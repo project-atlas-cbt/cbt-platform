@@ -51,6 +51,24 @@ export const envSchema = z.object({
 
   IDEMPOTENCY_KEY_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
 
+  // ---- Identity & Auth (ADR-0005, ADR-0019, ADR-0022 — B1) -----------------
+  SESSION_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60 * 24 * 7), // 7 days
+  PASSWORD_RESET_TOKEN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60), // 1 hour
+  AUTH_LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  AUTH_LOCKOUT_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 60),
+
   // Global rate-limit scaffolding (B0 scope) — a generous baseline every
   // route gets for free via ThrottlerGuard (apps/api/src/security). B1
   // tightens specific endpoints (e.g. login) with @Throttle() overrides;

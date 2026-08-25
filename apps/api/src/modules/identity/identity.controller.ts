@@ -1,0 +1,159 @@
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { prisma } from '@atlas/db';
+import { AppHttpException } from '../../common/app-http-exception.js';
+import { TenancyContextService } from '../../common/tenancy-context.service.js';
+import { createCsrfToken, PLATFORM_CSRF_USER_INFO } from '../../security/csrf.js';
+import { AuthGuard, type AuthenticatedUser } from './auth.guard.js';
+import { AllowPendingPasswordChange } from './decorators.js';
+import { IdentityService } from './identity.service.js';
+import { LoginDto } from './dto/login.dto.js';
+import { PasswordChangeDto } from './dto/password-change.dto.js';
+import { PasswordResetConfirmDto, PasswordResetRequestDto } from './dto/password-reset.dto.js';
+
+// Tight, endpoint-specific overrides on top of SecurityModule's generous
+// global ThrottlerGuard baseline (security.module.ts's own comment
+// anticipates exactly this). Keyed 'default' to match the one throttler
+// SecurityModule registers.
+const AUTH_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
+
+function currentUser(req: FastifyRequest): AuthenticatedUser {
+  // AuthGuard always sets this before a guarded handler runs; the
+  // non-null assertion is safe here specifically because every route in
+  // this controller that reads it is behind @UseGuards(AuthGuard).
+  return req.user!;
+}
+
+@ApiTags('identity')
+@Controller()
+export class IdentityController {
+  constructor(
+    private readonly identity: IdentityService,
+    private readonly tenancy: TenancyContextService,
+  ) {}
+
+  /** ADR-0005: every route below except tenant/resolve needs a resolved
+   * school to operate against — never a bare 500 when the caller hit the
+   * platform host or an unrecognised subdomain instead. */
+  private requireTenant(): string {
+    const schoolId = this.tenancy.schoolId;
+    if (!schoolId) {
+      throw new AppHttpException({
+        code: 'UNAUTHENTICATED',
+        message: 'No school could be resolved for this request.',
+      });
+    }
+    return schoolId;
+  }
+
+  @Get('tenant/resolve')
+  @ApiOperation({
+    summary:
+      "Resolve the current subdomain's school for pre-login branding (ADR-0005), plus a CSRF token.",
+  })
+  async resolveTenant(@Req() req: FastifyRequest) {
+    const schoolId = this.tenancy.schoolId;
+    const school = schoolId
+      ? await prisma.school.findUnique({
+          where: { id: schoolId },
+          select: { name: true, subdomain: true, timezone: true },
+        })
+      : null;
+
+    // No branding fields yet (logo/colour arrive with B4's School columns)
+    // — shaped so B4 extends this response, not replaces it.
+    const csrfToken = createCsrfToken(req.csrfSecret!, schoolId ?? PLATFORM_CSRF_USER_INFO);
+    return { school, csrfToken };
+  }
+
+  @Post('auth/login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(AUTH_THROTTLE)
+  @ApiOperation({ summary: 'Authenticate within the resolved tenant (ADR-0005).' })
+  async login(
+    @Body() body: LoginDto,
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const schoolId = this.requireTenant();
+    await this.identity.login(schoolId, body.identifier, body.password, res, req);
+    return { status: 'ok' as const };
+  }
+
+  @Post('auth/logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Revoke the current session.' })
+  async logout(@Req() req: FastifyRequest, @Res({ passthrough: true }) res: FastifyReply) {
+    const user = currentUser(req);
+    await this.identity.logout(user.schoolId, user.sessionId, res);
+    return { status: 'ok' as const };
+  }
+
+  @Post('auth/refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Rotate the current session (ADR-0022).' })
+  async refresh(@Req() req: FastifyRequest, @Res({ passthrough: true }) res: FastifyReply) {
+    const schoolId = this.requireTenant();
+    await this.identity.refresh(req, res, schoolId);
+    return { status: 'ok' as const };
+  }
+
+  @Get('auth/me')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Current user, membership, and roles — read live from the database.' })
+  async me(@Req() req: FastifyRequest) {
+    const user = currentUser(req);
+    return this.identity.me(user.schoolId, user.userId, user.membershipId);
+  }
+
+  @Post('auth/password/change')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @AllowPendingPasswordChange()
+  @ApiOperation({ summary: 'Authenticated password change — clears any forced-change state.' })
+  async changePassword(@Req() req: FastifyRequest, @Body() body: PasswordChangeDto) {
+    const user = currentUser(req);
+    await this.identity.changePassword(
+      user.schoolId,
+      user.userId,
+      body.currentPassword,
+      body.newPassword,
+    );
+    return { status: 'ok' as const };
+  }
+
+  @Post('auth/password/reset/request')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(AUTH_THROTTLE)
+  @ApiOperation({ summary: 'Initiate a staff password reset (ADR-0019 — students have no email).' })
+  async requestPasswordReset(@Body() body: PasswordResetRequestDto) {
+    const schoolId = this.requireTenant();
+    await this.identity.requestPasswordReset(schoolId, body.identifier);
+    // Always the same shape, whether or not the identifier existed —
+    // see IdentityService.requestPasswordReset's own comment.
+    return { status: 'ok' as const };
+  }
+
+  @Post('auth/password/reset/confirm')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(AUTH_THROTTLE)
+  @ApiOperation({ summary: 'Complete a password reset with a single-use token.' })
+  async confirmPasswordReset(@Body() body: PasswordResetConfirmDto) {
+    const schoolId = this.requireTenant();
+    await this.identity.confirmPasswordReset(schoolId, body.token, body.newPassword);
+    return { status: 'ok' as const };
+  }
+}

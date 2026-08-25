@@ -3,9 +3,12 @@
  * the tenancy primitive and a test proves it." Also the B0 Testing
  * requirements table's "Security | Cross-tenant RLS probe."
  *
- * Deliberately queries tenancy_probes WITHOUT a school_id filter — the
- * point of ADR-0023's defence-in-depth is that RLS still blocks the read
- * even when application code forgets to scope it.
+ * Runs against `school_memberships` — B1's first real school-owned table,
+ * replacing the B0-era `tenancy_probes` scaffolding per that model's own
+ * doc comment ("safe to delete once a real school-owned table exists to
+ * carry the isolation test suite instead"). Deliberately queries WITHOUT a
+ * school_id filter — the point of ADR-0023's defence-in-depth is that RLS
+ * still blocks the read even when application code forgets to scope it.
  *
  * Two connections, deliberately: fixture setup/teardown runs as the
  * schema-owner role (DATABASE_URL_TEST) so it isn't itself subject to RLS;
@@ -29,6 +32,10 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let app: PrismaClient;
     let schoolA: { id: string };
     let schoolB: { id: string };
+    let userA: { id: string };
+    let userB: { id: string };
+    let membershipA: { id: string };
+    let membershipB: { id: string };
 
     beforeAll(async () => {
       // Deploy is idempotent (a no-op if already applied) and cheap — this
@@ -48,17 +55,27 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         data: { name: `RLS Test School B ${randomUUID()}`, subdomain: `rls-b-${Date.now()}` },
       });
 
-      await owner.tenancyProbe.create({
-        data: { schoolId: schoolA.id, label: 'belongs to school A' },
+      userA = await owner.user.create({
+        data: { firstName: 'A', lastName: 'Person', displayName: 'A Person' },
       });
-      await owner.tenancyProbe.create({
-        data: { schoolId: schoolB.id, label: 'belongs to school B' },
+      userB = await owner.user.create({
+        data: { firstName: 'B', lastName: 'Person', displayName: 'B Person' },
+      });
+
+      membershipA = await owner.schoolMembership.create({
+        data: { schoolId: schoolA.id, userId: userA.id, loginIdentifier: `rls-a-${Date.now()}` },
+      });
+      membershipB = await owner.schoolMembership.create({
+        data: { schoolId: schoolB.id, userId: userB.id, loginIdentifier: `rls-b-${Date.now()}` },
       });
     });
 
     afterAll(async () => {
-      await owner.tenancyProbe.deleteMany({
+      await owner.schoolMembership.deleteMany({
         where: { schoolId: { in: [schoolA.id, schoolB.id] } },
+      });
+      await owner.user.deleteMany({
+        where: { id: { in: [userA?.id, userB?.id].filter((id): id is string => Boolean(id)) } },
       });
       await owner.school.deleteMany({ where: { id: { in: [schoolA.id, schoolB.id] } } });
       await owner.$disconnect();
@@ -71,45 +88,44 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       // against the app role, the connection that actually matters.
       const rows = await app.$queryRaw<
         Array<{ id: string }>
-      >`SELECT id FROM tenancy_probes WHERE id IN (SELECT id FROM tenancy_probes)`;
+      >`SELECT id FROM school_memberships WHERE id IN (${membershipA.id}::uuid, ${membershipB.id}::uuid)`;
       expect(rows).toHaveLength(0);
     });
 
-    it("scoped to school A, only school A's row is visible — school B's is not", async () => {
+    it("scoped to school A, only school A's membership is visible — school B's is not", async () => {
       const rows = await withTenant(
         app,
         schoolA.id,
         (tx) =>
           tx.$queryRaw<
-            Array<{ school_id: string; label: string }>
-          >`SELECT school_id, label FROM tenancy_probes`,
+            Array<{ school_id: string }>
+          >`SELECT school_id FROM school_memberships WHERE id IN (${membershipA.id}::uuid, ${membershipB.id}::uuid)`,
       );
       expect(rows).toHaveLength(1);
       expect(rows[0]?.school_id).toBe(schoolA.id);
     });
 
-    it("scoped to school B, only school B's row is visible", async () => {
+    it("scoped to school B, only school B's membership is visible", async () => {
       const rows = await withTenant(
         app,
         schoolB.id,
-        (tx) => tx.$queryRaw<Array<{ school_id: string }>>`SELECT school_id FROM tenancy_probes`,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ school_id: string }>
+          >`SELECT school_id FROM school_memberships WHERE id IN (${membershipA.id}::uuid, ${membershipB.id}::uuid)`,
       );
       expect(rows).toHaveLength(1);
       expect(rows[0]?.school_id).toBe(schoolB.id);
     });
 
     it('an explicit cross-tenant read by id returns nothing, even by primary key', async () => {
-      const probeInSchoolB = await owner.tenancyProbe.findFirstOrThrow({
-        where: { schoolId: schoolB.id },
-      });
-
       const rows = await withTenant(
         app,
         schoolA.id,
         (tx) =>
           tx.$queryRaw<
             Array<{ id: string }>
-          >`SELECT id FROM tenancy_probes WHERE id = ${probeInSchoolB.id}::uuid`,
+          >`SELECT id FROM school_memberships WHERE id = ${membershipB.id}::uuid`,
       );
       expect(rows).toHaveLength(0);
     });

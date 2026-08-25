@@ -201,7 +201,7 @@ None inbound. Outbound: every phase.
 
 # B1 — Identity & Authentication
 
-**Status:** NOT STARTED · **Decided ADRs:** 0005 (tenant resolution), 0019 (messaging channel), 0022 (session strategy)
+**Status:** COMPLETE (2026-08-25) · **Decided ADRs:** 0005 (tenant resolution), 0019 (messaging channel), 0022 (session strategy)
 
 ## Objective
 
@@ -254,6 +254,17 @@ Deliver authentication, session lifecycle, and credential management for all six
 - `login_identifier` uniqueness scoped per `ADR-0005` (per-school, not global — `A-01`).
 - Session/token storage with revocation support.
 - Indexes: `(school_id, login_identifier)`, `(user_id)`, membership and role lookups on the auth hot path.
+
+**Implementation note — `login_identifier` lives on `SchoolMembership`, not `User`.** `07 §5.1`
+lists it as a `User` attribute, but `User` is deliberately tenant-independent (06 §7/§9's own
+example: one person, `TEACHER` + `HOD` at one school, or memberships at two) — it carries no
+`school_id`, so a per-school-unique field can't live there without either giving `User` a
+`school_id` (breaking that model) or a global uniqueness constraint (breaking `ADR-0005`'s
+explicit requirement that two schools can each have student `ST001`). `SchoolMembership` already
+represents "this person's relationship with this school" (`07 §5.2`), so `login_identifier` +
+`@@unique([school_id, login_identifier])` moved there instead — confirmed with the project owner
+before implementation, per `AGENTS.md §3`. `schema.prisma`'s `User`/`SchoolMembership` doc comments
+carry the same reasoning.
 
 ## Background jobs
 

@@ -39,8 +39,21 @@ describe.skipIf(!testDatabaseUrl)('prisma migrations (create/apply/rollback)', (
       WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
     `;
     const names = rows.map((r) => r.table_name);
+    // tenancy_probes/tenancy_probe_children (B0 scaffolding) were dropped
+    // in B1's migration once a real school-owned table existed to carry
+    // the isolation-test suite instead — see schema.prisma's TenancyProbe
+    // doc comment and tests/tenancy/rls.integration.test.ts.
     expect(names).toEqual(
-      expect.arrayContaining(['schools', 'tenancy_probes', 'tenancy_probe_children']),
+      expect.arrayContaining([
+        'schools',
+        'users',
+        'school_memberships',
+        'role_assignments',
+        'student_profiles',
+        'teacher_profiles',
+        'sessions',
+        'password_reset_tokens',
+      ]),
     );
   });
 

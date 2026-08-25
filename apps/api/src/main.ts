@@ -7,7 +7,6 @@ import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import type { Env } from '@atlas/config';
 import { AppModule } from './app.module.js';
-import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { API_VERSION_PREFIX } from './openapi/version.js';
 import { isAllowedOrigin } from './security/cors.js';
 
@@ -42,7 +41,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // HttpExceptionFilter is registered as an APP_FILTER in app.module.ts —
+  // not here — so it applies to any harness that boots AppModule, not just
+  // this real bootstrap() path. See that provider's own comment.
 
   const port = config.get('API_PORT', { infer: true });
   const host = config.get('API_HOST', { infer: true });

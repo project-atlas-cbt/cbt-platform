@@ -1,6 +1,6 @@
 # Roadmap Index — Project Atlas CBT Platform
 
-**Version:** 1.1 · **Created:** 2026-08-24 · **Last updated:** 2026-08-25 · **Status:** In implementation (`B0` complete)
+**Version:** 1.1 · **Created:** 2026-08-24 · **Last updated:** 2026-08-25 · **Status:** In implementation (`B0`, `B1` complete)
 
 | Document                                                             | Purpose                                                       |
 | -------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -13,16 +13,16 @@
 
 ## 1. Current State
 
-`B0` is complete — see `backend-roadmap.md`'s B0 section and `CLAUDE.md`'s 2026-08-25 change-log entry for what shipped. `B1` is next.
+`B0` and `B1` are both complete — see `backend-roadmap.md`'s B0/B1 sections and `CLAUDE.md`'s 2026-08-25 change-log entries for what shipped. `B2` is next.
 
-| Item                | State                                                                                                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Specifications      | 9 documents, 18,271 lines, read and audited                                                                                                                              |
-| Specification audit | Complete — 88 findings, 18 BLOCKER, 40 HIGH                                                                                                                              |
-| Backend roadmap     | Complete — 24 phases                                                                                                                                                     |
-| Frontend roadmap    | Complete — 22 phases                                                                                                                                                     |
-| ADRs                | **33 of 33 decided and accepted (2026-08-24)**                                                                                                                           |
-| Application code    | `B0` complete (2026-08-25) — monorepo, NestJS+Fastify skeleton, Prisma/PostgreSQL 18.6, tenancy/RLS, error envelope + idempotency contract, BullMQ, CI. See §2's P0 row. |
+| Item                | State                                                                                                                                                                                                                                                                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Specifications      | 9 documents, 18,271 lines, read and audited                                                                                                                                                                                                                                                                                                    |
+| Specification audit | Complete — 88 findings, 18 BLOCKER, 40 HIGH                                                                                                                                                                                                                                                                                                    |
+| Backend roadmap     | Complete — 24 phases                                                                                                                                                                                                                                                                                                                           |
+| Frontend roadmap    | Complete — 22 phases                                                                                                                                                                                                                                                                                                                           |
+| ADRs                | **33 of 33 decided and accepted (2026-08-24)**                                                                                                                                                                                                                                                                                                 |
+| Application code    | `B0` complete (2026-08-25) — monorepo, NestJS+Fastify skeleton, Prisma/PostgreSQL 18.6, tenancy/RLS, error envelope + idempotency contract, BullMQ, CI. `B1` complete (2026-08-25) — `auth.v1`: tenant-scoped login/logout/refresh/me, Argon2id, forced first-login change, staff password reset, per-identifier lockout. See §2's P0/P1 rows. |
 
 **All decision gates are resolved; `B0` is done.** See §7 for what each gate settled.
 
@@ -350,12 +350,13 @@ Per `AGENTS.md` §13:
 
 ## 12. Immediate Next Actions
 
-`B0` is complete, including its 2026-08-25 gap closure (tenant resolution mechanism, cookie/CORS/CSRF primitives, the `NotificationChannel` abstraction, and rate-limit scaffolding — see `backend-roadmap.md`'s B0 section). The next actions are build actions.
+`B0` is complete, including its 2026-08-25 gap closure (tenant resolution mechanism, cookie/CORS/CSRF primitives, the `NotificationChannel` abstraction, and rate-limit scaffolding). `B1` — Identity & Authentication — is also complete (2026-08-25): the `auth.v1` contract, tenant-scoped login/logout/refresh/me, Argon2id, forced first-login password change, staff password reset, and per-identifier lockout. See `backend-roadmap.md`'s B0/B1 sections. The next actions are build actions.
 
-1. **Start `B1` — Identity & Authentication.** Tenant resolution at login (ADR-0005), the `auth.v1` contract, Argon2id, session lifecycle. B0's contracts, tenancy primitives, CSRF/CORS primitives, and `NotificationChannel` abstraction are the foundation it builds on — B1 needs none of them re-invented, and can prove login resolution and password-reset dispatch end to end against B0's local-dev conventions (`localtest.me` subdomains, the console notification provider) without waiting on real production infrastructure.
-2. **In parallel, continue `F0`'s design system and theming engine** — no API surface, so no dependency on B1.
-3. **In parallel, continue `F13`'s offline exam engine** — Dexie schema, sync queue, state machine, and timer, built against the published `attempt.v1` contract. This is the longest-lead frontend item and the most valuable parallelisation available.
-4. **F0 should confirm `packages/contracts` and the error envelope are sufficient to build its API client** — the one open item in B0's Definition of Done (item 9), closing P0 out fully.
-5. **Provision `eu-west-1`** per [ADR-0032](../decisions/ADR-0032-aws-region.md), with real wildcard DNS and TLS for the per-school subdomains required by [ADR-0005](../decisions/ADR-0005-tenant-resolution-at-login.md) — this is `B23` scope, not a B1 blocker: B0 already delivers the resolution mechanism and a working local-dev subdomain convention, so B1 doesn't need real production DNS to prove login resolution.
-6. **Select the transactional email provider** per [ADR-0019](../decisions/ADR-0019-transactional-messaging-channel.md) and configure SPF, DKIM and DMARC — also `B23` scope, not a B1 blocker: B0 ships the `NotificationChannel` abstraction with a console/dev provider, so B1's password-reset dispatch and B3's activation-key delivery can be built and tested against it now, with the real provider swapped in later behind the same interface.
-7. **Carry the two conditional decisions forward**: schedule ADR-0028's legal review into B20 and ADR-0032's RTT measurement into B21, so neither is forgotten.
+1. **Start `B2` — Authorization & Tenancy Engine.** Turns the `02` permission matrix into an executable policy layer on top of B1's identity primitives — normalised permission table, scope resolvers, Software Admin break-glass (`ADR-0012`), `ExamAdministrator` delegation. B1 already establishes "roles are never trusted from the token, always re-read live" (`09 §25`); B2 is what actually enforces it on every protected route.
+2. **In parallel, continue `F0`'s design system and theming engine** — no API surface, so no dependency on B1/B2.
+3. **In parallel, `F1` (Authentication & Tenant Entry) can now start for real** — `auth.v1` is frozen and published (`apps/api/openapi.json`), so F1's API client has a real contract to build against, not a placeholder.
+4. **In parallel, continue `F13`'s offline exam engine** — Dexie schema, sync queue, state machine, and timer, built against the published `attempt.v1` contract. This is the longest-lead frontend item and the most valuable parallelisation available.
+5. **F0 should confirm `packages/contracts` and the error envelope are sufficient to build its API client** — the one open item in B0's Definition of Done (item 9), closing P0 out fully.
+6. **Provision `eu-west-1`** per [ADR-0032](../decisions/ADR-0032-aws-region.md), with real wildcard DNS and TLS for the per-school subdomains required by [ADR-0005](../decisions/ADR-0005-tenant-resolution-at-login.md) — this is `B23` scope, not a B1/B2 blocker: B0 already delivers the resolution mechanism and a working local-dev subdomain convention.
+7. **Select the transactional email provider** per [ADR-0019](../decisions/ADR-0019-transactional-messaging-channel.md) and configure SPF, DKIM and DMARC — also `B23` scope: B0 ships the `NotificationChannel` abstraction with a console/dev provider, and B1's password-reset dispatch already proves it end to end against that provider; the real one swaps in later behind the same interface.
+8. **Carry the two conditional decisions forward**: schedule ADR-0028's legal review into B20 and ADR-0032's RTT measurement into B21, so neither is forgotten.

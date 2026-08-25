@@ -19,7 +19,11 @@ const schemaPath = resolve(__dirname, '../packages/db/prisma/schema.prisma');
 
 // Models that are not school-owned — the tenant root itself, and anything
 // explicitly platform-scoped. Extend deliberately, not by default.
-const EXEMPT_MODELS = new Set(['School']);
+//
+// User (B1): deliberately tenant-independent — one physical person may hold
+// SchoolMembership at more than one school (06 §7/§9), so it carries no
+// school_id at all. See User's own doc comment in schema.prisma.
+const EXEMPT_MODELS = new Set(['School', 'User']);
 
 const schema = readFileSync(schemaPath, 'utf-8');
 const modelBlockRe = /model\s+(\w+)\s*\{([^}]*)\}/g;

@@ -26,6 +26,150 @@
         "summary": "Readiness probe — database, Redis, and object storage are reachable.",
         "tags": ["health"]
       }
+    },
+    "/tenant/resolve": {
+      "get": {
+        "operationId": "IdentityController_resolveTenant",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Resolve the current subdomain's school for pre-login branding (ADR-0005), plus a CSRF token.",
+        "tags": ["identity"]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "IdentityController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Authenticate within the resolved tenant (ADR-0005).",
+        "tags": ["identity"]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "IdentityController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Revoke the current session.",
+        "tags": ["identity"]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "IdentityController_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Rotate the current session (ADR-0022).",
+        "tags": ["identity"]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "IdentityController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Current user, membership, and roles — read live from the database.",
+        "tags": ["identity"]
+      }
+    },
+    "/auth/password/change": {
+      "post": {
+        "operationId": "IdentityController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Authenticated password change — clears any forced-change state.",
+        "tags": ["identity"]
+      }
+    },
+    "/auth/password/reset/request": {
+      "post": {
+        "operationId": "IdentityController_requestPasswordReset",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Initiate a staff password reset (ADR-0019 — students have no email).",
+        "tags": ["identity"]
+      }
+    },
+    "/auth/password/reset/confirm": {
+      "post": {
+        "operationId": "IdentityController_confirmPasswordReset",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetConfirmDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Complete a password reset with a single-use token.",
+        "tags": ["identity"]
+      }
     }
   },
   "info": {
@@ -42,6 +186,55 @@
   ],
   "components": {
     "schemas": {
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "Login identifier — username or school-issued student ID."
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": ["identifier", "password"]
+      },
+      "PasswordChangeDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 10
+          }
+        },
+        "required": ["newPassword"]
+      },
+      "PasswordResetRequestDto": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "The staff login identifier to send a reset link for. Students have no email — see A-02."
+          }
+        },
+        "required": ["identifier"]
+      },
+      "PasswordResetConfirmDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 10
+          }
+        },
+        "required": ["token", "newPassword"]
+      },
       "ErrorEnvelopeErrorDto": {
         "type": "object",
         "properties": {

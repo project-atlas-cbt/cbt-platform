@@ -63,13 +63,23 @@ afterAll(async () => {
 
 describe('Global rate limiting (B0 scaffolding)', () => {
   it('allows requests up to the configured limit, then rejects with a 429 ADR-0033 envelope', async () => {
-    const first = await app.inject({ method: 'GET', url: '/rate-limit-probe' });
+    // A fixed/default remoteAddress means every run of this file shares one
+    // Redis-backed counter key (ThrottlerGuard's default tracker is req.ip)
+    // against the same long-lived local Redis (docker compose, not a
+    // fresh-per-run CI container) — re-running the suite twice within the
+    // 60s window fails the *first* request instead of the third, as a
+    // leftover count from the previous run. Randomised per test process so
+    // repeated local runs never collide — see identity.integration.test.ts's
+    // identical fix for the same class of issue.
+    const remoteAddress = `10.99.${Math.floor(Math.random() * 200) + 1}.1`;
+
+    const first = await app.inject({ method: 'GET', url: '/rate-limit-probe', remoteAddress });
     expect(first.statusCode).toBe(200);
 
-    const second = await app.inject({ method: 'GET', url: '/rate-limit-probe' });
+    const second = await app.inject({ method: 'GET', url: '/rate-limit-probe', remoteAddress });
     expect(second.statusCode).toBe(200);
 
-    const third = await app.inject({ method: 'GET', url: '/rate-limit-probe' });
+    const third = await app.inject({ method: 'GET', url: '/rate-limit-probe', remoteAddress });
     expect(third.statusCode).toBe(429);
     const body = third.json<ErrorEnvelope>();
     expect(body.error.code).toBe('RATE_LIMITED');

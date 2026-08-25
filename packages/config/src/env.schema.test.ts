@@ -45,6 +45,14 @@ describe('loadEnv', () => {
     expect(env.COOKIE_DOMAIN).toBeUndefined();
   });
 
+  it('defaults the B1 identity/auth tuning variables', () => {
+    const env = loadEnv(validEnv);
+    expect(env.SESSION_TTL_SECONDS).toBe(60 * 60 * 24 * 7);
+    expect(env.PASSWORD_RESET_TOKEN_TTL_SECONDS).toBe(60 * 60);
+    expect(env.AUTH_LOCKOUT_MAX_ATTEMPTS).toBe(5);
+    expect(env.AUTH_LOCKOUT_WINDOW_SECONDS).toBe(15 * 60);
+  });
+
   it('rejects a session secret shorter than 16 characters', () => {
     expect(() => loadEnv({ ...validEnv, SESSION_COOKIE_SECRET: 'short' })).toThrow(
       EnvValidationError,

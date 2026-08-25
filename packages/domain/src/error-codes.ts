@@ -19,6 +19,12 @@ export const BASE_ERROR_CODES = {
   RATE_LIMITED: { httpStatus: 429, retryable: true },
   INTERNAL_ERROR: { httpStatus: 500, retryable: true },
   SERVICE_UNAVAILABLE: { httpStatus: 503, retryable: true },
+
+  // B1 (Identity & Authentication) — see docs/roadmaps/backend-roadmap.md's
+  // B1 DoD item 8: a MUST_CHANGE_PASSWORD/MUST_SET_PASSWORD account is
+  // blocked from every authenticated route except password/change, enforced
+  // centrally by AuthGuard so it can't be bypassed by calling another route.
+  PASSWORD_CHANGE_REQUIRED: { httpStatus: 403, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

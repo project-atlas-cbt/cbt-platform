@@ -3,6 +3,18 @@
  * starting an HTTP listener — a NestFactory "application context" boot is
  * enough to build the Swagger document. Run via `pnpm openapi:emit`; the
  * result is committed and @atlas/contracts generates types from it.
+ *
+ * The `openapi:emit` script runs this file compiled (`nest build && node
+ * dist/openapi/emit.js`), not live via `tsx`, as every other standalone
+ * script in this package does (spike/run-spike.ts). B1 found a genuine tsx
+ * bug: `tsx`'s esbuild-based transform crashes `NestFactory.create(AppModule)`
+ * with no error output (not a catchable exception — the process just exits
+ * 1) specifically once `IdentityService` is registered, while the exact
+ * same boot succeeds correctly under Vitest's transform (every integration
+ * test proves this) *and* under plain `node` against the compiled output.
+ * Since CI's contract-drift job already builds apps/api immediately before
+ * calling this script (.github/workflows/ci.yml), building here too costs
+ * nothing there and fixes local `pnpm generate` the same way.
  */
 import 'reflect-metadata';
 import { writeFileSync } from 'node:fs';
