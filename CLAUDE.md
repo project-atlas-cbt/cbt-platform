@@ -232,7 +232,17 @@ session working on it without extra setup.
 
 ### Current Phase
 
-**`B0 — Engineering Foundation & Contracts`** — complete. `B1 — Identity & Authentication` is next.
+**`B1 — Identity & Authentication`** — complete. Per the new frontend/backend phase-pairing rule
+(see "Working Rules for Claude" above), `F0 — Design System` and `F1` (the frontend phase paired
+with `auth.v1`) are being built next, ahead of `B2 — Authorization & Tenancy Engine`, since `F0`/`F1`'s
+backend dependency (`B0`+`B1`) is now satisfied. `B2` remains the next backend phase once `F0`/`F1`
+are done.
+
+Delivered: the `User`/`SchoolMembership`/`RoleAssignment`/`StudentProfile`/`TeacherProfile`/`Session`/`PasswordResetToken` schema (RLS-protected where school-owned; `User` itself is tenant-independent by design); the `auth.v1` contract — `GET /tenant/resolve`, `POST /auth/login`, `POST /auth/logout`, `POST /auth/refresh`, `GET /auth/me`, `POST /auth/password/change`, `POST /auth/password/reset/request`, `POST /auth/password/reset/confirm` — published in `apps/api/openapi.json` and consumed by `packages/contracts`; Argon2id hashing (`@node-rs/argon2`); session cookies (sign/rotate/revoke, reusing B0's cookie-signing convention); forced first-login password change enforced centrally by `AuthGuard`; staff password reset over the `NotificationChannel` abstraction (B0); per-`(school, identifier)` lockout plus tighter per-route rate-limit overrides on the auth endpoints; and the credential-sheet one-time-reveal primitive (`CredentialSheetService`), scoped down from the roadmap's literal "per class" wording since `ClassGroup`/bulk import don't exist yet — confirmed with the project owner before implementation.
+
+Two engineering decisions worth knowing about going forward: `login_identifier` lives on `SchoolMembership`, not `User` (07 §5.1's literal placement doesn't survive ADR-0005's per-school-uniqueness requirement without breaking the multi-school membership model — see `backend-roadmap.md`'s B1 section for the full reasoning); and Software Admin login is explicitly out of B1's scope (no `SchoolMembership` model for a platform-level account yet — that's B2/B3's job).
+
+See this file's Change Log for two real bugs B1 found in B0-owned infrastructure and fixed as part of closing B1 out (`HttpExceptionFilter` never applying to any test that boots `AppModule` directly, and `tsx` crashing `NestFactory.create(AppModule)` with no error output once `IdentityService` existed).
 
 Delivered: pnpm/Turborepo monorepo (`apps/api`, `apps/worker`, `apps/web`, five `packages/*`, `tests/`); NestJS 11 + Fastify skeleton; Prisma 8→7.9.1 against PostgreSQL 18.6 with a migration workflow and seed harness; Docker Compose for local Postgres + Redis (and, optionally, containerized `api`/`worker`); fail-fast env validation with the product name read from environment only; the ADR-0033 error envelope and idempotency contract, published in the OpenAPI document; UTC `timestamptz` storage with per-school timezone rendering (ADR-0027); the tenancy convention — denormalised `school_id`, composite FKs, and RLS with `FORCE ROW LEVEL SECURITY` — enforced by a schema lint and proved by an integration test against a real non-superuser application role; BullMQ wired end to end; the ADR-0031 technology-validation spike (NestJS + Fastify + Prisma + PostgreSQL + BullMQ + Redis, one transaction with a row-level lock, one queued job); and a four-job CI pipeline (lint/typecheck/unit/build, OpenAPI contract-drift check, integration tests, secret scanning).
 
@@ -297,6 +307,18 @@ Do not silently change product requirements.
 Do not silently change architecture.
 
 If a new requirement or architectural need conflicts with the specifications, document the conflict and propose an explicit decision rather than silently choosing one.
+
+### Frontend/backend phase pairing (2026-08-25)
+
+Default posture going forward, per explicit project-owner instruction: **once a frontend phase's
+corresponding/depending backend phase(s) are built, build that frontend phase too**, before moving
+further down the backend critical path — unless there is a strong, stated reason to defer it for
+that specific phase (say so explicitly; don't skip silently). Reasons: proves the contract end to
+end rather than in isolation, and lets manual testing against a real UI start as early as possible
+instead of waiting for the whole backend critical path to finish. `F0`/`F13` have no backend
+dependency and may proceed independently at any time. See `AGENTS.md` §19 for the full rule; this
+does not retroactively require building frontend for phases already completed before this
+instruction, only going forward from `B1`/`F1`.
 
 ---
 
@@ -577,3 +599,123 @@ deferred to `B23` (wildcard DNS/TLS; real email provider + SPF/DKIM/DMARC).
 `docs/roadmaps/roadmap-index.md`'s Immediate Next Actions corrected two items that had overstated
 what blocks `B1` — provisioning real DNS and selecting a real email provider are `B23` scope, not
 prerequisites `B1` needs to start, now that B0 delivers working local-dev/CI equivalents of both.
+
+### 2026-08-25 — `B1` complete: identity, sessions, and authentication
+
+Followed the working-rules checklist first: read `07 §5.1`–`§5.5`/`06 §6`–`§12` (identity domain
+model), `02` (login/reset/force-reset rows), `03 §11`–`§17` (credential distribution), the B1
+roadmap phase, its three gating ADRs (0005/0019/0022), and audit findings A-01/A-02/C-14 — then
+verified B0's own 2026-08-25 gap-closure deliverables were real (not just documented) by re-running
+the full pipeline before building on them, per the user's explicit instruction earlier that session.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration
+`20260825143757_b1_identity_and_auth`): `User` (tenant-independent — no `school_id` at all, exempted
+in `scripts/lint-schema-tenancy.mjs` alongside `School`), `SchoolMembership`, `RoleAssignment`,
+`StudentProfile`, `TeacherProfile`, `Session`, `PasswordResetToken` — all RLS-protected where
+school-owned, following B0's `(school_id, id)` composite-FK convention. `TenancyProbe`/
+`TenancyProbeChild` dropped in the same migration per their own doc comment ("safe to delete once a
+real school-owned table exists to carry the isolation-test suite instead") —
+`tests/tenancy/rls.integration.test.ts` now proves cross-tenant isolation against
+`school_memberships` instead.
+
+**Two schema decisions made during implementation, both confirmed with the project owner first
+(`AGENTS.md §3`) rather than guessed:**
+
+- `login_identifier` moved from `User` (07 §5.1's literal placement) to `SchoolMembership`. `User`
+  has no `school_id` — one person can hold membership at more than one school (06 §7/§9's own
+  example) — so a field ADR-0005 requires unique _per school_ can't live there without either
+  breaking that model or falling back to global uniqueness (which breaks two schools both having
+  student "ST001", the exact thing ADR-0005 exists to fix). `SchoolMembership` already represents
+  "this person's relationship with this school" (07 §5.2), so the field — and
+  `@@unique([school_id, login_identifier])` — moved there instead.
+- `User.email` was added even though no B1 source document lists it. Staff-facing `NotificationChannel`
+  sends (ADR-0019) need an address to send _to_, and nothing in `06`/`07` puts one anywhere — a real
+  gap the schema design surfaced, not present in any earlier draft. Nullable: students never have
+  one, by ADR-0019's own design.
+
+**`auth.v1`** (`apps/api/src/modules/identity/`, published in `apps/api/openapi.json`):
+`GET /tenant/resolve` (branding placeholder + a CSRF token — B4 adds real branding fields to `School`
+later, not replaces this response), `POST /auth/login|logout|refresh`, `GET /auth/me`,
+`POST /auth/password/change|reset/request|reset/confirm`. Session cookies reuse B0's
+`cookie`/`cookie-signature` signing convention (`SessionService`) rather than introducing a second
+one; the raw bearer token is never stored, only its sha256. Refresh creates a new `Session` row and
+revokes the old one atomically (rotation, not reuse) — DoD item 6. `AuthGuard` re-reads
+`User`/`SchoolMembership`/`RoleAssignment` from the database on every request (09 §25's rule, which
+B1's own roadmap text names as the phase that establishes it) and centrally enforces the forced-
+password-change gate (`PASSWORD_CHANGE_REQUIRED`, new in `packages/domain`'s `BASE_ERROR_CODES`) —
+one `@AllowPendingPasswordChange()` decorator on `POST /auth/password/change` is the only exception,
+so the gate can't be bypassed by calling any other route (DoD item 8). Argon2id via `@node-rs/argon2`
+(prebuilt binaries, not the source-compiling `argon2` package — matters concretely on this Windows
+dev box) with OWASP-profile parameters passed explicitly. Enumeration resistance: every login
+failure branch (unknown identifier, wrong password, locked out, `INVITED`/`SUSPENDED`/`INACTIVE`
+user, `ENDED` membership) collapses to one identical `UNAUTHENTICATED` response — `IdentityService
+.evaluateLogin`'s internal `LoginOutcome` union is what tests assert the _distinct_ server-side
+reasoning against (DoD item 3's "distinct handling"), never the wire response. Lockout
+(`AuthLockoutService`, Redis, per `(school_id, login_identifier)`) layers under `@Throttle()`
+per-route IP overrides on the auth endpoints, per `SecurityModule`'s own anticipated design.
+
+**Credential sheets, scoped down explicitly (confirmed with the user before implementing):**
+`CredentialSheetService` delivers the one-time-reveal primitive only — issue a system-generated
+initial password for a given list of student `SchoolMembership` ids, store only its hash
+(`MUST_CHANGE_PASSWORD`), render the CSV. No controller route in B1. `ClassGroup` (B5) and bulk
+import (B7) don't exist yet, so "generate correctly for a class, after import" (the roadmap's
+literal DoD item 7 wording) can't be built end to end yet — `B6`'s own Background jobs already list
+"Credential-sheet generation for a class after import" as that phase's job, so this isn't scope
+newly deferred, just the primitive it will wrap arriving early.
+
+**Software Admin login is explicitly out of scope.** ADR-0005 names a distinct platform host for it,
+but Software Admin has no `SchoolMembership` in this model (`PLATFORM_ROLES` vs `SCHOOL_ROLES`,
+`packages/domain`) and B1's login path is tenant-scoped by construction. Platform-level account
+provisioning belongs to B2 (`ADR-0012` break-glass authority) / B3 (school creation) — recorded as a
+deferred item in `backend-roadmap.md`'s B1 section rather than guessed at.
+
+**Two real bugs found only by testing, not by inspection — both in B0-owned infrastructure, both
+fixed as part of closing B1 out:**
+
+1. `AppModule` never registered `HttpExceptionFilter` — only `main.ts`'s imperative `bootstrap()`
+   did, via `app.useGlobalFilters(...)`. Every integration test that boots `AppModule` directly via
+   `NestFactory.create()` (the established pattern — `health.integration.test.ts`,
+   `notifications.module.integration.test.ts`) therefore never got the real ADR-0033 envelope on an
+   error path; it just happened not to matter before because none of those tests exercised one.
+   B1's own integration suite does, extensively, and every guard-thrown `AppHttpException`
+   (`AuthGuard`'s `UNAUTHENTICATED`, etc.) came back as a bare framework 500 instead of the correct
+   401/403 envelope. Fixed at the source, not per-test: `HttpExceptionFilter` is now bound via
+   `APP_FILTER` in `AppModule` itself, so any harness that boots the module graph gets it — and
+   `main.ts`'s own manual registration was removed (keeping both would double-handle every
+   exception, since the filter calls `res.send()` directly).
+2. `tsx`'s esbuild-based transform crashes `NestFactory.create(AppModule)` with **no error output at
+   all** (not a catchable exception — the process just exits 1) specifically once `IdentityService`
+   is registered as a provider — bisected by commenting providers/controllers out one at a time.
+   The identical boot succeeds under Vitest's transform (proven repeatedly — the whole integration
+   suite exercises it) and under plain `node` against the compiled `dist/` output. This broke
+   `pnpm generate` (`openapi:emit` runs `tsx src/openapi/emit.ts`) locally, and would have broken
+   CI's OpenAPI contract-drift job too — that job already runs `nest build` immediately before
+   calling `openapi:emit`, but the script itself still read live TypeScript source via `tsx`,
+   unaffected by the build having just happened. Fixed by changing `openapi:emit` itself to
+   `nest build && node dist/openapi/emit.js` — the only one of the package's three standalone
+   scripts (`dev`, `spike`, `openapi:emit`) that boots the _whole_ `AppModule`, which is exactly
+   the condition that triggers this.
+
+Also caught while writing `rate-limit.integration.test.ts` down further (pre-existing B0 test, not
+new B1 code): it used a fixed default `remoteAddress` with no variance, so its Redis-backed
+per-IP/per-route throttle counter accumulates across separate `vitest run` invocations against the
+same long-lived local Redis (docker compose, not a fresh-per-run CI container) — re-running
+`pnpm test:integration` twice within the 60s window failed the _first_ request instead of the
+third. Fixed with a randomised-per-process fake IP, the same fix applied to B1's own
+`identity.integration.test.ts` (which hit the identical class of issue with its per-identifier
+lockout test) from the start.
+
+Full pipeline green, each run repeated at least twice to specifically confirm neither of the two
+flakiness bugs above still reproduces: `pnpm lint && pnpm typecheck && pnpm test && pnpm build &&
+pnpm test:integration && pnpm spike`, plus `pnpm generate` (OpenAPI + `packages/contracts`
+regeneration) and a live `node dist/main.js` verification — real HTTP via `curl` against a seeded
+school and student, Host-header subdomain resolution, the CSRF cookie/token dance, login, session
+cookie, `/auth/me`, logout, and a correctly-401'd post-logout `/auth/me` — before tearing the
+process and its seed data back down.
+
+`docs/roadmaps/backend-roadmap.md`'s B1 section gained DoD-item checkmarks, the `login_identifier`
+placement rationale under Database work, and Deferred-items entries for credential-sheet class
+grouping and Software Admin login. `docs/roadmaps/roadmap-index.md`'s Current State and Immediate
+Next Actions moved from "B1 next" to "B2 next, F1 can start now that `auth.v1` is frozen."
+Project state moves from _Implementation (B1)_ to _Implementation (B2)_.
+**Next: `B2 — Authorization & Tenancy Engine`.**

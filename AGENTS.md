@@ -315,7 +315,32 @@ Do not duplicate that doctrine here — read it, don't restate it.
 
 ---
 
-## 19. Default Behaviour
+## 19. Frontend/Backend Phase Pairing
+
+Default posture, per explicit project-owner instruction (2026-08-25): **do not let the frontend
+trail the backend by a large, unimplemented margin.** Once a frontend phase's corresponding/
+depending backend phase(s) are built (per `docs/roadmaps/roadmap-index.md`'s phase pairing), build
+that frontend phase too — before moving further down the backend critical path — unless there is
+a strong, stated reason to defer it for that specific phase.
+
+Rationale: it proves the contract works end to end rather than only in isolation, and it lets the
+project owner start manual testing against a real UI as soon as the backend supporting it exists,
+rather than waiting for the entire backend critical path to finish first.
+
+This is a default, not an absolute rule:
+
+- If a frontend phase's roadmap entry itself recommends deferring (e.g. it depends on a _later_
+  backend phase too, or its own scope is better built alongside a different phase), say so
+  explicitly and proceed with the backend phase instead — do not silently skip the frontend phase
+  without recording why.
+- `F0` (design system) and `F13` (offline exam engine) have no backend dependency and may proceed
+  independently at any time, per the roadmap's own note.
+- Applies going forward from `B1`/`F1` onward; it does not retroactively require pausing to build
+  frontend for phases already completed before this instruction, only going forward.
+
+---
+
+## 20. Default Behaviour
 
 When uncertain:
 
