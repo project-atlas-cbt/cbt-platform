@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1
+# Local development image, shared by apps/api and apps/worker (docker-compose
+# picks the process via `command:`, not a separate image each). NOT the
+# production image — B0 defers production packaging to B23 ("Production
+# infrastructure provisioning (moves to B23). B0 delivers local and CI
+# environments only.").
+#
+# Single stage, whole-repo build: simplicity over image size for a local dev
+# container. Node 24 LTS per CLAUDE.md's technology baseline (ADR-0031).
+FROM node:24-alpine
+
+RUN corepack enable
+
+WORKDIR /repo
+
+# Full monorepo context — pnpm's workspace install needs every
+# package.json present to resolve the lockfile correctly, and copying them
+# individually is more fragile than it's worth for a dev-only image.
+COPY . .
+
+# BuildKit cache mount: persists pnpm's content-addressable store across
+# builds (and across retries of this same build) instead of redownloading
+# every package from the registry each time — this registry has shown
+# transient timeouts on a cold install.
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# A genuine ordering cycle between two things that each need the other
+# built first, broken by building @atlas/config alone before either side:
+#   - `pnpm db:generate` runs `prisma generate`, which loads
+#     packages/db/prisma.config.ts — that imports @atlas/config, which
+#     (like every packages/* workspace package) now builds to real dist/
+#     output, so it must exist before this step runs at all.
+#   - packages/db's own build (tsc) needs the Prisma Client's generated
+#     types to exist first (`../generated/client`), so db:generate must
+#     run before `pnpm build` gets to packages/db.
+RUN pnpm --filter @atlas/config run build
+RUN pnpm db:generate
+# @atlas/domain and @atlas/contracts build to real dist/ output too (see
+# their package.json) — apps/api and apps/worker resolve every
+# packages/* dependency through dist, not source (see CLAUDE.md's
+# 2026-08-25 change-log entry for why). Scoped to just these two apps
+# (turbo pulls in their workspace dependencies automatically) — apps/web
+# isn't part of this image (see docker-compose.yml; it isn't
+# containerized in B0) and building it here too would be dead weight at
+# best.
+RUN pnpm turbo run build --filter=@atlas/api --filter=@atlas/worker
+
+# docker-compose.yml sets `command:` per service to select api or worker.

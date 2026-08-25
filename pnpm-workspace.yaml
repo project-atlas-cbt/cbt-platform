@@ -1,0 +1,40 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  - 'tests'
+overrides:
+  # @nestjs/platform-fastify@11.2.1 pins an exact fastify version; without
+  # forcing the whole tree to the same one, our own direct `fastify`
+  # dependency (needed for FastifyRequest/FastifyReply types) resolves to a
+  # second copy, and @fastify/helmet + @fastify/cors's plugin types stop
+  # structurally matching the app instance's type. One version, tree-wide.
+  fastify: '5.11.3'
+allowBuilds:
+  # Prisma's own engine binaries — required for `prisma generate`/`migrate`
+  # to work at all.
+  '@prisma/engines': true
+  prisma: true
+  # Prisma's postinstall analytics ping (github.com/prisma/prisma/issues,
+  # "checkpoint" telemetry) — declined; not required for functionality.
+  '@scarf/scarf': false
+  # Native binary builds needed by tools already chosen deliberately
+  # (Prisma's config loader, ESLint's import resolution, ioredis/bullmq's
+  # msgpack perf path).
+  esbuild: true
+  msgpackr-extract: true
+  unrs-resolver: true
+  # Our own git-hooks tool (package.json "simple-git-hooks" config).
+  simple-git-hooks: true
+minimumReleaseAgeExclude:
+  - eslint@10.9.1
+  - '@typescript-eslint/eslint-plugin@8.68.0'
+  - '@typescript-eslint/parser@8.68.0'
+  - '@typescript-eslint/project-service@8.68.0'
+  - '@typescript-eslint/scope-manager@8.68.0'
+  - '@typescript-eslint/tsconfig-utils@8.68.0'
+  - '@typescript-eslint/type-utils@8.68.0'
+  - '@typescript-eslint/types@8.68.0'
+  - '@typescript-eslint/typescript-estree@8.68.0'
+  - '@typescript-eslint/utils@8.68.0'
+  - '@typescript-eslint/visitor-keys@8.68.0'
+  - typescript-eslint@8.68.0

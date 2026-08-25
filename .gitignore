@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+coverage/
+*.tsbuildinfo
+.env
+.env.*.local
+!.env.example
+.DS_Store
+Thumbs.db
+packages/db/generated/
+# packages/contracts/src/generated/openapi-types.ts and apps/api/openapi.json
+# are committed deliberately — the published contract is reviewed via git
+# diff (09 §26 "contract-first"); CI fails if `pnpm generate` produces a
+# diff (see .github/workflows/ci.yml).
+*.log
+.pnpm-store/

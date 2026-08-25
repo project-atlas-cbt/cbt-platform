@@ -1,0 +1,88 @@
+# Local development infrastructure only. Production provisioning is deferred
+# to B23 (backend-roadmap.md B0 "Deferred items").
+name: atlas-dev
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    container_name: atlas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: atlas_dev_password
+      POSTGRES_DB: atlas_dev
+    ports:
+      - '5432:5432'
+    volumes:
+      # postgres:18+ images store data in a version-specific subdirectory
+      # under /var/lib/postgresql (pg_ctlcluster-compatible layout) — the
+      # mount point is the parent directory, not /var/lib/postgresql/data.
+      # See https://github.com/docker-library/postgres/pull/1259.
+      - atlas_postgres_data:/var/lib/postgresql
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U atlas -d atlas_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8.10.1-alpine
+    container_name: atlas-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - atlas_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.node
+    container_name: atlas-api
+    # Applies migrations before starting — `prisma migrate deploy` takes a
+    # database-level advisory lock internally, so this is safe to run
+    # concurrently with worker's identical step below without a race.
+    command: sh -c "pnpm db:migrate:deploy && pnpm --filter @atlas/api run start"
+    env_file: .env
+    environment:
+      # Container-to-container hostnames, overriding .env's localhost
+      # values (which are correct for running api/worker natively on the
+      # host instead — see README.md's two supported dev workflows).
+      DATABASE_URL: postgresql://atlas:atlas_dev_password@postgres:5432/atlas_dev?schema=public
+      DATABASE_APP_URL: postgresql://atlas_app:atlas_app_dev_password@postgres:5432/atlas_dev?schema=public
+      REDIS_URL: redis://redis:6379
+      API_HOST: 0.0.0.0
+    ports:
+      - '3001:3001'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.node
+    container_name: atlas-worker
+    command: sh -c "pnpm db:migrate:deploy && pnpm --filter @atlas/worker run start"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://atlas:atlas_dev_password@postgres:5432/atlas_dev?schema=public
+      DATABASE_APP_URL: postgresql://atlas_app:atlas_app_dev_password@postgres:5432/atlas_dev?schema=public
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  atlas_postgres_data:
+  atlas_redis_data:

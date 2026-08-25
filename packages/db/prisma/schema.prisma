@@ -1,0 +1,92 @@
+// Project Atlas — Prisma schema (B0 scaffold).
+//
+// B0 delivers the tenancy CONVENTION, not the domain model — the real
+// School entity (B3), User/Membership (B1), and every academic/exam table
+// arrive in their own phases. What lives here is the minimum needed to
+// prove, and integration-test, three things ADR-0023 requires of every
+// school-owned table going forward:
+//
+//   1. a denormalised `school_id` as the leading indexed column,
+//   2. a composite foreign key carrying `school_id` on both sides for any
+//      table one level below its immediate School-owned parent,
+//   3. a Row-Level Security policy that blocks a cross-tenant read even
+//      when the query itself forgot to filter by school_id.
+//
+// `TenancyProbe` / `TenancyProbeChild` are scaffolding for that proof only
+// (see model comments). They are dropped in the migration that introduces
+// the first real school-owned tables, once B1 or B3 lands.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+// This custom `output` sits outside node_modules, in our own source tree —
+// so the generated client's CJS runtime bundle (loaded via createRequire
+// even though this package is "type": "module") resolves its own
+// dependencies by climbing node_modules from THAT location, not from
+// wherever @prisma/client itself lives. Under pnpm's strict, non-hoisted
+// linking, that climb only reaches what packages/db declares directly —
+// hence @prisma/client-runtime-utils is listed as an explicit dependency
+// in package.json even though it's really a dependency of @prisma/client.
+// Symptom if this drifts out of sync on a future @prisma/client bump:
+// `Cannot find module '@prisma/client-runtime-utils'` at app boot (only
+// via plain `node`, not `tsx` — see apps/api's `start` script).
+
+// Prisma 7: the connection URL is no longer set here. Migrate reads it from
+// prisma.config.ts's `datasource.url`; PrismaClient at runtime takes a
+// driver adapter instead (see src/client.ts) — both resolve DATABASE_URL
+// via @atlas/config's loadRootEnv(), never a URL hardcoded in schema.
+datasource db {
+  provider = "postgresql"
+}
+
+/// Minimal tenant root so B0 has something to hang the tenancy convention
+/// off. Full school lifecycle fields (status, subscription, branding,
+/// address, etc.) are added in B3 — this model is extended, not replaced.
+model School {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name      String
+  subdomain String   @unique @db.VarChar(63)
+  timezone  String   @default("Africa/Lagos")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @updatedAt @db.Timestamptz(6) @map("updated_at")
+
+  tenancyProbes TenancyProbe[]
+
+  @@map("schools")
+}
+
+/// B0 scaffolding only — proves the direct school_id-FK convention.
+/// Safe to delete (model + its migration) once a real school-owned table
+/// exists to carry the isolation test suite instead.
+model TenancyProbe {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  label     String
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  school   School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  children TenancyProbeChild[]
+
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@map("tenancy_probes")
+}
+
+/// B0 scaffolding only — proves the COMPOSITE foreign key convention
+/// (school_id, probe_id) -> tenancy_probes(school_id, id), which is what
+/// stops a row from referencing a same-type parent belonging to a
+/// different school even when the plain (probe_id) FK alone would allow it.
+model TenancyProbeChild {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  probeId   String   @map("probe_id") @db.Uuid
+  note      String
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  probe TenancyProbe @relation(fields: [schoolId, probeId], references: [schoolId, id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("tenancy_probe_children")
+}

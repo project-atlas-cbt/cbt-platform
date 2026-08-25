@@ -1,0 +1,20 @@
+{
+  "name": "@atlas/tests-cross-cutting",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cross-cutting integration/tenancy tests that don't belong to one app (migrations, RLS isolation, queue round trip). See docs/roadmaps/backend-roadmap.md B0 scope: top-level tests/.",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"@atlas/tests-cross-cutting has no unit tests — see test:integration\"",
+    "test:integration": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "@atlas/config": "workspace:*",
+    "@atlas/db": "workspace:*",
+    "bullmq": "^6.2.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

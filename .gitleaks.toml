@@ -1,0 +1,18 @@
+# Minimal allowlist on top of gitleaks' default ruleset (B0 CI secret-scan job).
+# Extend deliberately — never broaden to silence a real finding.
+title = "Project Atlas gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-safe placeholders"
+regexes = [
+  '''dev-only-change-me-dev-only-change-me''',
+  '''ci-only-secret-ci-only-secret-32''',
+  '''atlas_dev_password''',
+  '''atlas_ci_password''',
+]
+paths = [
+  '''\.env\.example$''',
+]

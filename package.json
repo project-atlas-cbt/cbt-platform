@@ -1,0 +1,55 @@
+{
+  "name": "project-atlas",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Project Atlas — multi-tenant CBT platform (monorepo root).",
+  "engines": {
+    "node": ">=22.18.0 <25.0.0"
+  },
+  "packageManager": "pnpm@11.23.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint && pnpm lint:schema",
+    "lint:fix": "turbo run lint -- --fix",
+    "lint:schema": "node scripts/lint-schema-tenancy.mjs",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "generate": "pnpm --filter @atlas/api run openapi:emit && pnpm --filter @atlas/contracts run generate",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "clean": "turbo run clean && rimraf node_modules",
+    "db:generate": "pnpm --filter @atlas/db run generate",
+    "db:migrate": "pnpm --filter @atlas/db run migrate:dev",
+    "db:migrate:deploy": "pnpm --filter @atlas/db run migrate:deploy",
+    "db:seed": "pnpm --filter @atlas/db run seed",
+    "spike": "pnpm --filter @atlas/api run spike",
+    "prepare": "node scripts/setup-hooks.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.15.0",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6",
+    "rimraf": "^6.0.1",
+    "simple-git-hooks": "^2.13.0",
+    "lint-staged": "^16.2.4",
+    "turbo": "^2.10.11",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "eslint --fix"
+    ],
+    "*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
+}

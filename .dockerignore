@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+.git
+.env
+.env.local
+*.tsbuildinfo
+# Prisma's generated client is platform-specific (native query-engine
+# binaries) — regenerated fresh inside the container by `pnpm db:generate`,
+# never copied in from the host. packages/contracts/src/generated (the
+# committed openapi-typescript output) is NOT covered by this — different
+# directory, plain generated TS, meant to be copied in as-is.
+packages/db/generated
