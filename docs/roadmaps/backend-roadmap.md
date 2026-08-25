@@ -74,7 +74,18 @@ If a future decision is reopened or superseded, the affected phases return to **
 
 # B0 — Engineering Foundation & Contracts
 
-**Status:** COMPLETE (2026-08-25) · **Decided ADRs:** 0005, 0022, 0023, 0027, 0031, 0033
+**Status:** COMPLETE (2026-08-25) · **Decided ADRs:** 0005, 0019, 0022, 0023, 0027, 0031, 0033
+
+> **2026-08-25 gap closure.** The initial B0 completion left four items its own Scope and
+> Security/authorization-work bullets called for, but that were not actually delivered: ADR-0005's
+> "wildcard DNS/TLS, edge tenant resolution, subdomain-aware local dev" (only a placeholder
+> `X-School-Id` header existed); ADR-0022's "cookie and CORS configuration, CSRF middleware, domain
+> plan" (CORS was a single static origin, no cookie/CSRF primitive existed); ADR-0019's "provider
+> selection, `NotificationChannel` abstraction, template pipeline" (nothing existed); and the
+> "global rate-limit scaffolding" half of the security bullet (only Helmet was registered). All
+> four are now delivered and are what this section describes below — B1 was gated on these and
+> could not have started cleanly without them. See this file's Definition of Done items 10–13 and
+> the Testing requirements table for what closed each gap and how it's verified.
 
 ## Objective
 
@@ -94,6 +105,10 @@ Establish the monorepo, the runtime and infrastructure baseline, the tenancy pri
 - OpenAPI generation pipeline and `packages/contracts` type emission consumed by the web app.
 - CI pipeline: lint, typecheck, unit, integration against ephemeral Postgres, migration check, build.
 - **Technology validation spike** (`R-11`): one vertical slice proving Nest 11 + Fastify + Prisma 8 + PostgreSQL 18 + BullMQ + Redis in a single transaction and a single queued job.
+- **Tenant resolution mechanism** (`ADR-0005`): Host-header subdomain parsing (`apps/api/src/common/subdomain.ts`) against `School.subdomain`, replacing the placeholder `X-School-Id` header. `PLATFORM_ROOT_DOMAIN` env var; local-dev convention documented in `docs/operations/domain-plan.md` (a public wildcard-to-`127.0.0.1` domain, `localtest.me`, so real-browser subdomain testing needs no local DNS setup). Production wildcard DNS/TLS provisioning stays deferred to `B23`.
+- **Cookie/CORS/CSRF primitives and domain plan** (`ADR-0022`): multi-subdomain-aware CORS (`apps/api/src/security/cors.ts`) allowing any `https://*.<PLATFORM_ROOT_DOMAIN>` origin plus the exact `WEB_ORIGIN` escape hatch for local dev; `CsrfGuard` implementing the double-submit pattern (signed secret cookie + per-request token, bound to the resolved tenant to mitigate cookie-tossing across school subdomains); `COOKIE_DOMAIN` env var for B1's session cookie; the concrete domain layout written down in `docs/operations/domain-plan.md`. Session issuance itself remains B1 scope.
+- **`NotificationChannel` abstraction and template pipeline** (`ADR-0019`): `packages/notifications` — a provider-agnostic `NotificationChannel` interface, a `{{token}}` template registry/renderer, and `ConsoleNotificationChannel` as the decided B0 provider (a working dev/console transport, not a stand-in). Wired into `apps/api` via `NotificationsModule`. No real product templates ship here — B1/B3/B10 register their own against the same registry when they send real messages. Real provider selection (SES/Postmark) and SPF/DKIM/DMARC stay deferred to `B23`.
+- **Global rate-limit scaffolding**: `@nestjs/throttler`'s `ThrottlerGuard` bound globally via `RedisThrottlerStorage` (an atomic Lua-script-backed `ThrottlerStorage` built on the existing `REDIS_CLIENT`, not a third-party storage adapter), with an env-configurable baseline (`RATE_LIMIT_MAX`/`RATE_LIMIT_WINDOW_SECONDS`). B1 applies tighter, endpoint-specific limits to the authentication routes via `@Throttle()` on top of this baseline.
 
 ## Specification references
 
@@ -131,17 +146,19 @@ All module shells created; no domain logic. `packages/contracts` and `packages/c
 ## Security / authorization work
 
 - Secret handling: no secrets in the repo (`AGENTS.md §8`); env validation at boot.
-- TLS/CORS posture per `ADR-0022`, including the cross-origin decision between the Vercel web app and the AWS API.
-- Baseline security headers and global rate-limit scaffolding.
+- TLS/CORS posture per `ADR-0022`, including the cross-origin decision between the Vercel web app and the AWS API — delivered as the multi-subdomain-aware CORS matcher described above.
+- Baseline security headers (Helmet) and global rate-limit scaffolding (`ThrottlerGuard` + `RedisThrottlerStorage`, described above).
+- CSRF protection (`CsrfGuard`, double-submit, tenant-bound) — see above.
+- Tenant resolution at the edge (`TenancyMiddleware` + `subdomain.ts`) — see above.
 
 ## Testing requirements
 
-| Level       | Requirement                                                                      |
-| ----------- | -------------------------------------------------------------------------------- |
-| Unit        | Config validation, error envelope serialisation, idempotency middleware          |
-| Integration | Migration up/down against ephemeral Postgres; health endpoints; queue round trip |
-| Contract    | OpenAPI document generates and `packages/contracts` compiles against it          |
-| Security    | Cross-tenant RLS probe (if adopted); secret-scanning in CI                       |
+| Level       | Requirement                                                                                                                                                                                                                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit        | Config validation, error envelope serialisation, idempotency middleware, subdomain parsing, CORS origin matching, CSRF guard, notification template pipeline                                                                                                     |
+| Integration | Migration up/down against ephemeral Postgres; health endpoints; queue round trip; tenant resolution against a real School row; CSRF end to end including the exception-filter path; Redis-backed rate-limit counting and blocking; NotificationsModule DI wiring |
+| Contract    | OpenAPI document generates and `packages/contracts` compiles against it                                                                                                                                                                                          |
+| Security    | Cross-tenant RLS probe (if adopted); secret-scanning in CI; CSRF rejects a missing/invalid/cross-tenant token; rate limiting rejects an over-limit caller with the correct ADR-0033 envelope                                                                     |
 
 ## Frontend dependencies
 
@@ -162,17 +179,23 @@ None inbound. Outbound: every phase.
 7. Product name is read from an environment variable; a grep confirms no hardcoded product name in source.
 8. CI runs lint, typecheck, unit, integration, and migration checks on every pull request and blocks merge on failure.
 9. `packages/contracts` is consumable by `apps/web` and F0 has confirmed it.
+10. **Tenant resolution** (`ADR-0005`): a request's `Host` header subdomain resolves against a real `School.subdomain` row, proven by an integration test driving the middleware directly with a crafted `Host` value; reserved labels (`api`/`admin`/`www`) and the bare root domain correctly resolve no tenant; the local-dev subdomain convention is documented (`docs/operations/domain-plan.md`).
+11. **Cookie/CORS/CSRF** (`ADR-0022`): CORS accepts any `https://*.<PLATFORM_ROOT_DOMAIN>` origin plus the exact `WEB_ORIGIN` local-dev exception and rejects everything else, proven by unit tests; `CsrfGuard` sets a signed secret cookie, rejects a mutating request with a missing/invalid/cross-tenant token as a proper ADR-0033 `FORBIDDEN` envelope (not a raw crash), and accepts a matching token, proven end to end over real HTTP; the domain plan is written down.
+12. **`NotificationChannel` abstraction** (`ADR-0019`): `packages/notifications` compiles, is unit-tested (template rendering, unknown-template and missing-variable errors, the console provider), and is wired into `apps/api`'s DI graph, proven by an integration test resolving it from a real booted `AppModule`. The B0 provider decision (console/dev transport) is documented in that package's README.
+13. **Global rate-limit scaffolding**: `ThrottlerGuard` is bound globally with `RedisThrottlerStorage`; the Redis-backed atomic increment/block logic is proven against a real Redis instance; an end-to-end test proves an over-limit caller receives a `429` in the ADR-0033 envelope with `code: RATE_LIMITED`, `retryable: true`.
 
 ## Exit criteria
 
-- All six gating ADRs are written, decided, and merged into `docs/decisions/`.
+- All seven gating ADRs are written, decided, and merged into `docs/decisions/`.
 - F0 has confirmed the contract package and error envelope are sufficient to build the API client.
-- No `TODO` or placeholder remains in the tenancy or error-handling primitives.
+- No `TODO` or placeholder remains in the tenancy, error-handling, CSRF, rate-limit, or notification primitives.
 
 ## Deferred items
 
 - Production infrastructure provisioning (moves to B23). B0 delivers local and CI environments only.
 - Observability instrumentation beyond correlation ids (moves to B20).
+- Wildcard DNS/TLS provisioning for `*.<PLATFORM_ROOT_DOMAIN>` (`ADR-0005`'s own "Required changes" table assigns this to B23; B0 delivers the resolution mechanism and local-dev convention only).
+- Real transactional email provider selection (SES/Postmark) and SPF/DKIM/DMARC configuration (`ADR-0019`, moves to B23). B0 ships the `NotificationChannel` abstraction and a console/dev provider only.
 
 ---
 

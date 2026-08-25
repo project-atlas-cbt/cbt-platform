@@ -9,6 +9,7 @@ import type { Env } from '@atlas/config';
 import { AppModule } from './app.module.js';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { API_VERSION_PREFIX } from './openapi/version.js';
+import { isAllowedOrigin } from './security/cors.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
@@ -18,12 +19,18 @@ async function bootstrap() {
   const config = app.get(ConfigService<Env, true>);
 
   await app.register(helmet, { global: true });
-  // Read into a variable first, not inline: inside the object literal below,
+  // Read into variables first, not inline: inside the object literal below,
   // @fastify/cors's wide `origin` union type appears to push the ConfigService
   // generic overload toward `unknown` instead of inferring `string` from Env.
   const webOrigin = config.get('WEB_ORIGIN', { infer: true });
+  const rootDomain = config.get('PLATFORM_ROOT_DOMAIN', { infer: true });
   await app.register(cors, {
-    origin: webOrigin,
+    // ADR-0022's topology is multi-origin — every school's
+    // `<subdomain>.<root>` plus `admin.<root>` — so a single static
+    // origin string can't express it. See security/cors.ts.
+    origin: (origin, cb) => {
+      cb(null, isAllowedOrigin(origin, webOrigin, rootDomain));
+    },
     credentials: true, // same-site HttpOnly cookies per ADR-0022
   });
 

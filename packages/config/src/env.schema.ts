@@ -29,9 +29,35 @@ export const envSchema = z.object({
   SESSION_COOKIE_SECRET: z.string().min(16, 'SESSION_COOKIE_SECRET must be at least 16 chars'),
   WEB_ORIGIN: z.url(),
 
+  // ADR-0005 / ADR-0022: the registrable parent domain school subdomains,
+  // the API, and the platform-admin host all sit under — e.g. "atlas.app"
+  // in production, "localtest.me" for local dev (a public domain whose
+  // wildcard record already resolves every subdomain to 127.0.0.1, so
+  // subdomain-aware tenant resolution works in a browser with no local DNS
+  // setup — see docs/operations/domain-plan.md). Required, not defaulted:
+  // this is a concrete infrastructure decision each environment must set
+  // explicitly, the same way WEB_ORIGIN is.
+  PLATFORM_ROOT_DOMAIN: z.string().min(1, 'PLATFORM_ROOT_DOMAIN must not be empty'),
+
+  // ADR-0022: the Domain attribute B1's session cookie (and any other
+  // cross-subdomain cookie) is issued with. Empty/unset means a host-only
+  // cookie — correct for local dev, where the browser never crosses
+  // subdomains for cookie purposes even when PLATFORM_ROOT_DOMAIN is set
+  // for tenant-resolution testing. Set to the shared parent domain (e.g.
+  // ".atlas.app") once B23 provisions production DNS.
+  COOKIE_DOMAIN: z.string().optional(),
+
   DEFAULT_SCHOOL_TIMEZONE: z.string().min(1).default('Africa/Lagos'),
 
   IDEMPOTENCY_KEY_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+
+  // Global rate-limit scaffolding (B0 scope) — a generous baseline every
+  // route gets for free via ThrottlerGuard (apps/api/src/security). B1
+  // tightens specific endpoints (e.g. login) with @Throttle() overrides;
+  // this default exists so a route that never gets a specific override
+  // still has *some* protection rather than none.
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+  RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
 
   S3_ENDPOINT: z.string().optional().default(''),
   S3_BUCKET: z.string().optional().default(''),

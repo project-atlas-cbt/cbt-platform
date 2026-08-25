@@ -240,6 +240,8 @@ One real bug the isolation test itself caught and B0 fixed: the local Postgres i
 
 `packages/contracts`' consumability by `apps/web` is proven (the web app imports and builds against it); F0 itself hasn't started, so B0's DoD item 9 ("F0 has confirmed it") stays open until F0 does.
 
+**2026-08-25 gap closure (same day, before `B1` began):** the initial B0 pass left four items its own Scope and Security/authorization-work bullets called for, undelivered — B1 was gated on all four and could not have started cleanly without them. All are now closed; see `docs/roadmaps/backend-roadmap.md`'s B0 section (DoD items 10–13) and this file's Change Log entry below for detail: ADR-0005's tenant-resolution mechanism (Host-header subdomain parsing, replacing the `X-School-Id` placeholder), ADR-0022's cookie/CORS/CSRF primitives and domain plan, ADR-0019's `NotificationChannel` abstraction with a console/dev provider, and global rate-limit scaffolding (`ThrottlerGuard` + a Redis-backed storage).
+
 May proceed in parallel with the rest of `B1`:
 
 - `F0` design system and theming engine — no API surface.
@@ -473,3 +475,105 @@ Claude should append meaningful project-state changes here rather than rewriting
 - `CLAUDE.md` gained the "Frontend Design Governance" section above.
 - No product/architecture specification was changed. No roadmap phase status changed — `F0` is
   still NOT STARTED. No UI feature, screen, or component was implemented.
+
+### 2026-08-25 — `B0` gap closure: tenant resolution, cookie/CORS/CSRF, notifications, rate limiting
+
+Four items `B0`'s own Scope and Security/authorization-work bullets called for were not actually
+delivered when `B0` was first marked complete. `B1` was gated on all four and could not have
+started cleanly without them. Closed as a continuation of `B0`, not new `B1` scope — `B1`
+(login/session/reset flows themselves) is untouched.
+
+- **ADR-0005 tenant resolution.** `apps/api/src/common/tenancy.middleware.ts` now does real
+  Host-header subdomain parsing (`subdomain.ts`, pure/unit-tested) against `School.subdomain`,
+  replacing the `X-School-Id` placeholder header entirely — nothing in the codebase referenced it
+  outside that one file, so the replacement was clean. `PLATFORM_ROOT_DOMAIN` is a new required
+  env var; reserved labels (`api`/`admin`/`www`) and the bare root domain correctly resolve no
+  tenant. `TenancyContextService` now also carries the raw parsed `subdomain` (not just
+  `schoolId`), so a future "unknown subdomain" response can be distinguished from "no subdomain
+  present at all." Local-dev convention: `PLATFORM_ROOT_DOMAIN=localtest.me`, a public domain
+  whose wildcard record already resolves every subdomain to `127.0.0.1` — real browser testing of
+  subdomain resolution needs no `/etc/hosts` edits or local DNS. Documented in the new
+  `docs/operations/domain-plan.md`. Production wildcard DNS/TLS stays deferred to `B23` per the
+  ADR's own "Required changes" table — B0's job was the mechanism, not the certificate.
+- **ADR-0022 cookie/CORS/CSRF.** CORS (`apps/api/src/security/cors.ts`) is now genuinely
+  multi-subdomain-aware: any `https://*.<PLATFORM_ROOT_DOMAIN>` origin is allowed, plus the exact
+  configured `WEB_ORIGIN` as a local-dev escape hatch (a single static origin couldn't express
+  ADR-0022's "every school's subdomain" topology). CSRF protection is a double-submit primitive —
+  a signed, `HttpOnly` secret cookie plus a per-request token the client echoes back in
+  `X-CSRF-Token` on mutating requests — built on `@fastify/csrf` (token logic) and `cookie` /
+  `cookie-signature` (parsing/signing) rather than `@fastify/csrf-protection`, whose enforcement
+  hook writes its own raw Fastify error response directly and would have bypassed the ADR-0033
+  envelope entirely. The token is bound to the resolved tenant (`userInfo`) specifically to
+  mitigate cookie-tossing across school subdomains, a threat ADR-0022's shared-parent-domain
+  topology invites and `@fastify/csrf`'s own docs name `userInfo` as the mitigation for. New
+  `COOKIE_DOMAIN` env var for B1's session cookie. Domain plan written down in
+  `docs/operations/domain-plan.md`. Session issuance itself remains B1 scope untouched.
+- **ADR-0019 `NotificationChannel` abstraction.** New `packages/notifications`: a
+  `NotificationChannel` interface, a `{{token}}`-substitution `TemplateRegistry`, and
+  `ConsoleNotificationChannel` — the decided B0 provider (a working dev/console transport, not a
+  stand-in; real SES/Postmark selection and SPF/DKIM/DMARC stay deferred to `B23` per the ADR).
+  Wired into `apps/api` via a new `NotificationsModule` (`NOTIFICATION_CHANNEL` /
+  `NOTIFICATION_TEMPLATE_REGISTRY` DI tokens). No real product templates ship here by design —
+  B1/B3/B10 register their own against the same registry when they send real messages
+  (password reset, activation keys, staff invitations, expiry warnings).
+- **Global rate-limit scaffolding.** `@nestjs/throttler`'s `ThrottlerGuard` is bound globally via
+  `APP_GUARD` with a generous, env-configurable baseline (`RATE_LIMIT_MAX` /
+  `RATE_LIMIT_WINDOW_SECONDS`, defaults 300/60s). Storage is `RedisThrottlerStorage` — a small,
+  purpose-built `ThrottlerStorage` implementation using an atomic Lua script against the existing
+  `REDIS_CLIENT`, not a third-party community storage adapter of uncertain maintenance status for
+  what's fundamentally a well-specified atomic counter. `B1` layers tighter, endpoint-specific
+  limits onto the authentication routes via `@Throttle()` on top of this baseline — the whole
+  point of choosing `@nestjs/throttler` (a Nest-native decorator-driven primitive) over a raw
+  Fastify-level limiter.
+
+**Two real bugs found only by writing and running the integration tests, not by inspection:**
+
+1. `CsrfGuard` was originally `CsrfMiddleware`. Under `@nestjs/platform-fastify`, an exception
+   _thrown from NestMiddleware_ reaches `HttpExceptionFilter` with the **raw** Node
+   `http.IncomingMessage`/`ServerResponse` standing in for `FastifyRequest`/`FastifyReply` — not
+   the Fastify-decorated objects a controller-thrown exception gets. `req.raw` and `res.status()`
+   don't exist there, so the filter crashed (`Cannot read properties of undefined (reading
+'correlationId')`) and the request hung until timeout instead of ever returning a response.
+   Guards run inside Nest's real request-handling pipeline (after routing, before the handler) and
+   receive the genuine Fastify-decorated request/reply, so `CsrfMiddleware` became `CsrfGuard`,
+   bound via `APP_GUARD` alongside `ThrottlerGuard` instead of `consumer.apply(...)`. The
+   AsyncLocalStorage-based `CsrfContextService` this depended on was deleted along with it — a
+   guard's return value doesn't keep executing "underneath" it the way a middleware's `next()`
+   callback does, so that hand-off pattern only ever worked for `TenancyMiddleware` (still genuine
+   middleware) in the first place. A later handler that needs the current CSRF secret now reads
+   `request.csrfSecret`, set directly on the shared Fastify request object instead.
+2. `TenancyContextService` was originally provided directly by `AppModule` and exported from it —
+   fine for anything else `AppModule` itself provides, but invisible to `SecurityModule`'s own
+   `CsrfGuard` provider, which depends on it. Extracted into a new `@Global() TenancyModule`
+   (mirroring `RedisModule`/`AppConfigModule`'s existing pattern for shared singletons) so the
+   _same_ `AsyncLocalStorage`-backed instance `TenancyMiddleware` populates is reachable from any
+   module, not just ones that happen to import `AppModule` directly (which nothing can, being the
+   root). Without this, `NestFactory.create(AppModule)` failed outright with
+   `UnknownDependenciesException`, first surfacing (confusingly) as a native V8 crash inside
+   Vitest's worker-fork pool rather than a readable error — diagnosed by reproducing the same boot
+   via a plain `node dist/main.js`/`tsx` run outside Vitest's crash-swallowing wrapper, which
+   printed the real dependency-resolution error clearly.
+
+Also caught and fixed during this pass, smaller: a third-party type-declaration bug in
+`@fastify/csrf@8.1.0` (`Parameters<T>`/`ReturnType<T>` on an overloaded constructor type collapses
+to the last signature, so the `userInfo: true` variant is mistyped as the plain `TokensSimple`
+shape) — worked around with a narrow, documented local type assertion after confirming the
+_runtime_ behaviour is correct; a `cookie@2.0.1` API rename (`parse`/`serialize` →
+`parseCookie`/`stringifySetCookie` in that major version); and an `AsyncLocalStorage` test-authoring
+mistake of its own (reading `TenancyContextService`'s live getters _after_ `.run()`'s callback had
+already resolved and returned, which always sees the "no active context" default regardless of
+what was actually resolved inside — fixed by snapshotting the store from inside the callback).
+
+Full pipeline green after every fix: `pnpm lint && pnpm typecheck && pnpm test && pnpm build &&
+pnpm test:integration && pnpm spike`, plus a live `docker compose up -d --build api worker`
+verification — health, readiness, a Host-header subdomain request, and the CSRF cookie / rate-limit
+headers all confirmed correct against the real containerized stack before tearing the app
+containers back down to the native-dev-recommended state.
+
+`docs/roadmaps/backend-roadmap.md`'s B0 section gained DoD items 10–13 covering these four items,
+an updated Security/authorization-work and Testing requirements section, `ADR-0019` added to B0's
+Decided ADRs list, and explicit Deferred-items entries for the two things that genuinely do stay
+deferred to `B23` (wildcard DNS/TLS; real email provider + SPF/DKIM/DMARC).
+`docs/roadmaps/roadmap-index.md`'s Immediate Next Actions corrected two items that had overstated
+what blocks `B1` — provisioning real DNS and selecting a real email provider are `B23` scope, not
+prerequisites `B1` needs to start, now that B0 delivers working local-dev/CI equivalents of both.

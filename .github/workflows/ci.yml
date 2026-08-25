@@ -99,6 +99,7 @@ jobs:
       PRODUCT_NAME: 'Project Atlas'
       SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
       WEB_ORIGIN: 'http://localhost:3000'
+      PLATFORM_ROOT_DOMAIN: 'localtest.me'
     steps:
       - uses: actions/checkout@v4
 
@@ -174,6 +175,7 @@ jobs:
       PRODUCT_NAME: 'Project Atlas'
       SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
       WEB_ORIGIN: 'http://localhost:3000'
+      PLATFORM_ROOT_DOMAIN: 'localtest.me'
       # tests/support/run-prisma.ts's `migrate reset` call — same
       # human-reviewed, repeatable consent as the local dev database (see
       # that file's comment), scoped here to the ephemeral CI database.

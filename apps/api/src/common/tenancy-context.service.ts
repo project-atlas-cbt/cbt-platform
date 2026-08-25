@@ -3,25 +3,39 @@ import { Injectable } from '@nestjs/common';
 
 export interface TenancyStore {
   schoolId: string | null;
+  /**
+   * The raw subdomain label TenancyMiddleware parsed from the Host header
+   * (ADR-0005), even when it didn't resolve to a known School — e.g. an
+   * unrecognised subdomain. Kept distinct from `schoolId` so a future
+   * consumer (B1's `GET /v1/tenant/resolve`) can tell "no subdomain was
+   * present" apart from "a subdomain was present but no school matches
+   * it", which need different responses.
+   */
+  subdomain: string | null;
 }
 
 /**
- * Request-scoped school context (B0 scope). Real resolution — subdomain at
- * login, session-carried thereafter — is ADR-0005 / B1. B0 only needs the
- * primitive: an AsyncLocalStorage-backed context that TenancyMiddleware
- * populates and that repository/service code reads instead of threading
- * `schoolId` through every function signature by hand.
+ * Request-scoped tenant context. Resolution itself — Host-header subdomain
+ * parsing against School.subdomain — lives in TenancyMiddleware
+ * (ADR-0005); this service only holds the result for the duration of the
+ * request via AsyncLocalStorage, so repository/service code reads it
+ * instead of threading `schoolId` through every function signature by
+ * hand.
  */
 @Injectable()
 export class TenancyContextService {
   private readonly storage = new AsyncLocalStorage<TenancyStore>();
 
-  run<T>(schoolId: string | null, fn: () => T): T {
-    return this.storage.run({ schoolId }, fn);
+  run<T>(store: TenancyStore, fn: () => T): T {
+    return this.storage.run(store, fn);
   }
 
   get schoolId(): string | null {
     return this.storage.getStore()?.schoolId ?? null;
+  }
+
+  get subdomain(): string | null {
+    return this.storage.getStore()?.subdomain ?? null;
   }
 
   requireSchoolId(): string {

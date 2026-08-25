@@ -350,12 +350,12 @@ Per `AGENTS.md` §13:
 
 ## 12. Immediate Next Actions
 
-`B0` is complete. The next actions are build actions.
+`B0` is complete, including its 2026-08-25 gap closure (tenant resolution mechanism, cookie/CORS/CSRF primitives, the `NotificationChannel` abstraction, and rate-limit scaffolding — see `backend-roadmap.md`'s B0 section). The next actions are build actions.
 
-1. **Start `B1` — Identity & Authentication.** Tenant resolution at login (ADR-0005), the `auth.v1` contract, Argon2id, session lifecycle. B0's contracts and tenancy primitives are the foundation it builds on.
+1. **Start `B1` — Identity & Authentication.** Tenant resolution at login (ADR-0005), the `auth.v1` contract, Argon2id, session lifecycle. B0's contracts, tenancy primitives, CSRF/CORS primitives, and `NotificationChannel` abstraction are the foundation it builds on — B1 needs none of them re-invented, and can prove login resolution and password-reset dispatch end to end against B0's local-dev conventions (`localtest.me` subdomains, the console notification provider) without waiting on real production infrastructure.
 2. **In parallel, continue `F0`'s design system and theming engine** — no API surface, so no dependency on B1.
 3. **In parallel, continue `F13`'s offline exam engine** — Dexie schema, sync queue, state machine, and timer, built against the published `attempt.v1` contract. This is the longest-lead frontend item and the most valuable parallelisation available.
 4. **F0 should confirm `packages/contracts` and the error envelope are sufficient to build its API client** — the one open item in B0's Definition of Done (item 9), closing P0 out fully.
-5. **Provision `eu-west-1`** per [ADR-0032](../decisions/ADR-0032-aws-region.md), with wildcard DNS and TLS for the per-school subdomains required by [ADR-0005](../decisions/ADR-0005-tenant-resolution-at-login.md) — B1 needs real tenant subdomains to prove login resolution end to end.
-6. **Select the transactional email provider** per [ADR-0019](../decisions/ADR-0019-transactional-messaging-channel.md) and configure SPF, DKIM and DMARC — B1's password reset and B3 both depend on it.
+5. **Provision `eu-west-1`** per [ADR-0032](../decisions/ADR-0032-aws-region.md), with real wildcard DNS and TLS for the per-school subdomains required by [ADR-0005](../decisions/ADR-0005-tenant-resolution-at-login.md) — this is `B23` scope, not a B1 blocker: B0 already delivers the resolution mechanism and a working local-dev subdomain convention, so B1 doesn't need real production DNS to prove login resolution.
+6. **Select the transactional email provider** per [ADR-0019](../decisions/ADR-0019-transactional-messaging-channel.md) and configure SPF, DKIM and DMARC — also `B23` scope, not a B1 blocker: B0 ships the `NotificationChannel` abstraction with a console/dev provider, so B1's password-reset dispatch and B3's activation-key delivery can be built and tested against it now, with the real provider swapped in later behind the same interface.
 7. **Carry the two conditional decisions forward**: schedule ADR-0028's legal review into B20 and ADR-0032's RTT measurement into B21, so neither is forgotten.

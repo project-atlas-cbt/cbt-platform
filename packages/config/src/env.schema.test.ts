@@ -12,6 +12,7 @@ const validEnv = {
   REDIS_URL: 'redis://localhost:6379',
   SESSION_COOKIE_SECRET: 'x'.repeat(32),
   WEB_ORIGIN: 'http://localhost:3000',
+  PLATFORM_ROOT_DOMAIN: 'localtest.me',
 };
 
 describe('loadEnv', () => {
@@ -30,6 +31,18 @@ describe('loadEnv', () => {
   it('fails fast when DATABASE_URL is missing', () => {
     const { DATABASE_URL: _omit, ...rest } = validEnv;
     expect(() => loadEnv(rest)).toThrow(EnvValidationError);
+  });
+
+  it('fails fast when PLATFORM_ROOT_DOMAIN is missing', () => {
+    const { PLATFORM_ROOT_DOMAIN: _omit, ...rest } = validEnv;
+    expect(() => loadEnv(rest)).toThrow(EnvValidationError);
+  });
+
+  it('defaults RATE_LIMIT_MAX and RATE_LIMIT_WINDOW_SECONDS, and leaves COOKIE_DOMAIN unset', () => {
+    const env = loadEnv(validEnv);
+    expect(env.RATE_LIMIT_MAX).toBe(300);
+    expect(env.RATE_LIMIT_WINDOW_SECONDS).toBe(60);
+    expect(env.COOKIE_DOMAIN).toBeUndefined();
   });
 
   it('rejects a session secret shorter than 16 characters', () => {
