@@ -1,12 +1,24 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import { ThemeProvider } from '@/lib/theme/theme-provider';
+import { QueryProvider } from '@/lib/query/query-provider';
+import { Toaster } from '@/components/ui/toaster';
+import './globals.css';
 
-// PROJECT.md: product name is read from environment, never hardcoded — the
-// fallback below is a generic, non-branded placeholder for this bare
-// layout, not the product's temporary codename. F0's design system
-// replaces this layout and wires NEXT_PUBLIC_PRODUCT_NAME properly from
-// the monorepo's root .env (Next only auto-loads its own app-root .env
-// files, so that wiring is real work, not a one-line fix — left to F0).
+// PROJECT.md: the product name must be read from environment, never
+// hardcoded. next.config.ts re-exposes the canonical server-side
+// PRODUCT_NAME under NEXT_PUBLIC_PRODUCT_NAME for the client bundle — see
+// its own comment for why that indirection exists.
 const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
+
+// Doctrine §7: "one type family for UI... excellent legibility at small
+// sizes and strong number/tabular-figure support." Self-hosted via
+// next/font (no runtime request to Google Fonts, no layout shift).
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: productName,
@@ -15,8 +27,20 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={inter.variable}>
+      <body>
+        {/* No school colour is known at this layer — every school-branded
+            route (F1 onward) wraps its own subtree in a nested
+            <ThemeProvider primaryColor={...}>, overriding these tokens
+            further down. This outer instance is what makes the
+            platform-admin surface and any pre-branding screen coherent. */}
+        <ThemeProvider>
+          <QueryProvider>
+            {children}
+            <Toaster />
+          </QueryProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

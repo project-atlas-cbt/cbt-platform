@@ -232,11 +232,26 @@ session working on it without extra setup.
 
 ### Current Phase
 
-**`B1 — Identity & Authentication`** — complete. Per the new frontend/backend phase-pairing rule
-(see "Working Rules for Claude" above), `F0 — Design System` and `F1` (the frontend phase paired
-with `auth.v1`) are being built next, ahead of `B2 — Authorization & Tenancy Engine`, since `F0`/`F1`'s
-backend dependency (`B0`+`B1`) is now satisfied. `B2` remains the next backend phase once `F0`/`F1`
-are done.
+**`B1 — Identity & Authentication`** — complete. **`F0 — Frontend Foundation & Design System`** —
+complete. Per the frontend/backend phase-pairing rule (see "Working Rules for Claude" above),
+**`F1 — Authentication & Tenant Entry`** is next, ahead of `B2 — Authorization & Tenancy Engine`,
+since F1's backend dependency (`B1`'s `auth.v1`) is now satisfied and F0's foundation is in place
+underneath it. `B2` remains the next backend phase once `F1` is done.
+
+F0 delivered: the Next.js 16 App Router application (`apps/web`) with Tailwind v4 + a
+shadcn/ui-pattern component library restyled to Project Atlas's semantic design tokens; an
+OKLCH-based branding derivation engine (`lib/theme/derive-palette.ts`) that guarantees WCAG AA
+contrast on every school colour, adjusting lightness/chroma (never hue) and reporting when it
+does; a typed API client (`lib/api/client.ts`, `openapi-fetch` against `@atlas/contracts`'s
+generated types) with a normalised `ApiError`/`NetworkError` type the UI branches on; TanStack
+Query for admin server state (explicitly never the exam runtime); and PWA/service-worker
+scaffolding (`@serwist/next`) that precaches the app shell. A dev-only component workbench
+(`/workbench`, not `/_workbench` — see the roadmap's own note on why) demonstrates every component
+in its default/loading/error/empty states. See `docs/roadmaps/frontend-roadmap.md`'s F0 section
+for the full DoD breakdown and three real implementation gotchas found while building it (Serwist
+vs. Turbopack's webpack-config conflict, a Serwist build-time bug from referencing
+`self.__SW_MANIFEST` twice, and `apps/web`'s relative imports needing to be extensionless rather
+than the backend packages' `.js`-suffixed NodeNext convention).
 
 Delivered: the `User`/`SchoolMembership`/`RoleAssignment`/`StudentProfile`/`TeacherProfile`/`Session`/`PasswordResetToken` schema (RLS-protected where school-owned; `User` itself is tenant-independent by design); the `auth.v1` contract — `GET /tenant/resolve`, `POST /auth/login`, `POST /auth/logout`, `POST /auth/refresh`, `GET /auth/me`, `POST /auth/password/change`, `POST /auth/password/reset/request`, `POST /auth/password/reset/confirm` — published in `apps/api/openapi.json` and consumed by `packages/contracts`; Argon2id hashing (`@node-rs/argon2`); session cookies (sign/rotate/revoke, reusing B0's cookie-signing convention); forced first-login password change enforced centrally by `AuthGuard`; staff password reset over the `NotificationChannel` abstraction (B0); per-`(school, identifier)` lockout plus tighter per-route rate-limit overrides on the auth endpoints; and the credential-sheet one-time-reveal primitive (`CredentialSheetService`), scoped down from the roadmap's literal "per class" wording since `ClassGroup`/bulk import don't exist yet — confirmed with the project owner before implementation.
 
@@ -719,3 +734,105 @@ grouping and Software Admin login. `docs/roadmaps/roadmap-index.md`'s Current St
 Next Actions moved from "B1 next" to "B2 next, F1 can start now that `auth.v1` is frozen."
 Project state moves from _Implementation (B1)_ to _Implementation (B2)_.
 **Next: `B2 — Authorization & Tenancy Engine`.**
+
+### 2026-08-25 — New rule: frontend/backend phase pairing; `F0` started same day
+
+Immediately after B1 closed out, the project owner set a new standing rule (not a one-off
+decision): once a frontend phase's corresponding backend phase(s) are built, build that frontend
+phase too, before continuing further down the backend critical path — so contracts get proven end
+to end and manual testing against a real UI can start as early as possible. Recorded in
+`AGENTS.md` §19 and this file's Working Rules section. `F0`'s backend pair (`B0`) was already
+done, so F0 started the same day, ahead of `B2`.
+
+### 2026-08-25 — `F0` complete: frontend foundation and design system
+
+Followed the working-rules checklist: read `frontend-roadmap.md`'s F0 section, `docs/design/
+ui-ux-principles.md`, and `.claude/skills/project-atlas-ui/SKILL.md` before writing any code. No
+gating ADR blocks F0. Planned and scoped in a dedicated plan-mode pass, explicitly narrowed to F0
+only at the project owner's instruction — F1 was deliberately left out of this pass.
+
+**Tooling landed in `apps/web`** (previously the bare B0 placeholder — `app/layout.tsx`/
+`app/page.tsx` only): Tailwind CSS v4 + a shadcn/ui-pattern component library (owned source,
+restyled to this project's tokens — not shadcn's default styling), Radix primitives per component,
+`culori` for OKLCH colour math, `react-hook-form` + `@hookform/resolvers` + `zod` for the shared
+form-validation pattern, `openapi-fetch` for the typed API client, `@tanstack/react-query` for
+admin server state, `@serwist/next` for Workbox-based PWA scaffolding, `lucide-react` for icons,
+and `vitest` + `@testing-library/react` + `jsdom` for component/unit tests (matching every other
+workspace's existing Vitest convention — apps/web had none before this). Every dependency is tied
+to a specific F0 scope line, not added for convenience (`AGENTS.md` §9).
+
+**Theming engine** (`lib/theme/derive-palette.ts`): one school primary colour derives the full
+brand/neutral token set in OKLCH — perceptually uniform, so lightness/chroma adjustments predict
+their effect on contrast accurately. **Accessibility outranks exact colour reproduction**: every
+derived brand-primary/foreground pairing is verified against WCAG AA (>=4.5:1); a colour that can't
+clear that bar unadjusted has its lightness swept first, then chroma as a last resort — hue is
+never touched — and the adjustment is reported (`PaletteAdjustment`), not applied silently, so a
+future branding screen (F5) can explain it. Calibrated and tested against 8 sample colours
+including one mid-tone teal-gray (`#5E8284`) that clears AA with neither white nor black text —
+found by a real contrast sweep, not guessed — specifically to prove the adjustment path, not just
+the happy path. Status tokens (success/warning/danger/info) are fixed constants, independently
+calibrated against WCAG AA, never derived from a school's colour.
+
+**Component library** (`components/ui/`): Button, Input, Label, Form (a react-hook-form context
+wrapper wiring `aria-describedby`/`aria-invalid`/`role="alert"` automatically — errors
+programmatically associated with their field, not just visually adjacent), Select, Checkbox,
+RadioGroup, Table primitives + a generic `DataTable` (caller-owned sort/pagination state, so it's
+server-side-pagination-ready without F0 inventing the real data-fetching layer), Dialog, Tabs,
+Badge (semantic status, never colour-only), Skeleton, EmptyState, ErrorState (branches on the
+ADR-0033 envelope's `retryable` flag), and ErrorBoundary (contains a render failure to one section
+rather than blanking the whole screen, per doctrine's explicit rule). A dev-only workbench route
+(`app/workbench/` — **not** `app/_workbench/`, since a leading underscore is Next's "private
+folder" convention and would make the route unreachable rather than merely hidden) demonstrates
+every component across its default/loading/error/empty states, gated by `notFound()` outside
+development (verified: 404 under `next start`, 200 under `next dev`).
+
+**Typed API client** (`lib/api/client.ts`): `openapi-fetch` typed directly against
+`@atlas/contracts`'s generated `ApiPaths`, always `credentials: 'include'` (the session is an
+`HttpOnly` cookie per ADR-0022, never a token this code could read), with an `X-CSRF-Token`
+attach point wired but unset until F1 supplies a real token from `tenant/resolve`. Proven end to
+end against B0's Definition of Done item 9 (the one thing it left open): a real `GET /v1/health`
+call from the workbench succeeds against a running API.
+
+**Three real implementation problems found only by actually building and running this, not by
+inspection** — all fixed, all now documented inline where the fix lives:
+
+1. **Serwist vs. Next 16's Turbopack default.** `@serwist/next`'s stable integration mode injects
+   a `webpack` config; Turbopack refuses to run with an unexplained `webpack` key present (a real,
+   tracked upstream gap — `github.com/serwist/serwist/issues/54` — not a misconfiguration here).
+   Fixed with an explicit empty `turbopack: {}` in `next.config.ts` (Next's own documented way to
+   say the `webpack` key isn't a mistake), which lets `next dev` run under Turbopack with Serwist
+   genuinely inert there; `package.json`'s `build` script explicitly passes `next build --webpack`
+   for production, where Serwist actually needs to run.
+2. **A genuine Serwist build-time bug**, found while fixing the above: `app/sw.ts` originally
+   referenced `self.__SW_MANIFEST` twice (once to check truthiness, once to use the value) —
+   Serwist's build-time injector does a literal single-occurrence text replace in the compiled SW
+   bundle and refuses to build if it finds the string more than once. Fixed by reading it into a
+   local `const` exactly once.
+3. **`apps/web`'s relative imports needed to be extensionless, not `.js`-suffixed.** Every backend
+   package in this monorepo uses `moduleResolution: "NodeNext"` and writes relative imports as
+   `./file.js` (resolving to the sibling `.ts` source) — the convention this session initially
+   (incorrectly) carried into `apps/web`. `apps/web` has always used `moduleResolution: "Bundler"`
+   instead (a pre-existing B0 choice, for unrelated reasons), where the idiomatic and actually-
+   portable form is extensionless (`./file`). The `.js`-suffixed form typechecked fine and even
+   resolved under Turbopack, but broke with a real `Module not found` under `next build --webpack`
+   — found only by actually running that build, not by `tsc` or `next dev`. Fixed by writing every
+   `apps/web`-internal relative import without an extension.
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` at both the
+`apps/web` and full-monorepo level (9/9 turbo tasks). 53 tests in `apps/web` alone (14 files) —
+the OKLCH contrast sweep plus a default/loading/error/empty (or equivalent) test per component.
+Manually verified beyond the automated suite: `next build --webpack` produces a real `public/sw.js`
+(confirmed served with the correct content-type) and the built client bundle contains genuine
+`serviceWorker.register(...)` calls; `next dev` and `next start` both verified live via `curl` for
+the home route, the workbench route's dev/production gating, and the SSR-rendered default theme
+tokens appearing correctly in the initial HTML (no flash-of-unbranded-content).
+
+`docs/roadmaps/frontend-roadmap.md`'s F0 section gained status `COMPLETE`, DoD items checked off
+with file references, and an "Implementation notes" subsection covering the three problems above
+plus the dependency list and the "tenant-branded theming isn't wired yet, by design" scoping note.
+`docs/roadmaps/roadmap-index.md`'s Current State, P0 status, and Immediate Next Actions all moved
+from "F0 next" to "F1 next, ahead of B2." `.gitignore` gained an entry for Serwist's generated
+`public/sw.js` (regenerated by every build, same treatment as `.next/`). New env var
+`NEXT_PUBLIC_API_ORIGIN` documented in `.env.example`.
+Project state moves from _Implementation (B0/B1/F0)_ to _Implementation (F1)_.
+**Next: `F1 — Authentication & Tenant Entry`.**

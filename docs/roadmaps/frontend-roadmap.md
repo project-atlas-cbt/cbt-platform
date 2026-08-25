@@ -53,7 +53,7 @@ The student exam route runs its own client-side runtime inside the shared shell 
 
 | ID  | Phase                                  | Backend pair | Can start before backend?                    | Status      |
 | --- | -------------------------------------- | ------------ | -------------------------------------------- | ----------- |
-| F0  | Frontend Foundation & Design System    | B0           | Partially — design system yes, API client no | NOT STARTED |
+| F0  | Frontend Foundation & Design System    | B0           | Partially — design system yes, API client no | COMPLETE    |
 | F1  | Authentication & Tenant Entry          | B1           | No                                           | NOT STARTED |
 | F2  | App Shell, Navigation & Notifications  | B2, B10      | Shell yes, permissions no                    | NOT STARTED |
 | F3  | Platform Admin Workspace               | B3           | No                                           | NOT STARTED |
@@ -80,7 +80,7 @@ The student exam route runs its own client-side runtime inside the shared shell 
 
 # F0 — Frontend Foundation & Design System
 
-**Status:** NOT STARTED · **Backend pair:** B0
+**Status:** COMPLETE (2026-08-25) · **Backend pair:** B0
 
 ## Objective
 
@@ -144,26 +144,37 @@ B0 must publish the contract package before the API client is finalised.
 
 ## Definition of Done
 
-1. `pnpm dev` runs the web application locally against the local API.
-2. A school primary colour produces a complete derived palette; contrast is verified as accessible for text on generated shades.
-3. Every component exists in the workbench with all four states demonstrated.
-4. The typed API client is generated from the OpenAPI document and compiles.
-5. The error envelope is parsed into a typed error the UI can branch on, including the `retryable` flag.
-6. Loading, error, and empty primitives are documented as the required pattern for later phases.
-7. The product name renders from an environment variable; a grep confirms no hardcoded name.
-8. Responsive baseline verified at the target lab resolution.
-9. Service worker registers and precaches the shell.
-10. CI runs lint, typecheck, unit, and component tests.
+1. [x] `pnpm dev` runs the web application locally against the local API.
+2. [x] A school primary colour produces a complete derived palette; contrast is verified as accessible for text on generated shades. `lib/theme/derive-palette.ts` (OKLCH via `culori`), verified by `derive-palette.test.ts`'s AA contrast sweep across 8 sample colours including one that forces the lightness/chroma adjustment path.
+3. [x] Every component exists in the workbench with all four states demonstrated. `app/workbench` (dev-only route — see Implementation notes below), 14 component test files (53 tests) covering default/loading/error/empty/disabled states.
+4. [x] The typed API client is generated from the OpenAPI document and compiles. `lib/api/client.ts`, `openapi-fetch` typed against `@atlas/contracts`'s `ApiPaths`.
+5. [x] The error envelope is parsed into a typed error the UI can branch on, including the `retryable` flag. `lib/api/error.ts`'s `ApiError`/`NetworkError`, consumed by `<ErrorState>`.
+6. [x] Loading, error, and empty primitives are documented as the required pattern for later phases. `components/ui/{skeleton,error-state,error-boundary,empty-state,data-table}.tsx`.
+7. [x] The product name renders from an environment variable; a grep confirms no hardcoded name. `NEXT_PUBLIC_PRODUCT_NAME`, re-exposed from server-only `PRODUCT_NAME` by `next.config.ts`.
+8. [x] Responsive baseline verified at the target lab resolution.
+9. [x] Service worker registers and precaches the shell. `@serwist/next` + `app/sw.ts`; verified via `next build --webpack` producing `public/sw.js` and the built client bundle containing real `serviceWorker.register(...)` calls (see Implementation notes for why `--webpack` specifically).
+10. [x] CI runs lint, typecheck, unit, and component tests. `apps/web`'s `lint`/`typecheck`/`test` scripts wired into the existing `turbo run` pipeline — no CI workflow changes needed, it already runs every workspace's scripts.
 
 ## Exit criteria
 
-- B0's contract package is consumed successfully.
-- The component workbench is reviewed and accepted as the basis for later phases.
+- [x] B0's contract package is consumed successfully.
+- [x] The component workbench is reviewed and accepted as the basis for later phases.
+
+## Implementation notes
+
+- **Component workbench, not Storybook.** `eslint-config-next` already needed a workaround in this repo for an ESLint 10 incompatibility (`apps/web/eslint.config.mjs`'s own comment) — Storybook 8/9 against Next 16 + React 19 + Tailwind v4 carried the same class of bleeding-edge-tooling risk. The roadmap's "Storybook or an equivalent component workbench" wording is satisfied by an in-app route instead: `app/workbench/page.tsx`, gated with `notFound()` outside development (verified: returns 404 under `next start`, 200 under `next dev`). Note the route is `app/workbench/`, not `app/_workbench/` — a leading underscore is Next's "private folder" convention and would make the route unreachable, not merely hidden from navigation.
+- **Serwist vs. Turbopack, a real upstream gap.** `@serwist/next`'s stable integration mode injects a `webpack` key into `next.config`; Next 16 defaults to Turbopack and refuses to run with an unexplained `webpack` key present (tracked at `github.com/serwist/serwist/issues/54`). Fixed two ways: `next.config.ts` sets an explicit empty `turbopack: {}` (Next's own documented way to say the `webpack` key isn't a mistake), which lets `next dev` run under Turbopack with Serwist genuinely inert there (`disable: NODE_ENV !== 'production'`); `package.json`'s `build` script explicitly passes `next build --webpack`, since Serwist's supported integration mode needs the bundler it actually knows how to hook into. A separate real bug surfaced while fixing this: referencing `self.__SW_MANIFEST` twice in `app/sw.ts` (once to check truthiness, once to use the value) tripped Serwist's own build-time injector, which does a literal single-occurrence text replace and refuses to build otherwise — fixed by reading it into a local `const` once.
+- **NodeNext-style relative imports don't survive a webpack build in `apps/web`.** Every backend package in this monorepo uses `moduleResolution: "NodeNext"` and writes relative imports as `./file.js` (resolving to the sibling `.ts` source). `apps/web` uses `moduleResolution: "Bundler"` instead (a pre-existing B0 choice, for unrelated reasons — see that tsconfig's own comment), where the idiomatic and actually-portable form is extensionless (`./file`). `.js`-suffixed relative imports inside `apps/web`'s own source typechecked fine and even resolved under Turbopack, but broke under a real webpack build (`Module not found`) — found only by actually running `next build --webpack`, not by `tsc`. Fixed by writing every `apps/web`-internal relative import without an extension; imports of other `@atlas/*` workspace packages are unaffected (those resolve via `node_modules`, not this rule).
+- **Tenant-branded theming isn't wired to a real backend call yet, by design.** `<ThemeProvider>` derives tokens from a `primaryColor` prop with a documented platform-default fallback (`lib/theme/theme-provider.tsx`) — F0 has no `tenant/resolve` consumer (that's F1's `auth.v1` dependency). The root layout wraps the whole app in one default-branded `<ThemeProvider>`; F1 is expected to nest a second, school-branded instance around its own subtree once real branding data exists.
+- **New dependencies**, each tied to a specific scope line above rather than added for convenience (`AGENTS.md` §9): Tailwind v4 + shadcn/ui-pattern primitives (`@radix-ui/react-*`, `class-variance-authority`, `clsx`, `tailwind-merge`) as the approved component foundation; `culori` for OKLCH-based, WCAG-AA-guaranteed colour derivation; `react-hook-form` + `@hookform/resolvers` + `zod` for the shared form-validation pattern; `openapi-fetch` for the typed client; `@tanstack/react-query` for admin server state (explicitly never the exam runtime — see `lib/query/query-provider.tsx`'s doc comment); `@serwist/next` for Workbox-based PWA scaffolding; `lucide-react` for the one approved icon set; `vitest` + `@testing-library/*` + `jsdom` for component/unit tests, matching every other workspace's existing Vitest convention.
+- **`apps/web/next.config.ts` now loads the monorepo-root `.env`** via `dotenv`, closing the gap `app/layout.tsx`'s original B0 comment flagged ("Next only auto-loads its own app-root `.env*` files"). `NEXT_PUBLIC_API_ORIGIN` (new) is the browser-side typed client's base URL; `NEXT_PUBLIC_PRODUCT_NAME` is `PRODUCT_NAME` re-exposed under the client-safe prefix, kept as one canonical env var rather than two.
 
 ## Deferred items
 
 - Full design polish and marketing surfaces — not in scope.
 - Dark mode — not specified anywhere; do not introduce (`AGENTS.md §3`).
+- Real school-colour-driven theming end to end (needs F1's `tenant/resolve` integration).
+- Playwright/E2E tooling — F0's own testing table calls for unit/component/integration only; F1 introduces it (its testing table requires E2E across all six roles).
 
 ---
 

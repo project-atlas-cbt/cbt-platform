@@ -17,8 +17,15 @@ export default tseslint.config(
     // Unlike every other workspace, this config file lives inside the tree
     // `eslint .` lints (apps/web), so it must exclude itself — the
     // type-aware parserOptions.projectService below has no tsconfig
-    // covering a .mjs file.
-    ignores: ['.next/**', 'node_modules/**', 'eslint.config.mjs'],
+    // covering a .mjs file. postcss.config.mjs (F0, Tailwind v4's PostCSS
+    // plugin entry point) is the same situation.
+    ignores: [
+      '.next/**',
+      'node_modules/**',
+      'eslint.config.mjs',
+      'postcss.config.mjs',
+      'public/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
