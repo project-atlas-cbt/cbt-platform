@@ -178,10 +178,50 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        TenantResolveSchoolDto: {
+            name: string;
+            subdomain: string;
+            /** @description IANA timezone (ADR-0027). */
+            timezone: string;
+        };
+        TenantResolveResponseDto: {
+            /** @description null when the request resolved no school (platform host, unrecognised subdomain, or the bare root domain). */
+            school: components["schemas"]["TenantResolveSchoolDto"] | null;
+            /** @description ADR-0022's double-submit CSRF token. */
+            csrfToken: string;
+        };
         LoginDto: {
             /** @description Login identifier — username or school-issued student ID. */
             identifier: string;
             password: string;
+        };
+        StatusResponseDto: {
+            /**
+             * @example ok
+             * @enum {string}
+             */
+            status: "ok";
+        };
+        MeUserDto: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            displayName: string;
+            /** @description UserStatus (06 §7) — e.g. ACTIVE, SUSPENDED. */
+            status: string;
+        };
+        MeMembershipDto: {
+            id: string;
+            loginIdentifier: string;
+            /** @description SchoolMembership.status (07 §5.2). */
+            status: string;
+        };
+        MeResponseDto: {
+            user: components["schemas"]["MeUserDto"];
+            membership: components["schemas"]["MeMembershipDto"];
+            /** @description Active RoleAssignment.role values for this membership (02). */
+            roles: ("SOFTWARE_ADMIN" | "SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT")[];
+            effectiveSchoolId: string;
         };
         PasswordChangeDto: {
             currentPassword?: string;
@@ -274,7 +314,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TenantResolveResponseDto"];
+                };
             };
         };
     };
@@ -295,7 +337,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
             };
         };
     };
@@ -312,7 +356,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
             };
         };
     };
@@ -329,7 +375,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
             };
         };
     };
@@ -346,7 +394,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MeResponseDto"];
+                };
             };
         };
     };
@@ -367,7 +417,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
             };
         };
     };
@@ -388,7 +440,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
             };
         };
     };
@@ -409,7 +463,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
             };
         };
     };

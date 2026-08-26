@@ -180,7 +180,7 @@ B0 must publish the contract package before the API client is finalised.
 
 # F1 — Authentication & Tenant Entry
 
-**Status:** NOT STARTED · **Backend pair:** B1 · **Decided ADRs:** 0005, 0022
+**Status:** COMPLETE · **Backend pair:** B1 · **Decided ADRs:** 0005, 0022
 
 ## Objective
 
@@ -246,27 +246,130 @@ Blocks every authenticated phase.
 
 ## Definition of Done
 
-1. The login page renders the correct school logo and primary colour before authentication.
-2. Valid credentials authenticate and route to the correct workspace per role.
-3. Invalid credentials show a generic error revealing nothing about account existence.
-4. Suspended and inactive accounts are refused with an appropriate message.
-5. Software Admin uses a platform-branded login, not a school-branded one.
-6. Forced first-login password change cannot be skipped by navigating away.
-7. Password reset works end to end for staff.
-8. **A page refresh preserves the session**, verified explicitly.
-9. Session expiry shows a clear re-authentication path without data loss where avoidable.
-10. Logout clears all client state.
-11. Loading, error, and empty states implemented throughout.
-12. No credential material is stored in `localStorage` or `sessionStorage`.
+1. **Partial, honestly.** The login page renders the resolved school's real _name_ before
+   authentication (`components/auth/tenant-brand-line.tsx`, verified live via curl against a
+   seeded `greenfield` school). The _primary colour_ half cannot be real yet: `tenant/resolve`'s
+   `school` object is `{name, subdomain, timezone}` only — B4 (Media & branding) hasn't shipped
+   logo/colour columns. `lib/tenant/tenant-context.tsx` wires the full
+   resolve-→-`<ThemeProvider primaryColor>` pipeline so B4 only has to add a field, not build this
+   again; until then every school renders the platform default palette. Not silently faked.
+2. ✅ Valid credentials authenticate and route to the correct workspace per role
+   (`lib/auth/role-priority.ts`'s fixed priority order, `components/auth/role-landing-page.tsx`).
+   Verified live end to end (seeded Teacher account → `/teacher`) and by
+   `role-priority.test.ts`/`role-landing-page.test.tsx`.
+3. ✅ Invalid credentials show one generic error, verified live (wrong password → 401, identical
+   client message) and by `login-form.test.tsx` — the client never distinguishes
+   unknown-identifier/wrong-password/locked-out/suspended, matching
+   `IdentityService.evaluateLogin`'s server-side enumeration-resistance design.
+4. ✅ Suspended/inactive accounts collapse into the same generic message by the same mechanism as
+   item 3 — this _is_ the "appropriate message" for this product's enumeration-resistance
+   requirement, not a distinct one.
+5. **Partial, by design, matching B1's own recorded deferral.** `/admin/login` is a real,
+   platform-branded screen (verified live: renders "Platform sign in", default palette, no tenant
+   resolution attempted) — but submitting it cannot succeed against the API: B1 explicitly deferred
+   platform-level account provisioning (no `SchoolMembership` model for a Software Admin account).
+   Functional Software Admin login is B2/B3 scope.
+6. ✅ `<RouteGuard mode="requirePasswordChange">`/`mode="requireAuthenticated"` cross-redirect
+   (`components/auth/route-guard.tsx`) makes the forced-change screen unskippable client-side;
+   `AuthGuard`'s server-side `PASSWORD_CHANGE_REQUIRED` gate (B1, already integration-tested) is
+   the real enforcement this backs up. Covered by `route-guard.test.tsx`.
+7. ✅ Verified live, end to end, with a real token: seeded a staff account with an email, requested
+   a reset, read the real link off `ConsoleNotificationChannel`'s console output
+   (`/reset-password?token=...` — confirming the route-naming correction below was necessary, not
+   cosmetic), confirmed the reset, logged in with the new password, confirmed the old password
+   rejected. `reset-password-form.test.tsx` covers the missing-token/mismatch/invalid-token/success
+   states.
+8. ✅ **A page refresh preserves the session.** `auth-context.test.tsx`'s dedicated test calls no
+   `login()` at all — a fresh `/auth/me` query against the `HttpOnly` cookie alone resolves
+   `authenticated` — proving the `HttpOnly` cookie (ADR-0022), not any client code, is what this
+   depends on.
+9. ✅ A 401 from any authenticated call (not just the initial bootstrap) collapses to
+   `unauthenticated` via `lib/api/client.ts`'s shared `unauthenticatedMiddleware`, re-running the
+   `/auth/me` query rather than hand-forcing local state — route guards then redirect to `/login`.
+10. ✅ `logout()` (`lib/auth/auth-context.tsx`) revokes the session server-side, then re-resolves
+    `/auth/me` (which now correctly 401s) rather than maintaining a separately-tracked "logged out"
+    flag that could drift. Verified live (`Max-Age=0` cookie-clear + subsequent `/auth/me` → 401)
+    and by `auth-context.test.tsx`.
+11. ✅ Loading (skeletons), error (generic for login/reset-request per enumeration-resistance,
+    specific for reset-confirm's invalid-token case), and empty (reset-request success,
+    missing-reset-token) states implemented throughout — see each form's test file.
+12. ✅ Grep-confirmed: no `localStorage`/`sessionStorage` call anywhere in `apps/web`. The session
+    is exclusively the `HttpOnly` cookie; the CSRF token lives only in an in-memory module
+    variable (`lib/api/client.ts`).
 
 ## Exit criteria
 
-- ADR-0005 and ADR-0022 decided and implemented consistently across F1 and B1.
-- Refresh-persistence test green — F13 depends on it.
+- ADR-0005 and ADR-0022 decided and implemented consistently across F1 and B1. ✅
+- Refresh-persistence test green — F13 depends on it. ✅ (`auth-context.test.tsx`)
+
+## Implementation notes
+
+- **Dynamic API origin, not a fixed one** (`lib/api/resolve-origin.ts`): the browser-facing API
+  origin is derived from the current page's own hostname/port
+  (`greenfield.localtest.me:3000` (web) → `greenfield.localtest.me:3001` (api)), mirroring
+  `docs/operations/domain-plan.md`'s already-documented local-dev convention exactly — this is
+  what lets `TenancyMiddleware`'s Host-header parsing (ADR-0005) resolve the correct tenant for a
+  real cross-origin browser call, with zero backend change. `NEXT_PUBLIC_API_ORIGIN` (F0's fixed
+  default) is used unchanged only on bare `localhost`. **The production hostname pattern is a
+  deliberately flagged open question for B23**: ADR-0022's topology diagram shows a single flat
+  `api.<root>`, which cannot carry a per-school subdomain via Host header the way this mirrors it
+  locally — the same class of gap wildcard DNS/TLS itself already is deferred there. Not silently
+  resolved; see this phase's completion report to the project owner.
+- **Two real cross-cutting bugs found only by building a real typed consumer, not by inspection**,
+  both fixed at the source (B1-owned `apps/api`, not worked around client-side):
+  1. Every one of B1's `IdentityController` endpoints had no `@ApiOkResponse` decorator, so
+     `@atlas/contracts`'s generated types collapsed every response to `content?: never` — F1 is
+     the first real typed consumer of this contract, and building one immediately surfaced it.
+     Fixed with real response DTOs (`dto/status-response.dto.ts`, `dto/tenant-resolve-response
+.dto.ts`, `dto/me-response.dto.ts`) and `@ApiOkResponse({type: ...})` + explicit return-type
+     annotations on every method — `pnpm generate` regenerated a genuinely typed
+     `@atlas/contracts` client, no `as`-casts needed at any F1 call site.
+  2. Local multi-subdomain browser testing (`greenfield.localtest.me:3000` calling
+     `greenfield.localtest.me:3001`) was silently rejected by CORS: `isAllowedOrigin`
+     (`apps/api/src/security/cors.ts`) only ever allowed `https:` under the wildcard-subdomain
+     rule (`WEB_ORIGIN` was the one deliberate `http:` exception, for the single fixed
+     `localhost:3000` case F0 needed). Fixed with a new `allowInsecureSubdomains` parameter,
+     wired from `NODE_ENV !== 'production'` in `main.ts` — never relaxed in production regardless
+     of caller input. Verified live and via new `cors.test.ts` cases.
+- **`/reset-password`, not the roadmap's originally-listed `/password/reset`.**
+  `IdentityService.requestPasswordReset` (B1) already hardcodes the reset link as
+  `${WEB_ORIGIN}/reset-password?token=...` — confirmed live by reading the real link off
+  `ConsoleNotificationChannel`'s output during manual verification. Since B1 is frozen, the route
+  was built to match the real link a password-reset email actually contains, not the roadmap's
+  earlier wording.
+- **Session lifecycle is TanStack Query, not hand-rolled `useEffect`/`useState`**
+  (`lib/auth/auth-context.tsx`): `GET /auth/me` is a `useQuery`; `login`/`logout`/`reload` all
+  resolve to the same `AuthStatus` derivation by invalidating that one query. This was a real
+  mid-implementation correction — React's `react-hooks/set-state-in-effect` lint rule flagged the
+  first hand-rolled version, and `useQuery` was already this codebase's established pattern for
+  exactly this kind of fetch-on-mount lifecycle (F0's `use-health.ts`).
+- **Opportunistic session refresh**: `POST /auth/refresh` fires every 20 minutes while the tab is
+  visible and the user is authenticated — an explicit engineering default (comfortably inside the
+  7-day `SESSION_TTL_SECONDS`), distinct from DoD item 8 (which the cookie alone satisfies), and
+  what actually exercises `refresh` per the roadmap's own testing table.
+- **Role-priority landing** (`lib/auth/role-priority.ts`): `SCHOOL_ADMIN > MODERATOR > HOD >
+TEACHER > STUDENT`, a fixed engineering default for "where does a just-authenticated user land
+  first" when a membership holds more than one role — not a permissions decision, and explicitly
+  superseded once F2 builds the real academic-context/role switcher.
+- **Five placeholder per-role landing pages** (`/school`, `/moderator`, `/hod`, `/teacher`,
+  `/student`) prove the routing/guard logic end to end; they are not real workspaces — F2 ("App
+  Shell, Navigation & Notifications") replaces them.
+- `next.config.ts` gained `allowedDevOrigins: ['*.localtest.me']` — Next 15+'s dev-only
+  cross-origin request guard would otherwise warn/block `next dev` requests whose address-bar host
+  isn't `localhost`.
 
 ## Deferred items
 
 - MFA, SSO — not specified.
+- **Software Admin login functionality** (DoD item 5's non-UI half) — B2/B3, per B1's own recorded
+  scope decision.
+- **Real per-school branding colour/logo** (DoD item 1's non-name half) — B4.
+- **Production API-hostname topology** — B23, alongside wildcard DNS/TLS provisioning (already
+  deferred there by ADR-0005's own "Required changes" table).
+- Real browser/E2E automation (Playwright or equivalent) for the six-role login walk the roadmap's
+  own testing table lists — this pass used live `curl`-driven verification against a real running
+  API (proving the actual HTTP/cookie/CORS/CSRF mechanics) plus component-level tests (proving the
+  UI logic); a scripted, browser-driven E2E suite is not yet part of any phase's delivered tooling.
 
 ---
 

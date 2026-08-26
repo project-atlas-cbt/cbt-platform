@@ -33,7 +33,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantResolveResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Resolve the current subdomain's school for pre-login branding (ADR-0005), plus a CSRF token.",
@@ -56,7 +63,14 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Authenticate within the resolved tenant (ADR-0005).",
@@ -69,7 +83,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Revoke the current session.",
@@ -82,7 +103,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Rotate the current session (ADR-0022).",
@@ -95,7 +123,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Current user, membership, and roles — read live from the database.",
@@ -118,7 +153,14 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Authenticated password change — clears any forced-change state.",
@@ -141,7 +183,14 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Initiate a staff password reset (ADR-0019 — students have no email).",
@@ -164,7 +213,14 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Complete a password reset with a single-use token.",
@@ -186,6 +242,42 @@
   ],
   "components": {
     "schemas": {
+      "TenantResolveSchoolDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "subdomain": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone (ADR-0027)."
+          }
+        },
+        "required": ["name", "subdomain", "timezone"]
+      },
+      "TenantResolveResponseDto": {
+        "type": "object",
+        "properties": {
+          "school": {
+            "nullable": true,
+            "description": "null when the request resolved no school (platform host, unrecognised subdomain, or the bare root domain).",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TenantResolveSchoolDto"
+              }
+            ]
+          },
+          "csrfToken": {
+            "type": "string",
+            "description": "ADR-0022's double-submit CSRF token."
+          }
+        },
+        "required": ["school", "csrfToken"]
+      },
       "LoginDto": {
         "type": "object",
         "properties": {
@@ -198,6 +290,78 @@
           }
         },
         "required": ["identifier", "password"]
+      },
+      "StatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"],
+            "example": "ok"
+          }
+        },
+        "required": ["status"]
+      },
+      "MeUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "UserStatus (06 §7) — e.g. ACTIVE, SUSPENDED."
+          }
+        },
+        "required": ["id", "firstName", "lastName", "displayName", "status"]
+      },
+      "MeMembershipDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "loginIdentifier": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "SchoolMembership.status (07 §5.2)."
+          }
+        },
+        "required": ["id", "loginIdentifier", "status"]
+      },
+      "MeResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/MeUserDto"
+          },
+          "membership": {
+            "$ref": "#/components/schemas/MeMembershipDto"
+          },
+          "roles": {
+            "type": "array",
+            "description": "Active RoleAssignment.role values for this membership (02).",
+            "items": {
+              "type": "string",
+              "enum": ["SOFTWARE_ADMIN", "SCHOOL_ADMIN", "MODERATOR", "HOD", "TEACHER", "STUDENT"]
+            }
+          },
+          "effectiveSchoolId": {
+            "type": "string"
+          }
+        },
+        "required": ["user", "membership", "roles", "effectiveSchoolId"]
       },
       "PasswordChangeDto": {
         "type": "object",

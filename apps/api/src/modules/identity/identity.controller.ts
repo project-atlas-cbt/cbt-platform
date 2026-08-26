@@ -9,7 +9,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '@atlas/db';
@@ -22,6 +22,9 @@ import { IdentityService } from './identity.service.js';
 import { LoginDto } from './dto/login.dto.js';
 import { PasswordChangeDto } from './dto/password-change.dto.js';
 import { PasswordResetConfirmDto, PasswordResetRequestDto } from './dto/password-reset.dto.js';
+import { MeResponseDto } from './dto/me-response.dto.js';
+import { StatusResponseDto } from './dto/status-response.dto.js';
+import { TenantResolveResponseDto } from './dto/tenant-resolve-response.dto.js';
 
 // Tight, endpoint-specific overrides on top of SecurityModule's generous
 // global ThrottlerGuard baseline (security.module.ts's own comment
@@ -63,7 +66,8 @@ export class IdentityController {
     summary:
       "Resolve the current subdomain's school for pre-login branding (ADR-0005), plus a CSRF token.",
   })
-  async resolveTenant(@Req() req: FastifyRequest) {
+  @ApiOkResponse({ type: TenantResolveResponseDto })
+  async resolveTenant(@Req() req: FastifyRequest): Promise<TenantResolveResponseDto> {
     const schoolId = this.tenancy.schoolId;
     const school = schoolId
       ? await prisma.school.findUnique({
@@ -82,11 +86,12 @@ export class IdentityController {
   @HttpCode(HttpStatus.OK)
   @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: 'Authenticate within the resolved tenant (ADR-0005).' })
+  @ApiOkResponse({ type: StatusResponseDto })
   async login(
     @Body() body: LoginDto,
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) res: FastifyReply,
-  ) {
+  ): Promise<StatusResponseDto> {
     const schoolId = this.requireTenant();
     await this.identity.login(schoolId, body.identifier, body.password, res, req);
     return { status: 'ok' as const };
@@ -96,7 +101,11 @@ export class IdentityController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Revoke the current session.' })
-  async logout(@Req() req: FastifyRequest, @Res({ passthrough: true }) res: FastifyReply) {
+  @ApiOkResponse({ type: StatusResponseDto })
+  async logout(
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ): Promise<StatusResponseDto> {
     const user = currentUser(req);
     await this.identity.logout(user.schoolId, user.sessionId, res);
     return { status: 'ok' as const };
@@ -105,7 +114,11 @@ export class IdentityController {
   @Post('auth/refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate the current session (ADR-0022).' })
-  async refresh(@Req() req: FastifyRequest, @Res({ passthrough: true }) res: FastifyReply) {
+  @ApiOkResponse({ type: StatusResponseDto })
+  async refresh(
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ): Promise<StatusResponseDto> {
     const schoolId = this.requireTenant();
     await this.identity.refresh(req, res, schoolId);
     return { status: 'ok' as const };
@@ -114,7 +127,8 @@ export class IdentityController {
   @Get('auth/me')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Current user, membership, and roles — read live from the database.' })
-  async me(@Req() req: FastifyRequest) {
+  @ApiOkResponse({ type: MeResponseDto })
+  async me(@Req() req: FastifyRequest): Promise<MeResponseDto> {
     const user = currentUser(req);
     return this.identity.me(user.schoolId, user.userId, user.membershipId);
   }
@@ -124,7 +138,11 @@ export class IdentityController {
   @UseGuards(AuthGuard)
   @AllowPendingPasswordChange()
   @ApiOperation({ summary: 'Authenticated password change — clears any forced-change state.' })
-  async changePassword(@Req() req: FastifyRequest, @Body() body: PasswordChangeDto) {
+  @ApiOkResponse({ type: StatusResponseDto })
+  async changePassword(
+    @Req() req: FastifyRequest,
+    @Body() body: PasswordChangeDto,
+  ): Promise<StatusResponseDto> {
     const user = currentUser(req);
     await this.identity.changePassword(
       user.schoolId,
@@ -139,7 +157,8 @@ export class IdentityController {
   @HttpCode(HttpStatus.OK)
   @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: 'Initiate a staff password reset (ADR-0019 — students have no email).' })
-  async requestPasswordReset(@Body() body: PasswordResetRequestDto) {
+  @ApiOkResponse({ type: StatusResponseDto })
+  async requestPasswordReset(@Body() body: PasswordResetRequestDto): Promise<StatusResponseDto> {
     const schoolId = this.requireTenant();
     await this.identity.requestPasswordReset(schoolId, body.identifier);
     // Always the same shape, whether or not the identifier existed —
@@ -151,7 +170,8 @@ export class IdentityController {
   @HttpCode(HttpStatus.OK)
   @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: 'Complete a password reset with a single-use token.' })
-  async confirmPasswordReset(@Body() body: PasswordResetConfirmDto) {
+  @ApiOkResponse({ type: StatusResponseDto })
+  async confirmPasswordReset(@Body() body: PasswordResetConfirmDto): Promise<StatusResponseDto> {
     const schoolId = this.requireTenant();
     await this.identity.confirmPasswordReset(schoolId, body.token, body.newPassword);
     return { status: 'ok' as const };

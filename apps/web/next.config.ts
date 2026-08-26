@@ -43,6 +43,13 @@ const nextConfig: NextConfig = {
   // then runs normally, and Serwist stays genuinely inert there via
   // `disable` as intended.
   turbopack: {},
+  // F1: real per-school subdomain browser testing
+  // (greenfield.localtest.me:3000, per docs/operations/domain-plan.md and
+  // lib/api/resolve-origin.ts) means the page itself is requested from a
+  // host other than "localhost" — Next's dev-only cross-origin request
+  // guard would otherwise warn/block that. Never consulted outside `next
+  // dev`.
+  allowedDevOrigins: ['*.localtest.me'],
 };
 
 // Serwist (Workbox-based PWA/service-worker integration, actively

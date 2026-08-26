@@ -233,10 +233,10 @@ session working on it without extra setup.
 ### Current Phase
 
 **`B1 — Identity & Authentication`** — complete. **`F0 — Frontend Foundation & Design System`** —
-complete. Per the frontend/backend phase-pairing rule (see "Working Rules for Claude" above),
-**`F1 — Authentication & Tenant Entry`** is next, ahead of `B2 — Authorization & Tenancy Engine`,
-since F1's backend dependency (`B1`'s `auth.v1`) is now satisfied and F0's foundation is in place
-underneath it. `B2` remains the next backend phase once `F1` is done.
+complete. **`F1 — Authentication & Tenant Entry`** — complete (two DoD items honestly partial —
+Software Admin login functionality and real per-school branding colour, both deferred by design,
+not oversight; see this file's Change Log entry below). Per the frontend/backend phase-pairing
+rule, **`B2 — Authorization & Tenancy Engine`** is next.
 
 F0 delivered: the Next.js 16 App Router application (`apps/web`) with Tailwind v4 + a
 shadcn/ui-pattern component library restyled to Project Atlas's semantic design tokens; an
@@ -836,3 +836,92 @@ from "F0 next" to "F1 next, ahead of B2." `.gitignore` gained an entry for Serwi
 `NEXT_PUBLIC_API_ORIGIN` documented in `.env.example`.
 Project state moves from _Implementation (B0/B1/F0)_ to _Implementation (F1)_.
 **Next: `F1 — Authentication & Tenant Entry`.**
+
+### 2026-08-26 — `F1` complete: authentication and tenant entry
+
+Followed the working-rules checklist: read `frontend-roadmap.md`'s F1 section, ADR-0005 and
+ADR-0022, `apps/api/src/modules/identity/*` (the real B1 contract, not just its OpenAPI shape —
+controller, service, guard, DTOs), and `docs/operations/domain-plan.md` before writing any code.
+No gating ADR is unresolved.
+
+**Delivered:** tenant-resolved school-branded login (`lib/tenant/tenant-context.tsx` →
+`GET /tenant/resolve` → nested `<ThemeProvider>`, F0's own layout.tsx comment anticipated exactly
+this pattern), a session/auth context (`lib/auth/auth-context.tsx`) built on TanStack Query rather
+than hand-rolled state, forced first-login password change enforced client-side by
+`<RouteGuard>` on top of B1's server-side `AuthGuard` gate, staff password reset (request→confirm,
+verified live end to end with a real token), generic-error/enumeration-resistant login matching
+`IdentityService.evaluateLogin`'s server design, opportunistic session refresh, a platform-branded
+(non-functional) `/admin/login`, and role-priority post-login routing to five placeholder
+workspaces that F2 replaces. `/`, `/login`, `/admin/login`, `/password/forgot`, `/reset-password`,
+`/password/change`, `/school`, `/moderator`, `/hod`, `/teacher`, `/student`.
+
+**Three scope realities handled honestly, not silently smoothed over** (frontend-roadmap.md's F1
+section has the full detail):
+
+1. **No real per-school branding data exists yet.** `tenant/resolve`'s `school` object is
+   `{name, subdomain, timezone}` only — B4 hasn't shipped logo/colour columns. The login page shows
+   the real school name; the _colour_ stays the platform default until B4, by design.
+2. **Software Admin login has no backing API.** B1 already recorded this deferral explicitly.
+   `/admin/login` is a real, platform-branded screen; submitting it cannot succeed until B2/B3.
+3. **API origin is derived dynamically from the page's own hostname**
+   (`lib/api/resolve-origin.ts`), mirroring `domain-plan.md`'s `greenfield.localtest.me:3001`
+   local-dev convention exactly — this is what makes ADR-0005's Host-header tenant resolution work
+   for a real cross-origin browser call. The production hostname pattern (ADR-0022's diagram shows
+   a single flat `api.<root>`, which can't carry a per-school subdomain via Host header the same
+   way) is a **deliberately flagged open question for B23** — the same class of gap wildcard
+   DNS/TLS already is deferred there, not a silently-invented answer.
+
+**Two real bugs found only by building a real typed consumer against B1's contract, not by
+inspection — both fixed at the source in B1-owned `apps/api`, mirroring B1's own precedent of
+fixing B0-owned infrastructure it found broken while building on top of it:**
+
+1. Every one of `IdentityController`'s endpoints (`tenant/resolve`, `login`, `logout`, `refresh`,
+   `me`, `password/change`, `password/reset/request`, `password/reset/confirm`) had no
+   `@ApiOkResponse` decorator — `@atlas/contracts`'s generated types collapsed every response to
+   `content?: never`, invisible until F1 tried to build a genuinely typed client against it (F0's
+   only consumed endpoint, `/health`, already had one). Fixed with real response DTOs
+   (`dto/status-response.dto.ts`, `dto/tenant-resolve-response.dto.ts`, `dto/me-response.dto.ts`)
+   and `@ApiOkResponse` + explicit return-type annotations on every method; `pnpm generate`
+   regenerated a genuinely typed contract, so no F1 call site needed an `as`-cast.
+2. Real per-subdomain local browser testing
+   (`greenfield.localtest.me:3000` calling `greenfield.localtest.me:3001`) was silently rejected by
+   CORS — `isAllowedOrigin` (`apps/api/src/security/cors.ts`) only ever allowed `https:` under the
+   wildcard-subdomain rule; `WEB_ORIGIN`'s `http:` exception only covered the single fixed
+   `localhost:3000` case F0 needed. Fixed with a new `allowInsecureSubdomains` parameter, wired
+   from `NODE_ENV !== 'production'` in `main.ts` — never relaxed in production regardless of what a
+   caller passes. New `cors.test.ts` cases plus live verification cover it.
+
+**One naming correction, not a new decision:** the route is `/reset-password`, not the roadmap's
+originally-listed `/password/reset` — `IdentityService.requestPasswordReset` (B1, already frozen)
+hardcodes that exact link, confirmed by reading the real URL off `ConsoleNotificationChannel`'s
+console output during manual verification.
+
+**A third mid-implementation correction, not a bug in shipped code:** the first version of
+`AuthProvider`'s session bootstrap used a hand-rolled `useEffect`/`useState` pair; React's
+`react-hooks/set-state-in-effect` lint rule flagged it immediately (calling `setState`
+synchronously within an effect). Rewritten on `useQuery` — this codebase's own established pattern
+for exactly this fetch-on-mount shape (F0's `use-health.ts`) — before any test or manual run.
+
+**Verification, in increasing scope:** full monorepo `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build` green (16/16 turbo tasks), `apps/api`'s integration suite green (32 tests, unaffected
+by the DTO/CORS changes), 103 tests in `apps/web` (25 files — component tests per screen covering
+default/loading/error/empty-equivalent states, `auth-context.test.tsx` proving the `AuthStatus`
+state machine including the page-refresh-preserves-session case with no `login()` call at all).
+Beyond automated tests: a full live `curl`-driven walk against a real running API and a real seeded
+school/user — tenant resolution, CORS with the new local-subdomain exception, wrong-password 401,
+correct-password login with real CSRF/cookie mechanics, `/auth/me`, `/auth/refresh` rotation,
+logout + post-logout 401, the platform host resolving `school: null` — plus a second full pass
+proving the password-reset request→confirm round trip end to end with a real token read off the
+console notification output, confirming both that it works and that the old password stops
+working. `next build --webpack` and `next start` verified live too (all 14 routes render
+correctly, including `/reset-password`'s dynamic `searchParams` handling). All seed data and
+temporary verification scripts were removed afterward — nothing manual-verification-only was
+committed.
+
+`docs/roadmaps/frontend-roadmap.md`'s F1 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-deferred-with-reason and file references, an "Implementation
+notes" subsection covering the items above, and expanded Deferred items.
+`docs/roadmaps/roadmap-index.md`'s Current State, P1 status, and Immediate Next Actions moved from
+"F1 next" to "B2 next." New env var `NEXT_PUBLIC_API_PORT` documented in `.env.example`.
+Project state moves from _Implementation (F1)_ to _Implementation (B2)_.
+**Next: `B2 — Authorization & Tenancy Engine`.**

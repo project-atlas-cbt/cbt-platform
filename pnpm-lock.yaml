@@ -147,6 +147,9 @@ importers:
       '@atlas/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@atlas/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@atlas/validation':
         specifier: workspace:*
         version: link:../../packages/validation

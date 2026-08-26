@@ -23,12 +23,17 @@ async function bootstrap() {
   // generic overload toward `unknown` instead of inferring `string` from Env.
   const webOrigin = config.get('WEB_ORIGIN', { infer: true });
   const rootDomain = config.get('PLATFORM_ROOT_DOMAIN', { infer: true });
+  // F1: real per-school subdomain browser testing in local dev
+  // (greenfield.localtest.me:3000, apps/web/lib/api/resolve-origin.ts) has
+  // no TLS to offer — only ever relaxed outside production; see
+  // isAllowedOrigin's own doc comment.
+  const allowInsecureSubdomains = config.get('NODE_ENV', { infer: true }) !== 'production';
   await app.register(cors, {
     // ADR-0022's topology is multi-origin — every school's
     // `<subdomain>.<root>` plus `admin.<root>` — so a single static
     // origin string can't express it. See security/cors.ts.
     origin: (origin, cb) => {
-      cb(null, isAllowedOrigin(origin, webOrigin, rootDomain));
+      cb(null, isAllowedOrigin(origin, webOrigin, rootDomain, allowInsecureSubdomains));
     },
     credentials: true, // same-site HttpOnly cookies per ADR-0022
   });

@@ -37,4 +37,22 @@ describe('isAllowedOrigin (ADR-0022)', () => {
   it('rejects a malformed origin rather than throwing', () => {
     expect(isAllowedOrigin('not-a-url', WEB_ORIGIN, ROOT)).toBe(false);
   });
+
+  describe('allowInsecureSubdomains (F1 local-dev subdomain testing)', () => {
+    it('defaults to false — http subdomains still rejected with no 4th argument', () => {
+      expect(isAllowedOrigin('http://greenfield.atlas.app', WEB_ORIGIN, ROOT)).toBe(false);
+    });
+
+    it('allows an http subdomain of the root domain when explicitly opted in', () => {
+      expect(isAllowedOrigin('http://greenfield.atlas.app', WEB_ORIGIN, ROOT, true)).toBe(true);
+    });
+
+    it('still allows https subdomains when opted in (not an either/or)', () => {
+      expect(isAllowedOrigin('https://greenfield.atlas.app', WEB_ORIGIN, ROOT, true)).toBe(true);
+    });
+
+    it('still rejects an unrelated http domain even when opted in', () => {
+      expect(isAllowedOrigin('http://evil.example.com', WEB_ORIGIN, ROOT, true)).toBe(false);
+    });
+  });
 });

@@ -1,25 +1,46 @@
-import Link from 'next/link';
-import { API_VERSION_PREFIX } from '@atlas/contracts';
+'use client';
 
-// Still a placeholder — real tenant-resolved entry/redirect is F1 scope
-// (frontend-roadmap.md's F1 route table: "/" → tenant entry / redirect).
-// F0's job was the design system underneath this page, not this page
-// itself; it now at least renders through the real token/component
-// system instead of bare HTML.
-export default function Home() {
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Skeleton } from '@/components/ui/skeleton';
+import { resolveLandingRoute, useAuth } from '@/lib/auth';
+
+/**
+ * F1's tenant-entry/redirect route (frontend-roadmap.md's F1 route table).
+ * Never renders real content itself — it exists only to decide where an
+ * arriving request lands: `/login` for an unauthenticated visitor,
+ * `/password/change` for a forced first-login change, or the
+ * role-priority landing route (`lib/auth/role-priority.ts`) for an
+ * already-authenticated one.
+ *
+ * Always resolves to `/login`, never `/admin/login`, for an unauthenticated
+ * visitor — Software Admin login isn't functional against the API yet (see
+ * app/admin/login/page.tsx's doc comment), so there's no live-traffic
+ * reason to branch on host here today; a platform-host visitor can still
+ * reach `/admin/login` directly.
+ */
+export default function TenantEntryPage() {
+  const router = useRouter();
+  const { status, me } = useAuth();
+
+  useEffect(() => {
+    if (status === 'loading') return;
+    if (status === 'unauthenticated') {
+      router.replace('/login');
+      return;
+    }
+    if (status === 'password-change-required') {
+      router.replace('/password/change');
+      return;
+    }
+    if (status === 'authenticated' && me) {
+      router.replace(resolveLandingRoute(me.roles) ?? '/login');
+    }
+  }, [status, me, router]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-      <h1 className="text-2xl font-semibold text-text-primary">
-        {process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform'}
-      </h1>
-      <p className="text-sm text-text-secondary">
-        Engineering foundation (F0) is in place. API version prefix: {API_VERSION_PREFIX}
-      </p>
-      {process.env.NODE_ENV !== 'production' ? (
-        <Link href="/workbench" className="text-sm font-medium text-brand-primary underline">
-          Open the component workbench →
-        </Link>
-      ) : null}
-    </main>
+    <div className="flex min-h-screen items-center justify-center">
+      <Skeleton className="h-8 w-48" />
+    </div>
   );
 }

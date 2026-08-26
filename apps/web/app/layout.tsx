@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@/lib/theme/theme-provider';
 import { QueryProvider } from '@/lib/query/query-provider';
+import { AuthProvider } from '@/lib/auth';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 
@@ -36,8 +37,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             platform-admin surface and any pre-branding screen coherent. */}
         <ThemeProvider>
           <QueryProvider>
-            {children}
-            <Toaster />
+            {/* F1: session bootstrap (GET /auth/me) is tenant-agnostic at
+                the JS/query level — the API resolves the school from
+                whichever subdomain the request actually reaches it on
+                (lib/api/resolve-origin.ts), so this can live once, above
+                both the school-branded routes and /admin/login, rather
+                than per route group. */}
+            <AuthProvider>
+              {children}
+              <Toaster />
+            </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>
