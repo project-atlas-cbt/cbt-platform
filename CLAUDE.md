@@ -238,8 +238,35 @@ Software Admin login functionality and real per-school branding colour, both def
 not oversight; see this file's Change Log entry below). **`B2 — Authorization & Tenancy Engine`**
 — complete (one DoD item, the generated cross-tenant test-suite generator, honestly deferred to
 `B3`'s first real `:id`-shaped endpoint — the underlying cross-tenant guarantee itself is proven
-two other ways; see this file's Change Log entry below). Per the frontend/backend phase-pairing
-rule, **`F2 — App Shell, Navigation & Notifications`** is next, ahead of `B3`.
+two other ways; see this file's Change Log entry below). **`F2 — App Shell, Navigation &
+Notifications`** — complete (three DoD items honestly partial, all gated on backend phases that
+don't exist yet — the context switcher's session/term half and Teacher/HOD historical-session
+viewing on `B5`, notifications on `B10`; see this file's Change Log entry below). Per the
+frontend/backend phase-pairing rule, **`B3 — Platform, Schools & Subscriptions`** is next — no
+further frontend phase can proceed without a backend phase it depends on.
+
+F2 delivered: the real role-aware application shell (`components/shell/`) replacing F1's five
+placeholder per-role landing pages — `AppShell`, `RoleNavigation`, `ContextSwitcher`,
+`NotificationPanel`, `ProfileMenu`, `OfflineIndicator`, all wired into six new route-group layouts
+(`/admin`, `/school`, `/moderator`, `/hod`, `/teacher`, `/student`). Navigation is computed live
+from `GET /me/permissions` (`lib/nav/`), not hand-maintained per role — `nav-model.ts` pins every
+role's item list verbatim against `04 §68`'s own per-role "Primary Navigation" lists, and excludes
+break-glass-only grants (ADR-0012) from routine nav. `RouteGuard` gained a `requireRole` prop
+(replacing the removed `RoleLandingPage`) as the one shared place a wrong-role visitor is bounced
+to their own workspace. Every nav destination without a built screen yet renders through one
+`[...slug]` catch-all per role (not ~30 empty stub files) — a later phase's real `page.tsx`
+supersedes it automatically. Three DoD items are honestly partial, all blocked on backend phases
+that don't exist yet, not silently faked or dropped: the context switcher shows the school name
+and a working multi-role switcher today, but no session/term (`B5`); Teacher/HOD historical-session
+viewing, same `B5` gap; the notification bell/panel is real chrome over an honest "not yet
+available" empty state (`B10`). Real browser E2E remains deferred (as F1 already recorded) —
+substituted with component tests exercising the real `useNavigation`/`usePermissions`/`apiClient`
+stack for all six roles. Two gaps found and explicitly deferred, not fixed opportunistically
+(`AGENTS.md` §14): self-service password change has real backend support (B1) but no frontend
+entry point — `ProfileMenu` deliberately omits a link to the forced-only `/password/change` screen
+rather than shipping one that would immediately bounce the user back out; and School Admin's `04
+§11` "highly visible Subscription indicator" has no data source until `B3`. See
+`docs/roadmaps/frontend-roadmap.md`'s F2 section for the full DoD/Implementation-notes breakdown.
 
 F0 delivered: the Next.js 16 App Router application (`apps/web`) with Tailwind v4 + a
 shadcn/ui-pattern component library restyled to Project Atlas's semantic design tokens; an
@@ -1068,3 +1095,94 @@ script `scripts/generate-permission-table-doc.mjs`.
 Project state moves from _Implementation (B2)_ to _Implementation (F2)_.
 **Next: `F2 — App Shell, Navigation & Notifications`**, per the frontend/backend phase-pairing
 policy (`AGENTS.md` §19) — ahead of `B3` on the backend critical path.
+
+### 2026-08-26 — `F2` complete: app shell, navigation and notifications
+
+Followed the working-rules checklist first: read `04` §4/§64–§68 (shared navigation, notifications,
+search, context switcher, dashboard philosophy, complete module map) and each role's own "Primary
+Navigation" section (§5, §11, §20, §28, §35, §52), the F2 roadmap entry and its backend-dependency
+note, the `project-atlas-ui` skill, and the existing F1/B2 implementation (`RouteGuard`,
+`RoleLandingPage`, `role-priority.ts`, `MePermissionsResponseDto`/`AuthorizationService
+.effectivePermissions`) before writing any code.
+
+**Nav is data, not six hand-written sidebars.** `apps/web/lib/nav/nav-model.ts` is the single place
+every role's navigation lives — each item's `label`/`href` copied verbatim from `04`'s own per-role
+lists, gated by a `match` id-prefix into `GET /me/permissions`'s `resource` field
+(`packages/domain`'s `PERMISSION_TABLE`). `nav-model.test.ts` pins every role's label list directly
+against the spec; `use-navigation.ts` derives visibility live (excluding break-glass-only grants —
+ADR-0012's audited path isn't routine navigation), proven end to end by
+`role-navigation.test.tsx`'s parameterised six-role test, which flattens every `match` prefix in
+the model itself into a synthetic fully-granted permission set rather than hand-maintaining a
+second parallel prefix list that could drift.
+
+**`RouteGuard` gained `requireRole`**, replacing F1's `RoleLandingPage` entirely (both that
+component and the now-superseded `LogoutButton` are deleted, not left dead — their own doc
+comments already named this replacement). A wrong-role visitor is bounced to their own landing
+route (`resolveLandingRoute`) rather than shown someone else's workspace or a blank screen.
+
+**`AppShell`** (`components/shell/app-shell.tsx`) composes `RoleNavigation`, `ContextSwitcher`,
+`NotificationPanel`, `ProfileMenu`, and `OfflineIndicator` behind one `RouteGuard`, wrapping only
+`children` in F0's existing `ErrorBoundary` — a failing workspace screen degrades without taking
+the header/sidebar chrome down with it (proven directly: `app-shell.test.tsx` throws inside
+`children` and asserts the chrome survives). Six new route-group layouts wire it in:
+`/admin`, `/school`, `/moderator`, `/hod`, `/teacher`, `/student`. `/student` is nested one level
+under a `(shell)` route group specifically so a future sibling `student/exam/[attemptId]` (F13)
+won't inherit this chrome, satisfying DoD item 10 structurally ahead of F13 needing it — route
+groups are invisible in the URL, so `/student`/`/student/results` etc. are unaffected. Every real
+screen behind a nav item that isn't built yet (People, Academics, Questions, ... — all later,
+separately-scoped phases) renders through one `[...slug]/page.tsx` catch-all per role rather than
+~30 empty stub files; it looks the destination up in `nav-model.ts` and renders
+`WorkspacePlaceholder`, or `notFound()` for an unrecognised path — a later phase's real `page.tsx`
+takes over automatically since Next.js prefers the more specific route.
+
+**Three DoD items are honestly partial, all gated on backend phases that don't exist yet — not
+silently faked or dropped, per the same discipline as F1's two and B2's one.** The context switcher
+(`components/shell/context-switcher.tsx`) shows the school name and a genuinely new, working
+capability — a role switcher for multi-role users (06 §7/§9, e.g. Teacher + HOD) that navigates
+straight to the other workspace, something `role-priority.ts`'s fixed landing order never offered —
+but no session/term: `GET /v1/academics/context` is `B5`, unbuilt, so it shows an explicit "not yet
+available" note rather than fabricate one (doctrine §12). Teacher/HOD historical-session viewing
+has the identical `B5` gap. The notification bell/panel (`notification-panel.tsx`) is real chrome
+— trigger, panel, labelled empty state — over `B10`'s unbuilt `GET /v1/notifications`; an honest
+"No notifications... once B10 ships" rather than a fabricated one.
+`roadmap-index.md` §1 already named this pattern before F2 started: "B10 has no dedicated frontend
+phase — it surfaces through F2." The real-E2E exit criterion is substituted, not silently claimed:
+Playwright automation remains deferred exactly as F1's own Deferred items already recorded: the
+component tests above (real `useNavigation`/`usePermissions`/`apiClient` stack, mocked only at the
+HTTP boundary) are the closest available substitute today.
+
+**Two real gaps found and explicitly recorded as Candidate/Deferred (`AGENTS.md` §14), not fixed
+opportunistically.** Self-service password change: B1's `PasswordChangeDto` already supports an
+already-authenticated, `credentialState: 'OK'` caller (`currentPassword` required in that branch),
+but F1 only ever built the _forced_ first-login variant (`/password/change`, which redirects an
+already-authenticated user straight back out) — no self-service entry point exists. `ProfileMenu`
+deliberately omits a "Change password" item rather than link to a screen that would immediately
+bounce the user back out; its natural home is a future Profile/Account settings screen, not named
+in F2's own scope. School Admin's `04 §11` "highly visible Subscription indicator" has no data
+source until `B3` ships subscriptions — not built against fabricated status.
+
+**Software Admin's shell is code-complete but still unreachable end to end** — `/admin/(shell)/`
+wires `SOFTWARE_ADMIN` through the identical role-agnostic `AppShell`/`RoleNavigation` every school
+role uses, exercised by `role-navigation.test.tsx`'s mocked-session test, but Software Admin login
+itself still isn't functional (B1's original deferral, not yet closed by B2 or B3 — unchanged by
+this phase). Not a new gap; F2's architecture is simply ready for the moment `B3` closes it.
+
+One new dependency: `@radix-ui/react-dropdown-menu` (`components/ui/dropdown-menu.tsx`, restyled to
+this doctrine's tokens like every other Radix primitive F0 already established) — profile menu,
+notification panel, and role switcher. Same vendor/API family already in the stack; no comparable
+primitive existed (`AGENTS.md` §9).
+
+Full pipeline green: `pnpm --filter @atlas/web lint && pnpm --filter @atlas/web typecheck &&
+pnpm --filter @atlas/web test && pnpm --filter @atlas/web build` — 136 tests (up from 100), and the
+production build's own route table confirms the intended shape: `/admin`, `/admin/[...slug]`,
+`/hod`, `/hod/[...slug]`, `/school`, `/school/[...slug]`, `/student`, `/student/[...slug]`,
+`/teacher`, `/teacher/[...slug]`, `/moderator`, `/moderator/[...slug]`, each route group correctly
+invisible in the URL.
+
+`docs/roadmaps/frontend-roadmap.md`'s F2 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-deferred-with-reason, an "Implementation notes" subsection, and an
+expanded Deferred items list. `docs/roadmaps/roadmap-index.md`'s Current State and Immediate Next
+Actions moved from "F2 next" to "B3 next" — no further frontend phase can proceed without a backend
+phase it depends on (F3 needs B3; F13 continues independently in parallel, unaffected).
+Project state moves from _Implementation (F2)_ to _Implementation (B3)_.
+**Next: `B3 — Platform, Schools & Subscriptions`.**

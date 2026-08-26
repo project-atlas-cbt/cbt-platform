@@ -1,10 +1,11 @@
-import { RouteGuard } from '@/components/auth/route-guard';
-import { RoleLandingPage } from '@/components/auth/role-landing-page';
+import { WorkspacePlaceholder } from '@/components/shell';
+import { DASHBOARD_QUESTION } from '@/lib/nav';
 
-export default function TeacherPage() {
+export default function TeacherDashboardPage() {
   return (
-    <RouteGuard mode="requireAuthenticated">
-      <RoleLandingPage role="TEACHER" title="Teacher workspace" />
-    </RouteGuard>
+    <WorkspacePlaceholder
+      title="Dashboard"
+      description={`${DASHBOARD_QUESTION.TEACHER} The real Teacher dashboard (04 §36) is a later, separately-scoped phase.`}
+    />
   );
 }

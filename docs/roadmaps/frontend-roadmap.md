@@ -375,7 +375,8 @@ TEACHER > STUDENT`, a fixed engineering default for "where does a just-authentic
 
 # F2 — App Shell, Navigation & Notifications
 
-**Status:** NOT STARTED · **Backend pair:** B2 (permissions), B10 (notifications), B5 (context)
+**Status:** COMPLETE (2026-08-26) · **Backend pair:** B2 (permissions), B10 (notifications, not yet
+built), B5 (context, not yet built)
 
 ## Objective
 
@@ -436,26 +437,107 @@ Every subsequent workspace phase renders inside this shell.
 
 ## Definition of Done
 
-1. Each role sees the navigation specified in `04 §68` — no more, no less.
-2. The student shell shows exactly Assessment, Results, and Profile (`04 §52`).
-3. The context switcher displays school, session, and term, and switching updates all dependent views.
-4. Teachers and HODs default to the current session and can view historical sessions where permitted (`04 §66`).
-5. Notifications display, mark read, and link to their target.
-6. Direct navigation to an unauthorized route is handled gracefully — no crash, no blank screen, no leaked data.
-7. The offline indicator reflects real connectivity.
-8. The global error boundary catches render failures and offers recovery.
-9. Loading, error, and empty states implemented.
-10. The exam route renders without shell chrome.
+1. ✅ Each role sees the navigation specified in `04 §68` — no more, no less. Computed live from
+   `GET /me/permissions`, not hand-maintained per role (`lib/nav/nav-model.ts` +
+   `lib/nav/use-navigation.ts`) — `nav-model.test.ts` pins every role's label list verbatim against
+   `04`'s own per-role "Primary Navigation" sections; `role-navigation.test.tsx` proves it end to
+   end through the real hook/API-client stack for all six roles, fully granted.
+2. ✅ The student shell shows exactly Assessment, Results, and Profile (`04 §52`) —
+   `ROLE_WORKSPACES.STUDENT`, pinned by the same test.
+3. **Partial, honestly.** The context switcher (`components/shell/context-switcher.tsx`) is real
+   for the half B2 makes possible today: it shows the school name and, for a multi-role user
+   (06 §7/§9 — e.g. Teacher + HOD), a working role switcher that navigates to the other role's
+   workspace root — genuinely new capability `lib/auth/role-priority.ts`'s fixed landing order
+   couldn't offer. The session/term half cannot be real: `GET /v1/academics/context` is B5, which
+   hasn't shipped. Rather than fabricate a session/term (doctrine §12: never fabricate data), the
+   switcher shows an explicit "not yet available" note. Not silently faked or silently dropped.
+4. **Blocked on B5**, same gap as item 3 — there is no session concept yet for a teacher/HOD to
+   default into or view historically. Recorded here, not silently skipped.
+5. **Partial, honestly, matching item 3's pattern.** `components/shell/notification-panel.tsx` is
+   the real bell/panel chrome — B10 (`GET /v1/notifications`, `POST /v1/notifications/:id/read`)
+   hasn't shipped, so it renders an explicit "not yet available" empty state rather than a
+   fabricated notification. `roadmap-index.md` §1 already named this: "B10 has no dedicated
+   frontend phase — it surfaces through F2." The pipe is built; B10 only has to start returning
+   real rows through this same component.
+6. ✅ `RouteGuard`'s new `requireRole` prop (replacing F1's `RoleLandingPage`) redirects a
+   wrong-role user to their own landing route — no crash, no blank screen, no leaked data.
+   `route-guard.test.tsx` covers correct-role, wrong-role, and multi-role-holding-one-of-several
+   cases; `app-shell.test.tsx` proves the composed shell redirects rather than rendering.
+7. ✅ `components/shell/offline-indicator.tsx` (`useSyncExternalStore` over
+   `navigator`/`online`/`offline`) — `offline-indicator.test.tsx` covers both transitions.
+8. ✅ `<AppShell>` wraps only `children` in `<ErrorBoundary>` (F0's primitive, reused not
+   reinvented) — a failing workspace screen degrades without taking the header/nav chrome down
+   with it. `app-shell.test.tsx`'s dedicated test throws inside `children` and asserts the header
+   and sidebar are still present.
+9. ✅ Loading (nav skeleton while permissions resolve, auth-bootstrap skeleton reused from F1),
+   error (existing `ErrorState`/`ApiError` machinery, unchanged), and empty (notification panel;
+   every not-yet-built nav destination's `WorkspacePlaceholder`) states implemented throughout —
+   never a blank screen or a bare 404 for a real nav destination.
+10. ✅ **Structural, not yet exercised** — `/student` is nested one level under a `(student)/(shell)`
+    route group specifically so a future sibling `student/exam/[attemptId]` (F13) does not inherit
+    `<AppShell>`. No exam route exists yet to prove this live; the routing shape is in place so
+    F13 doesn't have to restructure `/student` to get it.
 
 ## Exit criteria
 
-- B2's permissions contract drives navigation correctly for all six roles.
-- Role-navigation E2E tests green.
+- ✅ B2's permissions contract drives navigation correctly for all six roles — proved by
+  `nav-model.test.ts` (spec conformance) and `role-navigation.test.tsx` (live end-to-end through
+  the real hook/API stack, fully granted and partially granted).
+- **Substituted, honestly.** "Role-navigation E2E tests green" — real browser E2E (Playwright or
+  equivalent) is still deferred, exactly as F1's own Deferred items already recorded ("Real
+  browser/E2E automation... for the six-role login walk"); F2 doesn't introduce it either. The
+  component-level tests above (real `useNavigation`/`usePermissions`/`apiClient` stack, mocked only
+  at the HTTP boundary) are the closest available substitute today, not a claim of real E2E
+  coverage.
+
+## Implementation notes
+
+- **Software Admin's shell is code-complete but unreachable end to end.** `AppShell`,
+  `RoleNavigation`, and `useNavigation` are fully role-agnostic — `/admin/(shell)/` wires
+  `SOFTWARE_ADMIN` through the identical components every school role uses, and
+  `role-navigation.test.tsx` exercises it with a mocked session. But Software Admin login still
+  isn't functional (B1's original deferral, not closed by B2 or B3 yet — see F1's own Deferred
+  items and `CLAUDE.md`'s B2 change-log entry), so this shell cannot be reached through a real
+  login today. Not a new gap F2 introduced; an existing one F2's own architecture is ready for the
+  moment B3 closes it.
+- **Nav visibility excludes break-glass-only grants.** `useNavigation` filters out any
+  `GET /me/permissions` row with `breakGlass: true` before matching — ADR-0012's audited emergency
+  path shouldn't read as routine navigation. Covered by `use-navigation.test.tsx`.
+- **`[...slug]` catch-all per role, not one `page.tsx` per nav destination.** Every real screen
+  behind School Admin's People/Academics/Questions/etc. (and the equivalent for every other role)
+  is a separately-scoped later phase (F5–F19). Rather than ~30 empty stub files, each role has one
+  `[...slug]/page.tsx` that looks the destination up in `nav-model.ts` and renders
+  `WorkspacePlaceholder`, or `notFound()` for an unrecognised path. A later phase adding a real
+  `page.tsx` at that path takes over automatically — Next.js prefers the more specific route — so
+  this recedes on its own as the product is built out rather than needing to be torn down by hand.
+- **Real gap found, not fixed here: self-service password change has no UI.** B1's
+  `PasswordChangeDto` already supports an already-authenticated, `credentialState: 'OK'` caller
+  (`currentPassword` required in that branch) — but F1 only ever built the _forced_ first-login
+  variant (`/password/change` under `<RouteGuard mode="requirePasswordChange">`, which redirects an
+  already-authenticated user straight back out). `ProfileMenu` deliberately has no "Change
+  password" item rather than linking to a page that would immediately bounce the user back out.
+  **Candidate/Deferred** (`AGENTS.md` §14) — not named in F2's own scope; its natural home is a
+  future Profile/Account settings screen.
+- **Candidate/Deferred: School Admin's "Subscription" header indicator** (`04 §11`: "a highly
+  visible Subscription indicator, but not necessarily a whole navigation section"). No data source
+  exists yet (`B3` — Platform, Schools & Subscriptions — hasn't shipped). Not built against
+  fabricated data; left for whichever phase wires real subscription status into the shell.
+- **`@radix-ui/react-dropdown-menu` added** (`components/ui/dropdown-menu.tsx`) — the one new
+  dependency this phase needed (profile menu, notification panel, role switcher). Same vendor and
+  API family as the Dialog/Select/Tabs primitives F0 already restyled to this doctrine's tokens;
+  no comparable primitive existed in the stack already (`AGENTS.md` §9).
+- **F1's `RoleLandingPage`/`LogoutButton` are removed, not left dead.** Both components' own doc
+  comments already named their replacement ("F2's real profile menu", "F2 replaces them") —
+  `RouteGuard`'s new `requireRole` prop and `ProfileMenu` are that replacement; removing the old
+  components keeps there being exactly one logout path and one role-check path rather than two.
 
 ## Deferred items
 
 - Global search UI → F18.
 - In-app messaging — explicitly out of scope (`01 §53`).
+- Real browser/E2E automation — still deferred from F1; see Exit criteria above.
+- Self-service password-change UI, School Admin's subscription-status indicator — see
+  Implementation notes above (both **Candidate/Deferred**, `AGENTS.md` §14).
 
 ---
 

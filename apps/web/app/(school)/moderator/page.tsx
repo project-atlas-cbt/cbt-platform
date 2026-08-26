@@ -1,10 +1,11 @@
-import { RouteGuard } from '@/components/auth/route-guard';
-import { RoleLandingPage } from '@/components/auth/role-landing-page';
+import { WorkspacePlaceholder } from '@/components/shell';
+import { DASHBOARD_QUESTION } from '@/lib/nav';
 
-export default function ModeratorPage() {
+export default function ModeratorDashboardPage() {
   return (
-    <RouteGuard mode="requireAuthenticated">
-      <RoleLandingPage role="MODERATOR" title="Moderator workspace" />
-    </RouteGuard>
+    <WorkspacePlaceholder
+      title="Dashboard"
+      description={`${DASHBOARD_QUESTION.MODERATOR} The real Moderator dashboard (04 §21) is a later, separately-scoped phase.`}
+    />
   );
 }

@@ -2,14 +2,14 @@ import type { Role } from '@atlas/domain';
 
 /**
  * F1 engineering default for "where does a freshly logged-in user land
- * first" — not a permissions decision, and not the real per-role workspace
- * shell (that's F2's job — see `docs/roadmaps/frontend-roadmap.md`'s F2
- * section). A membership can hold more than one `RoleAssignment`
- * (06 §7/§9), so a fixed priority order picks one deterministic landing
- * route. F2's real academic-context/role switcher supersedes this once it
- * exists; until then this is a placeholder choice, not a hidden authority
- * decision — the server remains the real authority on what each role can
- * actually do everywhere else.
+ * first" — not a permissions decision. A membership can hold more than one
+ * `RoleAssignment` (06 §7/§9), so a fixed priority order picks one
+ * deterministic initial landing route. F2's real workspace shell
+ * (`components/shell/context-switcher.tsx`'s role switcher) lets a
+ * multi-role user move to another role's workspace *after* landing — this
+ * function only ever decides the first hop, and remains a placeholder
+ * choice, not a hidden authority decision: the server remains the real
+ * authority on what each role can actually do everywhere else.
  */
 const LANDING_PRIORITY: readonly Role[] = [
   'SCHOOL_ADMIN',

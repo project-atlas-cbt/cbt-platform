@@ -2,8 +2,9 @@
 
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Role } from '@atlas/domain';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/lib/auth';
+import { resolveLandingRoute, useAuth } from '@/lib/auth';
 
 export type RouteGuardMode = 'requireAuthenticated' | 'requirePasswordChange';
 
@@ -22,10 +23,31 @@ export type RouteGuardMode = 'requireAuthenticated' | 'requirePasswordChange';
  * instead of rendering `children`. `requirePasswordChange` is the inverse,
  * used by `/password/change` itself: an already-`authenticated` user has
  * nothing to force-change and is sent to `/`.
+ *
+ * `requireRole` (F2) is the workspace-layout guard, replacing F1's
+ * `RoleLandingPage`: a signed-in user who doesn't hold this role — e.g. a
+ * Student bookmarking `/teacher` — is bounced to their own landing route
+ * rather than shown someone else's workspace. Only meaningful alongside
+ * `mode="requireAuthenticated"`.
  */
-export function RouteGuard({ mode, children }: { mode: RouteGuardMode; children: ReactNode }) {
+export function RouteGuard({
+  mode,
+  requireRole,
+  children,
+}: {
+  mode: RouteGuardMode;
+  requireRole?: Role;
+  children: ReactNode;
+}) {
   const router = useRouter();
-  const { status } = useAuth();
+  const { status, me } = useAuth();
+
+  const wrongRole =
+    mode === 'requireAuthenticated' &&
+    status === 'authenticated' &&
+    !!requireRole &&
+    !!me &&
+    !me.roles.includes(requireRole);
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -39,8 +61,12 @@ export function RouteGuard({ mode, children }: { mode: RouteGuardMode; children:
     }
     if (mode === 'requirePasswordChange' && status === 'authenticated') {
       router.replace('/');
+      return;
     }
-  }, [status, mode, router]);
+    if (wrongRole && me) {
+      router.replace(resolveLandingRoute(me.roles) ?? '/login');
+    }
+  }, [status, mode, router, wrongRole, me]);
 
   if (status === 'loading') {
     return (
@@ -51,7 +77,7 @@ export function RouteGuard({ mode, children }: { mode: RouteGuardMode; children:
   }
 
   const allowed =
-    (mode === 'requireAuthenticated' && status === 'authenticated') ||
+    (mode === 'requireAuthenticated' && status === 'authenticated' && !wrongRole) ||
     (mode === 'requirePasswordChange' && status === 'password-change-required');
 
   // A redirect from the effect above is in flight — render nothing rather
