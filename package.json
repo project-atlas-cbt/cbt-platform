@@ -25,6 +25,7 @@
     "db:migrate:deploy": "pnpm --filter @atlas/db run migrate:deploy",
     "db:seed": "pnpm --filter @atlas/db run seed",
     "spike": "pnpm --filter @atlas/api run spike",
+    "generate:permission-table-doc": "pnpm --filter @atlas/domain run build && node scripts/generate-permission-table-doc.mjs",
     "prepare": "node scripts/setup-hooks.mjs"
   },
   "devDependencies": {

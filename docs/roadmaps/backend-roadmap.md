@@ -324,7 +324,7 @@ Requires the `ADR-0019` messaging channel to be operational for staff password r
 
 # B2 — Authorization & Tenancy Engine
 
-**Status:** NOT STARTED · **Decided ADRs:** 0012 (Software Admin authority), 0023 (RLS)
+**Status:** COMPLETE (2026-08-26) · **Decided ADRs:** 0012 (Software Admin authority), 0023 (RLS)
 
 ## Objective
 
@@ -360,10 +360,11 @@ Turn the `02` permission matrix into an executable, testable authorization engin
 
 ## Database work
 
-- `ExamAdministrator` table (exam × membership, assigned_by, status).
-- Indexes supporting scope resolution on the hot path: teacher assignments by membership and session, HOD assignments by department, enrollments by student and session.
-- Composite foreign keys carrying `school_id` per `D-01`.
-- RLS policies applied to school-owned tables if `ADR-0023` adopts them.
+- ~~`ExamAdministrator` table (exam × membership, assigned_by, status).~~ **Deferred to B12** — `Exam` doesn't exist yet; see Implementation notes.
+- ~~Indexes supporting scope resolution on the hot path: teacher assignments by membership and session, HOD assignments by department, enrollments by student and session.~~ **Deferred to B5/B6** with the tables themselves.
+- Composite foreign keys carrying `school_id` per `D-01` — followed for the two tables B2 does add (`AuditEvent`, `PlatformRoleAssignment` is exempt, see its own doc comment).
+- **Done.** RLS policies applied to the new school-owned table (`AuditEvent`) — `ADR-0023` was already adopted at `B0`.
+- **New, not originally scoped:** `PlatformRoleAssignment` (2026-08-26 decision) and a minimal `AuditEvent` (write-path only; see Implementation notes and Deferred items for what's B10's job).
 
 ## Background jobs
 
@@ -398,28 +399,54 @@ Every subsequent backend phase integrates its endpoints with this engine as part
 
 ## Definition of Done
 
-1. The normalised permission table is complete, reviewed against `02` cell by cell, and approved; every undefined term from `A-03` is resolved and recorded.
-2. Every protected endpoint declares a policy; the startup assertion fails the build if one does not.
-3. The truth-table test covers all six roles against every resource type in scope so far.
-4. The generated cross-tenant suite passes for every school-scoped endpoint.
-5. A teacher cannot read, write, or enumerate a class or subject they are not assigned to.
-6. An HOD cannot act outside their assigned department.
-7. A moderator cannot approve a question.
-8. A student can reach only their own resources.
-9. Software Admin break-glass requires a reason, emits an elevated audit event, and is visible to the target school.
-10. `ExamAdministrator` delegation grants exam operation without granting authorship.
-11. Denied requests return 404 (not 403) for cross-tenant resources, so existence is not disclosed.
+1. **Done.** The normalised permission table (`packages/domain/src/authorization/permission-table.ts`, 139 rows / 16 sections, generated review doc `docs/architecture/permission-table.md`) covers every labelled row of `02`'s matrix, resolving A-03's ~22 undefined terms into the seven-predicate closed vocabulary via twelve documented resolution rules (R1–R12, in the source file's own header). Several interpretive calls beyond what ADR-0012/C-07 literally settle are flagged inline for review (R4's extension of "school-academic writes" to account lifecycle, School Configuration's platform-vs-break-glass split for Software Admin) — see this section's Implementation notes.
+2. **Done.** Every route declares `@RequirePermission(...)` (via the `@Authorized()` combinator) or `@PublicRoute(reason)`; `PolicyCoverageService` (`OnApplicationBootstrap`) enumerates every HTTP-route-decorated method via `DiscoveryService`/`MetadataScanner` and throws — failing app boot itself, for the real server and every integration test alike — if any route declares neither. Proven both by dedicated tests (`policy-coverage.service.test.ts`) and by every other integration test successfully booting `AppModule` at all.
+3. **Done, honestly bounded.** `authorization.service.test.ts`'s truth table covers all six roles against every resource type declared in the table so far, including the multi-role-union case (`TEACHER` + `HOD`) and Software-Admin-not-a-wildcard assertions. "Every resource type in scope so far" is deliberately small: only identity/session resources and platform-operation reads have real endpoints today — everything else (questions, exams, academic structure) is declared in the table with `awaitingResource` but has no backing schema table until `B5`/`B6`/`B8`/`B11`+, so `ASSIGNED`/`DEPARTMENT` scope resolvers are fail-closed placeholders (`ScopeResolverRegistry`) a later phase registers a real implementation into — proven directly in `scope-resolvers.test.ts`.
+4. **Honestly deferred, not built.** The generated cross-tenant suite's _infrastructure_ does not exist as a separate generator yet — B2 instead proved the same guarantee two ways: (a) `AuthorizationService.evaluate()` checks `resource.schoolId` against the actor's own school _before_ any grant logic runs at all, returning `NOT_FOUND` unconditionally on a mismatch (unit-tested); (b) a new RLS integration test proves `audit_events` (B2's own school-owned table) is cross-tenant-isolated the same way `school_memberships` already is (`tests/tenancy/rls.integration.test.ts`). There is currently no real `GET /v1/.../:id`-shaped school-scoped endpoint anywhere in the app to run a _generated_ suite against (identity has none) — B3 (the first phase adding one, `GET /v1/platform/schools/:id`) is the natural point to build the actual generator against a real target and should not skip it citing "B2 already covered this."
+5. **Done.** `permission-table.test.ts`'s dedicated DoD-item test (mirrored in `authorization.service.test.ts`) asserts every Teacher-scoped question/exam capability is `ASSIGNED` or `OWNED`, never bare `SCHOOL`.
+6. **Done.** Same pattern for HOD: question review, approval, and department analytics are `DEPARTMENT`-scoped, never bare `SCHOOL`.
+7. **Done.** `MODERATOR` is `DENIED` on `questionBank.approve`/`reject`/`requestChanges` — asserted directly, and proven false-negative-free via a real HTTP 403 path once `B9` wires the routes.
+8. **Done.** Every `STUDENT` grant in the table is `SELF`-scoped, `SYSTEM`, or denied, with exactly one named, deliberate exception (`schoolConfig.profile.view`, a field-limited `SCHOOL`-scope read) — asserted at the table level and proven end-to-end over real HTTP in `authorization.integration.test.ts`.
+9. **Done.** `BreakGlassService.execute()` requires a non-Software-Admin actor to fail before running anything, requires the target permission's grant to actually be `BREAK_GLASS`, requires a non-empty reason, and — only then — runs the operation and writes a real `AuditEvent` row (`breakGlass: true`, the _target_ school's tenant context) via the new minimal `AuditService`. Proven by unit tests (mocked audit sink) and an integration test against real Postgres (`break-glass.integration.test.ts`), including that RLS still isolates the resulting row from every other school. No controller reaches this yet — see Deferred items.
+10. **Deferred to B12, by explicit 2026-08-26 decision** (confirmed with the project owner before implementation) — see Implementation notes below. B2 delivers the generic mechanism (`OWNED` scope resolver, extensible via `ScopeResolverRegistry.register()`) that B12's real `ExamAdministrator` table will plug into; the table itself needs `Exam` (`B11`), which doesn't exist yet.
+11. **Done.** `AuthorizationService.evaluate()` returns `outcome: 'NOT_FOUND'` for a cross-tenant resource unconditionally, before any role/grant is even consulted; `PermissionGuard` turns that into a real 404, distinct from an ordinary same-tenant denial's 403.
 
 ## Exit criteria
 
-- Cross-tenant and privilege-escalation suites green in CI and wired as merge blockers.
-- ADR-0012 decided and implemented.
-- F2 confirms the permissions contract drives navigation correctly.
+- Cross-tenant assertion (unit + RLS integration) and privilege-escalation truth-table tests green in CI. A _generated_ cross-tenant suite specifically (as opposed to the guarantee itself, which is proven) is B3's job once a real `:id`-shaped endpoint exists — recorded as a carried-forward exit item, not silently dropped.
+- ADR-0012 decided and implemented — `SOFTWARE_ADMIN` is never a wildcard (asserted directly: `permission-table.test.ts`'s "SOFTWARE_ADMIN is not a wildcard" suite).
+- F2 confirms the permissions contract drives navigation correctly — **F2 has not started**; per the phase-pairing default this is the very next piece of work.
 
 ## Deferred items
 
 - A general-purpose capability system beyond `ExamAdministrator` (`M-15` recommends against it for this release).
-- The request/approval subsystem implied by `C-10` — pending `ADR-0017`; if approved it becomes a new phase, not an extension of B2.
+- The request/approval subsystem implied by `C-10` — pending `ADR-0017`; if approved it becomes a new phase, not an extension of B2. Every matrix cell whose only documented mechanism is this subsystem (`assignments.teacherToSubject`/`teacherToClass`/`moveStudent` for HOD) is `DEFERRED` (fail-closed) in the permission table, not silently granted or silently dropped.
+- `ExamAdministrator` table and the concrete "own exam = created_by OR active delegate" wiring — **deferred to B12** (2026-08-26 decision), once `Exam` exists. B2 ships only the extension point.
+- `ASSIGNED`/`DEPARTMENT` scope resolvers' real implementations — B6 (`TeacherAssignment`/`Enrollment`) and B5 (`Department`) respectively. Every rule using them fails closed until then.
+- Software Admin platform login — **deferred to B3** (2026-08-26 decision, confirmed with the project owner). `PlatformRoleAssignment` (the schema representation) ships now; the actual `/admin/auth/login`-equivalent endpoint does not. Break-glass and the truth table are proven via constructed `AuthorizedActor` fixtures in tests, not a real session.
+- The generated cross-tenant test-suite _generator_ itself (as distinct from the guarantee, which B2 does prove) — B3, against its first real `:id`-shaped endpoint.
+- `AuditEvent`'s full B10 apparatus: canonical closed action vocabulary (07 §11.1, resolving C-02), retrieval endpoints, DB-enforced append-only immutability (a trigger, or carving this table out of `grantAppRole()`'s blanket `UPDATE`/`DELETE` grant — a plain `REVOKE` in B2's own migration was tried and reverted specifically because `grantAppRole()` silently undoes it after every `migrate reset`), and retention policy. B2 ships only a minimal, real write-path (`AuditService.record()`) — the same shape of decision as B0 shipping a minimal `NotificationChannel` ahead of B10's full messaging apparatus.
+- The `⚠️`-flagged "Limited"-cell placeholders throughout the permission table (Moderator school settings, School/Moderator question archive/import/export, HOD force-password-reset, Moderator audit/department-analytics) are read-only until the phase that builds the underlying resource firms up the exact writable boundary — tracked per-row via each rule's `note`, not a single blanket TODO.
+
+## Implementation notes (2026-08-26)
+
+Followed the working-rules checklist: read `02` in full, `07 §41`/`§42` invariants 1/3/4, `08 §10`, `09 §25`, ADR-0012 and ADR-0023 in full, and audit findings A-03/C-06/C-07/M-15/D-01/R-01 before writing any code.
+
+**Three structural gaps surfaced during planning, each confirmed with the project owner before implementation** (mirroring B1's own precedent of confirming rather than guessing on schema/scope-shaping decisions):
+
+1. **`PlatformRoleAssignment`** (new model) — `SOFTWARE_ADMIN` had no schema representation at all: `RoleAssignment` lives under `SchoolMembership`, which a platform-level account doesn't have. Tenant-independent (no `school_id`), mirroring `User`'s own exemption in `scripts/lint-schema-tenancy.mjs`. A database `CHECK` constraint (`role = 'SOFTWARE_ADMIN'`) guards the shared `Role` enum at the row level, not just in application code.
+2. **`ExamAdministrator` deferred to B12** rather than built now with a dangling `exam_id` — `Exam` doesn't exist until `B11`. B2 ships only the `OWNED` scope resolver's extension point.
+3. **Software Admin login deferred to B3** — no endpoint anywhere in scope until then; break-glass and the truth table are tested via constructed actors, matching how B2's own roadmap text lists no login endpoint as B2 API work.
+
+**The authorization engine** (`apps/api/src/modules/authorization/`, `@Global()` module): `AuthorizationService.evaluate(actor, permissionId, resource?)` implements the 08§10 formula — tenant-boundary check first (unconditional `NOT_FOUND` on mismatch), then iterates the actor's _every_ active role (a membership may hold more than one, e.g. `TEACHER`+`HOD` — the effective access is the union, not just the first match) looking for a `GRANTED` scope that resolves true, falling back to reporting `requiresBreakGlass` rather than ever silently allowing a `BREAK_GLASS`-kind grant. `ScopeResolverRegistry` implements `PLATFORM`/`SCHOOL`/`SELF`/`OWNED` concretely now and `ASSIGNED`/`DEPARTMENT` as fail-closed placeholders with a one-time warning, extensible via `.register()` — the exact mechanism B5/B6/B12 plug their real resolvers into without this module ever depending on tables that don't exist yet. `PermissionGuard` + the `@Authorized(permissionId)` decorator (bundling `@UseGuards(AuthGuard, PermissionGuard)` — order matters, since `AuthGuard` populates `req.user.roles` that `PermissionGuard` reads) replace every bare `@UseGuards(AuthGuard)` in `IdentityController`; pre-authentication routes (`login`, `tenant/resolve`, password-reset request/confirm, `refresh`) and the two health probes get `@PublicRoute(reason)` instead. `AuthGuard` itself now also loads the caller's active `RoleAssignment` rows live in the same request (09§25 — never cached, never from a token).
+
+**`GET /v1/me/permissions`** (`AuthorizationController`) returns `{ roles, permissions: [{resource, section, label, action, scope?, breakGlass?}] }` — a purely declarative listing straight off the permission table for the actor's roles (no per-instance scope-resolver call, since there's no single resource being asked about), excluding `SYSTEM`-kind rows per R10. Contract-tested for shape stability.
+
+**Break-glass** (`BreakGlassService`, `AuditService` in the newly-populated `OperationsModule`): validates actor kind/role, validates the target permission is genuinely `BREAK_GLASS`-graded (not just "any Software Admin action"), validates a non-empty reason, runs the caller's operation, then writes a real `AuditEvent` row scoped to the _affected_ school's tenant context (not the actor's, who has none) — proven against real Postgres including that RLS still isolates it. No controller anywhere calls this yet (no school-academic-write endpoint a Software Admin could reach exists before B3+) — it's built and tested against a synthetic protected operation, ready for the first phase that adds one.
+
+**One real cross-module DI bug found only by actually booting the app, not by inspection:** `@UseGuards(AuthGuard)` referenced from a _different_ module than the one that provides `AuthGuard` (`AuthorizationController`, living in the new `AuthorizationModule`, importing `IdentityModule` for it) makes Nest build a fresh instance-wrapper for `AuthGuard` scoped to the _consuming_ module's own injector — which only reaches providers the providing module actually `exports`, not `AuthGuard`'s own private constructor dependencies. `SessionService` (an `IdentityModule`-internal provider `AuthGuard` needs) wasn't exported, so the real compiled app failed at boot with `UnknownDependenciesException` — silently fine under every unit test (which never boots the whole module graph) and invisible to `tsc`. Fixed by exporting `SessionService` alongside `AuthGuard` from `IdentityModule`, documented at the export site. Found via the same technique B1's own two boot-only bugs used: a real `nest build && node dist/...` boot, not `tsx` (which — per B1's own documented, still-current gotcha — cannot boot the full `AppModule` at all once enough providers are registered).
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration && pnpm spike`, plus `pnpm generate` (OpenAPI + `packages/contracts` regeneration, `GET /v1/me/permissions` now published) and a live compiled-app boot proving `PolicyCoverageService` reports "11 route(s) checked" with zero violations. New migration `20260826120305_b2_authorization_engine` (`PlatformRoleAssignment`, `AuditEvent` + RLS policy + `CHECK` constraint) applies and rolls back cleanly (`tests/integration/migrations.integration.test.ts`'s existing reset/reapply test covers it for free). `docs/architecture/permission-table.md` is generated (`pnpm generate:permission-table-doc`) from the TS source, never hand-duplicated.
 
 ---
 

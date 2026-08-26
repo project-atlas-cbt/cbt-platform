@@ -1,30 +1,24 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/health": {
+    "/me/permissions": {
       "get": {
-        "operationId": "HealthController_liveness",
+        "operationId": "AuthorizationController_me",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MePermissionsResponseDto"
+                }
+              }
+            }
           }
         },
-        "summary": "Liveness probe — the process is up.",
-        "tags": ["health"]
-      }
-    },
-    "/health/ready": {
-      "get": {
-        "operationId": "HealthController_readiness",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Readiness probe — database, Redis, and object storage are reachable.",
-        "tags": ["health"]
+        "summary": "The effective capability set for the current user in the current school (B2). Presentation only — every real route is independently enforced by PermissionGuard.",
+        "tags": ["authorization"]
       }
     },
     "/tenant/resolve": {
@@ -226,6 +220,32 @@
         "summary": "Complete a password reset with a single-use token.",
         "tags": ["identity"]
       }
+    },
+    "/health": {
+      "get": {
+        "operationId": "HealthController_liveness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Liveness probe — the process is up.",
+        "tags": ["health"]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_readiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Readiness probe — database, Redis, and object storage are reachable.",
+        "tags": ["health"]
+      }
     }
   },
   "info": {
@@ -242,6 +262,55 @@
   ],
   "components": {
     "schemas": {
+      "EffectivePermissionDto": {
+        "type": "object",
+        "properties": {
+          "resource": {
+            "type": "string",
+            "description": "PERMISSION_TABLE row id (@atlas/domain)."
+          },
+          "section": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label, traceable to docs/02-roles-permissions.md."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["CREATE", "READ", "UPDATE", "DELETE", "EXECUTE"]
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["NONE", "SELF", "OWNED", "ASSIGNED", "DEPARTMENT", "SCHOOL", "PLATFORM"],
+            "description": "Absent when this capability is only reachable via break-glass (breakGlass=true)."
+          },
+          "breakGlass": {
+            "type": "boolean",
+            "description": "ADR-0012: reachable only through the audited break-glass path, never an ordinary grant."
+          }
+        },
+        "required": ["resource", "section", "label", "action"]
+      },
+      "MePermissionsResponseDto": {
+        "type": "object",
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["SOFTWARE_ADMIN", "SCHOOL_ADMIN", "MODERATOR", "HOD", "TEACHER", "STUDENT"]
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EffectivePermissionDto"
+            }
+          }
+        },
+        "required": ["roles", "permissions"]
+      },
       "TenantResolveSchoolDto": {
         "type": "object",
         "properties": {

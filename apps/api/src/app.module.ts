@@ -11,6 +11,7 @@ import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { SecurityModule } from './security/security.module.js';
 import { PlatformModule } from './modules/platform/platform.module.js';
+import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 import { IdentityModule } from './modules/identity/identity.module.js';
 import { AcademicsModule } from './modules/academics/academics.module.js';
 import { QuestionsModule } from './modules/questions/questions.module.js';
@@ -26,9 +27,12 @@ import { OperationsModule } from './modules/operations/operations.module.js';
     RedisModule,
     TenancyModule,
     SecurityModule,
+    AuthorizationModule,
     NotificationsModule,
     HealthModule,
-    // Bounded domains (08 §5) — all stubbed empty per B0 scope.
+    // Bounded domains (08 §5) — all stubbed empty per B0 scope, except
+    // Identity (B1) and Authorization (B2, above — cross-cutting, so it's
+    // registered alongside Tenancy/Security rather than in this list).
     PlatformModule,
     IdentityModule,
     AcademicsModule,

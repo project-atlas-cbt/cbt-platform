@@ -1,0 +1,427 @@
+# Normalised Permission Table
+
+**Generated from `packages/domain/src/authorization/permission-table.ts` — do not hand-edit this file.** Regenerate with `node scripts/generate-permission-table-doc.mjs` after `pnpm --filter @atlas/domain run build`.
+
+This is B2's DoD item 1 deliverable: "the normalised permission table derived from `02`, resolving the undefined vocabulary in `A-03` into a closed set of scope predicates... reviewed and approved before guards are written." Every row below traces to one labelled row of `docs/02-roles-permissions.md`'s matrix.
+
+**Legend:** `PLATFORM`/`SCHOOL`/`DEPARTMENT`/`ASSIGNED`/`OWNED`/`SELF`/`NONE` are the seven closed scope predicates (A-03). `—` = denied. `🔒 BREAK-GLASS` = Software Admin only, via the audited break-glass path (ADR-0012) — never an ordinary grant. `SYSTEM` = automatic, no human role invokes it directly. `⏸ DEFERRED` = the matrix documents this capability but its mechanism (e.g. ADR-0017's request/approval subsystem) is explicitly out of scope for now — denied, fail-closed, until that decision is acted on. `⚠️` marks a grant with an interpretive note (hover the row in the source file, or see the Notes column) — most commonly a "Limited" cell resolved to read-only pending the phase that builds the underlying resource.
+
+## Identity & Sessions
+
+| Action                                                                                                  | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD  | TEACHER | STUDENT | Awaiting |
+| ------------------------------------------------------------------------------------------------------- | -------------- | ------------ | --------- | ---- | ------- | ------- | -------- |
+| Read own resolved identity (GET /auth/me) — not an explicit 02 row.                                     | SELF           | SELF         | SELF      | SELF | SELF    | SELF    |          |
+| Manage own session (logout/refresh) — not an explicit 02 row.                                           | SELF           | SELF         | SELF      | SELF | SELF    | SELF    |          |
+| Read own effective permission set (GET /v1/me/permissions) — B2's own contract, not an explicit 02 row. | SELF           | SELF         | SELF      | SELF | SELF    | SELF    |          |
+
+## Platform / School
+
+| Action                   | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD           | TEACHER  | STUDENT | Awaiting |
+| ------------------------ | -------------- | ------------ | --------- | ------------- | -------- | ------- | -------- |
+| View all schools         | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Create school            | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Activate school          | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Suspend school           | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Renew subscription       | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Revoke school access     | PLATFORM       | —            | —         | —             | —        | —       |          |
+| View subscription status | PLATFORM       | SCHOOL ⚠️    | —         | —             | —        | —       |          |
+| View school metrics      | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | ASSIGNED | SELF    |          |
+| Platform audit/logs      | PLATFORM       | SCHOOL ⚠️    | SCHOOL ⚠️ | DEPARTMENT ⚠️ | SELF ⚠️  | —       |          |
+
+<details><summary>Notes</summary>
+
+- **View subscription status / SCHOOL_ADMIN:** View own school.
+- **View school metrics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View school metrics / MODERATOR:** LIMITED (read-only placeholder): Exact "Limited" metrics subset finalized when B19 builds the dashboards.
+- **Platform audit/logs / SCHOOL_ADMIN:** Own school.
+- **Platform audit/logs / MODERATOR:** LIMITED (read-only placeholder): B10 defines the exact audit subset visible to Moderator.
+- **Platform audit/logs / HOD:** LIMITED (read-only placeholder): B10 defines the exact audit subset visible to HOD.
+- **Platform audit/logs / TEACHER:** LIMITED (read-only placeholder): B10; mirrors the Audit/Security section's own "Own actions" row.
+
+</details>
+
+## School Configuration
+
+| Action                                                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD       | TEACHER | STUDENT   | Awaiting                               |
+| ------------------------------------------------------------ | -------------- | ------------ | --------- | --------- | ------- | --------- | -------------------------------------- |
+| View school profile                                          | PLATFORM       | SCHOOL       | SCHOOL    | SCHOOL    | SCHOOL  | SCHOOL ⚠️ |                                        |
+| Edit school name/details                                     | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
+| Upload/change logo                                           | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         | School branding columns (B4)           |
+| Set primary colour                                           | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         | School branding columns (B4)           |
+| Manage departments (derived split: view)                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL ⚠️ | —       | —         | Department (B5)                        |
+| Manage departments (derived split: create/edit/delete)       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | Department (B5)                        |
+| Manage classes (derived split: view)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | ClassGroup (B5)                        |
+| Manage classes (derived split: create/edit/delete)           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | ClassGroup (B5)                        |
+| Manage subjects (derived split: view)                        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | Subject (B5)                           |
+| Manage subjects (derived split: create/edit/delete)          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | Subject (B5)                           |
+| Manage academic sessions (derived split: view)               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | AcademicSession (B5)                   |
+| Manage academic sessions (derived split: create/edit/delete) | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | AcademicSession (B5)                   |
+| Manage terms (derived split: view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | Term (B5)                              |
+| Manage terms (derived split: create/edit/delete)             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | Term (B5)                              |
+| Manage school settings                                       | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | —         | —       | —         | School settings resource (B4 or later) |
+
+<details><summary>Notes</summary>
+
+- **View school profile / STUDENT:** LIMITED (read-only placeholder): Field-limited view for students; exact fields finalized in B4.
+- **Edit school name/details / SOFTWARE_ADMIN:** R1: school CRUD is a platform operation.
+- **Upload/change logo / SOFTWARE_ADMIN:** R1.
+- **Set primary colour / SOFTWARE_ADMIN:** R1.
+- **Set primary colour / SCHOOL_ADMIN:** "Full / One-time" — School Admin sets it; whether subsequent changes are restricted to a single initial set is a B4 enforcement detail, not yet wired (see CLAUDE.md's F1 branding note).
+- **Manage departments (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage departments (derived split: view) / HOD:** Matrix cell is "View" — whole-school visibility, not department-limited.
+- **Manage departments (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1: school structural/administrative setup, not academic content — flagged for review, not itself ADR-decided.
+- **Manage classes (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage classes (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
+- **Manage subjects (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage subjects (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
+- **Manage academic sessions (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage academic sessions (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
+- **Manage terms (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage terms (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
+- **Manage school settings / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
+- **Manage school settings / MODERATOR:** LIMITED (read-only placeholder): Exact writable settings subset for Moderator finalized when the School Settings resource is built.
+
+</details>
+
+## User Management
+
+| Action                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                                                                 |
+| ------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ------------------------------------------------------------------------ |
+| Create Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Edit Moderator            | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Remove Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Create HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Edit HOD                  | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Remove HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Create Teacher            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Edit Teacher              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Deactivate Teacher        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Reset Teacher credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | CredentialSheetService already exists (B1); no controller route yet (B6) |
+| Create Student            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Edit Student              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Deactivate Student        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
+| Reset Student credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | CredentialSheetService already exists (B1); no controller route yet (B6) |
+| Import Teachers           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | Bulk import pipeline (B7)                                                |
+| Import Students           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | Bulk import pipeline (B7)                                                |
+| Export Users              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Export pipeline (B6/B18)                                                 |
+
+<details><summary>Notes</summary>
+
+- **Create Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Edit Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Remove Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Create HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Edit HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Remove HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Create Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Edit Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Deactivate Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Reset Teacher credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Create Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Edit Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Deactivate Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Reset Student credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Import Teachers / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Import Students / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Export Users / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+
+</details>
+
+## Assignments
+
+| Action                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER | STUDENT | Awaiting                              |
+| ---------------------------- | -------------- | ------------ | --------- | ---------- | ------- | ------- | ------------------------------------- |
+| Assign teacher → subject     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | TeacherAssignment (B6)                |
+| Assign teacher → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | TeacherAssignment (B6)                |
+| Assign HOD → department      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | Department (B5) + HOD assignment (B6) |
+| Assign student → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | ClassGroup/Enrollment (B5/B6)         |
+| Move student between classes | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | ClassGroup/Enrollment (B5/B6)         |
+| View assignments             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | SELF ⚠️ | SELF    | TeacherAssignment/Enrollment (B6)     |
+
+<details><summary>Notes</summary>
+
+- **Assign teacher → subject / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Assign teacher → subject / HOD:** R11: mechanism is ADR-0017's HOD request/approval subsystem, explicitly deferred (not part of the immediate implementation) — DENIED, fail-closed, until that phase lands.
+- **Assign teacher → class / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Assign teacher → class / HOD:** R11: mechanism is ADR-0017's HOD request/approval subsystem, explicitly deferred (not part of the immediate implementation) — DENIED, fail-closed, until that phase lands.
+- **Assign HOD → department / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Assign student → class / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Move student between classes / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Move student between classes / HOD:** R11: mechanism is ADR-0017's HOD request/approval subsystem, explicitly deferred (not part of the immediate implementation) — DENIED, fail-closed, until that phase lands.
+- **View assignments / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View assignments / TEACHER:** Their own assignment records, not the ASSIGNED-scope resources those assignments grant access to.
+
+</details>
+
+## Question Bank
+
+| Action                                      | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                                 |
+| ------------------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ---------------------------------------- |
+| View question bank                          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Question (B8)                            |
+| Create question                             | —              | —            | —         | —          | ASSIGNED | —       | Question (B8)                            |
+| Edit own draft question                     | —              | —            | —         | —          | OWNED    | —       | Question (B8)                            |
+| Delete own draft question                   | —              | —            | —         | —          | OWNED    | —       | Question (B8)                            |
+| Submit question for review                  | —              | —            | —         | —          | OWNED    | —       | Question (B8/B9)                         |
+| Review submitted questions                  | —              | SCHOOL       | —         | DEPARTMENT | —        | —       | Question review workflow (B9)            |
+| Comment on question (derived split: view)   | —              | SCHOOL       | —         | DEPARTMENT | OWNED ⚠️ | —       | Question review workflow (B9)            |
+| Comment on question (derived split: create) | —              | —            | —         | DEPARTMENT | OWNED ⚠️ | —       | Question review workflow (B9)            |
+| Approve question                            | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9)            |
+| Reject question                             | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9)            |
+| Request changes                             | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9)            |
+| Archive question                            | 🔒 BREAK-GLASS | SCHOOL ⚠️    | SCHOOL ⚠️ | DEPARTMENT | OWNED ⚠️ | —       | Question (B8)                            |
+| Import questions                            | 🔒 BREAK-GLASS | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Bulk import pipeline (B7), Question (B8) |
+| Export questions                            | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Question (B8)                            |
+
+<details><summary>Notes</summary>
+
+- **View question bank / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Comment on question (derived split: view) / TEACHER:** Comments on their own submitted question.
+- **Comment on question (derived split: create) / TEACHER:** "Respond to feedback" — replies on their own question's review thread, not an initiating review comment.
+- **Archive question / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
+- **Archive question / SCHOOL_ADMIN:** LIMITED (read-only placeholder): Exact archivable-by-School-Admin boundary finalized in B8/B9.
+- **Archive question / MODERATOR:** LIMITED (read-only placeholder): B8/B9.
+- **Archive question / TEACHER:** "Own/assigned" — exact boundary finalized in B8/B9.
+- **Import questions / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Import questions / SCHOOL_ADMIN:** LIMITED (read-only placeholder): B7/B8 — School Admin's import boundary is not yet finalized (this is a CREATE-shaped row; "Limited" is recorded here as a placeholder pending that phase, not a working read-only grant).
+- **Export questions / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export questions / SCHOOL_ADMIN:** LIMITED (read-only placeholder): B8.
+
+</details>
+
+## Question Lifecycle
+
+| Action                                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting         |
+| ----------------------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | ---------------- |
+| Create Draft                              | —              | —            | —         | —          | ASSIGNED ⚠️ | —       | Question (B8)    |
+| Submit                                    | —              | —            | —         | —          | OWNED ⚠️    | —       | Question (B8/B9) |
+| Under Review (view)                       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
+| Approved (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
+| Rejected (derived split: view)            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
+| Rejected (derived split: edit & resubmit) | —              | —            | —         | —          | OWNED ⚠️    | —       | Question (B8/B9) |
+| Archived (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8)    |
+
+<details><summary>Notes</summary>
+
+- **Create Draft / TEACHER:** Duplicate of "Create question" — gated by subject/class assignment before the question exists to be OWNED.
+- **Submit / TEACHER:** Duplicate of "Submit question for review".
+- **Under Review (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Approved (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Rejected (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Rejected (derived split: edit & resubmit) / TEACHER:** Only while question.status = REJECTED — resource-state gate enforced once B8/B9 build the real state machine.
+- **Archived (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+
+</details>
+
+## Exam Management
+
+| Action                          | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                                                       |
+| ------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | -------------------------------------------------------------- |
+| View all exams                  | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | SELF ⚠️ | Exam (B11)                                                     |
+| Create exam                     | —              | —            | —         | —          | ASSIGNED | —       | Exam (B11)                                                     |
+| Edit draft exam                 | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+| Delete draft exam               | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+| Add questions to exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+| Use approved questions          | —              | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Exam (B11)                                                     |
+| Schedule/configure availability | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+| Configure duration              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+| Configure randomization         | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+| Configure attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+| Publish/activate exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11/B12)                                                 |
+| Pause exam                      | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12) — ADR-0009: PAUSED is the UI label for OPEN→CLOSED. |
+| Close new attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12)                                                     |
+| Reopen exam                     | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12)                                                     |
+| Archive exam                    | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+
+<details><summary>Notes</summary>
+
+- **View all exams / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View all exams / STUDENT:** "Available only" — ADR-0006's eligibility predicate; B12 wires the actual filter.
+- **Create exam / SCHOOL_ADMIN:** R12/C-07: exam authoring is a Teacher capability; School Admin holds administration rights on existing exams instead.
+- **Create exam / MODERATOR:** R12/C-07.
+- **Create exam / HOD:** R12/C-07.
+- **Archive exam / SOFTWARE_ADMIN:** R4: matrix's literal "Full" read as break-glass per this file's header — consistent with "archive question" being explicitly named break-glass.
+
+</details>
+
+## Exam Administration
+
+| Action                   | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER    | STUDENT | Awaiting                             |
+| ------------------------ | -------------- | ------------ | --------- | ---------- | ---------- | ------- | ------------------------------------ |
+| Exam Control Center      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | Exam/ExamSession (B12)               |
+| View registered students | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED   | —       | ExamParticipation (B12)              |
+| View live attempts       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
+| See who has started      | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
+| See who has completed    | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
+| Manually allow student   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamParticipation (B12)              |
+| Grant makeup access      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | AttemptAuthorization (B14, ADR-0014) |
+| Mark/confirm absence     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamParticipation (B12)              |
+| End individual attempt   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
+| Invalidate attempt       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | ⏸ DEFERRED | —       | ExamAttempt (B14)                    |
+
+<details><summary>Notes</summary>
+
+- **Exam Control Center / SOFTWARE_ADMIN:** R4: operating a school's live Exam Control Center is a school-academic write surface; SA reads (viewing live status) are separately permitted+audited — see the view-* rows below.
+- **View registered students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View live attempts / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **See who has started / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **See who has completed / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manually allow student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Grant makeup access / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
+- **Mark/confirm absence / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **End individual attempt / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Invalidate attempt / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
+- **Invalidate attempt / TEACHER:** "Request/limited" names no actual mechanism in any document — not covered by ADR-0017 either. DENIED, fail-closed, pending explicit product clarification.
+
+</details>
+
+## Student CBT
+
+| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER | STUDENT | Awaiting                                |
+| -------------------------- | -------------- | ------------ | --------- | ------ | ------- | ------- | --------------------------------------- |
+| View active assessment     | —              | —            | —         | —      | —       | SELF    | Exam/ExamAttempt (B11–B13)              |
+| Start exam                 | —              | —            | —         | —      | —       | SELF    | ExamAttempt (B13)                       |
+| Answer questions           | —              | —            | —         | —      | —       | SELF    | AttemptAnswer (B13)                     |
+| Navigate questions         | —              | —            | —         | —      | —       | SELF    | AttemptQuestionSnapshot (B13)           |
+| Submit exam                | —              | —            | —         | —      | —       | SELF    | ExamAttempt (B13/B14)                   |
+| Auto-submit on timeout     | SYSTEM         | SYSTEM       | SYSTEM    | SYSTEM | SYSTEM  | SYSTEM  | ExamAttempt sweeper (B13/B14, ADR-0004) |
+| Resume interrupted attempt | —              | —            | —         | —      | —       | SELF    | ExamAttempt (B13)                       |
+| View previous results      | —              | —            | —         | —      | —       | SELF ⚠️ | Result (B15), school setting (B17)      |
+
+<details><summary>Notes</summary>
+
+- **View previous results / STUDENT:** "Configurable" — gated by a school-level setting; B15/B17 wires it.
+
+</details>
+
+## Results
+
+| Action                         | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR  | HOD        | TEACHER     | STUDENT | Awaiting                              |
+| ------------------------------ | -------------- | ------------ | ---------- | ---------- | ----------- | ------- | ------------------------------------- |
+| Automatic marking              | SYSTEM         | SYSTEM       | SYSTEM     | SYSTEM     | SYSTEM      | —       | Result (B14/B15)                      |
+| View exam results              | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | SELF ⚠️ | Result (B15)                          |
+| View individual student result | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | SELF    | Result (B15)                          |
+| View class performance         | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | —       | Result (B16/B17 analytics)            |
+| View subject performance       | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT | DEPARTMENT | ASSIGNED ⚠️ | —       | Result (B16/B17 analytics)            |
+| View question performance      | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT | DEPARTMENT | OWNED ⚠️    | —       | Result/Question analytics (B16/B17)   |
+| Export CSV                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       | Result (B15)                          |
+| Publish results                | —              | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       | ResultPublication (B15/B17, ADR-0010) |
+| Unpublish results              | —              | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       | ResultPublication (B15/B17, ADR-0010) |
+
+<details><summary>Notes</summary>
+
+- **View exam results / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View exam results / STUDENT:** "Own published results" — gated by ResultPublication (ADR-0010); B17 wires the publication-state check.
+- **View individual student result / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View class performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View subject performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View subject performance / TEACHER:** "Own subjects".
+- **View question performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View question performance / TEACHER:** "Own exams".
+- **Export CSV / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+
+</details>
+
+## Analytics
+
+| Action                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR     | HOD        | TEACHER  | STUDENT | Awaiting                              |
+| ---------------------------- | -------------- | ------------ | ------------- | ---------- | -------- | ------- | ------------------------------------- |
+| Platform analytics           | PLATFORM       | —            | —             | —          | —        | —       | Platform metrics (B3)                 |
+| School-wide analytics        | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | —          | —        | —       | B16/B17 analytics                     |
+| Department analytics         | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT ⚠️ | DEPARTMENT | —        | —       | Department (B5), B16/B17 analytics    |
+| Class analytics              | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | ASSIGNED | —       | ClassGroup (B5), B16/B17 analytics    |
+| Student performance history  | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | ASSIGNED | SELF    | Result (B15), B16/B17 analytics       |
+| Question difficulty analysis | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT    | DEPARTMENT | OWNED    | —       | Question/Result analytics (B16/B17)   |
+| Exam completion statistics   | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | OWNED    | —       | ExamParticipation analytics (B16/B17) |
+
+<details><summary>Notes</summary>
+
+- **School-wide analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Department analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Department analytics / MODERATOR:** LIMITED (read-only placeholder): Exact "Limited" department-analytics subset for Moderator finalized in B19.
+- **Class analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Student performance history / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Question difficulty analysis / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Exam completion statistics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+
+</details>
+
+## Reporting / Export
+
+| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting                                                                                          |
+| -------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | ------------------------------------------------------------------------------------------------- |
+| Export school data         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED    | —       | B18 reporting                                                                                     |
+| Export exam results        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Result (B15), B18 reporting                                                                       |
+| Export student list        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED    | —       | B18 reporting                                                                                     |
+| Export question bank       | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED ⚠️ | —       | Question (B8), B18 reporting                                                                      |
+| Generate printable reports | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | SELF ⚠️ | ADR-0030 defers server-rendered PDF reporting to a later phase; B18 gains the rendering pipeline. |
+
+<details><summary>Notes</summary>
+
+- **Export school data / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export exam results / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export student list / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export question bank / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export question bank / SCHOOL_ADMIN:** LIMITED (read-only placeholder): B8.
+- **Export question bank / TEACHER:** "Own subjects".
+- **Generate printable reports / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Generate printable reports / STUDENT:** "if enabled" — school-setting gated, same family as studentCbt.viewPreviousResults.
+
+</details>
+
+## Academic Progression
+
+| Action                                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER | STUDENT | Awaiting                 |
+| ----------------------------------------- | -------------- | ------------ | --------- | ---------- | ------- | ------- | ------------------------ |
+| Promote students (derived split: view)    | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | —       | —       | Promotion workflow (B19) |
+| Promote students (derived split: execute) | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | Promotion workflow (B19) |
+| Review promotion list                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | —       | —       | Promotion workflow (B19) |
+| Move student to next session              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | Promotion workflow (B19) |
+| Graduate/archive students                 | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | Promotion workflow (B19) |
+
+<details><summary>Notes</summary>
+
+- **Promote students (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Promote students (derived split: execute) / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Review promotion list / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Move student to next session / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Graduate/archive students / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+
+</details>
+
+## Subscription
+
+| Action               | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR  | HOD | TEACHER | STUDENT | Awaiting                          |
+| -------------------- | -------------- | ------------ | ---------- | --- | ------- | ------- | --------------------------------- |
+| View subscription    | PLATFORM       | SCHOOL       | SCHOOL     | —   | —       | —       | Subscription (B3)                 |
+| Enter activation key | —              | SCHOOL       | ⏸ DEFERRED | —   | —       | —       | ActivationGrant (B3)              |
+| Renew access         | PLATFORM       | SCHOOL ⚠️    | —          | —   | —       | —       | Subscription/ActivationGrant (B3) |
+| Suspend access       | PLATFORM       | —            | —          | —   | —       | —       | Subscription (B3)                 |
+
+<details><summary>Notes</summary>
+
+- **Enter activation key / MODERATOR:** "Authorized" — Moderator may redeem only when explicitly delegated by School Admin; the delegation mechanism is unspecified anywhere and left to B3's activation-flow design.
+- **Renew access / SCHOOL_ADMIN:** "Request/enter key" — School Admin may request renewal or redeem a key directly; B3 differentiates the two flows.
+
+</details>
+
+## Audit / Security
+
+| Action               | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD           | TEACHER | STUDENT | Awaiting                                                                                               |
+| -------------------- | -------------- | ------------ | --------- | ------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| View audit log       | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | SELF ⚠️ | SELF ⚠️ | AuditEvent retrieval endpoint (B10) — the write-path primitive itself ships with B2, see AuditService. |
+| Reset own password   | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    |                                                                                                        |
+| Change own profile   | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    | No profile-edit endpoint yet (future phase); identity read already exists (auth/me).                   |
+| Force password reset | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT ⚠️ | —       | —       | Controller route (B6) — CredentialSheetService/PasswordService primitives already exist (B1).          |
+| Deactivate account   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —             | —       | —       | Controller route (B6)                                                                                  |
+
+<details><summary>Notes</summary>
+
+- **View audit log / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View audit log / MODERATOR:** LIMITED (read-only placeholder): B10.
+- **View audit log / TEACHER:** "Own actions".
+- **View audit log / STUDENT:** "Own account".
+- **Force password reset / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
+- **Force password reset / HOD:** LIMITED (read-only placeholder): "Limited" — exact HOD-initiated force-reset scope (e.g. department teachers only, never students) finalized when B6 builds the operation. Recorded as read-only here per R5 until then, even though the row is EXECUTE-shaped — no controller route exists to grant real write access to.
+- **Deactivate account / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
+
+</details>

@@ -131,3 +131,107 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     });
   },
 );
+
+/**
+ * B2's own new school-owned table (audit_events) — ADR-0023 requires the
+ * same proof for every school-owned table, not just the one B1 already
+ * covers above. `schoolId` here is the *affected* school (ADR-0012), which
+ * is exactly why this table's isolation matters just as much: a break-
+ * glass event written under School B's tenant context must never be
+ * readable by School A.
+ */
+describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
+  'Row-Level Security tenant isolation — audit_events (B2, ADR-0023)',
+  () => {
+    let owner: PrismaClient;
+    let app: PrismaClient;
+    let schoolA: { id: string };
+    let schoolB: { id: string };
+    let actor: { id: string };
+    let eventA: { id: string };
+    let eventB: { id: string };
+
+    beforeAll(async () => {
+      await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
+      owner = createPrismaClient(ownerDatabaseUrl);
+      app = createPrismaClient(appDatabaseUrl);
+
+      schoolA = await owner.school.create({
+        data: {
+          name: `Audit RLS School A ${randomUUID()}`,
+          subdomain: `audit-rls-a-${Date.now()}`,
+        },
+      });
+      schoolB = await owner.school.create({
+        data: {
+          name: `Audit RLS School B ${randomUUID()}`,
+          subdomain: `audit-rls-b-${Date.now()}`,
+        },
+      });
+      actor = await owner.user.create({
+        data: { firstName: 'Audit', lastName: 'Actor', displayName: 'Audit Actor' },
+      });
+
+      eventA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.auditEvent.create({
+          data: {
+            schoolId: schoolA.id,
+            actorUserId: actor.id,
+            actorRole: 'SOFTWARE_ADMIN',
+            action: 'TEST_EVENT_A',
+          },
+        }),
+      );
+      eventB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.auditEvent.create({
+          data: {
+            schoolId: schoolB.id,
+            actorUserId: actor.id,
+            actorRole: 'SOFTWARE_ADMIN',
+            action: 'TEST_EVENT_B',
+          },
+        }),
+      );
+    });
+
+    afterAll(async () => {
+      await owner.auditEvent.deleteMany({ where: { schoolId: { in: [schoolA.id, schoolB.id] } } });
+      await owner.user.delete({ where: { id: actor.id } });
+      await owner.school.deleteMany({ where: { id: { in: [schoolA.id, schoolB.id] } } });
+      await owner.$disconnect();
+      await app.$disconnect();
+    });
+
+    it('with no tenant context set, RLS blocks all rows (fails closed)', async () => {
+      const rows = await app.$queryRaw<
+        Array<{ id: string }>
+      >`SELECT id FROM audit_events WHERE id IN (${eventA.id}::uuid, ${eventB.id}::uuid)`;
+      expect(rows).toHaveLength(0);
+    });
+
+    it("scoped to school A, only school A's audit event is visible — school B's is not, even by primary key", async () => {
+      const rows = await withTenant(
+        app,
+        schoolA.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ action: string }>
+          >`SELECT action FROM audit_events WHERE id IN (${eventA.id}::uuid, ${eventB.id}::uuid)`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.action).toBe('TEST_EVENT_A');
+    });
+
+    it('a break-glass event visible to School B is still invisible to School A (cross-tenant, not actor-tenant, is what governs visibility)', async () => {
+      const rows = await withTenant(
+        app,
+        schoolA.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ id: string }>
+          >`SELECT id FROM audit_events WHERE id = ${eventB.id}::uuid`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+  },
+);

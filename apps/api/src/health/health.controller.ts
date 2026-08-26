@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
 import { prisma } from '@atlas/db';
+import { PublicRoute } from '../modules/authorization/decorators.js';
 import { REDIS_CLIENT } from '../redis/redis.module.js';
 
 interface ReadinessCheck {
@@ -17,12 +18,18 @@ export class HealthController {
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
   @Get()
+  @PublicRoute(
+    'Liveness/readiness probes are infrastructure-level, unauthenticated by nature (load balancers, orchestrators).',
+  )
   @ApiOperation({ summary: 'Liveness probe — the process is up.' })
   liveness() {
     return { status: 'ok' as const };
   }
 
   @Get('ready')
+  @PublicRoute(
+    'Liveness/readiness probes are infrastructure-level, unauthenticated by nature (load balancers, orchestrators).',
+  )
   @ApiOperation({
     summary: 'Readiness probe — database, Redis, and object storage are reachable.',
   })

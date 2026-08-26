@@ -25,7 +25,16 @@ import { registerIdentityTemplates } from './templates.js';
     AuthGuard,
     CredentialSheetService,
   ],
-  exports: [PasswordService, CredentialSheetService, AuthGuard],
+  // SessionService is exported alongside AuthGuard (not otherwise part of
+  // this module's public surface) because `@UseGuards(AuthGuard)` used
+  // from a *different* module (AuthorizationController, B2) makes Nest
+  // build an instance-wrapper for AuthGuard scoped to that consuming
+  // module's own injector — which only reaches providers this module
+  // actually exports, not AuthGuard's own private dependencies. Without
+  // this, that cross-module instantiation fails at boot with
+  // UnknownDependenciesException even though AuthGuard itself already
+  // works fine for every route declared inside this module.
+  exports: [PasswordService, CredentialSheetService, AuthGuard, SessionService],
 })
 export class IdentityModule implements OnModuleInit {
   constructor(

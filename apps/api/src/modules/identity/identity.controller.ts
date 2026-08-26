@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Post,
-  Req,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -16,7 +6,8 @@ import { prisma } from '@atlas/db';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
 import { createCsrfToken, PLATFORM_CSRF_USER_INFO } from '../../security/csrf.js';
-import { AuthGuard, type AuthenticatedUser } from './auth.guard.js';
+import { Authorized, PublicRoute } from '../authorization/decorators.js';
+import { type AuthenticatedUser } from './auth.guard.js';
 import { AllowPendingPasswordChange } from './decorators.js';
 import { IdentityService } from './identity.service.js';
 import { LoginDto } from './dto/login.dto.js';
@@ -35,7 +26,8 @@ const AUTH_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   // AuthGuard always sets this before a guarded handler runs; the
   // non-null assertion is safe here specifically because every route in
-  // this controller that reads it is behind @UseGuards(AuthGuard).
+  // this controller that reads it is behind @Authorized(...), which runs
+  // AuthGuard before PermissionGuard.
   return req.user!;
 }
 
@@ -62,6 +54,7 @@ export class IdentityController {
   }
 
   @Get('tenant/resolve')
+  @PublicRoute('Pre-authentication — resolves branding for the login screen itself (ADR-0005).')
   @ApiOperation({
     summary:
       "Resolve the current subdomain's school for pre-login branding (ADR-0005), plus a CSRF token.",
@@ -85,6 +78,7 @@ export class IdentityController {
   @Post('auth/login')
   @HttpCode(HttpStatus.OK)
   @Throttle(AUTH_THROTTLE)
+  @PublicRoute('Pre-authentication by definition — this is what establishes a session.')
   @ApiOperation({ summary: 'Authenticate within the resolved tenant (ADR-0005).' })
   @ApiOkResponse({ type: StatusResponseDto })
   async login(
@@ -99,7 +93,7 @@ export class IdentityController {
 
   @Post('auth/logout')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard)
+  @Authorized('identity.session.manage')
   @ApiOperation({ summary: 'Revoke the current session.' })
   @ApiOkResponse({ type: StatusResponseDto })
   async logout(
@@ -113,6 +107,9 @@ export class IdentityController {
 
   @Post('auth/refresh')
   @HttpCode(HttpStatus.OK)
+  @PublicRoute(
+    "Operates on the raw session cookie directly (IdentityService.refresh) rather than through AuthGuard's active-membership check — must still work at the edges AuthGuard would reject.",
+  )
   @ApiOperation({ summary: 'Rotate the current session (ADR-0022).' })
   @ApiOkResponse({ type: StatusResponseDto })
   async refresh(
@@ -125,7 +122,7 @@ export class IdentityController {
   }
 
   @Get('auth/me')
-  @UseGuards(AuthGuard)
+  @Authorized('identity.me.read')
   @ApiOperation({ summary: 'Current user, membership, and roles — read live from the database.' })
   @ApiOkResponse({ type: MeResponseDto })
   async me(@Req() req: FastifyRequest): Promise<MeResponseDto> {
@@ -135,7 +132,7 @@ export class IdentityController {
 
   @Post('auth/password/change')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard)
+  @Authorized('account.resetOwnPassword')
   @AllowPendingPasswordChange()
   @ApiOperation({ summary: 'Authenticated password change — clears any forced-change state.' })
   @ApiOkResponse({ type: StatusResponseDto })
@@ -156,6 +153,7 @@ export class IdentityController {
   @Post('auth/password/reset/request')
   @HttpCode(HttpStatus.OK)
   @Throttle(AUTH_THROTTLE)
+  @PublicRoute('Pre-authentication by definition — the caller has no session yet.')
   @ApiOperation({ summary: 'Initiate a staff password reset (ADR-0019 — students have no email).' })
   @ApiOkResponse({ type: StatusResponseDto })
   async requestPasswordReset(@Body() body: PasswordResetRequestDto): Promise<StatusResponseDto> {
@@ -169,6 +167,9 @@ export class IdentityController {
   @Post('auth/password/reset/confirm')
   @HttpCode(HttpStatus.OK)
   @Throttle(AUTH_THROTTLE)
+  @PublicRoute(
+    'Pre-authentication — authorized by the single-use reset token itself, not a session.',
+  )
   @ApiOperation({ summary: 'Complete a password reset with a single-use token.' })
   @ApiOkResponse({ type: StatusResponseDto })
   async confirmPasswordReset(@Body() body: PasswordResetConfirmDto): Promise<StatusResponseDto> {

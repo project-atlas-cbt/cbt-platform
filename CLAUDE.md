@@ -235,8 +235,11 @@ session working on it without extra setup.
 **`B1 — Identity & Authentication`** — complete. **`F0 — Frontend Foundation & Design System`** —
 complete. **`F1 — Authentication & Tenant Entry`** — complete (two DoD items honestly partial —
 Software Admin login functionality and real per-school branding colour, both deferred by design,
-not oversight; see this file's Change Log entry below). Per the frontend/backend phase-pairing
-rule, **`B2 — Authorization & Tenancy Engine`** is next.
+not oversight; see this file's Change Log entry below). **`B2 — Authorization & Tenancy Engine`**
+— complete (one DoD item, the generated cross-tenant test-suite generator, honestly deferred to
+`B3`'s first real `:id`-shaped endpoint — the underlying cross-tenant guarantee itself is proven
+two other ways; see this file's Change Log entry below). Per the frontend/backend phase-pairing
+rule, **`F2 — App Shell, Navigation & Notifications`** is next, ahead of `B3`.
 
 F0 delivered: the Next.js 16 App Router application (`apps/web`) with Tailwind v4 + a
 shadcn/ui-pattern component library restyled to Project Atlas's semantic design tokens; an
@@ -925,3 +928,143 @@ notes" subsection covering the items above, and expanded Deferred items.
 "F1 next" to "B2 next." New env var `NEXT_PUBLIC_API_PORT` documented in `.env.example`.
 Project state moves from _Implementation (F1)_ to _Implementation (B2)_.
 **Next: `B2 — Authorization & Tenancy Engine`.**
+
+### 2026-08-26 — `B2` complete: authorization and tenancy engine
+
+Followed the working-rules checklist first: read `02` (the full permission matrix) end to end,
+`07 §41`/`§42` invariants 1/3/4, `08 §10`, `09 §25`, ADR-0012 and ADR-0023 in full, and audit
+findings A-03/C-06/C-07/M-15/D-01/R-01 — then inspected the existing B0/B1 implementation
+(`AuthGuard`, `TenancyContextService`, `withTenant`'s own closing comment, which explicitly names
+break-glass as "B2's authorization engine, not a B0 primitive") before writing any code.
+
+**Three structural gaps surfaced during planning — each confirmed with the project owner before
+implementation, not guessed**, mirroring B1's own precedent:
+
+1. **`PlatformRoleAssignment` (new schema model).** `SOFTWARE_ADMIN` had no representation at all —
+   `RoleAssignment` lives under `SchoolMembership`, and a platform account has none. Tenant-
+   independent (no `school_id`), exempted in `scripts/lint-schema-tenancy.mjs` alongside `User`; a
+   database `CHECK` constraint (`role = 'SOFTWARE_ADMIN'`) guards the shared `Role` enum at the row
+   level.
+2. **`ExamAdministrator` deferred to `B12`**, building only the generic delegation concept now (the
+   `OWNED` scope resolver's extension point) — `Exam` doesn't exist until `B11`, so the table would
+   need a dangling FK today.
+3. **Software Admin platform login deferred to `B3`.** No endpoint anywhere is in scope for it yet;
+   break-glass and the authorization truth table are tested via constructed `AuthorizedActor`
+   fixtures, not a real session — B2's own roadmap text already listed no login endpoint as B2 API
+   work.
+
+**The normalised permission table** (B2's own DoD item 1 — "reviewed and approved before guards are
+written"): `packages/domain/src/authorization/permission-table.ts`, 139 rows across 16 sections,
+covering every labelled row of `02`'s matrix. A-03's ~22 undefined terms ("Limited", "Own",
+"Assigned", "Department", "Scoped", "System", "Limited/request", "Configurable", ...) are resolved
+into the seven-predicate closed vocabulary (`PLATFORM`/`SCHOOL`/`DEPARTMENT`/`ASSIGNED`/`OWNED`/
+`SELF`/`NONE`) crossed with five actions, via twelve documented resolution rules (R1–R12, in the
+file's own header) rather than 150 independent ad hoc judgment calls. The riskiest rule (R4:
+extending ADR-0012's _named_ break-glass examples — invalidate attempt, grant makeup, archive
+question, force reset, deactivate account — to the rest of the "school academic writes" category,
+i.e. account create/edit/remove/import too) is flagged inline for explicit review rather than
+silently applied: the reasoning is that a Software Admin who could freely create a fresh account
+while being blocked from editing an existing one could trivially defeat the restriction. A
+generated, human-reviewable Markdown rendering (`docs/architecture/permission-table.md`,
+`pnpm generate:permission-table-doc`) is produced from this file, never hand-duplicated — same
+principle as `openapi.json`.
+
+**The authorization engine** (`apps/api/src/modules/authorization/`, new `@Global()` module):
+`AuthorizationService.evaluate(actor, permissionId, resource?)` implements the `08 §10` formula —
+a cross-tenant `resource.schoolId` mismatch is checked and rejected (`NOT_FOUND`) before any
+role/grant logic runs at all (DoD item 11); then every one of the actor's _active roles_ is tried
+in turn (a membership may hold more than one — e.g. `TEACHER` + `HOD` — and effective access is
+their union, not just the first match), falling back to reporting `requiresBreakGlass` rather than
+ever silently treating a `BREAK_GLASS`-kind grant as an ordinary allow. `ScopeResolverRegistry`
+implements `PLATFORM`/`SCHOOL`/`SELF`/`OWNED` concretely now; `ASSIGNED`/`DEPARTMENT` are
+registered as fail-closed placeholders (denying, with a one-time warning) since `TeacherAssignment`
+(`B6`) and `Department` (`B5`) don't exist yet — `.register()` is the extension point those phases
+plug a real resolver into without this module ever depending on tables that don't exist. `AuthGuard`
+(B1) now also loads the caller's active `RoleAssignment` rows live in the same request and attaches
+them to `req.user.roles` (09 §25 — never cached, never from a token). `PermissionGuard` +
+`@Authorized(permissionId)` (bundling `@UseGuards(AuthGuard, PermissionGuard)` in the correct order)
+replace every bare `@UseGuards(AuthGuard)` in `IdentityController`; every pre-authentication route
+(`login`, `tenant/resolve`, password-reset request/confirm, `refresh`) and both health probes get
+`@PublicRoute(reason)` instead. `PolicyCoverageService` (`OnApplicationBootstrap`, using
+`DiscoveryService`/`MetadataScanner` to find real HTTP route handlers specifically, not just any
+controller method) throws — failing app boot itself, for the real server and every integration test
+alike — if any route declares neither decorator (DoD item 2's "startup assertion... enforced").
+
+**`GET /v1/me/permissions`** (`AuthorizationController`) returns the actor's declarative capability
+list straight off the permission table (no per-instance scope-resolver call needed — it's "can you
+ever do X", not "can you do X to this specific resource"), excluding `SYSTEM`-kind rows. Contract-
+tested for shape stability, per B2's own Testing requirement.
+
+**Break-glass** (`BreakGlassService`, plus a new minimal `AuditService` populating the
+previously-empty `OperationsModule`): validates the actor is genuinely a Software Admin, validates
+the target permission's grant is actually `BREAK_GLASS`-graded (not just "any Software Admin
+action"), requires a non-empty reason, runs the caller's operation, then writes a real `AuditEvent`
+row under the _affected_ school's tenant context (not the actor's, who has none) — proven against
+real Postgres, RLS included. `AuditEvent` itself is a genuine, minimal, write-only primitive shipped
+a phase ahead of `B10`'s full apparatus (canonical action vocabulary, retrieval endpoints, DB-
+enforced append-only immutability, retention) — the same shape of decision as B0 shipping a minimal
+`NotificationChannel` ahead of B10's full messaging system. No controller anywhere calls
+`BreakGlassService` yet (no school-academic-write endpoint a Software Admin could reach exists
+before `B3`+) — proven instead against a synthetic protected operation, ready for the first phase
+that adds a real one.
+
+**One real cross-module dependency-injection bug found only by actually booting the compiled app,
+not by inspection, not by any unit test, and not by `tsc`:** `AuthorizationController` (living in
+the new `AuthorizationModule`) uses `@Authorized(...)`, which references `AuthGuard` — a class
+`IdentityModule` provides and exports. Nest resolves a guard class passed to `@UseGuards` by
+building a fresh instance-wrapper scoped to the _consuming_ module's own injector, which only
+reaches providers the providing module actually `exports` — not `AuthGuard`'s own private
+constructor dependencies. `SessionService` (an `IdentityModule`-internal provider `AuthGuard` needs)
+wasn't exported, so the real compiled app failed at boot with `UnknownDependenciesException` —
+invisible to every unit test (none boot the whole module graph) and to `tsc`. Found via the same
+technique B1's own two boot-only bugs used: a real `nest build && node dist/...` boot, not `tsx`
+(B1's still-current documented gotcha: `tsx` cannot boot the full `AppModule` once enough providers
+are registered, and fails with no error output at all). Fixed by exporting `SessionService`
+alongside `AuthGuard` from `IdentityModule`, documented at the export site.
+
+**Two DoD items honestly scoped down, not silently dropped:**
+
+1. **`ExamAdministrator`** — deferred to `B12` as described above; B2 ships the extension point the
+   real table plugs into.
+2. **The generated cross-tenant test-suite generator** — B2's roadmap text asked for infrastructure
+   that, for every school-scoped endpoint, proves a School A actor gets 404 on a School B resource,
+   generated from the route table. No real `GET /.../:id`-shaped school-scoped endpoint exists
+   anywhere in the app yet (identity has none), so there is nothing for a _generator_ to run against
+   today. B2 instead proved the same guarantee two other ways: `AuthorizationService.evaluate()`'s
+   unconditional tenant-boundary check (unit-tested), and a new RLS integration test proving the one
+   new school-owned table B2 introduces (`AuditEvent`) is cross-tenant-isolated exactly like
+   `SchoolMembership` already is. Building the actual _generator_ is recorded as `B3`'s job, against
+   its first real `:id`-shaped endpoint (`GET /v1/platform/schools/:id`) — not silently marked done.
+
+**Schema**: one migration (`20260826120305_b2_authorization_engine`) — `PlatformRoleAssignment`
+(with its `CHECK` constraint) and `AuditEvent` (school-owned, RLS-protected the same way every
+other school-owned table has been since `B0`'s bootstrap migration). One thing tried and reverted
+during this migration, documented in its own SQL comment: a plain `REVOKE UPDATE` on `audit_events`
+to approximate append-only enforcement early — reverted because `@atlas/db`'s `grantAppRole()`
+(called after every `migrate reset`) unconditionally re-`GRANT`s `UPDATE`/`DELETE` on every table in
+`public`, which would have silently undone the revoke and left a protection that looked enforced
+without being enforced. Real immutability enforcement stays `B10`'s job, done properly.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build && pnpm test:integration && pnpm spike`, plus `pnpm generate` (OpenAPI + contracts
+regeneration — `GET /v1/me/permissions` now published) and `pnpm generate:permission-table-doc`.
+124 new/changed tests across `packages/domain` (23, up from 7) and `apps/api` (86 unit + 38
+integration, up from 74/34) — truth-table coverage for every DoD-numbered assertion (teacher
+scoping, HOD department scoping, moderator cannot approve, student tiny surface, Software-Admin-
+not-a-wildcard, break-glass reason/grant/audit requirements), a real compiled-app boot proving
+`PolicyCoverageService` reports "11 route(s) checked" with zero violations, and the extended RLS
+suite (`tests/tenancy/rls.integration.test.ts`, now 7 tests) covering `audit_events`. The existing
+migrations reset/reapply integration test proves the new migration's hand-written SQL (the `CHECK`
+constraint and RLS bootstrap) applies and rolls back cleanly, for free.
+
+`docs/roadmaps/backend-roadmap.md`'s B2 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-deferred-with-reason, an "Implementation notes" subsection, and
+expanded Database work / Deferred items reflecting the three confirmed scope decisions above.
+`docs/roadmaps/roadmap-index.md`'s Current State, P2 status, and Immediate Next Actions moved from
+"B2 next" to "F2 next" (the phase-pairing default — B2's contract is frozen for F2 to consume),
+with B3 named as the right place to build the deferred cross-tenant generator against its first
+real `:id`-shaped endpoint. New file `docs/architecture/permission-table.md` (generated) and new
+script `scripts/generate-permission-table-doc.mjs`.
+Project state moves from _Implementation (B2)_ to _Implementation (F2)_.
+**Next: `F2 — App Shell, Navigation & Notifications`**, per the frontend/backend phase-pairing
+policy (`AGENTS.md` §19) — ahead of `B3` on the backend critical path.

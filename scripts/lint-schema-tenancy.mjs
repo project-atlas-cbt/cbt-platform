@@ -23,7 +23,10 @@ const schemaPath = resolve(__dirname, '../packages/db/prisma/schema.prisma');
 // User (B1): deliberately tenant-independent — one physical person may hold
 // SchoolMembership at more than one school (06 §7/§9), so it carries no
 // school_id at all. See User's own doc comment in schema.prisma.
-const EXEMPT_MODELS = new Set(['School', 'User']);
+//
+// PlatformRoleAssignment (B2): SOFTWARE_ADMIN has no school to be owned by
+// — mirrors User's own exemption reasoning exactly. See its doc comment.
+const EXEMPT_MODELS = new Set(['School', 'User', 'PlatformRoleAssignment']);
 
 const schema = readFileSync(schemaPath, 'utf-8');
 const modelBlockRe = /model\s+(\w+)\s*\{([^}]*)\}/g;

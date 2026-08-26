@@ -2,6 +2,7 @@ import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/com
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
 import { prisma, withTenant } from '@atlas/db';
+import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
 import { SessionService } from './session.service.js';
@@ -12,6 +13,10 @@ export interface AuthenticatedUser {
   schoolId: string;
   membershipId: string;
   sessionId: string;
+  /** Active RoleAssignment.role values for this membership, read live in
+   * the same request (B2's AuthorizationService reads this, never a
+   * decoded token — 09 §25). */
+  roles: Role[];
 }
 
 declare module 'fastify' {
@@ -67,6 +72,12 @@ export class AuthGuard implements CanActivate {
 
     if (!user || user.status !== 'ACTIVE' || !membership) throw unauthenticated();
 
+    const roleAssignments = await withTenant(prisma, schoolId, (tx) =>
+      tx.roleAssignment.findMany({
+        where: { schoolId, membershipId: membership.id, status: 'ACTIVE' },
+      }),
+    );
+
     const allowPending = this.reflector.getAllAndOverride<boolean>(
       ALLOW_PENDING_PASSWORD_CHANGE_KEY,
       [context.getHandler(), context.getClass()],
@@ -83,6 +94,7 @@ export class AuthGuard implements CanActivate {
       schoolId,
       membershipId: membership.id,
       sessionId: session.sessionId,
+      roles: roleAssignments.map((r) => r.role),
     };
     return true;
   }

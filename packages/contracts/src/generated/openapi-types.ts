@@ -4,32 +4,15 @@
  */
 
 export interface paths {
-    "/health": {
+    "/me/permissions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Liveness probe — the process is up. */
-        get: operations["HealthController_liveness"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/health/ready": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Readiness probe — database, Redis, and object storage are reachable. */
-        get: operations["HealthController_readiness"];
+        /** The effective capability set for the current user in the current school (B2). Presentation only — every real route is independently enforced by PermissionGuard. */
+        get: operations["AuthorizationController_me"];
         put?: never;
         post?: never;
         delete?: never;
@@ -174,10 +157,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liveness probe — the process is up. */
+        get: operations["HealthController_liveness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Readiness probe — database, Redis, and object storage are reachable. */
+        get: operations["HealthController_readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        EffectivePermissionDto: {
+            /** @description PERMISSION_TABLE row id (@atlas/domain). */
+            resource: string;
+            section: string;
+            /** @description Human-readable label, traceable to docs/02-roles-permissions.md. */
+            label: string;
+            /** @enum {string} */
+            action: "CREATE" | "READ" | "UPDATE" | "DELETE" | "EXECUTE";
+            /**
+             * @description Absent when this capability is only reachable via break-glass (breakGlass=true).
+             * @enum {string}
+             */
+            scope?: "NONE" | "SELF" | "OWNED" | "ASSIGNED" | "DEPARTMENT" | "SCHOOL" | "PLATFORM";
+            /** @description ADR-0012: reachable only through the audited break-glass path, never an ordinary grant. */
+            breakGlass?: boolean;
+        };
+        MePermissionsResponseDto: {
+            roles: ("SOFTWARE_ADMIN" | "SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT")[];
+            permissions: components["schemas"]["EffectivePermissionDto"][];
+        };
         TenantResolveSchoolDto: {
             name: string;
             subdomain: string;
@@ -267,7 +304,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    HealthController_liveness: {
+    AuthorizationController_me: {
         parameters: {
             query?: never;
             header?: never;
@@ -280,24 +317,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-        };
-    };
-    HealthController_readiness: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["MePermissionsResponseDto"];
                 };
-                content?: never;
             };
         };
     };
@@ -466,6 +488,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StatusResponseDto"];
                 };
+            };
+        };
+    };
+    HealthController_liveness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HealthController_readiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
