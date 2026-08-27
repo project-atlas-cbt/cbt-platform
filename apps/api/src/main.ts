@@ -15,8 +15,22 @@ async function bootstrap() {
   });
 
   const config = app.get(ConfigService<Env, true>);
+  const isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
 
-  await app.register(helmet, { global: true });
+  // A real bug found only by live browser testing of F3's admin login, not
+  // by inspection: @fastify/helmet's default `hsts` option was on
+  // unconditionally, in every environment. Local/CI dev never terminates
+  // TLS (native dev and Docker Compose both serve plain HTTP) — sending
+  // Strict-Transport-Security there is actively harmful, not just
+  // redundant: a browser that ever receives it caches "always upgrade this
+  // host, and — because of `includeSubDomains` — every `*.<root>`
+  // subdomain, to HTTPS" for up to a year. Every subsequent plain-HTTP dev
+  // request then fails at the TLS handshake itself
+  // (net::ERR_ALPN_NEGOTIATION_FAILED) until the browser's cached policy is
+  // manually cleared (chrome://net-internals/#hsts). Disabled outside
+  // production, mirroring `allowInsecureSubdomains`' own "only relaxed
+  // outside production" reasoning immediately below.
+  await app.register(helmet, { global: true, hsts: isProduction });
   // Read into variables first, not inline: inside the object literal below,
   // @fastify/cors's wide `origin` union type appears to push the ConfigService
   // generic overload toward `unknown` instead of inferring `string` from Env.
@@ -26,7 +40,7 @@ async function bootstrap() {
   // (greenfield.localtest.me:3000, apps/web/lib/api/resolve-origin.ts) has
   // no TLS to offer — only ever relaxed outside production; see
   // isAllowedOrigin's own doc comment.
-  const allowInsecureSubdomains = config.get('NODE_ENV', { infer: true }) !== 'production';
+  const allowInsecureSubdomains = !isProduction;
   await app.register(cors, {
     // ADR-0022's topology is multi-origin — every school's
     // `<subdomain>.<root>` plus `admin.<root>` — so a single static

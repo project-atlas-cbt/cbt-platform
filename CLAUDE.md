@@ -1692,3 +1692,44 @@ Actions both updated to reflect the closure. No schema change, no new migration,
 permission-table change, no ADR involved. Project state remains _Implementation (F5)_ — this was a
 gap closure on already-complete phases, not a new phase.
 **Next: `F5 — School Settings & Branding`.**
+
+### 2026-08-27 — Cross-cutting bug fix: HSTS sent unconditionally in local dev
+
+Found by live browser testing of the platform login flow (`/admin/login`), not by inspection or any
+automated test — the first time this codebase's Software Admin login had actually been exercised
+through a real browser rather than `app.inject()`/curl. Symptom: every login attempt failed with a
+generic "Incorrect email or password" error, but the exact same credentials succeeded every time via
+direct HTTP calls (curl) replicating the full browser contract (tenant-resolve → CSRF cookie/token →
+CORS preflight → login POST), across both the `admin.localtest.me:3000→3001` and plain
+`localhost:3000→3001` local-dev host pairs. The browser's Network tab showed the real cause:
+`net::ERR_ALPN_NEGOTIATION_FAILED` on the login `fetch` — a TLS handshake failure, meaning the
+browser was attempting HTTPS against a plain-HTTP Fastify dev server.
+
+**Root cause**: `apps/api/src/main.ts`'s `app.register(helmet, { global: true })` (`B0`-era, never
+touched since) left `@fastify/helmet`'s default `hsts` option on unconditionally, in every
+environment — sending `Strict-Transport-Security: max-age=31536000; includeSubDomains` even over
+plain HTTP in local dev. A browser that ever receives this (here, most likely from a prior visit to
+the real `localtest.me` site, which is genuinely HTTPS-served, combined with `includeSubDomains`)
+caches "always upgrade this host and every `*.<root>` subdomain to HTTPS" for up to a year — breaking
+every subsequent plain-HTTP local-dev request to any `*.localtest.me` host at the TLS layer, not just
+`/admin/login`, until the browser's cached policy is manually cleared
+(`chrome://net-internals/#hsts`). Never caught before because every existing test drives the app via
+`app.inject()` against `NestFactory.create(AppModule)` directly (the same "bypasses `main.ts`'s
+imperative `bootstrap()`" gap-class `B1`'s `HttpExceptionFilter` fix and this same gap-closure's own
+`ValidationPipe` fix above already document) — `helmet` itself is only ever registered in
+`bootstrap()`, so no automated test in this codebase has ever exercised it at all.
+
+**Fix**: `hsts: isProduction` (registered `false` outside production), mirroring
+`allowInsecureSubdomains`' existing "only relaxed outside production" reasoning immediately below it
+in the same function — the same shape of environment-gated relaxation, for the same underlying reason
+(local dev has no TLS to offer). Live-verified both directions: a real `node dist/main.js` boot with
+`NODE_ENV=production` still sends the header; the already-running dev instance (picked up via its own
+hot-reload) stopped sending it immediately. `pnpm typecheck` and the full `apps/api` unit suite
+(105 tests) reconfirmed green after the change. No test asserts HSTS presence/absence directly — the
+same structural gap named above (only a real `bootstrap()` boot exercises `helmet` at all) — so this
+was verified live rather than through the automated suite, matching the project's established
+practice for `main.ts`-level bootstrap concerns.
+
+No schema change, no migration, no permission-table change, no ADR involved, no roadmap phase status
+changed — this is an environment-configuration correctness fix cutting across every phase's local-dev
+experience, not scoped to any one of them.
