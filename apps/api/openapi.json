@@ -247,6 +247,94 @@
         "tags": ["health"]
       }
     },
+    "/media/uploads": {
+      "post": {
+        "operationId": "MediaController_requestUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestMediaUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMediaUploadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request an upload target for a question image/diagram/other asset (07 §11.3).",
+        "tags": ["media"]
+      }
+    },
+    "/media/uploads/{id}/complete": {
+      "post": {
+        "operationId": "MediaController_completeUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaAssetSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalise and validate an uploaded asset by content sniffing.",
+        "tags": ["media"]
+      }
+    },
+    "/media/{id}/url": {
+      "get": {
+        "operationId": "MediaController_getUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedMediaUrlResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Short-lived signed access URL for a non-logo media asset.",
+        "tags": ["media"]
+      }
+    },
     "/platform/auth/login": {
       "post": {
         "operationId": "PlatformAuthController_login",
@@ -323,10 +411,59 @@
         "parameters": [
           {
             "name": "status",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Comma-separated SchoolStatus values.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Matches school name or subdomain.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["name", "status", "createdAt"]
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"]
             }
           }
         ],
@@ -342,7 +479,7 @@
             }
           }
         },
-        "summary": "List schools (05 §3.1) — optional comma-separated status filter.",
+        "summary": "List schools (05 §3.1) — search, status filter, sort, and pagination (F3 gap closure).",
         "tags": ["platform"]
       },
       "post": {
@@ -635,6 +772,26 @@
         "tags": ["platform"]
       }
     },
+    "/platform/metrics/media/orphan-report": {
+      "get": {
+        "operationId": "PlatformMetricsController_getOrphanMediaReport",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrphanMediaReportResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B4 orphan-media report (report only, never deletes) — cached.",
+        "tags": ["platform"]
+      }
+    },
     "/activation/verify": {
       "post": {
         "operationId": "ActivationController_verify",
@@ -762,6 +919,113 @@
         "summary": "Read-only subscription status (05 §4.1) — School Admin/Moderator.",
         "tags": ["school"]
       }
+    },
+    "/school/branding/logo/upload-target": {
+      "post": {
+        "operationId": "SchoolBrandingController_requestLogoUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestLogoUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMediaUploadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request an upload target for a new school logo.",
+        "tags": ["school"]
+      }
+    },
+    "/school/branding/logo/upload-target/{id}/complete": {
+      "post": {
+        "operationId": "SchoolBrandingController_completeLogoUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaAssetSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalise and validate an uploaded logo by content sniffing.",
+        "tags": ["school"]
+      }
+    },
+    "/school/branding": {
+      "get": {
+        "operationId": "SchoolBrandingController_getBranding",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolBrandingResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own school branding + derived palette.",
+        "tags": ["school"]
+      },
+      "put": {
+        "operationId": "SchoolBrandingController_updateBranding",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSchoolBrandingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolBrandingResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update logo and/or primary colour (School Admin only) — freely editable, audited.",
+        "tags": ["school"]
+      }
     }
   },
   "info": {
@@ -839,9 +1103,17 @@
           "timezone": {
             "type": "string",
             "description": "IANA timezone (ADR-0027)."
+          },
+          "logoUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryColor": {
+            "type": "string",
+            "nullable": true
           }
         },
-        "required": ["name", "subdomain", "timezone"]
+        "required": ["name", "subdomain", "timezone", "logoUrl", "primaryColor"]
       },
       "TenantResolveResponseDto": {
         "type": "object",
@@ -984,6 +1256,86 @@
         },
         "required": ["token", "newPassword"]
       },
+      "RequestMediaUploadDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["QUESTION_IMAGE", "QUESTION_DIAGRAM", "OTHER"]
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "declaredMimeType": {
+            "type": "string",
+            "description": "Client-declared MIME type — never trusted alone; complete() re-derives it by sniffing."
+          },
+          "declaredSizeBytes": {
+            "type": "number",
+            "description": "Used to pin Content-Length on the presigned PUT."
+          }
+        },
+        "required": ["type", "filename", "declaredMimeType", "declaredSizeBytes"]
+      },
+      "RequestMediaUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string"
+          },
+          "uploadUrl": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["mediaAssetId", "uploadUrl", "expiresAt"]
+      },
+      "MediaAssetSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "READY", "REJECTED"]
+          },
+          "sniffedMimeType": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "number",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "nullable": true
+          },
+          "rejectionReason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["id", "status", "sniffedMimeType", "width", "height", "rejectionReason"]
+      },
+      "SignedMediaUrlResponseDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["url", "expiresAt"]
+      },
       "PlatformLoginDto": {
         "type": "object",
         "properties": {
@@ -1090,9 +1442,18 @@
             "items": {
               "$ref": "#/components/schemas/SchoolListItemDto"
             }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
           }
         },
-        "required": ["schools"]
+        "required": ["schools", "total", "page", "pageSize"]
       },
       "CreateSchoolDto": {
         "type": "object",
@@ -1401,6 +1762,35 @@
           "computedAt"
         ]
       },
+      "OrphanMediaReportResponseDto": {
+        "type": "object",
+        "properties": {
+          "expiredPendingCount": {
+            "type": "number",
+            "description": "Upload requested (presigned PUT issued) but never completed before the URL expired."
+          },
+          "supersededLogoCount": {
+            "type": "number",
+            "description": "A READY, SCHOOL_LOGO-typed asset no school's logoMediaId points to anymore."
+          },
+          "uncheckedReadyCount": {
+            "type": "number",
+            "description": "READY, non-SCHOOL_LOGO assets — nothing references these until B8 (Question/QuestionMedia). Not classified as orphaned or not; counted here only so this report never silently overstates its own coverage."
+          },
+          "computedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the worker sweeper last computed this snapshot; null if it has never run."
+          }
+        },
+        "required": [
+          "expiredPendingCount",
+          "supersededLogoCount",
+          "uncheckedReadyCount",
+          "computedAt"
+        ]
+      },
       "ActivationVerifyDto": {
         "type": "object",
         "properties": {
@@ -1526,6 +1916,174 @@
           }
         },
         "required": ["plan", "status", "startAt", "expiresAt", "inGracePeriod"]
+      },
+      "RequestLogoUploadDto": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "declaredMimeType": {
+            "type": "string",
+            "description": "Client-declared MIME type — never trusted alone; complete() re-derives it by sniffing."
+          },
+          "declaredSizeBytes": {
+            "type": "number",
+            "description": "Used to pin Content-Length on the presigned PUT."
+          }
+        },
+        "required": ["filename", "declaredMimeType", "declaredSizeBytes"]
+      },
+      "BrandTokensDto": {
+        "type": "object",
+        "properties": {
+          "brandPrimary": {
+            "type": "string"
+          },
+          "brandPrimaryHover": {
+            "type": "string"
+          },
+          "brandPrimaryActive": {
+            "type": "string"
+          },
+          "brandPrimarySubtle": {
+            "type": "string"
+          },
+          "brandPrimaryForeground": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "brandPrimary",
+          "brandPrimaryHover",
+          "brandPrimaryActive",
+          "brandPrimarySubtle",
+          "brandPrimaryForeground"
+        ]
+      },
+      "NeutralTokensDto": {
+        "type": "object",
+        "properties": {
+          "background": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "surfaceMuted": {
+            "type": "string"
+          },
+          "border": {
+            "type": "string"
+          },
+          "borderStrong": {
+            "type": "string"
+          },
+          "textPrimary": {
+            "type": "string"
+          },
+          "textSecondary": {
+            "type": "string"
+          },
+          "textMuted": {
+            "type": "string"
+          },
+          "textOnBrand": {
+            "type": "string"
+          },
+          "focusRing": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "background",
+          "surface",
+          "surfaceMuted",
+          "border",
+          "borderStrong",
+          "textPrimary",
+          "textSecondary",
+          "textMuted",
+          "textOnBrand",
+          "focusRing"
+        ]
+      },
+      "PaletteAdjustmentDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "requestedHex": {
+            "type": "string"
+          },
+          "appliedHex": {
+            "type": "string"
+          }
+        },
+        "required": ["reason", "requestedHex", "appliedHex"]
+      },
+      "DerivedPaletteDto": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "$ref": "#/components/schemas/BrandTokensDto"
+          },
+          "neutral": {
+            "$ref": "#/components/schemas/NeutralTokensDto"
+          },
+          "adjustment": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaletteAdjustmentDto"
+              }
+            ]
+          }
+        },
+        "required": ["brand", "neutral", "adjustment"]
+      },
+      "SchoolBrandingResponseDto": {
+        "type": "object",
+        "properties": {
+          "logoUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Long-lived signed URL (ADR-0021: \"logo may be cacheable\") — never a bare public object."
+          },
+          "primaryColor": {
+            "type": "string",
+            "nullable": true
+          },
+          "palette": {
+            "nullable": true,
+            "description": "Computed fresh on every read (never cached) via @atlas/domain's derivePalette. Null when primaryColor is unset.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DerivedPaletteDto"
+              }
+            ]
+          }
+        },
+        "required": ["logoUrl", "primaryColor", "palette"]
+      },
+      "UpdateSchoolBrandingDto": {
+        "type": "object",
+        "properties": {
+          "logoMediaId": {
+            "type": "string",
+            "nullable": true,
+            "description": "A READY, SCHOOL_LOGO-typed asset id from this school's own upload — re-validated server-side (type/status/tenant), which is the real gate here, not a second permission check. Pass null to remove the current logo."
+          },
+          "primaryColor": {
+            "type": "string",
+            "nullable": true,
+            "description": "\"#rrggbb\". Pass null to clear (falls back to the platform default palette)."
+          }
+        }
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

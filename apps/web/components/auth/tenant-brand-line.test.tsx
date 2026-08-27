@@ -16,12 +16,40 @@ describe('TenantBrandLine', () => {
     expect(container.querySelector('[role="status"]')).toBeInTheDocument();
   });
 
-  it("shows the school's name once resolved", () => {
+  it("shows the school's name once resolved, with no logo when none is set", () => {
     mockUseTenant.mockReturnValue({
       status: 'resolved',
-      school: { name: 'Greenfield Academy', subdomain: 'greenfield', timezone: 'Africa/Lagos' },
+      school: {
+        name: 'Greenfield Academy',
+        subdomain: 'greenfield',
+        timezone: 'Africa/Lagos',
+        logoUrl: null,
+        primaryColor: null,
+      },
     });
     render(<TenantBrandLine />);
+    expect(screen.getByText('Greenfield Academy')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('renders the real logo image when the school has set one (B4)', () => {
+    mockUseTenant.mockReturnValue({
+      status: 'resolved',
+      school: {
+        name: 'Greenfield Academy',
+        subdomain: 'greenfield',
+        timezone: 'Africa/Lagos',
+        logoUrl:
+          'https://minio.example/atlas-media-dev/schools/x/branding/y/logo.png?signature=abc',
+        primaryColor: '#2563EB',
+      },
+    });
+    render(<TenantBrandLine />);
+    const img = screen.getByRole('img', { name: 'Greenfield Academy logo' });
+    expect(img).toHaveAttribute(
+      'src',
+      'https://minio.example/atlas-media-dev/schools/x/branding/y/logo.png?signature=abc',
+    );
     expect(screen.getByText('Greenfield Academy')).toBeInTheDocument();
   });
 

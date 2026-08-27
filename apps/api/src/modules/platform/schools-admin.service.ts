@@ -29,6 +29,28 @@ import type {
 // @atlas/domain's access-gate.ts).
 const ACTIVATION_GRANT_VALIDITY_DAYS = 14;
 
+// Schools-list pagination (F3 gap closure) — no page-size selector exists
+// anywhere in the product yet, so this is a fixed constant rather than a
+// caller-configurable default; easy to make configurable later.
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+
+export interface ListSchoolsParams {
+  status?: SchoolStatus[] | undefined;
+  q?: string | undefined;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  sortBy?: 'name' | 'status' | 'createdAt' | undefined;
+  sortDir?: 'asc' | 'desc' | undefined;
+}
+
+export interface ListSchoolsResult {
+  schools: SchoolListItemDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 function hashKey(rawKey: string): string {
   return createHash('sha256').update(rawKey).digest('hex');
 }
@@ -93,14 +115,44 @@ export class SchoolsAdminService {
    * with nothing to show. Reuses the same per-school `withTenant` query
    * shape `detail()` already uses, just looped like `countByRole` already
    * is for `studentCount` — no new query pattern introduced.
+   *
+   * `q`/`page`/`pageSize`/`sortBy`/`sortDir` are a second F3 gap-closure
+   * (pagination — `frontend-roadmap.md`'s F3 DoD item 2). `sortBy` never
+   * includes `studentCount`: it isn't a `School` column, and
+   * `RoleAssignment` (what it's actually counted from) has
+   * `FORCE ROW LEVEL SECURITY` — a single cross-school `ORDER BY` on it
+   * isn't available without bypassing tenant isolation, so it's excluded at
+   * the DTO's `@IsIn` allow-list, not silently wrong here.
    */
-  async list(status?: SchoolStatus[]): Promise<SchoolListItemDto[]> {
-    const schools = await prisma.school.findMany({
-      ...(status && status.length > 0 ? { where: { status: { in: status } } } : {}),
-      orderBy: { createdAt: 'desc' },
-    });
+  async list(params: ListSchoolsParams = {}): Promise<ListSchoolsResult> {
+    const page = params.page && params.page > 0 ? params.page : 1;
+    const pageSize = Math.min(params.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const q = params.q?.trim();
 
-    return Promise.all(
+    const where = {
+      ...(params.status && params.status.length > 0 ? { status: { in: params.status } } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' as const } },
+              { subdomain: { contains: q, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+    const orderBy = { [params.sortBy ?? 'createdAt']: params.sortDir ?? 'desc' };
+
+    const [schools, total] = await prisma.$transaction([
+      prisma.school.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.school.count({ where }),
+    ]);
+
+    const enriched = await Promise.all(
       schools.map(async (school) => {
         const [studentCount, subscription] = await Promise.all([
           this.countByRole(school.id, 'STUDENT'),
@@ -118,6 +170,8 @@ export class SchoolsAdminService {
         };
       }),
     );
+
+    return { schools: enriched, total, page, pageSize };
   }
 
   /**

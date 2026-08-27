@@ -16,13 +16,13 @@ const mockUseSchools = vi.mocked(useSchools);
 
 function result(
   schools: unknown[],
-  overrides: Partial<{ isPending: boolean; isError: boolean; error: unknown }> = {},
+  overrides: Partial<{ isPending: boolean; isError: boolean; error: unknown; total: number }> = {},
 ) {
   return {
     isPending: false,
     isError: false,
     error: overrides.isError ? new NetworkError() : undefined,
-    data: { schools },
+    data: { schools, total: overrides.total ?? schools.length, page: 1, pageSize: 25 },
     refetch: vi.fn(),
     ...overrides,
   };
@@ -102,5 +102,52 @@ describe('SchoolsListPage', () => {
       'href',
       '/admin/schools/s1/subscription',
     );
+  });
+
+  // F3 gap closure (pagination) — server-side search/filter/sort/pagination.
+  it('renders the pager once the server reports more than one page, and Next updates the URL page param', async () => {
+    const oneRow = [
+      {
+        id: 's1',
+        name: 'Greenfield College',
+        subdomain: 'greenfield',
+        status: 'ACTIVE',
+        studentCount: 500,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+    mockUseSchools.mockReturnValue(result(oneRow, { total: 60 }) as never);
+    render(<SchoolsListPage />);
+    expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(replace).toHaveBeenCalledWith('/admin/schools?page=2');
+  });
+
+  it('narrowing the status filter resets the page back to 1', async () => {
+    params = new URLSearchParams('page=2');
+    mockUseSchools.mockReturnValue(result([], { total: 60 }) as never);
+    render(<SchoolsListPage />);
+    await userEvent.click(screen.getByLabelText('Suspended'));
+    const url = replace.mock.calls.at(-1)?.[0] as string;
+    expect(url).toContain('status=SUSPENDED');
+    expect(url).not.toContain('page=');
+  });
+
+  it('the Students column is not a sort control — it is not sortable server-side (RLS constraint)', () => {
+    mockUseSchools.mockReturnValue(
+      result([
+        {
+          id: 's1',
+          name: 'Greenfield College',
+          subdomain: 'greenfield',
+          status: 'ACTIVE',
+          studentCount: 500,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]) as never,
+    );
+    render(<SchoolsListPage />);
+    expect(screen.queryByRole('button', { name: /students/i })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Students')).toBeInTheDocument();
   });
 });

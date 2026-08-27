@@ -92,6 +92,16 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional().default(''),
   S3_SECRET_ACCESS_KEY: z.string().optional().default(''),
   S3_REGION: z.string().optional().default('eu-west-1'),
+
+  // B4: apps/worker's orphan-media reporting sweep interval — report only,
+  // never deletes (cleanup is a future M-14 retention-policy job). Not
+  // precision-sensitive, same reasoning as SUBSCRIPTION_SWEEP_INTERVAL_MS
+  // above. Default: 24 hours.
+  MEDIA_ORPHAN_SWEEP_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(24 * 60 * 60 * 1000),
 });
 
 export type Env = z.infer<typeof envSchema>;

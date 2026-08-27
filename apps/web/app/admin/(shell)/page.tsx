@@ -26,7 +26,7 @@ import { DASHBOARD_QUESTION } from '@/lib/nav';
  */
 export default function PlatformDashboardPage() {
   const metrics = usePlatformMetrics();
-  const attention = useSchools(['SUSPENDED', 'EXPIRED']);
+  const attention = useSchools({ status: ['SUSPENDED', 'EXPIRED'] });
 
   const platformIsEmpty = metrics.isSuccess && metrics.data.totalSchools === 0;
 

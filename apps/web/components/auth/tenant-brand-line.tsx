@@ -4,10 +4,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useTenant } from '@/lib/tenant';
 
 /**
- * DoD item 1's visible half: the resolved school's name, shown before
- * authentication. No real per-school colour/logo exists yet (B4 gap — see
- * lib/tenant/tenant-context.tsx's doc comment), so this is deliberately
- * text-only for now; B4 adds a logo `<img>` here once that data exists.
+ * DoD item 1's visible half: the resolved school's name and — since B4 —
+ * its real logo, shown before authentication. `logoUrl` is a long-lived
+ * signed URL (ADR-0021's "logo may be cacheable" allowance), never a bare
+ * public object, so a plain `<img>` is safe here with no extra proxying.
+ * Falls back to name-only text when the school hasn't set a logo, exactly
+ * as before B4.
  */
 export function TenantBrandLine() {
   const { status, school } = useTenant();
@@ -16,7 +18,21 @@ export function TenantBrandLine() {
     return <Skeleton className="mx-auto h-4 w-32" />;
   }
   if (school) {
-    return <p className="text-sm font-medium text-brand-primary">{school.name}</p>;
+    return (
+      <div className="flex flex-col items-center gap-2">
+        {school.logoUrl ? (
+          // A plain <img>, not next/image: the URL is a per-request signed
+          // value re-minted on every tenant/resolve call, not a static
+          // build-time asset next/image's optimization pipeline expects.
+          <img
+            src={school.logoUrl}
+            alt={`${school.name} logo`}
+            className="h-10 w-auto object-contain"
+          />
+        ) : null}
+        <p className="text-sm font-medium text-brand-primary">{school.name}</p>
+      </div>
+    );
   }
   // Unresolved subdomain, or resolution failed — doctrine: degrade the
   // specific section, not the whole screen. Nothing to show here; the

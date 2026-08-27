@@ -1,10 +1,70 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import {
   SCHOOL_STATUSES,
   SUBSCRIPTION_STATUSES,
   type SchoolStatus,
   type SubscriptionStatus,
 } from '@atlas/domain';
+
+const SCHOOL_LIST_SORT_FIELDS = ['name', 'status', 'createdAt'] as const;
+type SchoolListSortField = (typeof SCHOOL_LIST_SORT_FIELDS)[number];
+const SORT_DIRECTIONS = ['asc', 'desc'] as const;
+type SortDirection = (typeof SORT_DIRECTIONS)[number];
+
+/**
+ * Gap closure (F3 DoD item 2, `frontend-roadmap.md`): the first query-param
+ * DTO in the codebase — every other `GET` list endpoint uses raw
+ * `@Query('name')` string params, but this route now has five related
+ * params worth validating together. Global `ValidationPipe`
+ * (`transform: true`/`whitelist: true`, `apps/api/src/main.ts`) binds and
+ * coerces this the same way `@Body() body: CreateSchoolDto` already does.
+ *
+ * `sortBy` deliberately excludes `studentCount`: it isn't a column on
+ * `School` — it's a per-school count of `RoleAssignment` rows, and
+ * `RoleAssignment` has `FORCE ROW LEVEL SECURITY` (ADR-0023), so a single
+ * cross-school query ordering by it isn't available without bypassing
+ * tenant isolation (the same constraint `B3`'s worker jobs already document
+ * for the metrics sweep). Student count stays visible, just not sortable.
+ */
+export class ListSchoolsQueryDto {
+  @ApiPropertyOptional({ type: String, description: 'Comma-separated SchoolStatus values.' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ type: String, description: 'Matches school name or subdomain.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  q?: string;
+
+  @ApiPropertyOptional({ type: Number, minimum: 1, default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ type: Number, minimum: 1, maximum: 100, default: 25 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
+
+  @ApiPropertyOptional({ type: String, enum: SCHOOL_LIST_SORT_FIELDS })
+  @IsOptional()
+  @IsIn(SCHOOL_LIST_SORT_FIELDS)
+  sortBy?: SchoolListSortField;
+
+  @ApiPropertyOptional({ type: String, enum: SORT_DIRECTIONS })
+  @IsOptional()
+  @IsIn(SORT_DIRECTIONS)
+  sortDir?: SortDirection;
+}
 
 /** `05 §3.1`'s School List row shape. `subscriptionStatus`/`subscriptionExpiresAt`
  * are an F3 gap-closure (CLAUDE.md's F3 change-log entry) — added to power
@@ -39,9 +99,21 @@ export class SchoolListItemDto {
   subscriptionExpiresAt!: string | null;
 }
 
+/** `total`/`page`/`pageSize` are the F3 gap-closure (pagination) — `total`
+ * is the full matching-row count (before `skip`/`take`), so the frontend
+ * can compute `pageCount` for `DataTable`'s pager. */
 export class SchoolListResponseDto {
   @ApiProperty({ type: SchoolListItemDto, isArray: true })
   schools!: SchoolListItemDto[];
+
+  @ApiProperty({ type: Number })
+  total!: number;
+
+  @ApiProperty({ type: Number })
+  page!: number;
+
+  @ApiProperty({ type: Number })
+  pageSize!: number;
 }
 
 export class SchoolSubscriptionSummaryDto {

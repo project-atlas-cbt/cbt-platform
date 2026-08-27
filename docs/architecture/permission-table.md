@@ -16,17 +16,18 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Platform / School
 
-| Action                   | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD           | TEACHER  | STUDENT | Awaiting |
-| ------------------------ | -------------- | ------------ | --------- | ------------- | -------- | ------- | -------- |
-| View all schools         | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Create school            | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Activate school          | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Suspend school           | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Renew subscription       | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Revoke school access     | PLATFORM       | —            | —         | —             | —        | —       |          |
-| View subscription status | PLATFORM       | SCHOOL ⚠️    | —         | —             | —        | —       |          |
-| View school metrics      | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | ASSIGNED | SELF    |          |
-| Platform audit/logs      | PLATFORM       | SCHOOL ⚠️    | SCHOOL ⚠️ | DEPARTMENT ⚠️ | SELF ⚠️  | —       |          |
+| Action                        | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD           | TEACHER  | STUDENT | Awaiting |
+| ----------------------------- | -------------- | ------------ | --------- | ------------- | -------- | ------- | -------- |
+| View all schools              | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Create school                 | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Activate school               | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Suspend school                | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Renew subscription            | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Revoke school access          | PLATFORM       | —            | —         | —             | —        | —       |          |
+| View subscription status      | PLATFORM       | SCHOOL ⚠️    | —         | —             | —        | —       |          |
+| View school metrics           | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | ASSIGNED | SELF    |          |
+| Platform audit/logs           | PLATFORM       | SCHOOL ⚠️    | SCHOOL ⚠️ | DEPARTMENT ⚠️ | SELF ⚠️  | —       |          |
+| View orphan-media report (B4) | PLATFORM       | —            | —         | —             | —        | —       |          |
 
 <details><summary>Notes</summary>
 
@@ -46,8 +47,8 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | ------------------------------------------------------------ | -------------- | ------------ | --------- | --------- | ------- | --------- | -------------------------------------- |
 | View school profile                                          | PLATFORM       | SCHOOL       | SCHOOL    | SCHOOL    | SCHOOL  | SCHOOL ⚠️ |                                        |
 | Edit school name/details                                     | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
-| Upload/change logo                                           | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         | School branding columns (B4)           |
-| Set primary colour                                           | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         | School branding columns (B4)           |
+| Upload/change logo                                           | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
+| Set primary colour                                           | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         |                                        |
 | Manage departments (derived split: view)                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL ⚠️ | —       | —         | Department (B5)                        |
 | Manage departments (derived split: create/edit/delete)       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | Department (B5)                        |
 | Manage classes (derived split: view)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | ClassGroup (B5)                        |
@@ -66,7 +67,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Edit school name/details / SOFTWARE_ADMIN:** R1: school CRUD is a platform operation.
 - **Upload/change logo / SOFTWARE_ADMIN:** R1.
 - **Set primary colour / SOFTWARE_ADMIN:** R1.
-- **Set primary colour / SCHOOL_ADMIN:** "Full / One-time" — School Admin sets it; whether subsequent changes are restricted to a single initial set is a B4 enforcement detail, not yet wired (see CLAUDE.md's F1 branding note).
+- **Set primary colour / SCHOOL_ADMIN:** "Full / One-time" resolved as freely-editable, not a one-time lock (audit finding A-18) — School Admin may change the primary colour at any time; every change is audited (AuditService, action SCHOOL_BRANDING_CHANGED).
 - **Manage departments (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Manage departments (derived split: view) / HOD:** Matrix cell is "View" — whole-school visibility, not department-limited.
 - **Manage departments (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1: school structural/administrative setup, not academic content — flagged for review, not itself ADR-decided.
@@ -80,6 +81,24 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Manage terms (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
 - **Manage school settings / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
 - **Manage school settings / MODERATOR:** LIMITED (read-only placeholder): Exact writable settings subset for Moderator finalized when the School Settings resource is built.
+
+</details>
+
+## Media
+
+| Action                                                  | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER   | STUDENT | Awaiting                                                                                           |
+| ------------------------------------------------------- | -------------- | ------------ | --------- | ------ | --------- | ------- | -------------------------------------------------------------------------------------------------- |
+| View branding (logo + primary colour + derived palette) | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL | SCHOOL    | —       |                                                                                                    |
+| Upload media asset (question image/diagram/other)       | —              | SCHOOL       | SCHOOL    | SCHOOL | SCHOOL ⚠️ | —       | Question (B8) for real ASSIGNED-scoped Teacher upload — SCHOOL is a temporary widening until then. |
+| Get signed access URL for a non-logo media asset        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | SCHOOL | SCHOOL    | —       |                                                                                                    |
+
+<details><summary>Notes</summary>
+
+- **View branding (logo + primary colour + derived palette) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Upload media asset (question image/diagram/other) / SOFTWARE_ADMIN:** ADR-0012: content authoring denied to Software Admin.
+- **Upload media asset (question image/diagram/other) / TEACHER:** Placeholder scope: real per-subject/class (ASSIGNED) Teacher scoping is B8's job once Question/Subject/ClassGroup exist — mirrors the ASSIGNED/DEPARTMENT placeholder precedent already used elsewhere in this table. SCHOOL is a temporary widening.
+- **Get signed access URL for a non-logo media asset / SOFTWARE_ADMIN:** Matches the established "Software Admin: read + audited break-glass" default for school content elsewhere in this table.
+- **Get signed access URL for a non-logo media asset / STUDENT:** Students receive media via the attempt package (ADR-0021, B13), never this endpoint.
 
 </details>
 

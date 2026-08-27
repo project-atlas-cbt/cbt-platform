@@ -18,7 +18,11 @@
     "test": "vitest run",
     "clean": "rimraf dist"
   },
+  "dependencies": {
+    "culori": "^4.0.2"
+  },
   "devDependencies": {
+    "@types/culori": "^4.0.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   }

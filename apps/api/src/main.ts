@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ConfigService } from '@nestjs/config';
-import { ValidationPipe } from '@nestjs/common';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import type { Env } from '@atlas/config';
@@ -39,16 +38,11 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix(API_VERSION_PREFIX.replace(/^\//, ''));
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-  // HttpExceptionFilter is registered as an APP_FILTER in app.module.ts —
-  // not here — so it applies to any harness that boots AppModule, not just
-  // this real bootstrap() path. See that provider's own comment.
+  // HttpExceptionFilter and ValidationPipe are both registered as
+  // APP_FILTER/APP_PIPE in app.module.ts — not here — so they apply to any
+  // harness that boots AppModule, not just this real bootstrap() path. See
+  // those providers' own comments (the ValidationPipe one records a real
+  // bug this exact gap caused, found via F3's pagination gap-closure).
 
   const port = config.get('API_PORT', { infer: true });
   const host = config.get('API_HOST', { infer: true });

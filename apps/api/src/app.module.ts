@@ -1,5 +1,5 @@
-import { MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { MiddlewareConsumer, Module, ValidationPipe, type NestModule } from '@nestjs/common';
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { AppConfigModule } from './config/app-config.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -21,6 +21,7 @@ import { ExecutionModule } from './modules/execution/execution.module.js';
 import { ResultsModule } from './modules/results/results.module.js';
 import { AnalyticsModule } from './modules/analytics/analytics.module.js';
 import { OperationsModule } from './modules/operations/operations.module.js';
+import { MediaModule } from './modules/media/media.module.js';
 
 @Module({
   imports: [
@@ -35,6 +36,11 @@ import { OperationsModule } from './modules/operations/operations.module.js';
     // Bounded domains (08 §5) — all stubbed empty per B0 scope, except
     // Identity (B1) and Authorization (B2, above — cross-cutting, so it's
     // registered alongside Tenancy/Security rather than in this list).
+    // MediaModule (B4) doesn't map 1:1 to a single 08 §5 domain either —
+    // it's shared upload/validate/sign infrastructure Platform (branding)
+    // and, from B8, Questions both consume, the same shape of exception as
+    // Identity/Authorization above.
+    MediaModule,
     PlatformModule,
     IdentityModule,
     AcademicsModule,
@@ -62,6 +68,25 @@ import { OperationsModule } from './modules/operations/operations.module.js';
     // exception (the filter itself calls res.send(), so a second
     // invocation would crash trying to send an already-sent response).
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
+    // Registered here for the identical reason as HttpExceptionFilter above
+    // — a real gap found via this phase's own pagination integration tests,
+    // not by inspection: main.ts's imperative `app.useGlobalPipes(...)` only
+    // ever ran for the real bootstrap() path. Any harness booting AppModule
+    // directly (every integration test) never validated/transformed a
+    // single `@Body()`/`@Query()` DTO at all — invisible until a test
+    // actually asserted DTO-level validation/transform behaviour (an
+    // invalid `sortBy` value silently reached Prisma's `orderBy` and 500'd
+    // instead of 400ing; `@Type(() => Number)` never coerced a query
+    // string to a number). main.ts no longer registers this separately —
+    // same double-handling risk HttpExceptionFilter's own comment names.
+    {
+      provide: APP_PIPE,
+      useValue: new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    },
   ],
 })
 export class AppModule implements NestModule {

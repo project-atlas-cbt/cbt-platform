@@ -14,6 +14,15 @@ import { registerIdentityTemplates } from './templates.js';
  * Bounded domain per 08 §5: "Identity — Users, school memberships, roles,
  * sessions, credentials." B1 (auth.v1 contract); read (never written) by
  * B2's authorization engine.
+ *
+ * Does NOT import MediaModule, even though `GET /tenant/resolve` (B4)
+ * resolves the school's logo to a signed URL — MediaModule's own
+ * controllers need AuthGuard (this module), so importing MediaModule here
+ * too would create a real circular module dependency. `IdentityController`
+ * instead injects `ObjectStorageService` directly (the `@Global()`
+ * StorageModule needs no explicit import) and calls the shared
+ * `resolveLogoSignedUrl` helper — see that function's own doc comment in
+ * `apps/api/src/storage/logo-resolver.ts`.
  */
 @Module({
   controllers: [IdentityController],

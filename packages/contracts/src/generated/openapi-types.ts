@@ -191,6 +191,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an upload target for a question image/diagram/other asset (07 §11.3). */
+        post: operations["MediaController_requestUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/uploads/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalise and validate an uploaded asset by content sniffing. */
+        post: operations["MediaController_completeUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/{id}/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Short-lived signed access URL for a non-logo media asset. */
+        get: operations["MediaController_getUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/auth/login": {
         parameters: {
             query?: never;
@@ -249,7 +300,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List schools (05 §3.1) — optional comma-separated status filter. */
+        /** List schools (05 §3.1) — search, status filter, sort, and pagination (F3 gap closure). */
         get: operations["SchoolsAdminController_list"];
         put?: never;
         /** Create a school + initial admin + subscription (05 §3.2). */
@@ -380,6 +431,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/metrics/media/orphan-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** B4 orphan-media report (report only, never deletes) — cached. */
+        get: operations["PlatformMetricsController_getOrphanMediaReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activation/verify": {
         parameters: {
             query?: never;
@@ -449,6 +517,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/school/branding/logo/upload-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an upload target for a new school logo. */
+        post: operations["SchoolBrandingController_requestLogoUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/school/branding/logo/upload-target/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalise and validate an uploaded logo by content sniffing. */
+        post: operations["SchoolBrandingController_completeLogoUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/school/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own school branding + derived palette. */
+        get: operations["SchoolBrandingController_getBranding"];
+        /** Update logo and/or primary colour (School Admin only) — freely editable, audited. */
+        put: operations["SchoolBrandingController_updateBranding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -478,6 +598,8 @@ export interface components {
             subdomain: string;
             /** @description IANA timezone (ADR-0027). */
             timezone: string;
+            logoUrl: string | null;
+            primaryColor: string | null;
         };
         TenantResolveResponseDto: {
             /** @description null when the request resolved no school (platform host, unrecognised subdomain, or the bare root domain). */
@@ -530,6 +652,35 @@ export interface components {
             token: string;
             newPassword: string;
         };
+        RequestMediaUploadDto: {
+            /** @enum {string} */
+            type: "QUESTION_IMAGE" | "QUESTION_DIAGRAM" | "OTHER";
+            filename: string;
+            /** @description Client-declared MIME type — never trusted alone; complete() re-derives it by sniffing. */
+            declaredMimeType: string;
+            /** @description Used to pin Content-Length on the presigned PUT. */
+            declaredSizeBytes: number;
+        };
+        RequestMediaUploadResponseDto: {
+            mediaAssetId: string;
+            uploadUrl: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        MediaAssetSummaryResponseDto: {
+            id: string;
+            /** @enum {string} */
+            status: "PENDING" | "READY" | "REJECTED";
+            sniffedMimeType: string | null;
+            width: number | null;
+            height: number | null;
+            rejectionReason: string | null;
+        };
+        SignedMediaUrlResponseDto: {
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
         PlatformLoginDto: {
             /** @description Software Admin's account email. */
             email: string;
@@ -565,6 +716,9 @@ export interface components {
         };
         SchoolListResponseDto: {
             schools: components["schemas"]["SchoolListItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         CreateSchoolDto: {
             name: string;
@@ -665,6 +819,19 @@ export interface components {
              */
             computedAt: string | null;
         };
+        OrphanMediaReportResponseDto: {
+            /** @description Upload requested (presigned PUT issued) but never completed before the URL expired. */
+            expiredPendingCount: number;
+            /** @description A READY, SCHOOL_LOGO-typed asset no school's logoMediaId points to anymore. */
+            supersededLogoCount: number;
+            /** @description READY, non-SCHOOL_LOGO assets — nothing references these until B8 (Question/QuestionMedia). Not classified as orphaned or not; counted here only so this report never silently overstates its own coverage. */
+            uncheckedReadyCount: number;
+            /**
+             * Format: date-time
+             * @description When the worker sweeper last computed this snapshot; null if it has never run.
+             */
+            computedAt: string | null;
+        };
         ActivationVerifyDto: {
             key: string;
         };
@@ -705,6 +872,55 @@ export interface components {
             expiresAt: string;
             /** @description Whether the school is currently within ADR-0015's post-expiry grace window. */
             inGracePeriod: boolean;
+        };
+        RequestLogoUploadDto: {
+            filename: string;
+            /** @description Client-declared MIME type — never trusted alone; complete() re-derives it by sniffing. */
+            declaredMimeType: string;
+            /** @description Used to pin Content-Length on the presigned PUT. */
+            declaredSizeBytes: number;
+        };
+        BrandTokensDto: {
+            brandPrimary: string;
+            brandPrimaryHover: string;
+            brandPrimaryActive: string;
+            brandPrimarySubtle: string;
+            brandPrimaryForeground: string;
+        };
+        NeutralTokensDto: {
+            background: string;
+            surface: string;
+            surfaceMuted: string;
+            border: string;
+            borderStrong: string;
+            textPrimary: string;
+            textSecondary: string;
+            textMuted: string;
+            textOnBrand: string;
+            focusRing: string;
+        };
+        PaletteAdjustmentDto: {
+            reason: string;
+            requestedHex: string;
+            appliedHex: string;
+        };
+        DerivedPaletteDto: {
+            brand: components["schemas"]["BrandTokensDto"];
+            neutral: components["schemas"]["NeutralTokensDto"];
+            adjustment: components["schemas"]["PaletteAdjustmentDto"] | null;
+        };
+        SchoolBrandingResponseDto: {
+            /** @description Long-lived signed URL (ADR-0021: "logo may be cacheable") — never a bare public object. */
+            logoUrl: string | null;
+            primaryColor: string | null;
+            /** @description Computed fresh on every read (never cached) via @atlas/domain's derivePalette. Null when primaryColor is unset. */
+            palette: components["schemas"]["DerivedPaletteDto"] | null;
+        };
+        UpdateSchoolBrandingDto: {
+            /** @description A READY, SCHOOL_LOGO-typed asset id from this school's own upload — re-validated server-side (type/status/tenant), which is the real gate here, not a second permission check. Pass null to remove the current logo. */
+            logoMediaId?: string | null;
+            /** @description "#rrggbb". Pass null to clear (falls back to the platform default palette). */
+            primaryColor?: string | null;
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -959,6 +1175,71 @@ export interface operations {
             };
         };
     };
+    MediaController_requestUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestMediaUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestMediaUploadResponseDto"];
+                };
+            };
+        };
+    };
+    MediaController_completeUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetSummaryResponseDto"];
+                };
+            };
+        };
+    };
+    MediaController_getUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedMediaUrlResponseDto"];
+                };
+            };
+        };
+    };
     PlatformAuthController_login: {
         parameters: {
             query?: never;
@@ -1022,8 +1303,15 @@ export interface operations {
     };
     SchoolsAdminController_list: {
         parameters: {
-            query: {
-                status: string;
+            query?: {
+                /** @description Comma-separated SchoolStatus values. */
+                status?: string;
+                /** @description Matches school name or subdomain. */
+                q?: string;
+                page?: number;
+                pageSize?: number;
+                sortBy?: "name" | "status" | "createdAt";
+                sortDir?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -1246,6 +1534,25 @@ export interface operations {
             };
         };
     };
+    PlatformMetricsController_getOrphanMediaReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrphanMediaReportResponseDto"];
+                };
+            };
+        };
+    };
     ActivationController_verify: {
         parameters: {
             query?: never;
@@ -1349,6 +1656,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchoolSubscriptionStatusResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolBrandingController_requestLogoUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestLogoUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestMediaUploadResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolBrandingController_completeLogoUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetSummaryResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolBrandingController_getBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolBrandingResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolBrandingController_updateBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSchoolBrandingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolBrandingResponseDto"];
                 };
             };
         };

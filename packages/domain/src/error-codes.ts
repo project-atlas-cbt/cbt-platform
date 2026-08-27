@@ -54,6 +54,22 @@ export const BASE_ERROR_CODES = {
   // subscription; only an explicit platform override blocks login itself.
   SCHOOL_ACCESS_SUSPENDED: { httpStatus: 403, retryable: false },
   SCHOOL_ACCESS_DEACTIVATED: { httpStatus: 403, retryable: false },
+
+  // B4 (Media, Storage & Branding).
+  //
+  // MEDIA_UPLOAD_NOT_FOUND is also the cross-school-media response (404,
+  // not 403) — RLS makes another school's MediaAsset row invisible to
+  // withTenant(), which is indistinguishable from "doesn't exist" and
+  // deliberately so (never disclose existence across a tenant boundary,
+  // same rationale as NOT_FOUND/ACTIVATION_KEY_INVALID above).
+  MEDIA_TYPE_NOT_UPLOADABLE: { httpStatus: 400, retryable: false },
+  MEDIA_UPLOAD_NOT_FOUND: { httpStatus: 404, retryable: false },
+  MEDIA_UPLOAD_EXPIRED: { httpStatus: 409, retryable: false },
+  MEDIA_UPLOAD_NOT_RECEIVED: { httpStatus: 409, retryable: false },
+  MEDIA_CONTENT_TYPE_MISMATCH: { httpStatus: 422, retryable: false },
+  MEDIA_TOO_LARGE: { httpStatus: 422, retryable: false },
+  MEDIA_DIMENSIONS_INVALID: { httpStatus: 422, retryable: false },
+  MEDIA_NOT_READY: { httpStatus: 409, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

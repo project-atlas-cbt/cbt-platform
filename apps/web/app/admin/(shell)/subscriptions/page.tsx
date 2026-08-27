@@ -21,6 +21,12 @@ import { formatDate } from '@/lib/format/date';
  * subscription lens: defaults to schools whose subscription needs
  * attention, with Plan/Expiry/Status emphasized over student count —
  * not a second data-fetching concept.
+ *
+ * Unlike the Schools list, this view has no pager UI — it requests the
+ * server's max page size (100) in one request rather than building
+ * pagination for a screen scoped to "needs attention" schools only, which
+ * is expected to stay small at admin scale (same assumption this product
+ * has documented since F3).
  */
 interface Row {
   id: string;
@@ -34,7 +40,7 @@ interface Row {
 const ATTENTION_STATUSES = ['SUSPENDED', 'EXPIRED', 'PROVISIONAL'] as const;
 
 export default function SubscriptionsPage() {
-  const schools = useSchools([...ATTENTION_STATUSES]);
+  const schools = useSchools({ status: [...ATTENTION_STATUSES], pageSize: 100 });
 
   const rows: Row[] = useMemo(() => schools.data?.schools ?? [], [schools.data]);
 

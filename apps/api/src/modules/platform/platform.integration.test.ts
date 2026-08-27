@@ -437,3 +437,92 @@ describe('Full activation lifecycle (B3 DoD items 1-4, 6)', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+/**
+ * F3 gap closure (`frontend-roadmap.md`'s F3 DoD item 2): `GET
+ * /platform/schools` gained `q`/`page`/`pageSize`/`sortBy`/`sortDir`. Every
+ * request here filters with `q=<uniquePrefix>` so assertions are exact
+ * regardless of whatever other schools already exist in this shared test
+ * database (the same isolation trick `RUN`-scoped hosts elsewhere in this
+ * file rely on).
+ */
+describe('Schools list: search, sort, and pagination (F3 gap closure)', () => {
+  let platformCtx: RequestCtx;
+  const prefix = `Pager-${randomUUID().slice(0, 8)}`;
+  // Named so alphabetical name order is Alpha < Bravo < Charlie < Delta <
+  // Echo — distinct from creation order (created in a shuffled sequence
+  // below) so a name-sort assertion can't pass by accident of insertion
+  // order.
+  const names = ['Charlie', 'Alpha', 'Echo', 'Bravo', 'Delta'];
+
+  beforeAll(async () => {
+    const platformAdmin = await seedPlatformAdmin();
+    platformCtx = await freshCtx(ADMIN_HOST, `10.${RUN}.11.1`);
+    await loginPlatform(platformCtx, platformAdmin.email, platformAdmin.password);
+
+    for (const name of names) {
+      const school = await prisma.school.create({
+        data: {
+          name: `${prefix} ${name}`,
+          subdomain: `${prefix}-${name}-${randomUUID().slice(0, 6)}`.toLowerCase(),
+        },
+      });
+      createdSchoolIds.push(school.id);
+    }
+  });
+
+  it('q matches name case-insensitively and reports the full matching total', async () => {
+    const res = await get(platformCtx, `/platform/schools?q=${prefix.toLowerCase()}`);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ total: number; schools: Array<{ name: string }> }>();
+    expect(body.total).toBe(5);
+    expect(body.schools).toHaveLength(5);
+  });
+
+  it('pageSize/page slice the matching set, and sortBy=name orders alphabetically', async () => {
+    const page1 = await get(
+      platformCtx,
+      `/platform/schools?q=${prefix}&pageSize=2&page=1&sortBy=name&sortDir=asc`,
+    );
+    const body1 = page1.json<{
+      total: number;
+      page: number;
+      pageSize: number;
+      schools: Array<{ name: string }>;
+    }>();
+    expect(body1.total).toBe(5);
+    expect(body1.page).toBe(1);
+    expect(body1.pageSize).toBe(2);
+    expect(body1.schools.map((s) => s.name)).toEqual([`${prefix} Alpha`, `${prefix} Bravo`]);
+
+    const page2 = await get(
+      platformCtx,
+      `/platform/schools?q=${prefix}&pageSize=2&page=2&sortBy=name&sortDir=asc`,
+    );
+    const body2 = page2.json<{ schools: Array<{ name: string }> }>();
+    expect(body2.schools.map((s) => s.name)).toEqual([`${prefix} Charlie`, `${prefix} Delta`]);
+
+    const page3 = await get(
+      platformCtx,
+      `/platform/schools?q=${prefix}&pageSize=2&page=3&sortBy=name&sortDir=desc`,
+    );
+    const body3 = page3.json<{ schools: Array<{ name: string }> }>();
+    // desc order overall is Echo, Delta, Charlie, Bravo, Alpha — page 3 of
+    // size 2 is the last row only.
+    expect(body3.schools.map((s) => s.name)).toEqual([`${prefix} Alpha`]);
+  });
+
+  it('an out-of-range page returns an empty page with the real total, not an error', async () => {
+    const res = await get(platformCtx, `/platform/schools?q=${prefix}&page=99`);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ total: number; schools: unknown[] }>();
+    expect(body.total).toBe(5);
+    expect(body.schools).toHaveLength(0);
+  });
+
+  it('rejects an out-of-allow-list sortBy value with validation, not a raw ORDER BY error', async () => {
+    const res = await get(platformCtx, `/platform/schools?sortBy=studentCount`);
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('VALIDATION_ERROR');
+  });
+});

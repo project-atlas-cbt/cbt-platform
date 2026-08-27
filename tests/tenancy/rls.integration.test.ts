@@ -386,3 +386,133 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     });
   },
 );
+
+/**
+ * B4's new school-owned table (MediaAsset) — same four-test shape as the
+ * blocks above. This is also the mechanism `MediaService`'s own cross-
+ * school-404 behaviour depends on for real (`.../complete`, `GET
+ * /v1/media/:id/url`): a cross-school lookup via `withTenant` returns
+ * `null`, not a 403 — RLS itself is what makes another school's row
+ * genuinely invisible, not an application-level ownership check.
+ */
+describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
+  'Row-Level Security tenant isolation — media_assets (B4, ADR-0023)',
+  () => {
+    let owner: PrismaClient;
+    let app: PrismaClient;
+    let schoolA: { id: string };
+    let schoolB: { id: string };
+    let uploader: { id: string };
+    let assetA: { id: string };
+    let assetB: { id: string };
+
+    beforeAll(async () => {
+      await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
+      owner = createPrismaClient(ownerDatabaseUrl);
+      app = createPrismaClient(appDatabaseUrl);
+
+      schoolA = await owner.school.create({
+        data: {
+          name: `Media RLS School A ${randomUUID()}`,
+          subdomain: `media-rls-a-${Date.now()}`,
+        },
+      });
+      schoolB = await owner.school.create({
+        data: {
+          name: `Media RLS School B ${randomUUID()}`,
+          subdomain: `media-rls-b-${Date.now()}`,
+        },
+      });
+      uploader = await owner.user.create({
+        data: { firstName: 'Media', lastName: 'Uploader', displayName: 'Media Uploader' },
+      });
+
+      const now = new Date();
+      const in15Minutes = new Date(now.getTime() + 15 * 60 * 1000);
+
+      assetA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.mediaAsset.create({
+          data: {
+            id: randomUUID(),
+            schoolId: schoolA.id,
+            type: 'QUESTION_IMAGE',
+            storageKey: `schools/${schoolA.id}/questions/${randomUUID()}/a.png`,
+            originalFilename: 'a.png',
+            declaredMimeType: 'image/png',
+            declaredSizeBytes: 1024,
+            uploaderUserId: uploader.id,
+            uploadUrlExpiresAt: in15Minutes,
+          },
+        }),
+      );
+      assetB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.mediaAsset.create({
+          data: {
+            id: randomUUID(),
+            schoolId: schoolB.id,
+            type: 'QUESTION_IMAGE',
+            storageKey: `schools/${schoolB.id}/questions/${randomUUID()}/b.png`,
+            originalFilename: 'b.png',
+            declaredMimeType: 'image/png',
+            declaredSizeBytes: 1024,
+            uploaderUserId: uploader.id,
+            uploadUrlExpiresAt: in15Minutes,
+          },
+        }),
+      );
+    });
+
+    afterAll(async () => {
+      await owner.mediaAsset.deleteMany({ where: { schoolId: { in: [schoolA.id, schoolB.id] } } });
+      await owner.user.delete({ where: { id: uploader.id } });
+      await owner.school.deleteMany({ where: { id: { in: [schoolA.id, schoolB.id] } } });
+      await owner.$disconnect();
+      await app.$disconnect();
+    });
+
+    it('with no tenant context set, RLS blocks all rows (fails closed)', async () => {
+      const rows = await app.$queryRaw<
+        Array<{ id: string }>
+      >`SELECT id FROM media_assets WHERE id IN (${assetA.id}::uuid, ${assetB.id}::uuid)`;
+      expect(rows).toHaveLength(0);
+    });
+
+    it("scoped to school A, only school A's asset is visible", async () => {
+      const rows = await withTenant(
+        app,
+        schoolA.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ school_id: string }>
+          >`SELECT school_id FROM media_assets WHERE id IN (${assetA.id}::uuid, ${assetB.id}::uuid)`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.school_id).toBe(schoolA.id);
+    });
+
+    it("scoped to school B, only school B's asset is visible", async () => {
+      const rows = await withTenant(
+        app,
+        schoolB.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ school_id: string }>
+          >`SELECT school_id FROM media_assets WHERE id IN (${assetA.id}::uuid, ${assetB.id}::uuid)`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.school_id).toBe(schoolB.id);
+    });
+
+    it("an explicit cross-tenant read by id returns nothing, even by primary key (MediaService.getSignedUrl's actual 404 mechanism)", async () => {
+      const rows = await withTenant(
+        app,
+        schoolA.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ id: string }>
+          >`SELECT id FROM media_assets WHERE id = ${assetB.id}::uuid`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+  },
+);

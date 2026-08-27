@@ -5,6 +5,7 @@ import { getProductName, type Env } from '@atlas/config';
 import { NOTIFICATION_TEMPLATE_REGISTRY } from '../../notifications/notifications.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { OperationsModule } from '../operations/operations.module.js';
+import { MediaModule } from '../media/media.module.js';
 import { PlatformSessionService } from './platform-session.service.js';
 import { PlatformAuthGuard } from './platform-auth.guard.js';
 import { PlatformAuthService } from './platform-auth.service.js';
@@ -17,6 +18,8 @@ import { ActivationService } from './activation.service.js';
 import { ActivationController } from './activation.controller.js';
 import { SchoolProfileService } from './school-profile.service.js';
 import { SchoolProfileController } from './school-profile.controller.js';
+import { SchoolBrandingService } from './school-branding.service.js';
+import { SchoolBrandingController } from './school-branding.controller.js';
 import { registerPlatformTemplates } from './templates.js';
 
 /**
@@ -37,13 +40,14 @@ import { registerPlatformTemplates } from './templates.js';
  * way IdentityModule's own controller already relies on.
  */
 @Module({
-  imports: [IdentityModule, OperationsModule],
+  imports: [IdentityModule, OperationsModule, MediaModule],
   controllers: [
     PlatformAuthController,
     SchoolsAdminController,
     PlatformMetricsController,
     ActivationController,
     SchoolProfileController,
+    SchoolBrandingController,
   ],
   providers: [
     PlatformSessionService,
@@ -53,6 +57,7 @@ import { registerPlatformTemplates } from './templates.js';
     PlatformMetricsService,
     ActivationService,
     SchoolProfileService,
+    SchoolBrandingService,
   ],
 })
 export class PlatformModule implements OnModuleInit {

@@ -1,9 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * No branding fields yet (logo/colour arrive with B4's School columns) —
- * shaped so B4 extends this response, not replaces it (see
- * IdentityController.resolveTenant's own comment).
+ * B4 extended this response with branding fields, exactly as this file's
+ * own comment (and TenantBrandLine's on the frontend) anticipated —
+ * `logoUrl` is a long-lived signed URL (never a bare public object,
+ * ADR-0021's "logo may be cacheable" allowance), safe to expose on this
+ * public, unauthenticated route.
  */
 export class TenantResolveSchoolDto {
   @ApiProperty({ type: String })
@@ -14,6 +16,12 @@ export class TenantResolveSchoolDto {
 
   @ApiProperty({ type: String, description: 'IANA timezone (ADR-0027).' })
   timezone!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  logoUrl!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  primaryColor!: string | null;
 }
 
 export class TenantResolveResponseDto {

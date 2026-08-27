@@ -9,6 +9,11 @@ import {
   createSubscriptionExpiryWorker,
   scheduleSubscriptionExpirySweep,
 } from './queues/subscription-expiry.queue.js';
+import {
+  ORPHAN_MEDIA_REPORT_QUEUE_NAME,
+  createOrphanMediaReportWorker,
+  scheduleOrphanMediaReport,
+} from './queues/orphan-media-report.queue.js';
 import { registerWorkerTemplates } from './queues/templates.js';
 
 async function main() {
@@ -45,7 +50,13 @@ async function main() {
     env.SUBSCRIPTION_SWEEP_INTERVAL_MS,
   );
 
-  for (const worker of [probeWorker, subscriptionExpiryWorker]) {
+  // B4: orphan-media reporting — report only, never deletes (see this
+  // job's own doc comment).
+  const orphanMediaReportWorker = createOrphanMediaReportWorker(connection, { redis });
+  const orphanMediaReportQueue = new Queue(ORPHAN_MEDIA_REPORT_QUEUE_NAME, { connection });
+  await scheduleOrphanMediaReport(orphanMediaReportQueue, env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS);
+
+  for (const worker of [probeWorker, subscriptionExpiryWorker, orphanMediaReportWorker]) {
     worker.on('completed', (job) => {
       console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
     });
@@ -55,13 +66,18 @@ async function main() {
   }
 
   console.log(
-    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms)`,
+    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms)`,
   );
 
   const shutdown = async () => {
     console.log('[worker] shutting down...');
-    await Promise.all([probeWorker.close(), subscriptionExpiryWorker.close()]);
+    await Promise.all([
+      probeWorker.close(),
+      subscriptionExpiryWorker.close(),
+      orphanMediaReportWorker.close(),
+    ]);
     await subscriptionExpiryQueue.close();
+    await orphanMediaReportQueue.close();
     redis.disconnect();
     await prisma.$disconnect();
     process.exit(0);

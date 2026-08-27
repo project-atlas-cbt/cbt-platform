@@ -38,3 +38,14 @@ export {
   PLATFORM_METRICS_CACHE_KEY,
   type PlatformMetricsSnapshot,
 } from './platform/metrics-cache.js';
+export {
+  derivePalette,
+  type BrandTokens,
+  type NeutralTokens,
+  type PaletteAdjustment,
+  type DerivedPalette,
+} from './branding/derive-palette.js';
+export {
+  ORPHAN_MEDIA_REPORT_CACHE_KEY,
+  type OrphanMediaReportSnapshot,
+} from './media/orphan-media-report.js';

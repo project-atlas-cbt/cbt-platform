@@ -19,6 +19,7 @@ import { SchoolsAdminService } from './schools-admin.service.js';
 import { CreateSchoolDto } from './dto/create-school.dto.js';
 import { IssueSubscriptionDto, SchoolLifecycleReasonDto } from './dto/school-lifecycle.dto.js';
 import {
+  ListSchoolsQueryDto,
   SchoolActivationGrantsResponseDto,
   SchoolDetailResponseDto,
   SchoolListResponseDto,
@@ -48,11 +49,20 @@ export class SchoolsAdminController {
 
   @Get()
   @AuthorizedPlatform('platform.school.viewAll')
-  @ApiOperation({ summary: 'List schools (05 §3.1) — optional comma-separated status filter.' })
+  @ApiOperation({
+    summary:
+      'List schools (05 §3.1) — search, status filter, sort, and pagination (F3 gap closure).',
+  })
   @ApiOkResponse({ type: SchoolListResponseDto })
-  async list(@Query('status') status?: string): Promise<SchoolListResponseDto> {
-    const schools = await this.schools.list(parseStatusFilter(status));
-    return { schools };
+  async list(@Query() query: ListSchoolsQueryDto): Promise<SchoolListResponseDto> {
+    return this.schools.list({
+      status: parseStatusFilter(query.status),
+      q: query.q,
+      page: query.page,
+      pageSize: query.pageSize,
+      sortBy: query.sortBy,
+      sortDir: query.sortDir,
+    });
   }
 
   @Post()

@@ -8,6 +8,13 @@ export interface TenantSchool {
   name: string;
   subdomain: string;
   timezone: string;
+  /** B4: a long-lived signed URL (ADR-0021's "logo may be cacheable"
+   * allowance) — never a bare public object. Null if the school hasn't
+   * set one. */
+  logoUrl: string | null;
+  /** B4: "#rrggbb", or null if the school hasn't set one — see
+   * `<TenantProvider>` below for how this reaches `<ThemeProvider>`. */
+  primaryColor: string | null;
 }
 
 export interface TenantResolution {
@@ -70,23 +77,24 @@ const TenantContext = createContext<TenantResolution | null>(null);
  * `<ThemeProvider primaryColor={...}>`, overriding these tokens further
  * down."
  *
- * No real per-school colour exists yet — `tenant/resolve`'s `school`
- * object is `{name, subdomain, timezone}` only; B4 (Media & branding)
- * hasn't shipped the logo/colour columns. `primaryColor` stays `undefined`
- * (→ the platform default palette) until then; this component wires the
- * full pipeline so B4 only has to add a field, not build this again.
+ * B4 closed the gap this component's own comment used to flag: real
+ * per-school colour now flows straight from `tenant/resolve` into
+ * `<ThemeProvider>`. `?? undefined` (not a bare `resolution.school
+ * ?.primaryColor`) because `exactOptionalPropertyTypes` treats an
+ * explicit `primaryColor={null}` differently from the prop being omitted
+ * — `ThemeProvider` only knows "omitted" as its platform-default signal.
  */
 export function TenantProvider({ children }: { children: ReactNode }) {
   const resolution = useTenantResolution();
+  // exactOptionalPropertyTypes forbids `primaryColor={undefined}` as an
+  // explicit prop value — the key must be entirely absent, not present
+  // with an undefined value, to mean "use the platform default".
+  const primaryColor = resolution.school?.primaryColor;
+  const themeProps = primaryColor ? { primaryColor } : {};
 
   return (
     <TenantContext.Provider value={resolution}>
-      {/* B4 gap: no real per-school colour field exists yet — see this
-          component's doc comment. primaryColor omitted (not passed as
-          `undefined`) — exactOptionalPropertyTypes forbids that
-          explicitly; ThemeProvider already treats "omitted" as "use the
-          platform default". */}
-      <ThemeProvider>{children}</ThemeProvider>
+      <ThemeProvider {...themeProps}>{children}</ThemeProvider>
     </TenantContext.Provider>
   );
 }

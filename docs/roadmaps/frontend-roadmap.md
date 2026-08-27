@@ -613,10 +613,15 @@ Pairs with F4 — the key issued here is redeemed there.
    correct, real values — `computedAt: null` (worker never ran) shows an honest "not yet computed"
    caption rather than a blank or fabricated timestamp. "Recent platform activity" (`05 §2.1`,
    not `04 §6`) is honestly deferred — needs `B10`'s audit-read API.
-2. ⚠️ **Partial.** Search/filter/sort all work; **pagination does not** — `GET /platform/schools`
-   has no pagination params (B3's own endpoint shape), a real gap not anticipated in the original
-   plan text. Scoped down deliberately: fine at expected admin-scale school counts, not silently
-   dropped — see Implementation notes.
+2. ✅ **Closed (2026-08-27, post-completion gap closure).** Search, status filter, sort, and
+   pagination are all server-side now — `GET /platform/schools` gained `q`/`page`/`pageSize`/
+   `sortBy`/`sortDir`. One narrower-than-originally-planned casualty: sorting by **Student count**
+   is not offered — it isn't a `School` column (it's a per-school `RoleAssignment` count, and
+   `RoleAssignment` has `FORCE ROW LEVEL SECURITY`, ADR-0023), so a single cross-school `ORDER BY`
+   on it isn't available without bypassing tenant isolation; the column stays visible, just not a
+   sort key. See `backend-roadmap.md`'s B3 section, "Post-completion gap closure" note, for the
+   full implementation detail and the real `ValidationPipe` bug this gap-closure's own testing
+   found and fixed.
 3. ✅ Captures name, admin, and subscription exactly per `CreateSchoolDto`; returns the generated
    subdomain (`05 §3.2`'s "System generates: School identifier"). No raw activation key is ever
    shown — the email is the one-time reveal channel, B3's own design.
@@ -748,8 +753,6 @@ confirmed the full intended route table (all `/admin/schools/[id]/*` sub-routes,
 - Real break-glass wiring — `<ReasonDialog variant="breakGlass">` is built and tested but unused by
   any screen; no school-academic-write endpoint reachable by Software Admin exists yet.
 - Real Playwright E2E — standing deferral since F1.
-- Server-side pagination for the Schools list — no pagination API in `B3`'s endpoint; candidate if
-  the assumption that admin-scale school counts stay small changes.
 - Support/impersonation tooling (`04 §5` mentions "Support" as a later addition).
 - Revenue and billing views — no payment system in scope.
 

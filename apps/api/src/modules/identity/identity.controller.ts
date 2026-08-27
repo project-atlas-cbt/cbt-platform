@@ -7,6 +7,8 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
 import { createCsrfToken, PLATFORM_CSRF_USER_INFO } from '../../security/csrf.js';
 import { Authorized, PublicRoute } from '../authorization/decorators.js';
+import { ObjectStorageService } from '../../storage/object-storage.service.js';
+import { resolveLogoSignedUrl } from '../../storage/logo-resolver.js';
 import { type AuthenticatedUser } from './auth.guard.js';
 import { AllowPendingPasswordChange } from './decorators.js';
 import { IdentityService } from './identity.service.js';
@@ -37,6 +39,7 @@ export class IdentityController {
   constructor(
     private readonly identity: IdentityService,
     private readonly tenancy: TenancyContextService,
+    private readonly storage: ObjectStorageService,
   ) {}
 
   /** ADR-0005: every route below except tenant/resolve needs a resolved
@@ -62,15 +65,37 @@ export class IdentityController {
   @ApiOkResponse({ type: TenantResolveResponseDto })
   async resolveTenant(@Req() req: FastifyRequest): Promise<TenantResolveResponseDto> {
     const schoolId = this.tenancy.schoolId;
-    const school = schoolId
+    const row = schoolId
       ? await prisma.school.findUnique({
           where: { id: schoolId },
-          select: { name: true, subdomain: true, timezone: true },
+          select: {
+            name: true,
+            subdomain: true,
+            timezone: true,
+            logoMediaId: true,
+            primaryColor: true,
+          },
         })
       : null;
 
-    // No branding fields yet (logo/colour arrive with B4's School columns)
-    // — shaped so B4 extends this response, not replaces it.
+    // B4: extends this response with branding rather than replacing it,
+    // exactly as this file's own comment (and TenantBrandLine's on the
+    // frontend) anticipated. getLogoSignedUrl never throws — a dangling/
+    // superseded pointer degrades to "no logo shown," not a broken login
+    // page.
+    const school =
+      row === null
+        ? null
+        : {
+            name: row.name,
+            subdomain: row.subdomain,
+            timezone: row.timezone,
+            logoUrl: row.logoMediaId
+              ? await resolveLogoSignedUrl(this.storage, schoolId!, row.logoMediaId)
+              : null,
+            primaryColor: row.primaryColor,
+          };
+
     const csrfToken = createCsrfToken(req.csrfSecret!, schoolId ?? PLATFORM_CSRF_USER_INFO);
     return { school, csrfToken };
   }

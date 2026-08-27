@@ -673,11 +673,59 @@ consumer against this phase's own already-approved Scope bullet ("renewal histor
 `pnpm generate` and `pnpm generate:permission-table-doc` were re-run (139 rows, confirmed
 unchanged); `platform.integration.test.ts` gained two cases proving the new endpoint's real shape.
 
+### 2026-08-27 — Second gap closure: pagination on `GET /platform/schools` (via F3, post-`B4`)
+
+`frontend-roadmap.md`'s F3 section had flagged pagination on the Schools list as a deliberately
+scoped-down partial DoD item ("fine at admin-scale school counts"). Closed at the project owner's
+request. `GET /v1/platform/schools` gained `q`/`page`/`pageSize`/`sortBy`/`sortDir` — a new
+`ListSchoolsQueryDto` (the first whole-object `@Query()` DTO in the codebase), validated the same
+way `CreateSchoolDto` already is. Search/status-filter/sort all moved server-side alongside
+pagination, not just pagination alone: once the endpoint returns one page instead of the full list,
+client-side search/sort would otherwise have silently started operating on just that page — a real
+regression the fix deliberately avoided rather than introduced. `SchoolsAdminService.list()` now
+does `prisma.$transaction([findMany, count])` with `skip`/`take`, and the `studentCount`/
+`currentSubscription` enrichment fan-out only runs over the current page's rows, not the whole
+table — a genuine efficiency improvement alongside the shape change. `SchoolListResponseDto` gained
+`total`/`page`/`pageSize`. No permission-table change — `platform.school.viewAll` already governs
+the resource regardless of query params.
+
+**Scope decision, made and documented rather than asked (engineering-shaped, not product policy):**
+sorting by **Student count** is dropped. It isn't a `School` column — it's a per-school count of
+`RoleAssignment` rows, and `RoleAssignment` carries `FORCE ROW LEVEL SECURITY` (ADR-0023). A single
+cross-school query ordering by it before pagination isn't available without bypassing tenant
+isolation — the identical constraint this phase's own worker jobs already document (subscription-
+expiry sweep, platform metrics). The column stays visible; it just isn't a sort key.
+
+**A real bug found only by this gap closure's own integration tests, not by inspection, and not
+caught by any test in `B0`–`B4`:** the global `ValidationPipe` was registered only in `main.ts`'s
+imperative `bootstrap()`, never as an `APP_PIPE` in `AppModule` — the exact same class of gap `B1`
+already found and fixed for `HttpExceptionFilter`. Every integration test in the entire suite boots
+`AppModule` directly via `NestFactory.create()`, bypassing `main.ts` entirely, so **no `@Body()` or
+`@Query()` DTO had ever actually been validated or transformed by any integration test in this
+codebase** — invisible until a test finally asserted DTO-level behaviour that only holds if
+validation runs (an out-of-allow-list `sortBy` value should 400, not reach Prisma's `orderBy` and
+500; a query-string `"1"` should transform to the number `1` via `@Type(() => Number)`). Fixed at
+the source, mirroring `HttpExceptionFilter`'s own precedent exactly: `ValidationPipe` is now an
+`APP_PIPE` provider in `app.module.ts`, and `main.ts` no longer registers it separately (the same
+double-handling risk that comment already names). The full `apps/api` unit and integration suites,
+`apps/web`'s suite, and the cross-cutting `tests/` suite were all re-run afterward specifically to
+confirm real validation now actually applying across every existing endpoint changed nothing else —
+it didn't; every prior test was already sending well-formed input.
+
+`platform.integration.test.ts` gained a new `describe` block (4 cases: search + total count,
+page/pageSize slicing with `sortBy`/`sortDir`, an out-of-range page returning an empty page rather
+than an error, and the invalid-`sortBy` 400 case that caught the `ValidationPipe` bug above).
+`apps/web`'s `useSchools` hook and its three call sites (`schools/page.tsx`, the platform dashboard,
+`/admin/subscriptions`) were updated; the latter two now request `pageSize: 100` in one request
+rather than building pager UI they don't need, preserving their existing "small attention list, no
+pager" behaviour instead of silently truncating to the new 25-row default. `pnpm generate` was
+re-run (three new query params, three new response fields); no permission-table change.
+
 ---
 
 # B4 — Media, Storage & Branding
 
-**Status:** NOT STARTED · **Decided ADRs:** 0021 (offline media delivery)
+**Status:** COMPLETE (2026-08-27) · **Decided ADRs:** 0021 (offline media delivery)
 
 ## Objective
 
@@ -703,17 +751,23 @@ Deliver tenant-isolated object storage and the school branding system, including
 
 ## Domains / modules affected
 
-`MediaModule`, `BrandingModule` (within `SchoolsModule`).
+`MediaModule` (new, top-level — shared infrastructure, not nested under `QuestionsModule`; see
+Implementation notes). Branding lives in the existing `platform` module (`SchoolBrandingController`/
+`SchoolBrandingService`, sibling to `SchoolProfileController`) rather than a separate `SchoolsModule`
+— no such module exists in this codebase; school-facing self-service already lives under `platform`.
 
 ## API work
 
-| Endpoint                              | Purpose                                                                                      |
-| ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `POST /v1/media/uploads`              | Request upload target, validated and school-scoped                                           |
-| `POST /v1/media/uploads/:id/complete` | Finalise and register the asset                                                              |
-| `GET /v1/media/:id/url`               | Short-lived signed access URL                                                                |
-| `PUT /v1/school/branding`             | Logo + primary colour                                                                        |
-| `GET /v1/school/branding`             | Branding + derived palette (also served unauthenticated by `GET /v1/tenant/resolve` from B1) |
+| Endpoint                                                   | Purpose                                                                                         |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `POST /v1/media/uploads`                                   | Request upload target for question image/diagram/other, validated and school-scoped             |
+| `POST /v1/media/uploads/:id/complete`                      | Finalise and register the asset (content-sniffed, dimension-checked)                            |
+| `GET /v1/media/:id/url`                                    | Short-lived signed access URL (non-logo assets)                                                 |
+| `POST /v1/school/branding/logo/upload-target`              | Logo-specific upload-target request (own permission: `schoolConfig.logo.upload`)                |
+| `POST /v1/school/branding/logo/upload-target/:id/complete` | Logo-specific completion                                                                        |
+| `PUT /v1/school/branding`                                  | Logo + primary colour — freely editable (A-18), audited                                         |
+| `GET /v1/school/branding`                                  | Branding + derived palette (also served unauthenticated by `GET /v1/tenant/resolve` from B1)    |
+| `GET /v1/platform/metrics/media/orphan-report`             | Software-Admin-only orphan-media report (report only, never deletes) — not in the original plan |
 
 ## Database work
 
@@ -753,26 +807,150 @@ B13 depends on the offline media decision. If `ADR-0021` is unresolved when B13 
 
 ## Definition of Done
 
-1. A logo uploads, validates, stores under the school namespace, and renders on the branded login.
-2. Primary colour saves and produces a full derived palette; preview reflects it.
-3. Question media uploads privately and is retrievable only through an authorized signed URL.
-4. Direct public access to a question-media object is denied at the bucket level, proven by test.
-5. A cross-school media request returns 404.
-6. Signed URLs expire and are rejected after expiry.
-7. Oversized, wrong-type, and content-mismatched uploads are rejected with clear errors.
-8. An asset referenced by a submitted question revision cannot be replaced in place.
-9. Branding changes do not alter any historical record (`05 §6.1`) — asserted by test.
-10. The offline media contract is documented and F13 has confirmed it is sufficient.
+1. ✅ A logo uploads, validates, stores under the school namespace, and renders on the branded login — `TenantBrandLine` (apps/web) now renders a real `<img>` from `GET /v1/tenant/resolve`'s `logoUrl`, closing the exact seam F1 flagged for this phase.
+2. ✅ Primary colour saves and produces a full derived palette; `GET /v1/school/branding` returns it precomputed for the admin-facing preview. F5's actual branding _settings_ screen (upload UI, colour picker, "Preview School Theme" step) is separate, later scope — this phase ships the contract and the read-side rendering, not the authoring UI.
+3. ✅ Question media uploads privately and is retrievable only through an authorized signed URL — proven end to end against real MinIO (`media.integration.test.ts`).
+4. ✅ Direct public access to a question-media object is denied at the bucket level, proven by test — a raw, unsigned GET against the actual bucket object URL returns 403 (MinIO's real default-deny, not mocked). Real AWS S3 Block-Public-Access/IAM provisioning is `B23`'s job (infra/IaC) — see Deferred items.
+5. ✅ A cross-school media request returns 404, even by primary key — RLS itself is the mechanism (`withTenant` returns `null` for another school's row), not an application-level ownership check; see Implementation notes for the correction this made to the original plan's assumption about `AuthorizationService`.
+6. ✅ Signed URLs expire and are rejected after expiry — enforced by S3/MinIO's own signature verification (15 min for question media, 24h for the logo embedded in the public `tenant/resolve` response per ADR-0021's "logo may be cacheable" allowance).
+7. ✅ Oversized, wrong-type, and content-mismatched uploads are rejected with clear, specific error codes (`MEDIA_TOO_LARGE`, `MEDIA_CONTENT_TYPE_MISMATCH`, `MEDIA_DIMENSIONS_INVALID`) — content-type is sniffed from real bytes (`file-type`), never trusted from the client's declared MIME type or filename extension.
+8. ⚠️ **Structurally, not behaviourally, proven.** There is no update-in-place endpoint or service method for `MediaAsset` anywhere in the API surface — every mutation is a brand-new row plus, for logos, a pointer swap (`School.logoMediaId` reassigned). This satisfies D-13 today by construction. It cannot be proven _against a real `QuestionRevision`_ until `B8` exists — there is no revision to attempt to violate this against yet. Recorded honestly, not silently claimed as fully proven.
+9. ⚠️ **Narrower than the DoD text implies, honestly.** No historical-record-bearing entity references branding yet (`Result`/attempt records don't exist until much later phases). What's actually proven: changing branding touches only `School.logoMediaId`/`primaryColor`, nothing else, and is independently audited (`SCHOOL_BRANDING_CHANGED`) — `school-branding.integration.test.ts` asserts exactly two audit rows for two changes. Full proof (a historical record retaining the branding active at the time it was created) waits for a phase that introduces such a record — likely `B15`/`B18`.
+10. ✅ The offline media contract (ADR-0021: cache media into the client at attempt start; signed URLs only need to outlive that download) is documented in the ADR itself. F13 hasn't started yet, so its own confirmation is pending — this DoD item's second half moves with F13, not silently claimed done.
 
 ## Exit criteria
 
-- ADR-0021 decided; the attempt-package media contract is written into the B13 design.
-- Bucket policy verified in a real environment, not only locally.
+- ✅ ADR-0021 decided (already Accepted before this phase started); the attempt-package media contract is documented there for B13 to consume.
+- ⚠️ Bucket policy verified in a real environment — **locally/in-CI only**, against real MinIO. Real AWS S3 Block-Public-Access/IAM provisioning is `B23`'s job (infra/IaC), matching `docker-compose.yml`'s own header comment that production provisioning is deferred there. This gap cannot be closed by B4 alone.
+
+## Implementation notes (2026-08-27)
+
+**Resolved audit finding A-18** (the self-contradictory "Full / One-time" permission-matrix cell
+for School Admin's primary-colour capability) — confirmed with the project owner: **freely
+editable**, not a one-time lock, matching `05 §6.1` and the audit's own recommendation. Every
+branding change (logo or colour) is audited via the existing `AuditService.record(...)` convention
+(`action: 'SCHOOL_BRANDING_CHANGED'`), not just the first one.
+
+**A required architectural refactor, not optional polish**: `apps/web/lib/theme/derive-palette.ts`
+(F0's OKLCH, WCAG-AA-guaranteeing palette derivation engine) moved verbatim into
+`packages/domain/src/branding/derive-palette.ts` so the API can compute the identical palette
+server-side (`GET /v1/school/branding`) without a second, independently-drifting implementation.
+`apps/web`'s copy is now a one-line re-export; `culori` became `@atlas/domain`'s first-ever runtime
+dependency (a clean fit — pure TS/JS, no framework coupling). The exhaustive 8-sample-colour test
+suite moved with the implementation; `apps/web` keeps a smoke test proving the re-export wiring.
+
+**Module placement**: a new top-level `MediaModule` (not nested under `QuestionsModule`, which is
+still an empty B8-reserved stub) owns the generic, type-polymorphic upload/validate/sign pipeline —
+shared infrastructure Branding (this phase) and, later, Questions (`B8`) both consume, the same
+shape of decision as `OperationsModule` owning cross-cutting Audit. Logo upload/attach deliberately
+does **not** go through `MediaController`'s generic endpoints — one route can't cleanly enforce two
+different permission rows (`schoolConfig.logo.upload` for `SCHOOL_LOGO` vs `media.upload` for
+everything else) depending on request-body content under this codebase's `@Authorized(single-id)`
+decorator model, so `school-branding.controller.ts` (the `platform` module) exposes its own small
+logo upload-target/complete pair instead, both delegating into the same `MediaService` internals.
+
+**A real cross-module circular-dependency bug, found only by a real compiled boot** (`node
+dist/main.js`), not `tsc`/`tsx`/Vitest — this project's now-standing class of gotcha (see B1/B2's
+own identical discoveries). `storage.module.ts`'s factory provider and `object-storage.service.ts`
+both needed the `S3_CLIENT` DI symbol; defining it in either file and importing it into the other
+created a circular ESM import that left the second-evaluated module with an uninitialised binding
+at class-definition time (`@Inject` runs immediately, not lazily) — crashing with "Cannot access
+'S3_CLIENT' before initialization" only under a real `node` boot, invisible to every other tooling.
+Fixed by extracting the symbol into its own `storage.tokens.ts` file both import from. The identical
+class of problem shaped `resolveLogoSignedUrl` (`apps/api/src/storage/logo-resolver.ts`): `GET
+/v1/tenant/resolve` (`IdentityModule`) needs to resolve a school's logo to a signed URL, but
+`MediaModule`'s own controllers need `AuthGuard` (`IdentityModule`) for authorization — importing
+`MediaModule` into `IdentityModule` would create a real module cycle. `IdentityController` instead
+injects `ObjectStorageService` directly (the `@Global()` `StorageModule` needs no explicit import)
+and calls this shared helper function, mirroring `AccessGateModule`'s own B3-era precedent for the
+identical class of problem.
+
+**`AuthorizationService.evaluate()`'s resource/tenant-context parameter is dead code in practice —
+a correction to this phase's own planning assumption, not a new finding about the engine itself.**
+It is never populated by the existing `@Authorized`/`@AuthorizedPlatform` decorator flow (confirmed
+by reading `permission.guard.ts`: it calls `evaluate(actor, permissionId)` with no third argument,
+and no call site anywhere passes one). The actual cross-school-404 mechanism for `.../complete` and
+`GET /v1/media/:id/url` is **RLS itself**: `withTenant` returns `null` for another school's row,
+which the service turns into a 404. Correct and sufficient (defense-in-depth per ADR-0023), just
+worth recording accurately rather than attributing to the wrong layer.
+
+**Local/CI object storage is MinIO** (S3-compatible, self-hosted), a new `docker-compose.yml`
+service mirroring the existing postgres/redis pattern exactly (pinned image tag, named volume,
+healthcheck). The running api/worker never provision the bucket via compose — `ObjectStorageService
+.ensureBucket()` does it idempotently at boot, the same mechanism that has to work identically in
+CI service containers, which (per B0's own precedent) can't run custom init scripts.
+
+**Real virus/malware scanning is explicitly out of scope**, confirmed before implementation —
+recorded as Candidate/Deferred below, not silently skipped. Content validation is real magic-byte
+sniffing (`file-type`) + size/dimension checks (`image-size`, reading only the image header, never
+decoding pixel data) — genuine content-sniffing, just not malware detection. SVG is excluded from
+every allow-list on purpose: it can embed scripts and can't be reliably magic-byte-sniffed (it's
+text, not a fixed binary signature), which would defeat "reject by content sniffing, not extension"
+outright.
+
+**Two real bugs found only by writing and running the integration tests, not by inspection** — both
+in the tests' own shared HTTP helper, not the product:
+
+1. The `post()` test helper unconditionally set `Content-Type: application/json` even for bodyless
+   POST calls (e.g. `.../complete`, which takes no body). Fastify's default JSON body parser throws
+   on that combination (`Content-Type: application/json` with zero bytes), surfacing as a generic
+   framework `400 VALIDATION_ERROR` with empty `details` — indistinguishable, without printing the
+   raw body, from a real product bug. Fixed by only setting the header when an actual payload is
+   given. This was masking every one of `media.integration.test.ts`'s `.../complete` assertions,
+   including the happy path.
+2. A test fixture bug in the same file: a hand-picked `declaredSizeBytes` for a "reject by content
+   sniffing" case didn't match the real byte length of the buffer being uploaded — since
+   `Content-Length` is a _signed_ header on the presigned PUT, the mismatch made the PUT itself fail
+   signature verification, so the object never landed and `complete()` correctly (but misleadingly)
+   reported `MEDIA_UPLOAD_NOT_RECEIVED` instead of exercising the content-mismatch rejection the
+   test was actually for. Fixed by deriving the declared size from the real buffer.
+
+**Orphan-media reporting** (`apps/worker`) reuses `PlatformMetricsSnapshot`'s exact Redis-cached,
+worker-computed, "honest zeros on a missing snapshot" convention (`OrphanMediaReportSnapshot`,
+`@atlas/domain`), read via a new `GET /v1/platform/metrics/media/orphan-report`
+(`platform.media.viewOrphanReport`, Software-Admin-only). It classifies only what's actually
+checkable today: expired-and-abandoned `PENDING` uploads (any type), and `READY` `SCHOOL_LOGO`
+assets no school's `logoMediaId` points to anymore. `READY` question-media assets are deliberately
+**not** classified as orphaned or not — nothing references them until `B8` (`Question`/
+`QuestionMedia` don't exist yet), so calling them all orphaned would be noise, not signal. Counted
+instead under an explicit `uncheckedReadyCount` so the report is honest about its own coverage gap
+rather than silently overstating it. The optional post-upload logo-resize job sketched in the
+original plan was not built — the synchronous `complete()` validation already guarantees a valid,
+correctly-dimensioned image is `READY` and servable without it, and no DoD item needs it.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build && pnpm test:integration && pnpm spike`, plus `pnpm generate` (three DTOs/endpoints newly
+published in `apps/api/openapi.json`/`@atlas/contracts`: the media pipeline, school branding, and
+`tenant/resolve`'s extension) and `pnpm generate:permission-table-doc` (143 rows, up from 139 — one
+new section, `Media`, three new rows, plus the two pre-graded branding rows' `awaitingResource`
+flags cleared now that the columns exist). Live-verified beyond the automated suite: a real `node
+dist/main.js` boot (the exact class of check that caught the `S3_CLIENT` bug) confirmed all 37
+routes pass `PolicyCoverageService`'s startup assertion, including every new `MediaController`/
+`SchoolBrandingController` route. A `docker compose up -d --build api worker` rebuild against the
+real MinIO/Postgres/Redis containers hit unrelated npm-registry flakiness in this environment and
+was not completed as a second confirmation — the native `node dist/main.js` boot plus the full
+integration suite (which already exercises real MinIO, not a mock) is the verification of record
+for this phase.
 
 ## Deferred items
 
 - CDN tuning and edge caching (moves to B21/B23).
 - Rich media beyond images — video, audio (not in scope per `05 §15.2`).
+- **Real virus/malware scanning** (ClamAV or equivalent) — confirmed out of scope before
+  implementation. Content-mismatch rejection (magic-byte sniffing) is not equivalent to
+  malware-free; record as a candidate for a future security-hardening phase.
+- **Real AWS S3 bucket-policy/IAM provisioning** — this phase proves MinIO's default-private
+  behaviour locally/in-CI only, per the Exit criteria note above. `B23`'s job.
+- **Post-upload logo resize/re-encode job** — sketched in the original plan as optional; not built,
+  since no DoD item needs it and the synchronous validation path already guarantees a servable
+  image.
+- **Real per-subject/class (`ASSIGNED`) Teacher scoping for `media.upload`** — `SCHOOL` scope is a
+  temporary widening (flagged inline in the permission table) until `B8` gives `Question`/`Subject`/
+  `ClassGroup` a real resource to scope against, mirroring B2's own `ASSIGNED`/`DEPARTMENT`
+  placeholder precedent.
+- **F5's branding settings/authoring screen** (upload UI, colour picker, "Preview School Theme"
+  step per `03 §5`) — this phase ships the backend contract and the read-side login-page rendering
+  (DoD item 1) only, per the frontend/backend phase-pairing policy's normal division of labour.
 
 ---
 

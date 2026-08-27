@@ -79,6 +79,7 @@ export type PermissionSection =
   | 'Identity & Sessions'
   | 'Platform / School'
   | 'School Configuration'
+  | 'Media'
   | 'User Management'
   | 'Assignments'
   | 'Question Bank'
@@ -313,6 +314,20 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       STUDENT: denied(),
     },
   },
+  {
+    id: 'platform.media.viewOrphanReport',
+    section: 'Platform / School',
+    label: 'View orphan-media report (B4)',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: granted('PLATFORM'),
+      SCHOOL_ADMIN: denied(),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
 
   // ------------------------------------------------------------------
   // School Configuration
@@ -361,7 +376,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'School branding columns (B4)',
   },
   {
     id: 'schoolConfig.colour.set',
@@ -372,14 +386,13 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SOFTWARE_ADMIN: granted('PLATFORM', 'R1.'),
       SCHOOL_ADMIN: granted(
         'SCHOOL',
-        '"Full / One-time" — School Admin sets it; whether subsequent changes are restricted to a single initial set is a B4 enforcement detail, not yet wired (see CLAUDE.md\'s F1 branding note).',
+        '"Full / One-time" resolved as freely-editable, not a one-time lock (audit finding A-18) — School Admin may change the primary colour at any time; every change is audited (AuditService, action SCHOOL_BRANDING_CHANGED).',
       ),
       MODERATOR: denied(),
       HOD: denied(),
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'School branding columns (B4)',
   },
   {
     id: 'schoolConfig.department.view',
@@ -554,6 +567,66 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       STUDENT: denied(),
     },
     awaitingResource: 'School settings resource (B4 or later)',
+  },
+
+  // ------------------------------------------------------------------
+  // Media (B4) — the generic, type-polymorphic upload/access pipeline.
+  // Logo upload/set is its own pair of rows above (schoolConfig.logo.upload
+  // / schoolConfig.colour.set) since that's School-Admin-only and goes
+  // through the branding controller, never this generic endpoint.
+  // ------------------------------------------------------------------
+  {
+    id: 'schoolConfig.branding.view',
+    section: 'Media',
+    label: 'View branding (logo + primary colour + derived palette)',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: platformRead(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('SCHOOL'),
+      TEACHER: granted('SCHOOL'),
+      STUDENT: denied(),
+    },
+  },
+  {
+    id: 'media.upload',
+    section: 'Media',
+    label: 'Upload media asset (question image/diagram/other)',
+    action: 'CREATE',
+    grants: {
+      SOFTWARE_ADMIN: denied('ADR-0012: content authoring denied to Software Admin.'),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('SCHOOL'),
+      TEACHER: granted(
+        'SCHOOL',
+        "Placeholder scope: real per-subject/class (ASSIGNED) Teacher scoping is B8's job once " +
+          'Question/Subject/ClassGroup exist — mirrors the ASSIGNED/DEPARTMENT placeholder ' +
+          'precedent already used elsewhere in this table. SCHOOL is a temporary widening.',
+      ),
+      STUDENT: denied(),
+    },
+    awaitingResource:
+      'Question (B8) for real ASSIGNED-scoped Teacher upload — SCHOOL is a temporary widening until then.',
+  },
+  {
+    id: 'media.view',
+    section: 'Media',
+    label: 'Get signed access URL for a non-logo media asset',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: breakGlass(
+        'Matches the established "Software Admin: read + audited break-glass" default for school content elsewhere in this table.',
+      ),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('SCHOOL'),
+      TEACHER: granted('SCHOOL'),
+      STUDENT: denied(
+        'Students receive media via the attempt package (ADR-0021, B13), never this endpoint.',
+      ),
+    },
   },
 
   // ------------------------------------------------------------------

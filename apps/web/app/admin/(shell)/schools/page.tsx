@@ -32,33 +32,21 @@ const STATUS_LABEL: Record<SchoolStatus, string> = {
   DEACTIVATED: 'Deactivated',
 };
 
-function sortRows(rows: SchoolRow[], sort: DataTableSort | null): SchoolRow[] {
-  if (!sort) return rows;
-  const sorted = [...rows].sort((a, b) => {
-    switch (sort.columnId) {
-      case 'name':
-        return a.name.localeCompare(b.name);
-      case 'status':
-        return a.status.localeCompare(b.status);
-      case 'studentCount':
-        return a.studentCount - b.studentCount;
-      case 'createdAt':
-        return a.createdAt.localeCompare(b.createdAt);
-      default:
-        return 0;
-    }
-  });
-  return sort.direction === 'desc' ? sorted.reverse() : sorted;
-}
+// Matches SchoolsAdminService's own DEFAULT_PAGE_SIZE — no page-size
+// selector exists anywhere in the product yet, so this is a fixed constant
+// on both sides rather than something the API needs to echo back.
+const PAGE_SIZE = 25;
 
 /**
- * SA-02 (`05 §3.1`). Search/sort are client-side over the fetched list —
- * `GET /platform/schools` has no pagination or search params (B3's own
- * endpoint shape), which is fine at the expected admin-scale school count;
- * documented as a scoping note, not a silent gap (see CLAUDE.md's F3
- * change-log entry). Filter/search/sort state is mirrored into the URL
- * (roadmap's own State management requirement) so this view is
- * shareable/back-navigable.
+ * SA-02 (`05 §3.1`). Search, status filter, sort, and pagination are all
+ * server-side (F3 gap closure — `frontend-roadmap.md`'s F3 DoD item 2
+ * originally shipped with pagination as an honestly-flagged partial item).
+ * `studentCount` is displayed but not sortable: it isn't a `School` column
+ * (it's a per-school count of RLS-protected `RoleAssignment` rows), so a
+ * single cross-school `ORDER BY` on it isn't available without bypassing
+ * tenant isolation — see `SchoolsAdminService.list`'s own doc comment.
+ * Filter/search/sort/page state is mirrored into the URL (roadmap's own
+ * State management requirement) so this view is shareable/back-navigable.
  */
 export default function SchoolsListPage() {
   const router = useRouter();
@@ -69,9 +57,9 @@ export default function SchoolsListPage() {
   const search = searchParams.get('q') ?? '';
   const sortColumn = searchParams.get('sortBy');
   const sortDir = searchParams.get('sortDir');
+  const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
   // Memoized so its identity is stable across renders unless the underlying
-  // params actually change — otherwise filteredSorted's own useMemo below
-  // would never really memoize (a fresh object literal every render).
+  // params actually change.
   const sort = useMemo<DataTableSort | null>(
     () =>
       sortColumn && (sortDir === 'asc' || sortDir === 'desc')
@@ -91,25 +79,29 @@ export default function SchoolsListPage() {
     router.replace(`/admin/schools?${params.toString()}`);
   }
 
+  // Narrowing the result set (status/search/sort) can leave the view on a
+  // now out-of-range page — always reset to page 1 alongside those changes.
+  function updateFilterParams(next: Record<string, string | null>) {
+    updateParams({ ...next, page: null });
+  }
+
   function toggleStatus(status: SchoolStatus) {
     const next = statusFilter.includes(status)
       ? statusFilter.filter((s) => s !== status)
       : [...statusFilter, status];
-    updateParams({ status: next.join(',') || null });
+    updateFilterParams({ status: next.join(',') || null });
   }
 
-  const schools = useSchools(statusFilter);
+  const schools = useSchools({
+    status: statusFilter,
+    q: search,
+    page,
+    sortBy: sortColumn,
+    sortDir: sortDir === 'asc' || sortDir === 'desc' ? sortDir : null,
+  });
 
-  const filteredSorted = useMemo(() => {
-    const rows: SchoolRow[] = schools.data?.schools ?? [];
-    const q = search.trim().toLowerCase();
-    const filtered = q
-      ? rows.filter(
-          (r) => r.name.toLowerCase().includes(q) || r.subdomain.toLowerCase().includes(q),
-        )
-      : rows;
-    return sortRows(filtered, sort);
-  }, [schools.data, search, sort]);
+  const rows: SchoolRow[] = schools.data?.schools ?? [];
+  const pageCount = Math.max(1, Math.ceil((schools.data?.total ?? 0) / PAGE_SIZE));
 
   const columns: DataTableColumn<SchoolRow>[] = [
     {
@@ -135,9 +127,11 @@ export default function SchoolsListPage() {
       cell: (row) => <SchoolStatusBadge value={row.status} />,
     },
     {
+      // Not sortable: studentCount is a per-school RoleAssignment count, not
+      // a School column, and RoleAssignment's RLS makes a single cross-
+      // school ORDER BY on it unavailable — see this file's own doc comment.
       id: 'studentCount',
       header: 'Students',
-      sortable: true,
       align: 'right',
       cell: (row) => row.studentCount,
     },
@@ -180,9 +174,9 @@ export default function SchoolsListPage() {
             placeholder="Name or subdomain"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            onBlur={() => updateParams({ q: searchInput || null })}
+            onBlur={() => updateFilterParams({ q: searchInput || null })}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') updateParams({ q: searchInput || null });
+              if (e.key === 'Enter') updateFilterParams({ q: searchInput || null });
             }}
           />
         </div>
@@ -205,13 +199,16 @@ export default function SchoolsListPage() {
       ) : (
         <DataTable
           columns={columns}
-          rows={filteredSorted}
+          rows={rows}
           getRowId={(r) => r.id}
           isLoading={schools.isPending}
           sort={sort}
           onSortChange={(next) =>
-            updateParams({ sortBy: next?.columnId ?? null, sortDir: next?.direction ?? null })
+            updateFilterParams({ sortBy: next?.columnId ?? null, sortDir: next?.direction ?? null })
           }
+          page={page}
+          pageCount={pageCount}
+          onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             statusFilter.length === 0 && !search ? (
               <EmptyState

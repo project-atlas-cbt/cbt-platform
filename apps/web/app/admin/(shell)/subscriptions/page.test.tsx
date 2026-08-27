@@ -19,7 +19,10 @@ describe('SubscriptionsPage', () => {
       refetch: vi.fn(),
     } as never);
     render(<SubscriptionsPage />);
-    expect(mockUseSchools).toHaveBeenCalledWith(['SUSPENDED', 'EXPIRED', 'PROVISIONAL']);
+    expect(mockUseSchools).toHaveBeenCalledWith({
+      status: ['SUSPENDED', 'EXPIRED', 'PROVISIONAL'],
+      pageSize: 100,
+    });
   });
 
   it('shows the real subscription plan/status/expiry per row, and a Manage link to the subscription tab', () => {

@@ -1,8 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
-import { PLATFORM_METRICS_CACHE_KEY, type PlatformMetricsSnapshot } from '@atlas/domain';
+import {
+  PLATFORM_METRICS_CACHE_KEY,
+  ORPHAN_MEDIA_REPORT_CACHE_KEY,
+  type PlatformMetricsSnapshot,
+  type OrphanMediaReportSnapshot,
+} from '@atlas/domain';
 import { REDIS_CLIENT } from '../../redis/redis.module.js';
 import type { PlatformMetricsResponseDto } from './dto/platform-metrics-response.dto.js';
+import type { OrphanMediaReportResponseDto } from './dto/orphan-media-report-response.dto.js';
 
 const EMPTY_METRICS: Omit<PlatformMetricsSnapshot, 'computedAt'> = {
   totalSchools: 0,
@@ -15,6 +21,12 @@ const EMPTY_METRICS: Omit<PlatformMetricsSnapshot, 'computedAt'> = {
   teachers: 0,
   examsConducted: 0,
   attempts: 0,
+};
+
+const EMPTY_ORPHAN_REPORT: Omit<OrphanMediaReportSnapshot, 'computedAt'> = {
+  expiredPendingCount: 0,
+  supersededLogoCount: 0,
+  uncheckedReadyCount: 0,
 };
 
 /**
@@ -43,6 +55,19 @@ export class PlatformMetricsService {
       return parsed;
     } catch {
       return { ...EMPTY_METRICS, computedAt: null };
+    }
+  }
+
+  /** B4's orphan-media report — same "worker-computed, Redis-cached,
+   * honest zeros on a missing snapshot" convention as read() above. */
+  async readOrphanMediaReport(): Promise<OrphanMediaReportResponseDto> {
+    const raw = await this.redis.get(ORPHAN_MEDIA_REPORT_CACHE_KEY);
+    if (!raw) return { ...EMPTY_ORPHAN_REPORT, computedAt: null };
+
+    try {
+      return JSON.parse(raw) as OrphanMediaReportSnapshot;
+    } catch {
+      return { ...EMPTY_ORPHAN_REPORT, computedAt: null };
     }
   }
 }

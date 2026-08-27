@@ -34,27 +34,38 @@ datasource db {
 }
 
 /// Tenant root. Full school lifecycle fields (status, subscription, address)
-/// arrive in B3; branding fields (logo, primary colour, derived palette) in
-/// B4 — this model is extended, not replaced, by both.
+/// arrived in B3; branding fields (logo, primary colour) arrived in B4 —
+/// this model is extended, not replaced, by both. Derived palette is never
+/// stored (computed on read by @atlas/domain's derivePalette).
 ///
 /// B3 note: "School identifier" (05 §3.2's required, generated, unique
 /// creation field) IS `subdomain` — ADR-0005 already froze it as the unique
 /// tenant-resolution key derived from the school's name/code, so B3 does not
 /// add a redundant separate `school_code` column despite 07 §4.1 listing one.
 model School {
-  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
   name      String
-  subdomain String   @unique @db.VarChar(63)
-  timezone  String   @default("Africa/Lagos")
+  subdomain String @unique @db.VarChar(63)
+  timezone  String @default("Africa/Lagos")
 
   // --- B3: school profile fields (07 §4.1), set post-activation via
   // PATCH /v1/school/profile (03 §4 Step 1) — not required at platform
-  // creation (05 §3.2's narrower required-field list). Logo/primary colour
-  // stay out — B4's own doc comment above already reserves them.
+  // creation (05 §3.2's narrower required-field list).
   shortName    String? @map("short_name") @db.VarChar(32)
   contactEmail String? @map("contact_email") @db.VarChar(320)
   contactPhone String? @map("contact_phone") @db.VarChar(32)
   address      String?
+
+  // --- B4: branding (03 §5, 05 §6.1), set via PUT /v1/school/branding.
+  // Freely editable by School Admin at any time (audit finding A-18's
+  // resolution — see packages/domain's schoolConfig.colour.set row); every
+  // change is audited (SCHOOL_BRANDING_CHANGED). Plain (non-composite) FK
+  // to MediaAsset — the pointed-to asset's own schoolId/type/status
+  // (READY, SCHOOL_LOGO) are re-validated at the service layer before this
+  // is ever assigned, not enforced by the FK itself.
+  logoMediaId  String? @map("logo_media_id") @db.Uuid
+  /// "#rrggbb" — validated at the DTO layer (see UpdateSchoolBrandingDto).
+  primaryColor String? @map("primary_color") @db.VarChar(7)
 
   /// Derived, cached access-gate label (ADR-0016) — recomputed by
   /// @atlas/domain's resolveSchoolStatus on every subscription/activation/
@@ -62,7 +73,7 @@ model School {
   /// outside that recomputation; never read directly by a guard — every
   /// guard calls AccessGateService instead (ADR-0016: "no guard reads either
   /// field directly").
-  status SchoolStatus @default(PROVISIONAL)
+  status           SchoolStatus            @default(PROVISIONAL)
   /// Explicit Software-Admin platform action (suspend/deactivate),
   /// independent of and taking precedence over the subscription-derived
   /// state (ADR-0016 precedence: DEACTIVATED > SUSPENDED > subscription-
@@ -78,6 +89,12 @@ model School {
   auditEvents         AuditEvent[]
   subscriptions       Subscription[]
   activationGrants    ActivationGrant[]
+  mediaAssets         MediaAsset[]         @relation("SchoolMediaAssets")
+  /// The currently-active logo asset, if any. `onDelete: SetNull` — a
+  /// superseded/removed MediaAsset row is never deleted by this relation
+  /// (D-13 immutability), so this only fires if something else removes the
+  /// row; the school simply falls back to no logo, never a dangling FK.
+  logoMedia           MediaAsset?          @relation("SchoolLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
 
   @@map("schools")
 }
@@ -210,6 +227,7 @@ model User {
   platformRoleAssignments PlatformRoleAssignment[]
   platformSessions        PlatformSession[]
   issuedActivationGrants  ActivationGrant[]
+  uploadedMediaAssets     MediaAsset[]
 
   @@map("users")
 }
@@ -454,18 +472,18 @@ enum SubscriptionStatus {
 /// (collapsing to the same restricted EXPIRED label). Recorded as
 /// Candidate/Deferred in CLAUDE.md.
 model Subscription {
-  id        String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId  String             @map("school_id") @db.Uuid
-  plan      String             @db.VarChar(64)
-  startAt   DateTime           @map("start_at") @db.Timestamptz(6)
-  expiresAt DateTime           @map("expires_at") @db.Timestamptz(6)
-  status    SubscriptionStatus @default(PENDING)
+  id                       String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId                 String             @map("school_id") @db.Uuid
+  plan                     String             @db.VarChar(64)
+  startAt                  DateTime           @map("start_at") @db.Timestamptz(6)
+  expiresAt                DateTime           @map("expires_at") @db.Timestamptz(6)
+  status                   SubscriptionStatus @default(PENDING)
   /// Highest pre-expiry warning threshold (days before expiresAt) already
   /// dispatched by the worker sweeper — null until the first warning fires.
   /// Prevents the same threshold being re-sent on a later sweep tick.
-  lastWarningThresholdDays Int? @map("last_warning_threshold_days")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastWarningThresholdDays Int?               @map("last_warning_threshold_days")
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   activationGrants ActivationGrant[]
@@ -555,4 +573,100 @@ model PlatformSession {
 
   @@index([userId])
   @@map("platform_sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Media, Storage & Branding (07 §7.4/§11.3, 09 §22, ADR-0021) — B4.
+// ---------------------------------------------------------------------------
+
+/// 07 §11.3's fixed list — order matters for stable UI select lists, do not
+/// reorder. REPORT is never client-uploadable (system-generated only, B18/
+/// ADR-0030 — unbuilt); the media endpoints reject any client request for
+/// this type outright, before any permission check runs.
+enum MediaAssetType {
+  SCHOOL_LOGO
+  QUESTION_IMAGE
+  QUESTION_DIAGRAM
+  REPORT
+  OTHER
+}
+
+/// The two-step upload lifecycle (request target → client PUTs bytes
+/// directly to storage → complete/validate). PENDING: a presigned PUT was
+/// issued, the object isn't confirmed in the bucket yet. READY: complete()
+/// ran, content was sniffed and (for images) dimension-checked, and it
+/// passed. REJECTED: complete() ran but validation failed — the row (and
+/// bucket object, if one landed) is kept, never deleted; only a future
+/// M-14 retention policy deletes anything. There is no "REPLACED" status —
+/// D-13 ("never overwritten") is satisfied structurally, not by a status
+/// value: see MediaAsset's own doc comment.
+enum MediaAssetStatus {
+  PENDING
+  READY
+  REJECTED
+}
+
+/// One immutable record per upload (D-13). There is no service method
+/// anywhere that mutates storageKey/declaredMimeType/declaredSizeBytes
+/// after creation — a "replace" is always a brand-new MediaAsset row plus,
+/// where applicable, a pointer swap (School.logoMediaId reassigned to the
+/// new row). id is generated by the application (uuidv7(), not
+/// dbgenerated) because it's part of the storage key computed before
+/// insert — see MediaService.buildStorageKey.
+model MediaAsset {
+  id       String           @id @db.Uuid
+  schoolId String           @map("school_id") @db.Uuid
+  type     MediaAssetType
+  status   MediaAssetStatus @default(PENDING)
+
+  /// Key shape (09 §22): schools/SCHOOL_ID/CATEGORY/MEDIA_ASSET_ID/FILENAME,
+  /// where CATEGORY is branding, questions, reports, or other — globally
+  /// unique by construction (MEDIA_ASSET_ID is a fresh UUIDv7 per upload);
+  /// the @@unique below is belt-and-suspenders, not the actual uniqueness
+  /// mechanism. (Curly-brace placeholders deliberately avoided in this
+  /// comment — scripts/lint-schema-tenancy.mjs parses model bodies with a
+  /// brace-matching regex that such a placeholder would break.)
+  storageKey       String @unique @map("storage_key") @db.VarChar(512)
+  originalFilename String @map("original_filename") @db.VarChar(255)
+
+  /// Client-declared at POST /v1/media/uploads request time — never
+  /// trusted alone; complete() re-derives sniffedMimeType from the actual
+  /// bytes (magic-byte sniffing, not extension/declared-type trust).
+  declaredMimeType String  @map("declared_mime_type") @db.VarChar(127)
+  /// Set by complete() after magic-byte sniffing; null until then.
+  sniffedMimeType  String? @map("sniffed_mime_type") @db.VarChar(127)
+
+  /// Client-declared at request time, used to pin Content-Length on the
+  /// presigned PUT. Not independently re-verified beyond what the storage
+  /// layer itself enforces via that signed Content-Length.
+  declaredSizeBytes Int @map("declared_size_bytes")
+
+  /// Populated for image types at complete() time (image-size); null for
+  /// non-image OTHER assets or before completion.
+  width  Int?
+  height Int?
+
+  uploaderUserId  String  @map("uploader_user_id") @db.Uuid
+  /// Set only when status = REJECTED — the specific validation failure.
+  rejectionReason String? @map("rejection_reason")
+
+  /// Presigned-PUT expiry (~15 min from creation) — the orphan-media
+  /// sweep's signal for "upload was requested and abandoned."
+  uploadUrlExpiresAt DateTime @map("upload_url_expires_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school             School   @relation("SchoolMediaAssets", fields: [schoolId], references: [id], onDelete: Cascade)
+  uploader           User     @relation(fields: [uploaderUserId], references: [id], onDelete: Restrict)
+  schoolsUsingAsLogo School[] @relation("SchoolLogo")
+
+  // Composite-FK target, matching every other school-owned table's
+  // (schoolId, id) convention, for a future composite reference (e.g. B8's
+  // QuestionMedia) — not consumed by anything in B4 itself.
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, type])
+  @@index([schoolId, status])
+  @@map("media_assets")
 }
