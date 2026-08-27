@@ -7,6 +7,7 @@ import type { Env } from '@atlas/config';
 import type { NotificationChannel } from '@atlas/notifications';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
+import { AccessGateService } from '../platform/access-gate.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService, type AuthenticatedSession } from './session.service.js';
 import { AuthLockoutService } from './auth-lockout.service.js';
@@ -44,6 +45,7 @@ export class IdentityService {
     private readonly lockout: AuthLockoutService,
     private readonly config: ConfigService<Env, true>,
     @Inject(NOTIFICATION_CHANNEL) private readonly notifications: NotificationChannel,
+    private readonly accessGate: AccessGateService,
   ) {}
 
   /**
@@ -117,6 +119,27 @@ export class IdentityService {
     res: FastifyReply,
     req: FastifyRequest,
   ): Promise<AuthenticatedSession> {
+    // Roadmap DoD item 4 / ADR-0016: a suspended or deactivated school
+    // blocks login itself, not just subsequent requests (AuthGuard enforces
+    // the latter for an already-open session) — checked before credential
+    // evaluation so a suspended school's login attempt never even reaches
+    // password verification. Distinct, specific codes: see error-codes.ts's
+    // own comment on why this isn't enumeration-sensitive the way account
+    // existence is.
+    const override = await this.accessGate.getPlatformOverride(schoolId);
+    if (override === 'SUSPENDED') {
+      throw new AppHttpException({
+        code: 'SCHOOL_ACCESS_SUSPENDED',
+        message: 'This school has been suspended.',
+      });
+    }
+    if (override === 'DEACTIVATED') {
+      throw new AppHttpException({
+        code: 'SCHOOL_ACCESS_DEACTIVATED',
+        message: 'This school has been deactivated.',
+      });
+    }
+
     const outcome = await this.evaluateLogin(schoolId, identifier, password);
     if (outcome.kind !== 'SUCCESS') throw GENERIC_LOGIN_FAILURE();
 

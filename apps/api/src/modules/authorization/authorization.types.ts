@@ -4,14 +4,15 @@ import type { Role } from '@atlas/domain';
  * The evaluated identity AuthorizationService reasons about — deliberately
  * separate from AuthGuard's `AuthenticatedUser` (identity module) so the
  * engine itself stays testable with plain fixtures (2026-08-26 decision:
- * break-glass and the effective-access function are tested via direct
- * actor construction, not a real login flow — Software Admin login has no
- * endpoint anywhere until at least B3).
+ * break-glass and the effective-access function were originally tested via
+ * direct actor construction, not a real login flow, since Software Admin
+ * login had no endpoint until B3).
  *
- * `SCHOOL` is the only kind AuthGuard can produce today. `PLATFORM` exists
- * so the engine and its tests are ready for B3's real Software Admin
- * session — see PlatformRoleAssignment's own schema doc comment for the
- * matching 2026-08-26 decision on how that identity is represented.
+ * `SCHOOL` is produced by AuthGuard (identity module); `PLATFORM` by
+ * PlatformAuthGuard (B3, platform module) — see
+ * PermissionGuard's actorFromAuthenticatedUser for where the two map onto
+ * this type, and PlatformRoleAssignment's own schema doc comment for the
+ * matching 2026-08-26 decision on how the platform identity is represented.
  */
 export type AuthorizedActor =
   | { kind: 'SCHOOL'; userId: string; schoolId: string; membershipId: string; roles: Role[] }

@@ -11,6 +11,7 @@ import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { SecurityModule } from './security/security.module.js';
 import { PlatformModule } from './modules/platform/platform.module.js';
+import { AccessGateModule } from './modules/platform/access-gate.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 import { IdentityModule } from './modules/identity/identity.module.js';
 import { AcademicsModule } from './modules/academics/academics.module.js';
@@ -29,6 +30,7 @@ import { OperationsModule } from './modules/operations/operations.module.js';
     SecurityModule,
     AuthorizationModule,
     NotificationsModule,
+    AccessGateModule,
     HealthModule,
     // Bounded domains (08 §5) — all stubbed empty per B0 scope, except
     // Identity (B1) and Authorization (B2, above — cross-cutting, so it's

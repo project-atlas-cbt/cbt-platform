@@ -9,7 +9,10 @@
 // reserved for a future marketing site. A request to any of these, or to
 // the bare root domain, resolves no tenant — which is correct, not an
 // error: not every request needs one (see TenancyMiddleware's comment).
-const RESERVED_SUBDOMAIN_LABELS = new Set(['api', 'admin', 'www']);
+// Exported (not just module-private) so B3's subdomain-generator.ts can
+// avoid ever *generating* a reserved label for a new school, the mirror
+// image of this file's own job of never *resolving* one to a school.
+export const RESERVED_SUBDOMAIN_LABELS = new Set(['api', 'admin', 'www']);
 
 /**
  * Extracts a candidate school subdomain label from an inbound `Host`

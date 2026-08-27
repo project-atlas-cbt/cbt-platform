@@ -18,3 +18,23 @@ export {
   type PermissionRule,
   type PermissionSection,
 } from './authorization/permission-table.js';
+export {
+  SCHOOL_STATUSES,
+  SUBSCRIPTION_STATUSES,
+  SUBSCRIPTION_EXPIRY_GRACE_DAYS,
+  SUBSCRIPTION_WARNING_THRESHOLD_DAYS,
+  SUBSCRIPTION_EXPIRING_WINDOW_DAYS,
+  resolveSchoolStatus,
+  resolveAccessGate,
+  meetsCapability,
+  type SchoolStatus,
+  type SubscriptionStatus,
+  type PlatformOverride,
+  type AccessCapability,
+  type AccessGateInput,
+  type AccessGateResult,
+} from './platform/access-gate.js';
+export {
+  PLATFORM_METRICS_CACHE_KEY,
+  type PlatformMetricsSnapshot,
+} from './platform/metrics-cache.js';

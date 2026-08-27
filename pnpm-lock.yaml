@@ -295,6 +295,12 @@ importers:
       '@atlas/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@atlas/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@atlas/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
       bullmq:
         specifier: ^6.2.0
         version: 6.2.0(ioredis@6.0.0(supports-color@10.2.2))(pg@8.23.0)
@@ -359,6 +365,9 @@ importers:
         specifier: ^8.23.0
         version: 8.23.0
     devDependencies:
+      '@node-rs/argon2':
+        specifier: ^2.1.0
+        version: 2.1.0
       '@types/pg':
         specifier: ^8.23.0
         version: 8.23.1

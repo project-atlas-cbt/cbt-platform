@@ -36,11 +36,39 @@ datasource db {
 /// Tenant root. Full school lifecycle fields (status, subscription, address)
 /// arrive in B3; branding fields (logo, primary colour, derived palette) in
 /// B4 — this model is extended, not replaced, by both.
+///
+/// B3 note: "School identifier" (05 §3.2's required, generated, unique
+/// creation field) IS `subdomain` — ADR-0005 already froze it as the unique
+/// tenant-resolution key derived from the school's name/code, so B3 does not
+/// add a redundant separate `school_code` column despite 07 §4.1 listing one.
 model School {
   id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   name      String
   subdomain String   @unique @db.VarChar(63)
   timezone  String   @default("Africa/Lagos")
+
+  // --- B3: school profile fields (07 §4.1), set post-activation via
+  // PATCH /v1/school/profile (03 §4 Step 1) — not required at platform
+  // creation (05 §3.2's narrower required-field list). Logo/primary colour
+  // stay out — B4's own doc comment above already reserves them.
+  shortName    String? @map("short_name") @db.VarChar(32)
+  contactEmail String? @map("contact_email") @db.VarChar(320)
+  contactPhone String? @map("contact_phone") @db.VarChar(32)
+  address      String?
+
+  /// Derived, cached access-gate label (ADR-0016) — recomputed by
+  /// @atlas/domain's resolveSchoolStatus on every subscription/activation/
+  /// platform-action mutation (AccessGateService). Never set independently
+  /// outside that recomputation; never read directly by a guard — every
+  /// guard calls AccessGateService instead (ADR-0016: "no guard reads either
+  /// field directly").
+  status SchoolStatus @default(PROVISIONAL)
+  /// Explicit Software-Admin platform action (suspend/deactivate),
+  /// independent of and taking precedence over the subscription-derived
+  /// state (ADR-0016 precedence: DEACTIVATED > SUSPENDED > subscription-
+  /// derived). Null = no override — the subscription-derived status governs.
+  platformOverride SchoolPlatformOverride? @map("platform_override")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -48,8 +76,29 @@ model School {
   sessions            Session[]
   passwordResetTokens PasswordResetToken[]
   auditEvents         AuditEvent[]
+  subscriptions       Subscription[]
+  activationGrants    ActivationGrant[]
 
   @@map("schools")
+}
+
+/// Persisted School.status label (07 §4.1) — see School.status's own doc
+/// comment for the derivation rule (@atlas/domain's resolveSchoolStatus).
+enum SchoolStatus {
+  PROVISIONAL
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  DEACTIVATED
+}
+
+/// The two platform actions Software Admin can set directly on School.status
+/// (ADR-0016). A separate enum from SchoolStatus (not a nullable subset of
+/// it) so no other SchoolStatus value can ever be assigned to this column by
+/// mistake — only these two platform actions are valid overrides.
+enum SchoolPlatformOverride {
+  SUSPENDED
+  DEACTIVATED
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +208,8 @@ model User {
   sessions                Session[]
   passwordResetTokens     PasswordResetToken[]
   platformRoleAssignments PlatformRoleAssignment[]
+  platformSessions        PlatformSession[]
+  issuedActivationGrants  ActivationGrant[]
 
   @@map("users")
 }
@@ -372,4 +423,136 @@ model AuditEvent {
   @@index([schoolId])
   @@index([schoolId, occurredAt])
   @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------------
+// Platform, Schools & Subscriptions (07 §4, 03 §2-3/§66-67, ADR-0012/0015/
+// 0016/0019) — B3.
+// ---------------------------------------------------------------------------
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+/// Commercial truth (ADR-0016) — School.status is a derived, cached label
+/// computed from this plus SchoolPlatformOverride via @atlas/domain's
+/// resolveSchoolStatus/resolveAccessGate, never read directly by a guard.
+/// One school may have many historical Subscription rows; at most one is
+/// ever PENDING/ACTIVE/EXPIRING at a time — enforced by a partial unique
+/// index in this migration's hand-written SQL (Prisma's schema DSL can't
+/// express a filtered/partial unique constraint).
+///
+/// SUSPENDED/CANCELLED exist in the enum to match 07 §4.2 exactly, but no B3
+/// endpoint ever sets them — no spec'd action triggers a subscription-level
+/// (as opposed to school-level, SchoolPlatformOverride) suspend/cancel.
+/// @atlas/domain's resolveSchoolStatus defends against them defensively
+/// (collapsing to the same restricted EXPIRED label). Recorded as
+/// Candidate/Deferred in CLAUDE.md.
+model Subscription {
+  id        String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String             @map("school_id") @db.Uuid
+  plan      String             @db.VarChar(64)
+  startAt   DateTime           @map("start_at") @db.Timestamptz(6)
+  expiresAt DateTime           @map("expires_at") @db.Timestamptz(6)
+  status    SubscriptionStatus @default(PENDING)
+  /// Highest pre-expiry warning threshold (days before expiresAt) already
+  /// dispatched by the worker sweeper — null until the first warning fires.
+  /// Prevents the same threshold being re-sent on a later sweep tick.
+  lastWarningThresholdDays Int? @map("last_warning_threshold_days")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  activationGrants ActivationGrant[]
+
+  // Composite-FK target for ActivationGrant, matching SchoolMembership's
+  // proven (schoolId, id) pattern.
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@map("subscriptions")
+}
+
+/// Distinguishes an unauthenticated first-activation redemption (target
+/// User still INVITED, no session possible yet) from an authenticated
+/// renewal redemption (target User already ACTIVE, checked against the
+/// caller's own session inside ActivationService) — see B3's plan decision
+/// 3. Not named anywhere in 07 §4.3; a mechanical necessity the same shape
+/// as B1's User.email addition.
+enum ActivationGrantPurpose {
+  INITIAL_ACTIVATION
+  RENEWAL
+}
+
+enum ActivationGrantStatus {
+  ISSUED
+  ACTIVATED
+  EXPIRED
+  REVOKED
+}
+
+/// Issued activation/renewal authorization (07 §4.3). Only the key's sha256
+/// is stored — the raw value exists only in the outbound email — mirroring
+/// PasswordResetToken's convention. issuedAt/issuedBy/keyHash are immutable
+/// after activation (enforced at the service layer, same honest scope as
+/// AuditEvent's own not-yet-DB-enforced immutability); single-use is
+/// enforced by a partial unique index in this migration's hand-written SQL.
+model ActivationGrant {
+  id             String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId       String                 @map("school_id") @db.Uuid
+  subscriptionId String                 @map("subscription_id") @db.Uuid
+  purpose        ActivationGrantPurpose
+  keyHash        String                 @unique @map("key_hash") @db.VarChar(64)
+  issuedBy       String                 @map("issued_by") @db.Uuid
+  issuedAt       DateTime               @default(now()) @map("issued_at") @db.Timestamptz(6)
+  activatedAt    DateTime?              @map("activated_at") @db.Timestamptz(6)
+  expiresAt      DateTime               @map("expires_at") @db.Timestamptz(6)
+  status         ActivationGrantStatus  @default(ISSUED)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [schoolId, subscriptionId], references: [schoolId, id], onDelete: Cascade)
+  issuer       User         @relation(fields: [issuedBy], references: [id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([subscriptionId])
+  @@map("activation_grants")
+}
+
+/// Software Admin's session record — parallels Session (B1) but is
+/// deliberately a separate, tenant-independent table rather than a
+/// nullable-schoolId Session row, mirroring PlatformRoleAssignment's own
+/// precedent exactly: Session is RLS-protected school-owned infrastructure
+/// B1 already hardened, and a nullable-schoolId carve-out there would risk
+/// exactly the class of subtle RLS bug @atlas/db's tenancy.ts already
+/// documents avoiding (see withTenant's own history). Not RLS-protected
+/// (not school-owned); exempted in scripts/lint-schema-tenancy.mjs alongside
+/// User/School/PlatformRoleAssignment. Own cookie name
+/// (PlatformSessionService) so a school session and a platform session can
+/// never be confused for one another.
+model PlatformSession {
+  id            String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash") @db.VarChar(64)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(6)
+  /// Points at the session this one replaced via POST /platform/auth/refresh
+  /// equivalent rotation — mirrors Session.rotatedFromId exactly.
+  rotatedFromId String?   @unique @map("rotated_from_id") @db.Uuid
+  userAgent     String?   @map("user_agent")
+  ipAddress     String?   @map("ip_address") @db.VarChar(64)
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rotatedFrom PlatformSession? @relation("PlatformSessionRotation", fields: [rotatedFromId], references: [id])
+  rotatedTo   PlatformSession? @relation("PlatformSessionRotation")
+
+  @@index([userId])
+  @@map("platform_sessions")
 }

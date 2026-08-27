@@ -11,9 +11,12 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 
 ## Project Status
 
-**Current Stage:** Specification audit, roadmaps, and all 33 architecture decisions completed. Implementation has not yet started, but is now unblocked.
+**Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
+architecture decisions were completed first (see below); backend phases `B0`–`B3` and frontend
+phases `F0`–`F2` are now complete. See "Implementation Status" and "Change Log" further down in
+this file for what has actually shipped and what's next.
 
-The project has completed:
+The planning phase completed:
 
 - Product vision and scope
 - Role and permission model
@@ -28,9 +31,7 @@ The project has completed:
 - Backend, frontend, and integration roadmaps
 - All 33 architecture decision records
 
-The current objective is to **begin the engineering foundation (`B0`)**.
-
-All decision gates are cleared. `B0` may start, and `F0`'s design system plus `F13`'s offline exam engine may proceed in parallel.
+All decision gates are cleared — no roadmap phase is blocked on an undecided ADR.
 
 ---
 
@@ -236,14 +237,68 @@ session working on it without extra setup.
 complete. **`F1 — Authentication & Tenant Entry`** — complete (two DoD items honestly partial —
 Software Admin login functionality and real per-school branding colour, both deferred by design,
 not oversight; see this file's Change Log entry below). **`B2 — Authorization & Tenancy Engine`**
-— complete (one DoD item, the generated cross-tenant test-suite generator, honestly deferred to
-`B3`'s first real `:id`-shaped endpoint — the underlying cross-tenant guarantee itself is proven
-two other ways; see this file's Change Log entry below). **`F2 — App Shell, Navigation &
-Notifications`** — complete (three DoD items honestly partial, all gated on backend phases that
-don't exist yet — the context switcher's session/term half and Teacher/HOD historical-session
-viewing on `B5`, notifications on `B10`; see this file's Change Log entry below). Per the
-frontend/backend phase-pairing rule, **`B3 — Platform, Schools & Subscriptions`** is next — no
-further frontend phase can proceed without a backend phase it depends on.
+— complete (one DoD item, the generated cross-tenant test-suite generator, honestly deferred
+forward — the underlying cross-tenant guarantee itself is proven two other ways; see this file's
+Change Log entry below). **`F2 — App Shell, Navigation & Notifications`** — complete (three DoD
+items honestly partial, all gated on backend phases that don't exist yet — the context switcher's
+session/term half and Teacher/HOD historical-session viewing on `B5`, notifications on `B10`; see
+this file's Change Log entry below). **`B3 — Platform, Schools & Subscriptions`** — complete: the
+full platform tenant lifecycle, Software Admin authentication (closing the deferral `B2` pushed
+here), and the ADR-0015/0016 access gate — one DoD-adjacent item (the generated cross-tenant
+test-suite generator) still honestly deferred forward again, plus a handful of newly-scoped-down
+items recorded below. Per the frontend/backend phase-pairing rule, **`F3 — Platform Admin
+Workspace`** is next, `B3`'s own paired frontend phase.
+
+B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
+`subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
+now has a real session (`PlatformSession`/`PlatformSessionService`/`PlatformAuthGuard`/
+`PlatformAuthService`, paralleling identity's own `Session`/`AuthGuard` by convention, not shared
+code) — `POST/GET /v1/platform/auth/{login,logout,me}` — closing the deferral `B2` recorded
+explicitly for this phase. `POST /v1/platform/schools` creates a school (`PROVISIONAL`) + its
+initial School Admin (`User.status = INVITED`, no password yet) + a `PENDING` subscription + an
+`INITIAL_ACTIVATION`-purpose `ActivationGrant`, atomically (a manual `prisma.$transaction` sets the
+RLS session variable mid-transaction, since the school's own id — needed for `withTenant` — doesn't
+exist until partway through). `POST /v1/activation/{verify,redeem}` complete the flow — redemption
+sets the admin's password and flips School/Subscription to `ACTIVE`; both purposes (initial
+activation and renewal) share one endpoint, authorized purely by key possession (a simplification
+found during implementation, dropping an originally-planned additional "renewal requires an
+authenticated session" check as redundant — the key is already single-use and school-scoped).
+Suspend/reactivate/deactivate (`SchoolPlatformOverride`) block access **immediately** — enforced
+centrally by `AuthGuard`, for an already-open session and a fresh login attempt alike, not only new
+platform actions. The access gate is genuinely two functions, not one column
+(`@atlas/domain/platform/access-gate.ts`): `resolveSchoolStatus` (the persisted, cached
+`School.status` label) and `resolveAccessGate` (the live, grace-aware capability ADR-0015's 14-day
+window actually depends on — `School.status` can already read `EXPIRED` while capability is still
+`FULL`). Wrapped by `AccessGateService`, deliberately registered in its own `@Global()`
+`AccessGateModule` rather than inside `PlatformModule`, specifically so identity's own `AuthGuard`
+can inject it without `IdentityModule` importing `PlatformModule` (which itself imports
+`IdentityModule` — a real cycle this avoids). `apps/worker` gained its first BullMQ **repeatable**
+job (`Queue.upsertJobScheduler` — BullMQ 6 removed `Queue.add`'s old `repeat` option, a real API
+difference from the original plan) — a combined subscription-expiry sweep and platform-metrics
+aggregation pass, iterating every school one at a time via `withTenant` rather than one global
+query, because `FORCE ROW LEVEL SECURITY` means `atlas_app` cannot see rows across schools in an
+unscoped query (a real constraint found while implementing, not anticipated in the original plan).
+Platform metrics are consequently cached in Redis (`@atlas/domain`'s `PLATFORM_METRICS_CACHE_KEY`)
+and read-only from the API side — computed periodically, never live per request.
+
+Two real bugs found only by integration testing, not by inspection: re-issuing an activation key
+via `POST .../activation-grants` always sent the renewal-wording email regardless of the grant's
+actual purpose, so a re-issued _initial_ activation key told the new School Admin to "enter it from
+your subscription screen," which doesn't exist yet (fixed to branch on `purpose`); and the sweep's
+warning-threshold selection picked the _largest_ crossed threshold (30) instead of the tightest/
+most urgent one (7), caught by a table-driven integration test asserting the real value.
+
+Honestly scoped down, not silently dropped: **Moderator activation-key redemption delegation**
+stays `deferred()` in the permission table exactly as B2 left it (no delegation mechanism is
+specified anywhere — that's `ADR-0017` territory) — School Admin only, for now. **Subscription-
+level suspend/cancel** (as opposed to school-level `SchoolPlatformOverride`) — the enum values exist
+to match `07 §4.2`, but no B3 endpoint ever sets them. **Self-service Software Admin password
+change** — the seeded account ships with a directly-usable password (dev/ops bootstrap via
+`packages/db/prisma/seed.ts`), not a forced-change one; no `/v1/platform/auth/password/change`
+endpoint exists. **The generated cross-tenant test-suite generator** B2 deferred here specifically —
+still not built; B3 proved cross-school isolation the same two ways B2 did instead (a real
+integration test for the cross-school activation-key case, plus an extended RLS suite covering
+`Subscription`/`ActivationGrant`), pushed forward again rather than silently dropped.
 
 F2 delivered: the real role-aware application shell (`components/shell/`) replacing F1's five
 placeholder per-role landing pages — `AppShell`, `RoleNavigation`, `ContextSwitcher`,
@@ -1186,3 +1241,105 @@ Actions moved from "F2 next" to "B3 next" — no further frontend phase can proc
 phase it depends on (F3 needs B3; F13 continues independently in parallel, unaffected).
 Project state moves from _Implementation (F2)_ to _Implementation (B3)_.
 **Next: `B3 — Platform, Schools & Subscriptions`.**
+
+### 2026-08-27 — `B3` complete: platform, schools and subscriptions
+
+Followed the working-rules checklist first: read `03 §2–§3`/`§66–§67` (school lifecycle, subscription
+expiry), `05 §2–§4`/`§3.1–§3.3` (platform/subscription screens), `06 §2`/`§4`/`§5`, `07 §4.1–§4.3`
+(School/Subscription/ActivationGrant), `02`'s Platform/School/Subscription rows, `04 §5–§9`
+(Software Admin workspace screens), the B3 roadmap phase, its four gating ADRs (0012/0015/0016/0019)
+in full, and the pre-graded B3 permission-table rows B2 already shipped — then planned in a
+dedicated plan-mode pass before writing any code, per the size of this phase.
+
+**Confirmed-scope addition, not silently decided**: `docs/roadmaps/roadmap-index.md`'s own
+Immediate-Next-Actions entry, and `CLAUDE.md`'s B1/B2 Change Log entries, all already named B3 as
+where Software Admin platform login lands — B3's own roadmap-section endpoint table simply omitted
+it. Built as originally intended; the table gained a corrective note rather than silently expanding
+scope. See `backend-roadmap.md`'s B3 section for the full endpoint table, Database work, Background
+jobs, and — most importantly — its "Implementation notes" subsection, which carries the detailed
+reasoning for every schema/architecture decision this phase made (the two-function access gate,
+`ActivationGrant.purpose`, `School.subdomain` as the generated identifier, `AccessGateModule`'s
+separate `@Global()` registration, the BullMQ 6 API adaptation, the RLS cross-tenant-query
+constraint that shaped both the sweeper and platform metrics). Not duplicated here in full — this
+entry covers what changed and what was tested; that section covers why.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260826184802_b3_platform_schools_
+subscriptions`): `School` gained `status`/`platformOverride`/`shortName`/`contactEmail`/
+`contactPhone`/`address`; new `Subscription`, `ActivationGrant`, `PlatformSession` models, all
+RLS-protected where school-owned (`PlatformSession` exempted, mirroring `PlatformRoleAssignment`'s
+precedent). Hand-written migration SQL (matching B2's own precedent for beyond-the-DSL additions):
+RLS bootstrap for the two new school-owned tables, plus two partial unique indexes Prisma's schema
+DSL can't express — at most one non-terminal `Subscription` per school, at most one `ISSUED`
+`ActivationGrant` per subscription.
+
+**Two schema/architecture decisions confirmed as engineering-shaped rather than product-policy,
+mirroring B1/B2's own precedent for this kind of call**: `ActivationGrant.purpose` (not named in
+`07 §4.3`) distinguishes an unauthenticated first-activation redemption from an authenticated-by-
+key-possession renewal; and `School.platformOverride` as a column separate from `School.status`,
+so an explicit Software-Admin suspend/deactivate can take precedence over — and later fall back
+cleanly from — whatever the subscription-derived state actually is.
+
+**API work**: `platform.v1` (`PlatformAuthController`, `SchoolsAdminController`,
+`PlatformMetricsController`), `schools.v1`/`subscriptions.v1` (`ActivationController`,
+`SchoolProfileController`) — all in `apps/api/src/modules/platform/`, the module B0 had stubbed
+empty specifically for this phase. A new `@AuthorizedPlatform(permissionId)` decorator alongside
+the existing `@Authorized`/`@PublicRoute`, and `permission.guard.ts`'s `actorFromAuthenticatedUser`
+— the exact function B2's own comment and `authorization.types.ts`'s doc comment predicted would
+change once a Software Admin session existed — now branches on `req.user.kind`. Every one of B3's
+permission checks reuses an id `packages/domain/src/authorization/permission-table.ts` had already
+pre-graded in B2 (flagged `awaitingResource: '... (B3)'`) — no new permission ids were added.
+
+**Two real bugs found only by integration testing, not by inspection** (full detail and the fixes
+in `backend-roadmap.md`'s B3 Implementation notes): the activation-grant re-issue endpoint always
+sent the renewal-wording email regardless of the grant's actual purpose; and the worker sweep's
+warning-threshold selection picked the largest crossed threshold instead of the tightest one.
+
+**One real cross-tenant architectural constraint found only while implementing** (not anticipated
+in the original plan): RLS's `FORCE ROW LEVEL SECURITY` means `atlas_app` cannot see rows across
+multiple schools in a single unscoped query. This shaped both the worker sweep (iterates every
+school one at a time via `withTenant`) and platform metrics (consequently cached in Redis and
+computed periodically, never live per API request — see `PlatformMetricsService`'s own doc
+comment).
+
+**Testing**: `packages/domain/src/platform/access-gate.test.ts` (19 tests, table-driven — every
+`SubscriptionStatus` × `PlatformOverride` combination, plus the ADR-0015 grace-window boundary);
+`apps/api/src/modules/platform/subdomain-generator.test.ts` (9 tests); `apps/api/src/modules/
+platform/platform.integration.test.ts` (7 tests, real HTTP via `app.inject()` against real Postgres
+— the full create→issue-key→verify→redeem→active flow, replay and cross-school rejection, the
+access-gate blocking an existing session _and_ a fresh login attempt identically, the row-count
+data-preservation assertion, and enumeration-resistant platform login); `apps/worker/src/queues/
+subscription-expiry.integration.test.ts` (6 tests — PENDING never touched, ACTIVE→EXPIRING→EXPIRED
+transitions, warning dispatch-once-per-threshold, the metrics snapshot written to Redis); two new
+`describe` blocks in `tests/tenancy/rls.integration.test.ts` covering `Subscription`/
+`ActivationGrant` (cross-tenant reads blocked even by primary key — the same mechanism that gives
+`/v1/activation/verify` its cross-school rejection for free, no extra application-layer check
+needed). `apps/worker` gained its own `test:integration` script/config, mirroring `apps/api`'s.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build && pnpm test:integration && pnpm spike` (16 packages, all passing — 45 `apps/api`
+integration tests, 6 `apps/worker`, 19 `tests/`), plus `pnpm generate` (three new contracts appear
+in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (139
+rows, unchanged — confirms no new permission ids were needed). Live-verified beyond the automated
+suite: a real `node dist/main.js` (api) + `node dist/main.js` (worker) walk covering platform
+login, school creation, cross-school activation-key rejection, redemption, School Admin login,
+profile read/write, subscription status, the full suspend→reactivate→deactivate lifecycle
+(including the access gate blocking a fresh login attempt during suspension), and the worker's
+repeatable job firing on schedule and writing a real metrics snapshot the API then served
+correctly. All verification schools, sessions, and scratch scripts were removed afterward.
+
+New env var `SUBSCRIPTION_SWEEP_INTERVAL_MS` (default 6 hours) documented in `.env.example`. One
+new package dependency: `@node-rs/argon2` added to `packages/db`'s `devDependencies` (the seed
+script's Software Admin bootstrap needs to hash a real password; duplicates `PasswordService`'s
+exact profile rather than introducing a cross-app import, the same "convention reuse, not literal
+code sharing" precedent as `PlatformSessionService`'s cookie signing).
+
+`docs/roadmaps/backend-roadmap.md`'s B3 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-deferred-with-reason, a full "Implementation notes" subsection,
+and an expanded Deferred items list (Moderator activation-key delegation, subscription-level
+suspend/cancel, self-service Software Admin password change, and the still-undelivered generated
+cross-tenant test-suite generator B2 had deferred here — pushed forward again, not dropped).
+`docs/roadmaps/roadmap-index.md`'s version, Current State, and Immediate Next Actions all moved
+from "B3 next" to "F3 next" per the frontend/backend phase-pairing policy — `platform.v1` is frozen
+and published for F3 to consume.
+Project state moves from _Implementation (B3)_ to _Implementation (F3)_.
+**Next: `F3 — Platform Admin Workspace`.**

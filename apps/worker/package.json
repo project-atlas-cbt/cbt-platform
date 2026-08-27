@@ -9,12 +9,15 @@
     "start": "node dist/main.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude '**/*.integration.test.ts'",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "clean": "rimraf dist"
   },
   "dependencies": {
     "@atlas/config": "workspace:*",
     "@atlas/db": "workspace:*",
+    "@atlas/domain": "workspace:*",
+    "@atlas/notifications": "workspace:*",
     "bullmq": "^6.2.0",
     "ioredis": "^6.0.0"
   },

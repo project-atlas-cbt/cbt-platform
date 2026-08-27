@@ -34,7 +34,12 @@ import { registerIdentityTemplates } from './templates.js';
   // this, that cross-module instantiation fails at boot with
   // UnknownDependenciesException even though AuthGuard itself already
   // works fine for every route declared inside this module.
-  exports: [PasswordService, CredentialSheetService, AuthGuard, SessionService],
+  //
+  // AuthLockoutService (B3): PlatformAuthService (platform module) reuses
+  // this same per-identifier lockout primitive for Software Admin login —
+  // it's already keyed by an arbitrary string, not literally a school id,
+  // so no change to the service itself, just exporting it.
+  exports: [PasswordService, CredentialSheetService, AuthGuard, SessionService, AuthLockoutService],
 })
 export class IdentityModule implements OnModuleInit {
   constructor(

@@ -5,10 +5,12 @@ import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
+import { AccessGateService } from '../platform/access-gate.service.js';
 import { SessionService } from './session.service.js';
 import { ALLOW_PENDING_PASSWORD_CHANGE_KEY } from './decorators.js';
 
 export interface AuthenticatedUser {
+  kind: 'SCHOOL';
   userId: string;
   schoolId: string;
   membershipId: string;
@@ -19,10 +21,25 @@ export interface AuthenticatedUser {
   roles: Role[];
 }
 
+/** B3: Software Admin's authenticated identity — no schoolId/membershipId,
+ * mirroring PlatformRoleAssignment's own tenant-independence. Set by
+ * PlatformAuthGuard (apps/api/src/modules/platform/platform-auth.guard.ts),
+ * never by this file's AuthGuard. */
+export interface AuthenticatedPlatformUser {
+  kind: 'PLATFORM';
+  userId: string;
+  sessionId: string;
+  roles: Role[];
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
-    /** Set by AuthGuard once a session resolves to a live, ACTIVE user + membership. */
-    user?: AuthenticatedUser;
+    /** Set by AuthGuard (school-scoped) or PlatformAuthGuard (Software
+     * Admin) once a session resolves to a live, ACTIVE identity. The two
+     * guards are mutually exclusive by construction — AuthGuard only ever
+     * succeeds when a tenant is resolved, PlatformAuthGuard only when one
+     * isn't — so a route is never guarded by both. */
+    user?: AuthenticatedUser | AuthenticatedPlatformUser;
   }
 }
 
@@ -48,6 +65,7 @@ export class AuthGuard implements CanActivate {
     private readonly sessions: SessionService,
     private readonly tenancy: TenancyContextService,
     private readonly reflector: Reflector,
+    private readonly accessGate: AccessGateService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -57,6 +75,29 @@ export class AuthGuard implements CanActivate {
       new AppHttpException({ code: 'UNAUTHENTICATED', message: 'Authentication required.' });
 
     if (!schoolId) throw unauthenticated();
+
+    // ADR-0016/roadmap DoD item 4: a platform-level suspend/deactivate
+    // blocks *all* school access immediately, on every request — not just
+    // new logins — so an already-open session stops working the instant
+    // Software Admin acts. Checked before session resolution: a school-
+    // level block takes precedence over individual session validity, and
+    // this is a cheap read-only check (AccessGateService.getPlatformOverride),
+    // not the full recompute-and-persist path. Deliberately NOT checked for
+    // EXPIRED-alone (no override) — ADR-0015 keeps login/reads working
+    // through an expired subscription.
+    const override = await this.accessGate.getPlatformOverride(schoolId);
+    if (override === 'SUSPENDED') {
+      throw new AppHttpException({
+        code: 'SCHOOL_ACCESS_SUSPENDED',
+        message: 'This school has been suspended.',
+      });
+    }
+    if (override === 'DEACTIVATED') {
+      throw new AppHttpException({
+        code: 'SCHOOL_ACCESS_DEACTIVATED',
+        message: 'This school has been deactivated.',
+      });
+    }
 
     const session = await this.sessions.resolve(req, schoolId);
     if (!session) throw unauthenticated();
@@ -90,6 +131,7 @@ export class AuthGuard implements CanActivate {
     }
 
     req.user = {
+      kind: 'SCHOOL',
       userId: user.id,
       schoolId,
       membershipId: membership.id,

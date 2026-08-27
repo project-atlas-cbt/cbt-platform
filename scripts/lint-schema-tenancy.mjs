@@ -26,7 +26,11 @@ const schemaPath = resolve(__dirname, '../packages/db/prisma/schema.prisma');
 //
 // PlatformRoleAssignment (B2): SOFTWARE_ADMIN has no school to be owned by
 // — mirrors User's own exemption reasoning exactly. See its doc comment.
-const EXEMPT_MODELS = new Set(['School', 'User', 'PlatformRoleAssignment']);
+//
+// PlatformSession (B3): Software Admin's session record — same exemption
+// reasoning as PlatformRoleAssignment; a platform account has no school to
+// scope a session under. See its own doc comment.
+const EXEMPT_MODELS = new Set(['School', 'User', 'PlatformRoleAssignment', 'PlatformSession']);
 
 const schema = readFileSync(schemaPath, 'utf-8');
 const modelBlockRe = /model\s+(\w+)\s*\{([^}]*)\}/g;

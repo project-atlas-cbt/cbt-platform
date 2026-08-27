@@ -77,6 +77,16 @@ export const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
 
+  // B3: apps/worker's subscription-expiry sweeper / platform-metrics
+  // aggregation tick interval. Not required to be precise to the minute
+  // (ADR-0015's 14-day grace window dwarfs any reasonable interval here) —
+  // an engineering default, easy to tune per environment. Default: 6 hours.
+  SUBSCRIPTION_SWEEP_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(6 * 60 * 60 * 1000),
+
   S3_ENDPOINT: z.string().optional().default(''),
   S3_BUCKET: z.string().optional().default(''),
   S3_ACCESS_KEY_ID: z.string().optional().default(''),

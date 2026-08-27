@@ -191,6 +191,263 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Authenticate as Software Admin (ADR-0005's distinct platform host). */
+        post: operations["PlatformAuthController_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke the current Software Admin session. */
+        post: operations["PlatformAuthController_logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current Software Admin identity and roles — read live from the database. */
+        get: operations["PlatformAuthController_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List schools (05 §3.1) — optional comma-separated status filter. */
+        get: operations["SchoolsAdminController_list"];
+        put?: never;
+        /** Create a school + initial admin + subscription (05 §3.2). */
+        post: operations["SchoolsAdminController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** School overview (05 §3.3 / 04 §8). */
+        get: operations["SchoolsAdminController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools/{id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Suspend a school (platform action, reason required, audited). */
+        post: operations["SchoolsAdminController_suspend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools/{id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate a suspended school (reason required, audited). */
+        post: operations["SchoolsAdminController_reactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate a school — terminal, reason required, audited. */
+        post: operations["SchoolsAdminController_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools/{id}/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue or renew a subscription period. */
+        post: operations["SchoolsAdminController_issueSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools/{id}/activation-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a standalone renewal key against the current subscription period. */
+        post: operations["SchoolsAdminController_issueActivationGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform dashboard aggregates (04 §6) — cached, never live-computed. */
+        get: operations["PlatformMetricsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activation/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate an activation/renewal key without consuming it (03 §3). */
+        post: operations["ActivationController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activation/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redeem an activation/renewal key (03 §3). */
+        post: operations["ActivationController_redeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/school/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own school profile (03 §4 Step 1). */
+        get: operations["SchoolProfileController_getProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update the caller's own school profile (School Admin only). */
+        patch: operations["SchoolProfileController_updateProfile"];
+        trace?: never;
+    };
+    "/school/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read-only subscription status (05 §4.1) — School Admin/Moderator. */
+        get: operations["SchoolProfileController_getSubscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -271,6 +528,158 @@ export interface components {
         PasswordResetConfirmDto: {
             token: string;
             newPassword: string;
+        };
+        PlatformLoginDto: {
+            /** @description Software Admin's account email. */
+            email: string;
+            password: string;
+        };
+        PlatformMeUserDto: {
+            id: string;
+            firstName: string;
+            lastName: string;
+            displayName: string;
+            /** @description UserStatus (06 §7). */
+            status: string;
+        };
+        PlatformMeResponseDto: {
+            user: components["schemas"]["PlatformMeUserDto"];
+            /** @description Active PlatformRoleAssignment.role values (02). */
+            roles: ("SOFTWARE_ADMIN" | "SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT")[];
+        };
+        SchoolListItemDto: {
+            id: string;
+            name: string;
+            subdomain: string;
+            /** @enum {string} */
+            status: "PROVISIONAL" | "ACTIVE" | "SUSPENDED" | "EXPIRED" | "DEACTIVATED";
+            /** @description Active SchoolMembership count with a STUDENT role. */
+            studentCount: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SchoolListResponseDto: {
+            schools: components["schemas"]["SchoolListItemDto"][];
+        };
+        CreateSchoolDto: {
+            name: string;
+            adminFirstName: string;
+            adminLastName: string;
+            /** @description The admin's email — where the activation key is sent. */
+            adminEmail: string;
+            /** @description The login identifier this admin will use to sign in once activated (unique per school, ADR-0005) — distinct from their email. */
+            adminLoginIdentifier: string;
+            /** @description Subscription plan name/identifier. */
+            plan: string;
+            /** @description Initial subscription period, in days. */
+            initialPeriodDays: number;
+        };
+        CreateSchoolResponseDto: {
+            id: string;
+            subdomain: string;
+        };
+        SchoolSubscriptionSummaryDto: {
+            id: string;
+            plan: string;
+            status: string;
+            /** Format: date-time */
+            startAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        SchoolUsageDto: {
+            students: number;
+            teachers: number;
+            /** @description Exams do not exist until B11 — always 0 until then, not fabricated. */
+            exams: number;
+            /** @description Attempts do not exist until B13 — always 0 until then, not fabricated. */
+            attempts: number;
+        };
+        SchoolDetailResponseDto: {
+            id: string;
+            name: string;
+            subdomain: string;
+            /** @enum {string} */
+            status: "PROVISIONAL" | "ACTIVE" | "SUSPENDED" | "EXPIRED" | "DEACTIVATED";
+            shortName: string | null;
+            contactEmail: string | null;
+            contactPhone: string | null;
+            timezone: string;
+            /** Format: date-time */
+            createdAt: string;
+            subscription: components["schemas"]["SchoolSubscriptionSummaryDto"] | null;
+            usage: components["schemas"]["SchoolUsageDto"];
+        };
+        SchoolLifecycleReasonDto: {
+            reason: string;
+        };
+        IssueSubscriptionDto: {
+            plan: string;
+            /** @description New subscription period, in days. */
+            periodDays: number;
+        };
+        IssueSubscriptionResponseDto: {
+            subscriptionId: string;
+        };
+        PlatformMetricsResponseDto: {
+            totalSchools: number;
+            activeSchools: number;
+            provisionalSchools: number;
+            suspendedSchools: number;
+            expiredSchools: number;
+            deactivatedSchools: number;
+            students: number;
+            teachers: number;
+            /** @description Exams do not exist until B11 — always 0 until then, not fabricated. */
+            examsConducted: number;
+            /** @description Attempts do not exist until B13 — always 0 until then, not fabricated. */
+            attempts: number;
+            /**
+             * Format: date-time
+             * @description When the worker sweeper last computed this snapshot; null if it has never run.
+             */
+            computedAt: string | null;
+        };
+        ActivationVerifyDto: {
+            key: string;
+        };
+        ActivationVerifyResponseDto: {
+            schoolName: string;
+            /** @enum {string} */
+            purpose: "INITIAL_ACTIVATION" | "RENEWAL";
+            /** @description Whether redeem must include newPassword. */
+            requiresPassword: boolean;
+        };
+        ActivationRedeemDto: {
+            key: string;
+            /** @description Required for an INITIAL_ACTIVATION-purpose key; the admin has no password yet. */
+            newPassword?: string;
+        };
+        SchoolProfileResponseDto: {
+            id: string;
+            name: string;
+            subdomain: string;
+            timezone: string;
+            shortName: string | null;
+            contactEmail: string | null;
+            contactPhone: string | null;
+            address: string | null;
+        };
+        UpdateSchoolProfileDto: {
+            shortName?: string;
+            contactEmail?: string;
+            contactPhone?: string;
+            address?: string;
+        };
+        SchoolSubscriptionStatusResponseDto: {
+            plan: string;
+            status: string;
+            /** Format: date-time */
+            startAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Whether the school is currently within ADR-0015's post-expiry grace window. */
+            inGracePeriod: boolean;
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -522,6 +931,379 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    PlatformAuthController_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformLoginDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformMeResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_list: {
+        parameters: {
+            query: {
+                status: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolListResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSchoolDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSchoolResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolDetailResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_suspend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchoolLifecycleReasonDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_reactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchoolLifecycleReasonDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchoolLifecycleReasonDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_issueSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueSubscriptionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueSubscriptionResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_issueActivationGrant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueSubscriptionResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformMetricsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformMetricsResponseDto"];
+                };
+            };
+        };
+    };
+    ActivationController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivationVerifyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivationVerifyResponseDto"];
+                };
+            };
+        };
+    };
+    ActivationController_redeem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivationRedeemDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolProfileController_getProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolProfileResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolProfileController_updateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSchoolProfileDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolProfileResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolProfileController_getSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolSubscriptionStatusResponseDto"];
+                };
             };
         };
     };

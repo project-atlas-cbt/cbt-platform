@@ -2,15 +2,26 @@ import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/com
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
 import { AppHttpException } from '../../common/app-http-exception.js';
-import type { AuthenticatedUser } from '../identity/auth.guard.js';
+import type { AuthenticatedUser, AuthenticatedPlatformUser } from '../identity/auth.guard.js';
 import { AuthorizationService } from './authorization.service.js';
 import { REQUIRE_PERMISSION_KEY } from './decorators.js';
 import type { AuthorizedActor } from './authorization.types.js';
 
-export function actorFromAuthenticatedUser(user: AuthenticatedUser): AuthorizedActor {
-  // AuthGuard only ever produces a school-scoped actor today — there is no
-  // Software Admin login endpoint anywhere until at least B3 (2026-08-26
-  // decision). This is the one place that changes when B3 adds one.
+/**
+ * B3: the place both this file's own prior comment and
+ * authorization.types.ts's AuthorizedActor doc comment named as "the one
+ * place that changes" once a Software Admin session exists. AuthGuard
+ * (school-scoped) and PlatformAuthGuard (B3) each populate `req.user` with a
+ * differently-`kind`ed shape; this maps either straight onto the matching
+ * AuthorizedActor variant PermissionGuard/AuthorizationService already
+ * understood since B2.
+ */
+export function actorFromAuthenticatedUser(
+  user: AuthenticatedUser | AuthenticatedPlatformUser,
+): AuthorizedActor {
+  if (user.kind === 'PLATFORM') {
+    return { kind: 'PLATFORM', userId: user.userId, roles: user.roles };
+  }
   return {
     kind: 'SCHOOL',
     userId: user.userId,

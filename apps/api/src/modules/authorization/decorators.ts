@@ -1,5 +1,6 @@
 import { applyDecorators, SetMetadata, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../identity/auth.guard.js';
+import { PlatformAuthGuard } from '../platform/platform-auth.guard.js';
 import { PermissionGuard } from './permission.guard.js';
 
 export const REQUIRE_PERMISSION_KEY = 'atlas:requirePermission';
@@ -31,4 +32,19 @@ export const PublicRoute = (reason: string) => SetMetadata(PUBLIC_ROUTE_KEY, rea
  */
 export function Authorized(permissionId: string) {
   return applyDecorators(RequirePermission(permissionId), UseGuards(AuthGuard, PermissionGuard));
+}
+
+/**
+ * B3: the platform-scoped equivalent of `@Authorized` — authenticate via
+ * PlatformAuthGuard (Software Admin's session, not a school one) before
+ * PermissionGuard. Mutually exclusive with `@Authorized` by construction:
+ * AuthGuard requires a resolved tenant (TenancyContextService.schoolId) to
+ * even attempt session resolution, PlatformAuthGuard needs no tenant at
+ * all — a route only ever declares one or the other, never both.
+ */
+export function AuthorizedPlatform(permissionId: string) {
+  return applyDecorators(
+    RequirePermission(permissionId),
+    UseGuards(PlatformAuthGuard, PermissionGuard),
+  );
 }

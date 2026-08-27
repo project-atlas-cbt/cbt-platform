@@ -246,6 +246,495 @@
         "summary": "Readiness probe — database, Redis, and object storage are reachable.",
         "tags": ["health"]
       }
+    },
+    "/platform/auth/login": {
+      "post": {
+        "operationId": "PlatformAuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Authenticate as Software Admin (ADR-0005's distinct platform host).",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/auth/logout": {
+      "post": {
+        "operationId": "PlatformAuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revoke the current Software Admin session.",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/auth/me": {
+      "get": {
+        "operationId": "PlatformAuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformMeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Current Software Admin identity and roles — read live from the database.",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/schools": {
+      "get": {
+        "operationId": "SchoolsAdminController_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List schools (05 §3.1) — optional comma-separated status filter.",
+        "tags": ["platform"]
+      },
+      "post": {
+        "operationId": "SchoolsAdminController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSchoolDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSchoolResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a school + initial admin + subscription (05 §3.2).",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/schools/{id}": {
+      "get": {
+        "operationId": "SchoolsAdminController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolDetailResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "School overview (05 §3.3 / 04 §8).",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/schools/{id}/suspend": {
+      "post": {
+        "operationId": "SchoolsAdminController_suspend",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolLifecycleReasonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Suspend a school (platform action, reason required, audited).",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/schools/{id}/reactivate": {
+      "post": {
+        "operationId": "SchoolsAdminController_reactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolLifecycleReasonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reactivate a suspended school (reason required, audited).",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/schools/{id}/deactivate": {
+      "post": {
+        "operationId": "SchoolsAdminController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolLifecycleReasonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deactivate a school — terminal, reason required, audited.",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/schools/{id}/subscriptions": {
+      "post": {
+        "operationId": "SchoolsAdminController_issueSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueSubscriptionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Issue or renew a subscription period.",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/schools/{id}/activation-grants": {
+      "post": {
+        "operationId": "SchoolsAdminController_issueActivationGrant",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueSubscriptionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Issue a standalone renewal key against the current subscription period.",
+        "tags": ["platform"]
+      }
+    },
+    "/platform/metrics": {
+      "get": {
+        "operationId": "PlatformMetricsController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformMetricsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Platform dashboard aggregates (04 §6) — cached, never live-computed.",
+        "tags": ["platform"]
+      }
+    },
+    "/activation/verify": {
+      "post": {
+        "operationId": "ActivationController_verify",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivationVerifyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivationVerifyResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Validate an activation/renewal key without consuming it (03 §3).",
+        "tags": ["activation"]
+      }
+    },
+    "/activation/redeem": {
+      "post": {
+        "operationId": "ActivationController_redeem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivationRedeemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Redeem an activation/renewal key (03 §3).",
+        "tags": ["activation"]
+      }
+    },
+    "/school/profile": {
+      "get": {
+        "operationId": "SchoolProfileController_getProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolProfileResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own school profile (03 §4 Step 1).",
+        "tags": ["school"]
+      },
+      "patch": {
+        "operationId": "SchoolProfileController_updateProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSchoolProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolProfileResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update the caller's own school profile (School Admin only).",
+        "tags": ["school"]
+      }
+    },
+    "/school/subscription": {
+      "get": {
+        "operationId": "SchoolProfileController_getSubscription",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolSubscriptionStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Read-only subscription status (05 §4.1) — School Admin/Moderator.",
+        "tags": ["school"]
+      }
     }
   },
   "info": {
@@ -467,6 +956,468 @@
           }
         },
         "required": ["token", "newPassword"]
+      },
+      "PlatformLoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Software Admin's account email."
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": ["email", "password"]
+      },
+      "PlatformMeUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "UserStatus (06 §7)."
+          }
+        },
+        "required": ["id", "firstName", "lastName", "displayName", "status"]
+      },
+      "PlatformMeResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/PlatformMeUserDto"
+          },
+          "roles": {
+            "type": "array",
+            "description": "Active PlatformRoleAssignment.role values (02).",
+            "items": {
+              "type": "string",
+              "enum": ["SOFTWARE_ADMIN", "SCHOOL_ADMIN", "MODERATOR", "HOD", "TEACHER", "STUDENT"]
+            }
+          }
+        },
+        "required": ["user", "roles"]
+      },
+      "SchoolListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "subdomain": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PROVISIONAL", "ACTIVE", "SUSPENDED", "EXPIRED", "DEACTIVATED"]
+          },
+          "studentCount": {
+            "type": "number",
+            "description": "Active SchoolMembership count with a STUDENT role."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "name", "subdomain", "status", "studentCount", "createdAt"]
+      },
+      "SchoolListResponseDto": {
+        "type": "object",
+        "properties": {
+          "schools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchoolListItemDto"
+            }
+          }
+        },
+        "required": ["schools"]
+      },
+      "CreateSchoolDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "adminFirstName": {
+            "type": "string"
+          },
+          "adminLastName": {
+            "type": "string"
+          },
+          "adminEmail": {
+            "type": "string",
+            "description": "The admin's email — where the activation key is sent."
+          },
+          "adminLoginIdentifier": {
+            "type": "string",
+            "description": "The login identifier this admin will use to sign in once activated (unique per school, ADR-0005) — distinct from their email."
+          },
+          "plan": {
+            "type": "string",
+            "description": "Subscription plan name/identifier."
+          },
+          "initialPeriodDays": {
+            "type": "number",
+            "description": "Initial subscription period, in days.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "name",
+          "adminFirstName",
+          "adminLastName",
+          "adminEmail",
+          "adminLoginIdentifier",
+          "plan",
+          "initialPeriodDays"
+        ]
+      },
+      "CreateSchoolResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "subdomain": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "subdomain"]
+      },
+      "SchoolSubscriptionSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "startAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "plan", "status", "startAt", "expiresAt"]
+      },
+      "SchoolUsageDto": {
+        "type": "object",
+        "properties": {
+          "students": {
+            "type": "number"
+          },
+          "teachers": {
+            "type": "number"
+          },
+          "exams": {
+            "type": "number",
+            "description": "Exams do not exist until B11 — always 0 until then, not fabricated."
+          },
+          "attempts": {
+            "type": "number",
+            "description": "Attempts do not exist until B13 — always 0 until then, not fabricated."
+          }
+        },
+        "required": ["students", "teachers", "exams", "attempts"]
+      },
+      "SchoolDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "subdomain": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PROVISIONAL", "ACTIVE", "SUSPENDED", "EXPIRED", "DEACTIVATED"]
+          },
+          "shortName": {
+            "type": "string",
+            "nullable": true
+          },
+          "contactEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "contactPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subscription": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SchoolSubscriptionSummaryDto"
+              }
+            ]
+          },
+          "usage": {
+            "$ref": "#/components/schemas/SchoolUsageDto"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "subdomain",
+          "status",
+          "shortName",
+          "contactEmail",
+          "contactPhone",
+          "timezone",
+          "createdAt",
+          "subscription",
+          "usage"
+        ]
+      },
+      "SchoolLifecycleReasonDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["reason"]
+      },
+      "IssueSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string"
+          },
+          "periodDays": {
+            "type": "number",
+            "description": "New subscription period, in days.",
+            "minimum": 1
+          }
+        },
+        "required": ["plan", "periodDays"]
+      },
+      "IssueSubscriptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "subscriptionId": {
+            "type": "string"
+          }
+        },
+        "required": ["subscriptionId"]
+      },
+      "PlatformMetricsResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalSchools": {
+            "type": "number"
+          },
+          "activeSchools": {
+            "type": "number"
+          },
+          "provisionalSchools": {
+            "type": "number"
+          },
+          "suspendedSchools": {
+            "type": "number"
+          },
+          "expiredSchools": {
+            "type": "number"
+          },
+          "deactivatedSchools": {
+            "type": "number"
+          },
+          "students": {
+            "type": "number"
+          },
+          "teachers": {
+            "type": "number"
+          },
+          "examsConducted": {
+            "type": "number",
+            "description": "Exams do not exist until B11 — always 0 until then, not fabricated."
+          },
+          "attempts": {
+            "type": "number",
+            "description": "Attempts do not exist until B13 — always 0 until then, not fabricated."
+          },
+          "computedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the worker sweeper last computed this snapshot; null if it has never run."
+          }
+        },
+        "required": [
+          "totalSchools",
+          "activeSchools",
+          "provisionalSchools",
+          "suspendedSchools",
+          "expiredSchools",
+          "deactivatedSchools",
+          "students",
+          "teachers",
+          "examsConducted",
+          "attempts",
+          "computedAt"
+        ]
+      },
+      "ActivationVerifyDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": ["key"]
+      },
+      "ActivationVerifyResponseDto": {
+        "type": "object",
+        "properties": {
+          "schoolName": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": ["INITIAL_ACTIVATION", "RENEWAL"]
+          },
+          "requiresPassword": {
+            "type": "boolean",
+            "description": "Whether redeem must include newPassword."
+          }
+        },
+        "required": ["schoolName", "purpose", "requiresPassword"]
+      },
+      "ActivationRedeemDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Required for an INITIAL_ACTIVATION-purpose key; the admin has no password yet."
+          }
+        },
+        "required": ["key"]
+      },
+      "SchoolProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "subdomain": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "shortName": {
+            "type": "string",
+            "nullable": true
+          },
+          "contactEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "contactPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "subdomain",
+          "timezone",
+          "shortName",
+          "contactEmail",
+          "contactPhone",
+          "address"
+        ]
+      },
+      "UpdateSchoolProfileDto": {
+        "type": "object",
+        "properties": {
+          "shortName": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "contactEmail": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "address": {
+            "type": "string"
+          }
+        }
+      },
+      "SchoolSubscriptionStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "startAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "inGracePeriod": {
+            "type": "boolean",
+            "description": "Whether the school is currently within ADR-0015's post-expiry grace window."
+          }
+        },
+        "required": ["plan", "status", "startAt", "expiresAt", "inGracePeriod"]
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

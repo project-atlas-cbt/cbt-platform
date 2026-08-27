@@ -1,6 +1,15 @@
-import { loadEnv, loadRootEnv } from '@atlas/config';
+import { Queue } from 'bullmq';
+import { Redis } from 'ioredis';
+import { loadEnv, loadRootEnv, getProductName } from '@atlas/config';
 import { prisma } from '@atlas/db';
+import { ConsoleNotificationChannel, TemplateRegistry } from '@atlas/notifications';
 import { createProbeWorker } from './queues/probe.queue.js';
+import {
+  SUBSCRIPTION_EXPIRY_QUEUE_NAME,
+  createSubscriptionExpiryWorker,
+  scheduleSubscriptionExpirySweep,
+} from './queues/subscription-expiry.queue.js';
+import { registerWorkerTemplates } from './queues/templates.js';
 
 async function main() {
   loadRootEnv();
@@ -12,23 +21,48 @@ async function main() {
   await prisma.$queryRaw`SELECT 1`;
 
   const redisUrl = new URL(env.REDIS_URL);
-  const worker = createProbeWorker({
-    host: redisUrl.hostname,
-    port: Number(redisUrl.port) || 6379,
-  });
+  const connection = { host: redisUrl.hostname, port: Number(redisUrl.port) || 6379 };
 
-  worker.on('completed', (job) => {
-    console.log(`[worker] job ${job.id} completed`);
-  });
-  worker.on('failed', (job, err) => {
-    console.error(`[worker] job ${job?.id} failed:`, err.message);
-  });
+  const probeWorker = createProbeWorker(connection);
 
-  console.log(`[worker] ${env.PRODUCT_NAME} worker listening on queue "${worker.name}"`);
+  // B3: no Nest DI in this process — construct the notification channel
+  // directly, same class B0 decided on for apps/api (ConsoleNotificationChannel),
+  // with this process's own TemplateRegistry instance (see
+  // queues/templates.ts's own doc comment on why it isn't shared with
+  // apps/api's).
+  const templates = new TemplateRegistry();
+  registerWorkerTemplates(templates, getProductName(env));
+  const notifications = new ConsoleNotificationChannel(templates);
+  const redis = new Redis(env.REDIS_URL);
+
+  const subscriptionExpiryWorker = createSubscriptionExpiryWorker(connection, {
+    notifications,
+    redis,
+  });
+  const subscriptionExpiryQueue = new Queue(SUBSCRIPTION_EXPIRY_QUEUE_NAME, { connection });
+  await scheduleSubscriptionExpirySweep(
+    subscriptionExpiryQueue,
+    env.SUBSCRIPTION_SWEEP_INTERVAL_MS,
+  );
+
+  for (const worker of [probeWorker, subscriptionExpiryWorker]) {
+    worker.on('completed', (job) => {
+      console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
+    });
+    worker.on('failed', (job, err) => {
+      console.error(`[worker] job ${job?.id} on queue "${worker.name}" failed:`, err.message);
+    });
+  }
+
+  console.log(
+    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms)`,
+  );
 
   const shutdown = async () => {
     console.log('[worker] shutting down...');
-    await worker.close();
+    await Promise.all([probeWorker.close(), subscriptionExpiryWorker.close()]);
+    await subscriptionExpiryQueue.close();
+    redis.disconnect();
     await prisma.$disconnect();
     process.exit(0);
   };

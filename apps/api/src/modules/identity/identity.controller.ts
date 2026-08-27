@@ -25,10 +25,10 @@ const AUTH_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   // AuthGuard always sets this before a guarded handler runs; the
-  // non-null assertion is safe here specifically because every route in
-  // this controller that reads it is behind @Authorized(...), which runs
-  // AuthGuard before PermissionGuard.
-  return req.user!;
+  // assertion is safe here specifically because every route in this
+  // controller that reads it is behind @Authorized(...), which runs
+  // AuthGuard (never PlatformAuthGuard) before PermissionGuard.
+  return req.user as AuthenticatedUser;
 }
 
 @ApiTags('identity')

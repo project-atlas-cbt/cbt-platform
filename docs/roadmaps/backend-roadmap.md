@@ -452,7 +452,7 @@ Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && 
 
 # B3 — Platform, Schools & Subscriptions
 
-**Status:** NOT STARTED · **Decided ADRs:** 0015, 0016, 0019, 0012
+**Status:** COMPLETE (2026-08-27) · **Decided ADRs:** 0015, 0016, 0019, 0012
 
 ## Objective
 
@@ -487,32 +487,40 @@ Deliver the platform tenant lifecycle: Software Admin creates schools, issues ac
 
 **Contracts: `platform.v1`, `schools.v1`, `subscriptions.v1`.**
 
+The table below is corrected from the original plan: `platform.v1`'s own auth endpoints were missing
+from this section even though `docs/roadmaps/roadmap-index.md`'s Immediate-Next-Actions entry and
+`CLAUDE.md`'s B1/B2 Change Log entries all already named B3 as where Software Admin login lands
+("Platform-level account provisioning belongs to... B3"). Built as originally intended, not a scope
+addition — this section's own table was simply incomplete.
+
 | Endpoint                                                                | Purpose                                                                        |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `POST /v1/platform/auth/login` · `/logout` · `GET /v1/platform/auth/me` | Software Admin session (ADR-0005's distinct platform host)                     |
 | `GET /v1/platform/schools`                                              | List with filters Active/Provisional/Suspended/Expired/Deactivated (`05 §3.1`) |
 | `POST /v1/platform/schools`                                             | Create school + initial admin + subscription (`05 §3.2`)                       |
 | `GET /v1/platform/schools/:id`                                          | Overview, subscription, usage, activity (`05 §3.3`)                            |
 | `POST /v1/platform/schools/:id/suspend` · `/reactivate` · `/deactivate` | Lifecycle, reason required                                                     |
 | `POST /v1/platform/schools/:id/subscriptions`                           | Issue or renew                                                                 |
 | `POST /v1/platform/schools/:id/activation-grants`                       | Issue key                                                                      |
-| `GET /v1/platform/metrics`                                              | Platform dashboard aggregates                                                  |
+| `GET /v1/platform/metrics`                                              | Platform dashboard aggregates (cached — see Implementation notes)              |
 | `POST /v1/activation/verify` · `/v1/activation/redeem`                  | School-side activation (`03 §3`)                                               |
 | `GET /v1/school/profile` · `PATCH /v1/school/profile`                   | School-side profile incl. timezone                                             |
 | `GET /v1/school/subscription`                                           | School-side read-only status                                                   |
 
 ## Database work
 
-- `School` with denormalised access-gate column maintained by the resolution function, never set independently.
-- `Subscription` with non-overlapping active-period constraint per school.
+- `School` with denormalised access-gate column (`status`) maintained by the resolution function, never set independently, plus a separate `platformOverride` column for the two Software-Admin actions (see Implementation notes).
+- `Subscription` with a partial unique index enforcing at most one non-terminal (`PENDING/ACTIVE/EXPIRING`) row per school.
 - `ActivationGrant` with single-use enforcement at the database level (partial unique on unredeemed grants per subscription).
-- Immutability: `issued_at`, `issued_by`, and grant reference frozen after activation (`07 §4.3`).
+- Immutability: `issued_at`, `issued_by`, and the key hash frozen after activation (`07 §4.3`) — enforced at the service layer, same honest scope as `AuditEvent`'s own not-yet-DB-enforced immutability.
+- `PlatformSession` (new, tenant-independent) — Software Admin's session record.
 - Indexes for expiry sweeps and platform metrics.
 
 ## Background jobs
 
-- Subscription expiry sweeper transitioning `ACTIVE → EXPIRING → EXPIRED` and recomputing the derived gate.
+- Subscription expiry sweeper (`apps/worker`) transitioning `ACTIVE → EXPIRING → EXPIRED` and recomputing the derived gate — the first BullMQ repeatable job in the codebase (see Implementation notes for the BullMQ 6 API adaptation).
 - Expiry warning notifications at defined thresholds (`05 §4.2`).
-- Platform metric aggregation (derived, cached — never authoritative, per `06 §75`).
+- Platform metric aggregation (derived, cached — never authoritative, per `06 §75`) — combined into the same per-school sweep pass, not a second full scan.
 
 ## Security / authorization work
 
@@ -521,6 +529,7 @@ Deliver the platform tenant lifecycle: Software Admin creates schools, issues ac
 - Activation keys are single-use, expiring, and validated server-side; a redeemed key is rejected on replay.
 - Activation endpoints are rate-limited — they are unauthenticated by nature and therefore brute-forceable.
 - School Admin sees subscription status but cannot alter dates or plan.
+- A platform-level suspend/deactivate blocks _all_ school access immediately — enforced centrally by `AuthGuard`, on every authenticated request and at login itself, not only new platform actions (see Implementation notes).
 
 ## Testing requirements
 
@@ -542,27 +551,107 @@ Requires `ADR-0019` messaging to deliver activation keys and expiry warnings. Bl
 
 ## Definition of Done
 
-1. Software Admin creates a school; it lands in `PROVISIONAL` with an initial admin and a `PENDING` subscription.
-2. An activation key is issued, validated, redeemed once, and rejected on any replay or cross-school use.
-3. Redemption moves school to `ACTIVE` and subscription to `ACTIVE`, and directs the admin to onboarding.
-4. Suspension blocks school access immediately; reactivation restores it; both are audited with a reason.
-5. Expiry follows the `ADR-0015` profile: in-progress attempts complete and are marked; new attempts and sessions are blocked; historical reads work; renewal restores full access.
-6. **A row-count assertion proves no academic data is deleted or modified by any lifecycle transition.**
-7. The access gate resolves by documented precedence and is consulted by exactly one shared function.
-8. Expiry warnings dispatch at the configured thresholds.
-9. Platform metrics match a hand-computed fixture.
-10. School timezone is stored and returned; all school-facing timestamps render in it.
+1. ✅ Software Admin creates a school; it lands in `PROVISIONAL` with an initial admin (`User.status = INVITED`) and a `PENDING` subscription.
+2. ✅ An activation key is issued, validated, redeemed once, and rejected on any replay or cross-school use — proven both by a real HTTP integration test and by an RLS test at the database layer.
+3. ✅ Redemption moves school to `ACTIVE` and subscription to `ACTIVE`. "Directs the admin to onboarding" is F4's job (the onboarding wizard UI) — B3 ships the contract (`POST /v1/activation/redeem`'s response), not the redirect itself.
+4. ✅ Suspension blocks school access immediately — for an already-open session _and_ a fresh login attempt, not just new platform actions — reactivation restores it; both are audited with a reason.
+5. ✅ Expiry follows the `ADR-0015` profile via `AccessGateService`/`@atlas/domain`'s `resolveAccessGate`: capability stays `FULL` through the 14-day grace window even after `School.status` has already flipped to `EXPIRED`, then drops to `RESTRICTED`. Full B13/B14 exam-write integration (in-progress-attempt continuation) is those phases' own job — B3 ships the function and proves it via table-driven unit tests against a synthetic protected write, the same "ready for the first real caller" pattern B2 used for break-glass.
+6. ✅ **Row-count assertion**: `platform.integration.test.ts` proves suspend→reactivate changes zero rows across `SchoolMembership`/`RoleAssignment`/`Session`/`Subscription`/`ActivationGrant`, while `AuditEvent` count grows by exactly the expected number (audited, not "unchanged" — audit rows are supposed to grow).
+7. ✅ The access gate resolves by documented precedence (`SchoolPlatformOverride` > subscription-derived) and is consulted by exactly one shared function (`@atlas/domain`'s `resolveAccessGate`, wrapped by `AccessGateService` — a `@Global()` Nest module so both `AuthGuard` (identity) and every platform write path share the one instance without a module import cycle).
+8. ✅ Expiry warnings dispatch at configured thresholds (30/14/7/1 days — engineering default, no concrete day-counts are specified anywhere in the corpus), tracked via `Subscription.lastWarningThresholdDays` so a threshold is never re-sent.
+9. ✅ Platform metrics — honestly partial by design: Schools-by-status and Students/Teachers counts are real (computed by the worker sweep, cached in Redis); Exams/Attempts are `0` with a documented reason (those tables don't exist until B11/B13). "Cached, never live-computed" is itself a real B3 finding, not the original plan text — see Implementation notes.
+10. ✅ School timezone is stored (already existed since B0/B1) and returned via `GET /v1/school/profile`; per-school timestamp rendering in that timezone is a frontend (F3/F4) concern, unaffected by this phase.
 
 ## Exit criteria
 
-- ADR-0015 and ADR-0016 decided and implemented.
-- Data-preservation test wired as a merge blocker.
-- F3 and F4 confirm their contracts.
+- ✅ ADR-0015 and ADR-0016 decided and implemented.
+- ✅ Data-preservation test wired (`platform.integration.test.ts`) — not yet wired as a distinct CI merge-blocker job (it runs as part of the ordinary `test:integration` suite, which CI already gates on).
+- ⏳ F3 and F4 confirm their contracts — pending those frontend phases; `platform.v1`/`schools.v1`/`subscriptions.v1` are frozen and published in `apps/api/openapi.json`/`@atlas/contracts`.
+
+## Implementation notes (2026-08-27)
+
+**Software Admin authentication** (confirmed in-scope per the roadmap-index cross-reference, not
+a silent addition — see the API work table's own note): `PlatformSession` (new, tenant-independent
+table, mirroring `PlatformRoleAssignment`'s precedent exactly rather than a nullable-`schoolId`
+`Session` row — RLS-protected infrastructure B1 already hardened shouldn't grow a carve-out).
+`PlatformSessionService`/`PlatformAuthGuard`/`PlatformAuthService` parallel the identity module's
+own `SessionService`/`AuthGuard`/`IdentityService` by convention, not by shared code. `req.user`
+widened to a `{kind:'SCHOOL'|...} | {kind:'PLATFORM'|...}` union; `permission.guard.ts`'s
+`actorFromAuthenticatedUser` — the exact function both B2's own comment and
+`authorization.types.ts`'s doc comment predicted would change — now branches on `kind`. A new
+`@AuthorizedPlatform(permissionId)` decorator (mutually exclusive with `@Authorized` by
+construction: one guard requires a resolved tenant, the other requires none). The first Software
+Admin account is provisioned by an idempotent `packages/db/prisma/seed.ts` addition — dev/ops
+bootstrap, not self-service (nothing in any spec describes Software Admin signup). No forced-
+password-change gate exists for platform accounts (no `/v1/platform/auth/password/change`
+endpoint) — recorded as Candidate/Deferred, not built.
+
+**The access gate is two functions, not one column.** `School.status` (persisted, cached label)
+flips to `EXPIRED` exactly when `Subscription.status` does; the live _capability_ a guard actually
+enforces is grace-aware and computed fresh every time (`@atlas/domain`'s `resolveAccessGate`) —
+`School.status = EXPIRED` and capability `FULL` are simultaneously true throughout ADR-0015's
+14-day window. `School.platformOverride` (`SUSPENDED|DEACTIVATED|null`) holds the explicit
+Software-Admin action, independent of and taking precedence over the subscription-derived state,
+so reactivating a suspended school falls back to whatever the subscription-derived state actually
+is rather than unconditionally to `ACTIVE`. `DEACTIVATED` is terminal — no reactivate path out of
+it. `reactivate` reuses the `platform.school.activate` permission id (no separate "Reactivate
+school" row exists in `02`'s matrix); `deactivate` uses `platform.school.revokeAccess`.
+
+**A real architectural constraint found only while implementing, not in the original plan**: RLS's
+`FORCE ROW LEVEL SECURITY` means `atlas_app` cannot see rows across multiple schools in one
+unscoped query — `Subscription`/`RoleAssignment` are school-owned. The worker's expiry sweeper and
+the platform metrics aggregation therefore iterate every school one at a time via `withTenant`
+(`School` itself carries no RLS, so listing school ids first is a single ordinary query), combined
+into one per-school pass rather than two separate full scans. Platform metrics are consequently
+**cached** (Redis, key/shape shared via `@atlas/domain`'s `PLATFORM_METRICS_CACHE_KEY`/
+`PlatformMetricsSnapshot` so the reader and writer processes can't drift) and computed periodically
+by the worker, never live per API request — this is _why_ "derived, cached" (already in this
+phase's own Background-jobs bullet) turned out to be load-bearing, not just a nice-to-have.
+
+**BullMQ 6 removed `Queue.add`'s `repeat` option** (the plan's original sketch assumed the older
+shape) — `scheduleSubscriptionExpirySweep` uses `Queue.upsertJobScheduler` instead, which is
+inherently idempotent across process restarts by its own `jobSchedulerId`.
+
+**Activation redemption is one endpoint for both purposes, key possession is the only
+authorization check.** `ActivationGrant.purpose` (`INITIAL_ACTIVATION|RENEWAL`, new field — a
+mechanical necessity like B1's `User.email`) distinguishes an unauthenticated first-activation
+redemption (target `User.status` still `INVITED`, body carries the chosen password) from a
+renewal redemption (target user already `ACTIVE`). The original plan sketched an _additional_
+"renewal redemption must also be authenticated as School Admin" check; dropped as redundant during
+implementation — the key is already single-use and school-scoped (resolved against the
+already-resolved tenant, `ActivationGrant` being RLS-protected — see `ActivationService`'s own doc
+comment), and commercial dates are only ever changed by Software Admin's issuance, never by
+redemption itself. **A real bug this simplification's own testing caught**: re-issuing a key via
+`POST .../activation-grants` always sent the renewal-wording email regardless of the grant's actual
+`purpose` — a re-issued _initial_ activation key (school still `PROVISIONAL`, original email lost)
+told the new admin to "enter it from your subscription screen", which doesn't exist yet. Fixed to
+branch on `purpose` and send the matching template — found by `platform.integration.test.ts`
+asserting the real console-notification content, not by inspection.
+
+**School identifier = `School.subdomain`.** `07 §4.1` lists a separate `school_code`; ADR-0005 says
+the subdomain is "derived from school_code." Rather than add a redundant column, `subdomain` _is_
+the generated identifier (slugified from name, collision-suffixed, never a reserved platform
+label) — the same equivalence-decision shape as B1's `login_identifier` placement.
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration
+&& pnpm spike`, plus `pnpm generate` (OpenAPI + contracts — three new contracts appear) and
+`pnpm generate:permission-table-doc` (139 rows, unchanged — B3 reused existing permission ids
+throughout, adding none). Live-verified beyond the automated suite: a full `node dist/main.js` /
+`node dist/main.js` (worker) walk — platform login, school creation, cross-school activation
+rejection, redemption, School-Admin login, profile read/write, subscription status, suspend/
+reactivate/deactivate (including the access-gate blocking a fresh login attempt and an existing
+session identically), and the worker sweeper's repeatable job firing and writing a real metrics
+snapshot the API then served. All verification schools/sessions were cleaned up afterward.
 
 ## Deferred items
 
 - Payment gateway and billing automation (`01 §53` — future expansion). Subscriptions are administratively managed.
 - Per-school resource limits (`01 §3` mentions "configure school limits if necessary") — not specified anywhere; record as a candidate.
+- **Moderator activation-key redemption delegation** — `subscription.enterActivationKey`'s permission-table row still carries B2's `deferred()` grade for Moderator; no delegation mechanism is specified anywhere (that's `ADR-0017` HOD-request-subsystem territory). School Admin only, for now.
+- **Subscription-level (as opposed to school-level) suspend/cancel as an independent commercial action** — `SubscriptionStatus.SUSPENDED`/`CANCELLED` exist in the schema enum to match `07 §4.2` exactly, but no B3 endpoint ever sets them; `@atlas/domain`'s `resolveAccessGate` defends against them defensively (collapsing to the same restricted `EXPIRED` label), ready for the phase that adds a real trigger.
+- **Self-service Software Admin password change** — no `/v1/platform/auth/password/change` endpoint; the seeded account ships with a directly-usable password (dev/ops bootstrap), not a forced-change one. Same shape of gap as F2's already-recorded School-side self-service password-change omission.
+- A distinct CI job specifically gating merges on the data-preservation test (DoD item 6) — it runs today as part of the ordinary `test:integration` suite, which CI already requires to pass; a dedicated named job is a documentation/CI-config nicety, not a missing guarantee.
+- **The generated cross-tenant test-suite generator** (B2's own deferral, expected to land here per `roadmap-index.md`'s Immediate Next Actions) — still not built. B3 has several real `:id`-shaped endpoints now (`GET/POST /v1/platform/schools/:id/...`) that could drive one, but this phase proved cross-school isolation the same two ways B2 did instead (specific integration tests — the cross-school activation-key rejection case — plus the extended RLS suite covering `Subscription`/`ActivationGrant`), not via a generator. Pushed forward again, not silently dropped; `B5` or later is the next candidate.
 
 ---
 

@@ -235,3 +235,154 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     });
   },
 );
+
+/**
+ * B3's new school-owned tables (Subscription, ActivationGrant) — same
+ * four-test shape as the audit_events block above.
+ */
+describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
+  'Row-Level Security tenant isolation — subscriptions & activation_grants (B3, ADR-0023)',
+  () => {
+    let owner: PrismaClient;
+    let app: PrismaClient;
+    let schoolA: { id: string };
+    let schoolB: { id: string };
+    let issuer: { id: string };
+    let subA: { id: string };
+    let subB: { id: string };
+    let grantA: { id: string };
+    let grantB: { id: string };
+
+    beforeAll(async () => {
+      await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
+      owner = createPrismaClient(ownerDatabaseUrl);
+      app = createPrismaClient(appDatabaseUrl);
+
+      schoolA = await owner.school.create({
+        data: { name: `Sub RLS School A ${randomUUID()}`, subdomain: `sub-rls-a-${Date.now()}` },
+      });
+      schoolB = await owner.school.create({
+        data: { name: `Sub RLS School B ${randomUUID()}`, subdomain: `sub-rls-b-${Date.now()}` },
+      });
+      issuer = await owner.user.create({
+        data: { firstName: 'Issuer', lastName: 'Admin', displayName: 'Issuer Admin' },
+      });
+
+      const now = new Date();
+      const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+      subA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.subscription.create({
+          data: { schoolId: schoolA.id, plan: 'STANDARD', startAt: now, expiresAt: in30Days },
+        }),
+      );
+      subB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.subscription.create({
+          data: { schoolId: schoolB.id, plan: 'STANDARD', startAt: now, expiresAt: in30Days },
+        }),
+      );
+
+      grantA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.activationGrant.create({
+          data: {
+            schoolId: schoolA.id,
+            subscriptionId: subA.id,
+            purpose: 'INITIAL_ACTIVATION',
+            keyHash: `hash-a-${randomUUID()}`,
+            issuedBy: issuer.id,
+            expiresAt: in30Days,
+          },
+        }),
+      );
+      grantB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.activationGrant.create({
+          data: {
+            schoolId: schoolB.id,
+            subscriptionId: subB.id,
+            purpose: 'INITIAL_ACTIVATION',
+            keyHash: `hash-b-${randomUUID()}`,
+            issuedBy: issuer.id,
+            expiresAt: in30Days,
+          },
+        }),
+      );
+    });
+
+    afterAll(async () => {
+      await owner.activationGrant.deleteMany({
+        where: { schoolId: { in: [schoolA.id, schoolB.id] } },
+      });
+      await owner.subscription.deleteMany({
+        where: { schoolId: { in: [schoolA.id, schoolB.id] } },
+      });
+      await owner.user.delete({ where: { id: issuer.id } });
+      await owner.school.deleteMany({ where: { id: { in: [schoolA.id, schoolB.id] } } });
+      await owner.$disconnect();
+      await app.$disconnect();
+    });
+
+    it('subscriptions: with no tenant context set, RLS blocks all rows (fails closed)', async () => {
+      const rows = await app.$queryRaw<
+        Array<{ id: string }>
+      >`SELECT id FROM subscriptions WHERE id IN (${subA.id}::uuid, ${subB.id}::uuid)`;
+      expect(rows).toHaveLength(0);
+    });
+
+    it("subscriptions: scoped to school A, only school A's subscription is visible", async () => {
+      const rows = await withTenant(
+        app,
+        schoolA.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ school_id: string }>
+          >`SELECT school_id FROM subscriptions WHERE id IN (${subA.id}::uuid, ${subB.id}::uuid)`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.school_id).toBe(schoolA.id);
+    });
+
+    it('subscriptions: an explicit cross-tenant read by id returns nothing, even by primary key', async () => {
+      const rows = await withTenant(
+        app,
+        schoolA.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ id: string }>
+          >`SELECT id FROM subscriptions WHERE id = ${subB.id}::uuid`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it('activation_grants: with no tenant context set, RLS blocks all rows (fails closed)', async () => {
+      const rows = await app.$queryRaw<
+        Array<{ id: string }>
+      >`SELECT id FROM activation_grants WHERE id IN (${grantA.id}::uuid, ${grantB.id}::uuid)`;
+      expect(rows).toHaveLength(0);
+    });
+
+    it("activation_grants: scoped to school A, only school A's grant is visible", async () => {
+      const rows = await withTenant(
+        app,
+        schoolA.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ school_id: string }>
+          >`SELECT school_id FROM activation_grants WHERE id IN (${grantA.id}::uuid, ${grantB.id}::uuid)`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.school_id).toBe(schoolA.id);
+    });
+
+    it('activation_grants: an explicit cross-tenant read by id returns nothing, even by primary key (the ACTIVATION_KEY_INVALID enumeration-resistance case)', async () => {
+      const rows = await withTenant(
+        app,
+        schoolA.id,
+        (tx) =>
+          tx.$queryRaw<
+            Array<{ id: string }>
+          >`SELECT id FROM activation_grants WHERE id = ${grantB.id}::uuid`,
+      );
+      expect(rows).toHaveLength(0);
+    });
+  },
+);
