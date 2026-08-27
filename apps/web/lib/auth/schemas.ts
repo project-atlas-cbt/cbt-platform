@@ -6,6 +6,16 @@ export const loginSchema = z.object({
 });
 export type LoginValues = z.infer<typeof loginSchema>;
 
+/** `PlatformLoginDto` authenticates by email, not a school-scoped
+ * `login_identifier` — a distinct schema from `loginSchema` rather than a
+ * shared "identifier" field, since the two are genuinely different inputs
+ * server-side (apps/api/src/modules/platform/dto/platform-login.dto.ts). */
+export const platformLoginSchema = z.object({
+  email: z.string().min(1, 'Enter your email.').email('Enter a valid email address.'),
+  password: z.string().min(1, 'Enter your password.'),
+});
+export type PlatformLoginValues = z.infer<typeof platformLoginSchema>;
+
 export const forgotPasswordSchema = z.object({
   identifier: z.string().min(1, 'Enter your username or staff ID.'),
 });

@@ -543,7 +543,7 @@ Every subsequent workspace phase renders inside this shell.
 
 # F3 — Platform Admin Workspace
 
-**Status:** NOT STARTED · **Backend pair:** B3, B10
+**Status:** COMPLETE (2026-08-27) · **Backend pair:** B3, B10
 
 ## Objective
 
@@ -609,26 +609,147 @@ Pairs with F4 — the key issued here is redeemed there.
 
 ## Definition of Done
 
-1. The dashboard shows all metrics from `04 §6` with correct values.
-2. The school list searches, filters by every status, sorts, and paginates.
-3. School creation captures name, admin, and subscription, and returns an activation mechanism.
-4. School detail shows all seven sections from `04 §8`.
-5. Suspend, reactivate, and deactivate work and require a reason.
-6. Subscription renewal issues a new grant with history retained.
-7. Activation and renewal history display correctly.
-8. Break-glass actions require a reason and warn that they are audited and school-visible.
-9. Platform audit is searchable and filterable.
-10. Non-Software-Admin access to `/admin/*` is refused.
-11. Loading, error, and empty states implemented — including "No schools have been onboarded yet" (`05 §2.1`).
-12. Partial metric failure degrades gracefully rather than blanking the dashboard (`05 §2.1`).
+1. ✅ The dashboard shows all metrics from `04 §6` (plus `05 §2.1`'s fuller status breakdown) with
+   correct, real values — `computedAt: null` (worker never ran) shows an honest "not yet computed"
+   caption rather than a blank or fabricated timestamp. "Recent platform activity" (`05 §2.1`,
+   not `04 §6`) is honestly deferred — needs `B10`'s audit-read API.
+2. ⚠️ **Partial.** Search/filter/sort all work; **pagination does not** — `GET /platform/schools`
+   has no pagination params (B3's own endpoint shape), a real gap not anticipated in the original
+   plan text. Scoped down deliberately: fine at expected admin-scale school counts, not silently
+   dropped — see Implementation notes.
+3. ✅ Captures name, admin, and subscription exactly per `CreateSchoolDto`; returns the generated
+   subdomain (`05 §3.2`'s "System generates: School identifier"). No raw activation key is ever
+   shown — the email is the one-time reveal channel, B3's own design.
+4. ⚠️ **Partial.** All seven sections (`04 §8`) render as real routes/tabs; three have real data
+   (Overview, Subscription, Usage) and four show a specific, honest "not yet available" state
+   (Users, Exams, Activity, Audit) — no platform-side user-list endpoint, no exam data (`B11`), no
+   audit-read API (`B10`). Not silently faked.
+5. ✅ Suspend/reactivate/deactivate all require a reason (`<ReasonDialog>`), are gated by current
+   status (e.g. Suspend only enabled when `ACTIVE`), and never update optimistically — only a
+   confirmed refetch changes what the screen shows.
+6. ✅ Renewal issues/extends a `Subscription` row; history is retained and real (see item 7).
+7. ✅ **Closes a real B3 gap, not originally planned**: no endpoint existed to list `ActivationGrant`
+   history at all — `GET /v1/platform/schools/:id/activation-grants` was added this phase (see
+   Implementation notes) specifically so this DoD item could be real rather than a fabricated
+   "coming later" note.
+8. ✅ `<ReasonDialog variant="breakGlass">` implements ADR-0012's exact reason-required,
+   school-visible-audit warning — but is unused by any real F3 screen, since no school-academic-
+   write endpoint reachable by Software Admin exists yet (all later phases, `B5`+). Platform
+   lifecycle actions use `variant="platform"` instead (ADR-0012 marks these "Unrestricted," not
+   break-glass grade). Recorded as Candidate/Deferred — component ready for the first real caller.
+9. ❌ **Deferred, per this phase's own pre-approved allowance** ("the audit and analytics tabs may
+   land in a second pass," this section's own Backend dependencies line). `GET /v1/platform/audit`
+   is `B10`, not yet built. `/admin/audit` is a real, permanent route with a specific "not yet
+   available" state, not a stub.
+10. ✅ `PlatformRouteGuard` (new this phase) redirects any unauthenticated visitor to `/admin/login`;
+    a school-session user has no platform session and is bounced the same way — proven by a
+    dedicated security test.
+11. ✅ Every screen has real loading/error/empty states, including the platform-empty "No schools
+    have been onboarded yet." (`05 §2.1`) on both the dashboard and the schools list.
+12. ✅ A `GET /platform/metrics` failure shows an `ErrorState` in place of the metric tiles only —
+    the "schools requiring attention" section (its own independent query) and the Create-school
+    action still render, proven by a dedicated test.
 
 ## Exit criteria
 
-- B3 contracts confirmed.
-- E2E school-creation flow green.
+- ✅ B3 contracts confirmed — consumed directly, plus two small additive gap-closures (Implementation
+  notes).
+- ⚠️ Real browser E2E remains the same standing deferral F1/F2 already recorded (no Playwright
+  anywhere in this project yet) — substituted with the create-school component test plus the
+  backend integration test proving create → issue-key → list end to end at the API layer.
+
+## Implementation notes (2026-08-27)
+
+**The admin shell was wired to the wrong session — closed this phase.** F2 built `AppShell`/
+`RouteGuard`/`ProfileMenu`/`ContextSwitcher` against the **school** session (`GET /auth/me`) even
+for the `SOFTWARE_ADMIN` role, since no platform session existed yet at the time (`/admin/login`'s
+own doc comment recorded this honestly). `B3` shipped a real, separate `PlatformSession` mechanism;
+F3 is the first phase to actually consume it. `AppShell` now dispatches to one of two small sibling
+components — `SchoolAppShell` (`useAuth`/`RouteGuard`, unchanged) or `PlatformAppShell`
+(`usePlatformAuth`/`PlatformRouteGuard`, new) — chosen by `ROLE_WORKSPACES[role].variant`
+(`nav-model.ts`, present since F2 but unused for this purpose until now), since a single component
+can't call two different auth hooks conditionally (React's rules of hooks). `ProfileMenu` and
+`ContextSwitcher` were refactored to receive identity via props instead of calling `useAuth()`
+directly, so neither shared component needs to know which session mechanism is in play. New
+`lib/auth/platform-auth-context.tsx` (`PlatformAuthProvider`/`usePlatformAuth`) mirrors
+`auth-context.tsx` structurally but is deliberately smaller — no forced-password-change branch (B3
+built no such endpoint for platform accounts), no refresh-interval loop. New
+`components/auth/platform-login-form.tsx` posts `{email, password}` to `/platform/auth/login`
+(distinct from the identifier-based school `LoginForm`) and redirects straight to `/admin` — no
+role-priority hand-off needed, since Software Admin has exactly one landing route. `/admin/login`
+now actually works end to end, closing the deferral F1/F2/B2/B3 all separately recorded.
+
+**Two small, additive backend gap-closures found while building against the real contract — the
+same "found by building a real consumer, fixed at the source" pattern every prior paired frontend
+phase used (F1 on B1's DTOs/CORS; this phase on B3's own scope text).** Both are pure reads over
+already-stored data, no schema migration, no business-rule change, zero new permission ids (both
+reuse `platform.school.viewAll`):
+
+1. `GET /v1/platform/schools/:id/activation-grants` — B3's own Scope bullet named "renewal
+   history" as in scope, and `05 §4.1`/`04 §8` call for it on the Subscription tab, but no endpoint
+   ever listed `ActivationGrant` rows (only issuance existed). Added, deliberately never selecting
+   `keyHash` — the email is the one-time reveal channel.
+2. `SchoolListItemDto` gained `subscriptionStatus`/`subscriptionExpiresAt` — needed for `05 §2.1`'s
+   "schools requiring attention" dashboard section and the `04 §5`-mandated "Subscriptions" nav
+   entry (below), neither of which had a data source. `SchoolSubscriptionSummaryDto.status` also
+   gained its missing `enum:` (was plain `string` — a real DTO/OpenAPI-accuracy gap found by
+   `tsc`, not the DTO's actual runtime behaviour, which was always correct).
+
+**The "Subscriptions" nav item** (`04 §5`, already pinned as a spec-verbatim nav entry since F2)
+had no dedicated screen defined anywhere in `04`/`05` beyond the per-school Subscription tab.
+`/admin/subscriptions` reuses the same `useSchools` data as the Schools list through a different
+lens — default-filtered to attention-worthy statuses, Plan/Expires/Status columns emphasized —
+rather than inventing a second data-fetching concept.
+
+**A real, pre-existing bug in `Button`, found only by this phase's own component tests, not by
+inspection**: `<Button asChild loading={false}>` (the common case) always threw
+`"Slot failed to slot onto its children"` — `{loading ? <Loader2/> : null}{children}` passes
+Radix's `Slot` two children (`null` plus the real element) whenever not loading, and `Slot`'s own
+`React.Children.count(children) === 1` check counts `null` as an entry. This was latent since F0
+(one untested workbench usage existed; nothing exercised `Button asChild` in a test before this
+phase's Create-school/Schools-list screens, which are the first real `asChild` usage anywhere in
+the product). Fixed at the source in `components/ui/button.tsx` — a single conditional expression
+instead of two sibling expressions — not worked around per call site.
+
+**A new `Textarea` UI primitive** (`components/ui/textarea.tsx`) — mirrors `Input` exactly; a
+genuine reusable base component (every lifecycle action and the future break-glass path need a
+multi-line reason field), not a one-off.
+
+**School Detail's tab strip is real routes, not client-only tab state** — a deliberate deviation
+from this section's own "via `Tabs`" wording, explained rather than silent: the roadmap's own route
+table lists `/admin/schools/:id/subscription` as its own distinct row, so each of the seven
+sections (`04 §8`) is a real nested route (`app/admin/(shell)/schools/[id]/{subscription,usage,
+users,exams,activity,audit}/page.tsx`) sharing one layout for the header/tab-strip chrome —
+shareable, bookmarkable, reloadable per tab. Styled identically to `Tabs`/`TabsTrigger`'s own CSS
+treatment (same classes) via `<Link>`, since Radix's `Tabs` primitive isn't itself route-driven.
+
+**Testing**: 32 new/changed component tests across the new screens, `ReasonDialog` (both variants),
+the platform auth plumbing (`PlatformAuthProvider`, `PlatformRouteGuard`, `PlatformLoginForm`), and
+`AppShell`'s new platform-variant path (redirect-when-unauthenticated, chrome renders from the real
+platform session and never touches `useAuth`, logout redirects to `/admin/login` not `/login`) —
+182 total in `apps/web`, up from 150. Backend: 2 new integration-test cases in
+`platform.integration.test.ts` proving the new endpoint's real shape (newest-first ordering, a
+re-issue revoking the prior grant, never a key hash) and the list endpoint's new fields — 47 `apps/api`
+integration tests total, unchanged elsewhere. Full pipeline green: `pnpm lint && pnpm typecheck &&
+pnpm test && pnpm build && pnpm test:integration`, plus `pnpm generate` (three schema fields/one
+endpoint appear) and `pnpm generate:permission-table-doc` (139 rows, confirmed unchanged). Live-
+verified beyond the automated suite: a real `node dist/main.js` walk — platform login, school
+creation, the school list's new subscription fields, the new activation-grants endpoint (including
+a real re-issue revoking the prior grant), and platform metrics — against the real seeded
+Software Admin account and a real Postgres database, cleaned up afterward. `next build --webpack`
+confirmed the full intended route table (all `/admin/schools/[id]/*` sub-routes, `/admin/subscriptions`,
+`/admin/analytics`, `/admin/audit`).
 
 ## Deferred items
 
+- Users/Exams/Activity tabs on School Detail, full Audit & Security screen (`B10`), full Platform
+  Analytics screen (`B17`) — no backend data source yet; each has a real, specific "not yet
+  available" state naming what unlocks it.
+- Real break-glass wiring — `<ReasonDialog variant="breakGlass">` is built and tested but unused by
+  any screen; no school-academic-write endpoint reachable by Software Admin exists yet.
+- Real Playwright E2E — standing deferral since F1.
+- Server-side pagination for the Schools list — no pagination API in `B3`'s endpoint; candidate if
+  the assumption that admin-scale school counts stay small changes.
 - Support/impersonation tooling (`04 §5` mentions "Support" as a later addition).
 - Revenue and billing views — no payment system in scope.
 

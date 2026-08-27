@@ -1,7 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { SCHOOL_STATUSES, type SchoolStatus } from '@atlas/domain';
+import {
+  SCHOOL_STATUSES,
+  SUBSCRIPTION_STATUSES,
+  type SchoolStatus,
+  type SubscriptionStatus,
+} from '@atlas/domain';
 
-/** `05 §3.1`'s School List row shape. */
+/** `05 §3.1`'s School List row shape. `subscriptionStatus`/`subscriptionExpiresAt`
+ * are an F3 gap-closure (CLAUDE.md's F3 change-log entry) — added to power
+ * the Schools list's expiry column, the dashboard's "schools requiring
+ * attention" section (05 §2.1), and the Subscriptions nav view (04 §5),
+ * none of which had a data source before. Null only for a school with no
+ * subscription row at all, which shouldn't happen in practice (school
+ * creation always issues a PENDING one) but is defended against anyway. */
 export class SchoolListItemDto {
   @ApiProperty({ type: String })
   id!: string;
@@ -20,6 +31,12 @@ export class SchoolListItemDto {
 
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: string;
+
+  @ApiProperty({ type: String, enum: SUBSCRIPTION_STATUSES, nullable: true })
+  subscriptionStatus!: SubscriptionStatus | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  subscriptionExpiresAt!: string | null;
 }
 
 export class SchoolListResponseDto {
@@ -34,8 +51,8 @@ export class SchoolSubscriptionSummaryDto {
   @ApiProperty({ type: String })
   plan!: string;
 
-  @ApiProperty({ type: String })
-  status!: string;
+  @ApiProperty({ type: String, enum: SUBSCRIPTION_STATUSES })
+  status!: SubscriptionStatus;
 
   @ApiProperty({ type: String, format: 'date-time' })
   startAt!: string;
@@ -99,4 +116,46 @@ export class SchoolDetailResponseDto {
 
   @ApiProperty({ type: SchoolUsageDto })
   usage!: SchoolUsageDto;
+}
+
+const ACTIVATION_GRANT_PURPOSES = ['INITIAL_ACTIVATION', 'RENEWAL'] as const;
+const ACTIVATION_GRANT_STATUSES = ['ISSUED', 'ACTIVATED', 'EXPIRED', 'REVOKED'] as const;
+
+/** `05 §4.1`'s "Renewal history / Activation history" — an F3 gap-closure
+ * (CLAUDE.md's F3 change-log entry): B3 shipped issuance but never a way to
+ * list what had been issued. Deliberately never includes `keyHash` or the
+ * raw key — the email is the one-time reveal channel (B3's own design),
+ * this is a read-only historical record. */
+export class SchoolActivationGrantDto {
+  @ApiProperty({ type: String })
+  id!: string;
+
+  @ApiProperty({ type: String, enum: ACTIVATION_GRANT_PURPOSES })
+  purpose!: (typeof ACTIVATION_GRANT_PURPOSES)[number];
+
+  @ApiProperty({ type: String, enum: ACTIVATION_GRANT_STATUSES })
+  status!: (typeof ACTIVATION_GRANT_STATUSES)[number];
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  issuedAt!: string;
+
+  @ApiProperty({ type: String })
+  issuedByDisplayName!: string;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  activatedAt!: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  expiresAt!: string;
+
+  @ApiProperty({ type: String })
+  subscriptionId!: string;
+
+  @ApiProperty({ type: String })
+  subscriptionPlan!: string;
+}
+
+export class SchoolActivationGrantsResponseDto {
+  @ApiProperty({ type: SchoolActivationGrantDto, isArray: true })
+  grants!: SchoolActivationGrantDto[];
 }

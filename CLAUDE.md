@@ -246,8 +246,14 @@ this file's Change Log entry below). **`B3 — Platform, Schools & Subscriptions
 full platform tenant lifecycle, Software Admin authentication (closing the deferral `B2` pushed
 here), and the ADR-0015/0016 access gate — one DoD-adjacent item (the generated cross-tenant
 test-suite generator) still honestly deferred forward again, plus a handful of newly-scoped-down
-items recorded below. Per the frontend/backend phase-pairing rule, **`F3 — Platform Admin
-Workspace`** is next, `B3`'s own paired frontend phase.
+items recorded below. **`F3 — Platform Admin Workspace`** — complete: the real Software Admin
+dashboard, school list/detail/create, and subscription/activation-key management, closing the real
+gap of the admin shell having been wired to the school session instead of the platform one — two
+DoD items honestly partial (no pagination on the Schools list; four School Detail tabs gated on
+`B10`/`B11`), plus two small additive `B3` gap-closures found and fixed along the way (recorded
+below and in `backend-roadmap.md`'s B3 section). Per the frontend/backend phase-pairing rule,
+**`B4 — Media, Storage & Branding`** is next, continuing the backend critical path now that `F3`
+has caught up to `B3`.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -1343,3 +1349,113 @@ from "B3 next" to "F3 next" per the frontend/backend phase-pairing policy — `p
 and published for F3 to consume.
 Project state moves from _Implementation (B3)_ to _Implementation (F3)_.
 **Next: `F3 — Platform Admin Workspace`.**
+
+### 2026-08-27 — `F3` complete: Platform Admin Workspace
+
+Followed the working-rules checklist first: read `04 §5`–`§10` (Software Admin workspace screens),
+`05 §2`–`§4` (dashboard/school-list/create-school/subscription functional detail), `01 §48`–`§49`,
+the F3 roadmap phase and its backend-dependency note, ADR-0012 (break-glass), and the existing
+B3/F2 implementation before writing any code. No gating ADR blocks F3. Planned in a dedicated
+plan-mode pass given the phase's size, per the same precedent B3's own planning used.
+
+**Two things surfaced during investigation, before any screen was built, that shaped the plan
+beyond "build the screens":**
+
+1. **The admin shell was wired to the wrong session.** F2 built `AppShell`/`RouteGuard`/
+   `ProfileMenu`/`ContextSwitcher` against the **school** session (`GET /auth/me`) even for
+   `SOFTWARE_ADMIN`, since no platform session existed when F2 was built — `/admin/(shell)/
+layout.tsx`'s own doc comment recorded this honestly as a known gap. `B3` shipped a real,
+   separate `PlatformSession` mechanism; F3 is the first phase to actually consume it, so closing
+   this was necessary scope, not optional — without it no DoD item in this phase could be proven
+   against a real session.
+2. **Two small, additive gaps in `B3`'s own already-approved Scope text**, found by building a real
+   consumer against the contract (the same discovery pattern every prior paired frontend phase
+   used): `B3`'s Scope bullet named "renewal history" as in scope, and `05 §4.1`/`04 §8` call for
+   it on the Subscription screen and `04 §5` pins "Subscriptions" as its own primary nav item — but
+   no endpoint ever listed `ActivationGrant` rows, and the school-list endpoint carried no
+   subscription data to power either. Both closed as part of this phase, documented in both
+   roadmap files.
+
+**Frontend: platform session plumbing** (`apps/web`) — mirrors the backend's own "parallel, not
+shared" convention (B3's `PlatformSessionService`/`PlatformAuthGuard`/`PlatformAuthService`
+alongside identity's own, by convention not shared code). New `lib/auth/platform-auth-context.tsx`
+(`PlatformAuthProvider`/`usePlatformAuth`) mirrors `auth-context.tsx` structurally but is
+deliberately smaller (no forced-password-change branch — B3 built no such endpoint for platform
+accounts; no refresh-interval loop). New `components/auth/platform-route-guard.tsx`
+(`PlatformRouteGuard`) and `components/auth/platform-login-form.tsx` (`PlatformLoginForm`, posting
+`{email, password}` — a platform account authenticates by email, not a school-scoped
+`login_identifier` — distinct from the identifier-based `LoginForm`). `AppShell` now dispatches to
+one of two small sibling components — `SchoolAppShell` (unchanged `useAuth`/`RouteGuard`) or
+`PlatformAppShell` (new `usePlatformAuth`/`PlatformRouteGuard`) — chosen by
+`ROLE_WORKSPACES[role].variant` (present in `nav-model.ts` since F2, unused for this purpose until
+now), since a single component can't call two different auth hooks conditionally (React's rules of
+hooks). `ProfileMenu`/`ContextSwitcher` were refactored to receive identity via props instead of
+calling `useAuth()` directly, so neither shared F2 component needs to know which session mechanism
+is in play. `/admin/login` now actually works end to end against `POST /platform/auth/login`,
+closing the deferral F1/F2/B2/B3 all separately recorded, redirecting straight to `/admin` (no
+role-priority hand-off needed — Software Admin has exactly one landing route).
+
+**Backend gap-closures** (`apps/api`, both additive-only, no schema migration, no business-rule
+change, zero new permission ids — both reuse `platform.school.viewAll`): `GET /v1/platform/
+schools/:id/activation-grants` lists `ActivationGrant` history (never `keyHash` — the email is the
+one-time reveal channel, B3's own design); `SchoolListItemDto` gained `subscriptionStatus`/
+`subscriptionExpiresAt`, and `SchoolSubscriptionSummaryDto.status` gained its missing OpenAPI
+`enum:` (a real DTO-accuracy gap `tsc` caught building the frontend consumer, not a runtime bug).
+Full detail and reasoning in `backend-roadmap.md`'s B3 section, "Post-completion gap closure."
+
+**Screens** (`apps/web/app/admin/(shell)/`): the real Dashboard (SA-01, every `04 §6`/`05 §2.1`
+metric, a "schools requiring attention" section, graceful degradation on a metrics-only failure);
+Schools list (SA-02, search/filter/sort — no server-side pagination, `B3`'s endpoint has none);
+Create School (SA-03, matches `CreateSchoolDto` exactly, never shows a raw activation key); School
+Detail (SA-04, seven sections as real nested routes sharing one tab-strip layout rather than
+client-only tab state — `04 §8`'s Overview/Subscription/Usage real, Users/Exams/Activity/Audit
+honest "not yet available" placeholders naming what unlocks them, matching `NotificationPanel`'s
+own F2 precedent); Subscription (SA-05, renewal, key re-issuance, and the new activation-history
+endpoint's real table); a `/admin/subscriptions` nav view reusing the Schools-list data through a
+subscription-attention lens (no dedicated screen is defined anywhere in `04`/`05` beyond the
+per-school tab, but `04 §5` pins the nav item and it needed a real destination); and permanent,
+specific "not yet available" states for Platform Analytics (`B17`) and platform Audit & Security
+(`B10`), per this phase's own pre-approved "second pass" allowance.
+
+**Break-glass** (ADR-0012): `<ReasonDialog variant="breakGlass">` implements the ADR's exact
+reason-required, school-visible-audit-warning language, but is unused by any F3 screen — no
+school-academic-write endpoint reachable by Software Admin exists yet (all later phases, `B5`+).
+Platform lifecycle actions (suspend/reactivate/deactivate/renew) use `variant="platform"` instead,
+since ADR-0012 marks those "Unrestricted," not break-glass grade. Recorded as Candidate/Deferred —
+built and tested, ready for the first real caller, the same shape as `BreakGlassService`'s own
+B2-era precedent.
+
+**A real, pre-existing bug in `Button`, found only by this phase's own component tests, not by
+inspection.** `<Button asChild loading={false}>` — the common case — always threw `"Slot failed to
+slot onto its children"`: `{loading ? <Loader2/> : null}{children}` passes Radix's `Slot` two
+children whenever not loading (`null` plus the real element), and `Slot`'s own
+`React.Children.count(children) === 1` check counts `null` as an entry. Latent since `F0` — one
+untested workbench usage existed, but nothing exercised `Button asChild` in a test before this
+phase's Create-school/Schools-list screens, the first real `asChild` usage anywhere in the product.
+Fixed at the source (a single conditional expression instead of two sibling expressions), not
+worked around per call site. New `components/ui/textarea.tsx` primitive (mirrors `Input`) — a
+genuine reusable base component every reason field needs, not a one-off.
+
+**Testing**: 32 new/changed `apps/web` component tests (every new screen's default/loading/error/
+empty states; `ReasonDialog` both variants; the platform auth plumbing; `AppShell`'s new platform
+variant — unauthenticated redirect, chrome renders from the real platform session and never
+touches `useAuth`, logout redirects to `/admin/login` not `/login`) — 182 total, up from 150. Two
+new `apps/api` integration cases proving the new endpoint's real shape (newest-first ordering, a
+re-issue revoking the prior grant, never a key hash) and the list endpoint's new fields — 47
+integration tests total, unchanged elsewhere. Full pipeline green, run in full after every fix:
+`pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration`, plus `pnpm
+generate` and `pnpm generate:permission-table-doc` (139 rows, confirmed unchanged — no new
+permission ids). Live-verified beyond the automated suite: a real `node dist/main.js` walk against
+a real seeded Software Admin account and a real Postgres database — platform login, school
+creation, the school list's new subscription fields, the new activation-grants endpoint (including
+a real re-issue revoking the prior grant), and platform metrics — all schools/sessions cleaned up
+afterward. `next build --webpack` confirmed the full intended route table.
+
+`docs/roadmaps/frontend-roadmap.md`'s F3 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-partial-with-reason, a full "Implementation notes" subsection, and
+an expanded Deferred items list. `docs/roadmaps/backend-roadmap.md`'s B3 section gained a
+"Post-completion gap closure" note for the two additive endpoint/DTO changes. `docs/roadmaps/
+roadmap-index.md`'s version, Current State, and Immediate Next Actions all moved from "F3 next" to
+"B4 next" — `F3` has caught up to `B3`, so the backend critical path continues.
+Project state moves from _Implementation (F3)_ to _Implementation (B4)_.
+**Next: `B4 — Media, Storage & Branding`.**

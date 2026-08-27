@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { ChevronsUpDown, Check } from 'lucide-react';
 import type { Role } from '@atlas/domain';
-import { useAuth } from '@/lib/auth';
 import { ROLE_WORKSPACES } from '@/lib/nav/nav-model';
 import {
   DropdownMenu,
@@ -30,11 +29,12 @@ const ROLE_LABEL: Record<Role, string> = {
  * which of their roles they're currently viewing, and which academic
  * session/term is active.
  *
- * The role-switching half is real: `me.roles` is already known from
- * `GET /auth/me`, so a multi-role user (06 §7/§9 — e.g. Teacher + HOD) can
- * jump straight to another workspace instead of logging out and back in.
- * `lib/auth/role-priority.ts` still picks the *first* landing route after
- * login; this is what lets them move between roles afterward.
+ * The role-switching half is real: `roles` is already known from
+ * `GET /auth/me` (school) / `GET /platform/auth/me` (platform), so a
+ * multi-role user (06 §7/§9 — e.g. Teacher + HOD) can jump straight to
+ * another workspace instead of logging out and back in. `lib/auth/
+ * role-priority.ts` still picks the *first* landing route after login;
+ * this is what lets them move between roles afterward.
  *
  * The session/term half is honestly deferred: B5 (Academic Structure)
  * hasn't shipped `GET /v1/academics/context` yet, so there is no real
@@ -42,19 +42,23 @@ const ROLE_LABEL: Record<Role, string> = {
  * violate doctrine §12 ("never fabricate data"). See F2's own backend-
  * dependencies note; this is the same kind of explicitly-flagged partial
  * DoD item as F1's Software-Admin-login and B2's cross-tenant-suite gaps.
+ *
+ * `roles` is received as a prop (F3), not read from `useAuth()` directly —
+ * `AppShell` resolves it from whichever session mechanism actually applies
+ * (school vs. platform, see `app-shell.tsx`), so this component stays
+ * agnostic to which one is in play.
  */
 export function ContextSwitcher({
   currentRole,
   schoolName,
+  roles,
 }: {
   currentRole: Role;
   /** Omitted for the platform-branded (Software Admin) shell, which has no school to name. */
   schoolName?: string;
+  roles: Role[];
 }) {
   const router = useRouter();
-  const { me } = useAuth();
-
-  const roles = me?.roles ?? [];
 
   return (
     <DropdownMenu>

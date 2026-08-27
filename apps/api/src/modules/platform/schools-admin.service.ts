@@ -16,7 +16,11 @@ import {
 } from './templates.js';
 import type { CreateSchoolDto } from './dto/create-school.dto.js';
 import type { IssueSubscriptionDto } from './dto/school-lifecycle.dto.js';
-import type { SchoolDetailResponseDto, SchoolListItemDto } from './dto/school-response.dto.js';
+import type {
+  SchoolActivationGrantDto,
+  SchoolDetailResponseDto,
+  SchoolListItemDto,
+} from './dto/school-response.dto.js';
 
 // The ActivationGrant's own redemption window — how long the emailed key
 // stays valid, distinct from the Subscription period it activates. No
@@ -81,6 +85,15 @@ export class SchoolsAdminService {
     return `${webOrigin.protocol}//${subdomain}.${rootDomain}${port}${path}`;
   }
 
+  /**
+   * `subscriptionStatus`/`subscriptionExpiresAt` are an F3 gap-closure
+   * (CLAUDE.md's F3 change-log entry) — the school-list row had no
+   * subscription data at all, leaving the "schools requiring attention"
+   * dashboard section (05 §2.1) and the Subscriptions nav view (04 §5)
+   * with nothing to show. Reuses the same per-school `withTenant` query
+   * shape `detail()` already uses, just looped like `countByRole` already
+   * is for `studentCount` — no new query pattern introduced.
+   */
   async list(status?: SchoolStatus[]): Promise<SchoolListItemDto[]> {
     const schools = await prisma.school.findMany({
       ...(status && status.length > 0 ? { where: { status: { in: status } } } : {}),
@@ -89,7 +102,10 @@ export class SchoolsAdminService {
 
     return Promise.all(
       schools.map(async (school) => {
-        const studentCount = await this.countByRole(school.id, 'STUDENT');
+        const [studentCount, subscription] = await Promise.all([
+          this.countByRole(school.id, 'STUDENT'),
+          this.currentSubscription(school.id),
+        ]);
         return {
           id: school.id,
           name: school.name,
@@ -97,6 +113,8 @@ export class SchoolsAdminService {
           status: school.status,
           studentCount,
           createdAt: school.createdAt.toISOString(),
+          subscriptionStatus: subscription?.status ?? null,
+          subscriptionExpiresAt: subscription?.expiresAt.toISOString() ?? null,
         };
       }),
     );
@@ -204,9 +222,7 @@ export class SchoolsAdminService {
     const school = await prisma.school.findUnique({ where: { id: schoolId } });
     if (!school) throw new AppHttpException({ code: 'NOT_FOUND', message: 'School not found.' });
 
-    const subscription = await withTenant(prisma, schoolId, (tx) =>
-      tx.subscription.findFirst({ where: { schoolId }, orderBy: { createdAt: 'desc' } }),
-    );
+    const subscription = await this.currentSubscription(schoolId);
 
     const [students, teachers] = await Promise.all([
       this.countByRole(schoolId, 'STUDENT'),
@@ -357,9 +373,7 @@ export class SchoolsAdminService {
     const school = await prisma.school.findUnique({ where: { id: schoolId } });
     if (!school) throw new AppHttpException({ code: 'NOT_FOUND', message: 'School not found.' });
 
-    const subscription = await withTenant(prisma, schoolId, (tx) =>
-      tx.subscription.findFirst({ where: { schoolId }, orderBy: { createdAt: 'desc' } }),
-    );
+    const subscription = await this.currentSubscription(schoolId);
     if (!subscription) {
       throw new AppHttpException({
         code: 'CONFLICT',
@@ -371,7 +385,49 @@ export class SchoolsAdminService {
     return { subscriptionId: subscription.id };
   }
 
+  /**
+   * `05 §4.1`'s "Renewal history / Activation history" — an F3 gap-closure
+   * (CLAUDE.md's F3 change-log entry). `keyHash` is deliberately never
+   * selected — the email sent at issuance is the one-time reveal channel
+   * (B3's own design); this is a read-only historical record, not a way to
+   * recover a lost key.
+   */
+  async listActivationGrants(schoolId: string): Promise<SchoolActivationGrantDto[]> {
+    const school = await prisma.school.findUnique({ where: { id: schoolId } });
+    if (!school) throw new AppHttpException({ code: 'NOT_FOUND', message: 'School not found.' });
+
+    const grants = await withTenant(prisma, schoolId, (tx) =>
+      tx.activationGrant.findMany({
+        where: { schoolId },
+        orderBy: { issuedAt: 'desc' },
+        include: { issuer: true, subscription: true },
+      }),
+    );
+
+    return grants.map((grant) => ({
+      id: grant.id,
+      purpose: grant.purpose,
+      status: grant.status,
+      issuedAt: grant.issuedAt.toISOString(),
+      issuedByDisplayName: grant.issuer.displayName,
+      activatedAt: grant.activatedAt?.toISOString() ?? null,
+      expiresAt: grant.expiresAt.toISOString(),
+      subscriptionId: grant.subscriptionId,
+      subscriptionPlan: grant.subscription.plan,
+    }));
+  }
+
   // --- internal helpers ---------------------------------------------------
+
+  /** Shared by `list()`, `detail()`, `issueSubscription()`, and
+   * `issueActivationGrant()` — the school's current (most recent) subscription
+   * row. Introduced as an F3 gap-closure when `list()` needed the same query
+   * `detail()` already had inlined. */
+  private async currentSubscription(schoolId: string) {
+    return withTenant(prisma, schoolId, (tx) =>
+      tx.subscription.findFirst({ where: { schoolId }, orderBy: { createdAt: 'desc' } }),
+    );
+  }
 
   private async issueGrantForSubscription(
     schoolId: string,

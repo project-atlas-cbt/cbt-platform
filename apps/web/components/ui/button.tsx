@@ -60,8 +60,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={loading || undefined}
         {...props}
       >
-        {loading ? <Loader2 className="animate-spin" aria-hidden /> : null}
-        {children}
+        {/* A real bug found by F3's own tests, not by inspection: when not
+            loading, `{loading ? <Loader2/> : null}{children}` passes Slot
+            two children (`null` + the real element) — `React.Children.count`
+            counts `null` as an entry, so Slot's own `=== 1` check fails and
+            it throws "expected a single React element child" for every
+            `<Button asChild>` that wasn't already loading. Rendering a
+            single conditional expression keeps `asChild`'s non-loading case
+            (the common one) down to exactly one child. */}
+        {loading ? (
+          <>
+            <Loader2 className="animate-spin" aria-hidden />
+            {children}
+          </>
+        ) : (
+          children
+        )}
       </Comp>
     );
   },

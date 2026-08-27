@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { UserCircle, LogOut } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,19 +28,34 @@ import {
  * Candidate/Deferred (see CLAUDE.md's F2 change-log entry) rather than
  * built opportunistically here. Its natural home is each role's own
  * Profile/Account settings screen once that's in scope.
+ *
+ * `identity`/`onLogout` are received as props (F3), not read from
+ * `useAuth()` directly — `AppShell` resolves them from whichever session
+ * mechanism actually applies (school vs. platform) and owns the
+ * post-logout redirect target (`/login` vs. `/admin/login`), so this
+ * component stays agnostic to which one is in play.
  */
-export function ProfileMenu() {
-  const router = useRouter();
-  const { me, logout } = useAuth();
+export interface ProfileMenuIdentity {
+  displayName: string;
+  /** School: the login identifier. Platform: a fixed "Software Admin" label. */
+  secondaryLabel: string;
+}
+
+export function ProfileMenu({
+  identity,
+  onLogout,
+}: {
+  identity: ProfileMenuIdentity | null;
+  onLogout: () => Promise<void>;
+}) {
   const [loggingOut, setLoggingOut] = useState(false);
 
-  if (!me) return null;
+  if (!identity) return null;
 
   async function handleLogout() {
     setLoggingOut(true);
     try {
-      await logout();
-      router.replace('/login');
+      await onLogout();
     } finally {
       setLoggingOut(false);
     }
@@ -56,15 +69,13 @@ export function ProfileMenu() {
       >
         <UserCircle className="size-6 text-text-muted" aria-hidden />
         <span className="hidden max-w-32 truncate font-medium text-text-primary sm:inline">
-          {me.user.displayName}
+          {identity.displayName}
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
-          <p className="truncate font-medium text-text-primary">{me.user.displayName}</p>
-          <p className="truncate text-xs font-normal text-text-muted">
-            {me.membership.loginIdentifier}
-          </p>
+          <p className="truncate font-medium text-text-primary">{identity.displayName}</p>
+          <p className="truncate text-xs font-normal text-text-muted">{identity.secondaryLabel}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem

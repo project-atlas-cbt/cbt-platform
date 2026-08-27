@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthCard } from '@/components/auth/auth-card';
-import { LoginForm } from '@/components/auth/login-form';
+import { PlatformLoginForm } from '@/components/auth/platform-login-form';
 import { useTenantResolution } from '@/lib/tenant';
 
 /**
@@ -16,19 +16,17 @@ import { useTenantResolution } from '@/lib/tenant';
  * null` (apps/api's `resolveTenant` controller method), which this screen
  * ignores.
  *
- * Submitting this form cannot succeed today: B1 explicitly deferred
- * platform-level account provisioning (no `SchoolMembership` model for a
- * Software Admin account yet — see CLAUDE.md's B1 completion notes and
- * `docs/roadmaps/backend-roadmap.md`'s B2/B3 sections). The screen is
- * real; the backend behind it isn't yet. Not hidden — see this phase's
- * roadmap notes and completion report.
+ * F3 closes the gap F1/F2 recorded: `B3` shipped a real
+ * `/platform/auth/login`, so this now submits against something real via
+ * `<PlatformLoginForm>` (not the school-scoped `<LoginForm>` this used to
+ * render, which could never succeed here).
  */
 export default function AdminLoginPage() {
   useTenantResolution();
 
   return (
     <AuthCard title="Platform sign in" description="Software Admin access.">
-      <LoginForm showForgotPasswordLink={false} identifierLabel="Username" />
+      <PlatformLoginForm />
     </AuthCard>
   );
 }

@@ -493,19 +493,20 @@ from this section even though `docs/roadmaps/roadmap-index.md`'s Immediate-Next-
 ("Platform-level account provisioning belongs to... B3"). Built as originally intended, not a scope
 addition — this section's own table was simply incomplete.
 
-| Endpoint                                                                | Purpose                                                                        |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `POST /v1/platform/auth/login` · `/logout` · `GET /v1/platform/auth/me` | Software Admin session (ADR-0005's distinct platform host)                     |
-| `GET /v1/platform/schools`                                              | List with filters Active/Provisional/Suspended/Expired/Deactivated (`05 §3.1`) |
-| `POST /v1/platform/schools`                                             | Create school + initial admin + subscription (`05 §3.2`)                       |
-| `GET /v1/platform/schools/:id`                                          | Overview, subscription, usage, activity (`05 §3.3`)                            |
-| `POST /v1/platform/schools/:id/suspend` · `/reactivate` · `/deactivate` | Lifecycle, reason required                                                     |
-| `POST /v1/platform/schools/:id/subscriptions`                           | Issue or renew                                                                 |
-| `POST /v1/platform/schools/:id/activation-grants`                       | Issue key                                                                      |
-| `GET /v1/platform/metrics`                                              | Platform dashboard aggregates (cached — see Implementation notes)              |
-| `POST /v1/activation/verify` · `/v1/activation/redeem`                  | School-side activation (`03 §3`)                                               |
-| `GET /v1/school/profile` · `PATCH /v1/school/profile`                   | School-side profile incl. timezone                                             |
-| `GET /v1/school/subscription`                                           | School-side read-only status                                                   |
+| Endpoint                                                                | Purpose                                                                           |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `POST /v1/platform/auth/login` · `/logout` · `GET /v1/platform/auth/me` | Software Admin session (ADR-0005's distinct platform host)                        |
+| `GET /v1/platform/schools`                                              | List with filters Active/Provisional/Suspended/Expired/Deactivated (`05 §3.1`)    |
+| `POST /v1/platform/schools`                                             | Create school + initial admin + subscription (`05 §3.2`)                          |
+| `GET /v1/platform/schools/:id`                                          | Overview, subscription, usage, activity (`05 §3.3`)                               |
+| `POST /v1/platform/schools/:id/suspend` · `/reactivate` · `/deactivate` | Lifecycle, reason required                                                        |
+| `POST /v1/platform/schools/:id/subscriptions`                           | Issue or renew                                                                    |
+| `POST /v1/platform/schools/:id/activation-grants`                       | Issue key                                                                         |
+| `GET /v1/platform/schools/:id/activation-grants`                        | Activation/renewal history (`05 §4.1`) — F3 gap-closure, see Implementation notes |
+| `GET /v1/platform/metrics`                                              | Platform dashboard aggregates (cached — see Implementation notes)                 |
+| `POST /v1/activation/verify` · `/v1/activation/redeem`                  | School-side activation (`03 §3`)                                                  |
+| `GET /v1/school/profile` · `PATCH /v1/school/profile`                   | School-side profile incl. timezone                                                |
+| `GET /v1/school/subscription`                                           | School-side read-only status                                                      |
 
 ## Database work
 
@@ -652,6 +653,25 @@ snapshot the API then served. All verification schools/sessions were cleaned up 
 - **Self-service Software Admin password change** — no `/v1/platform/auth/password/change` endpoint; the seeded account ships with a directly-usable password (dev/ops bootstrap), not a forced-change one. Same shape of gap as F2's already-recorded School-side self-service password-change omission.
 - A distinct CI job specifically gating merges on the data-preservation test (DoD item 6) — it runs today as part of the ordinary `test:integration` suite, which CI already requires to pass; a dedicated named job is a documentation/CI-config nicety, not a missing guarantee.
 - **The generated cross-tenant test-suite generator** (B2's own deferral, expected to land here per `roadmap-index.md`'s Immediate Next Actions) — still not built. B3 has several real `:id`-shaped endpoints now (`GET/POST /v1/platform/schools/:id/...`) that could drive one, but this phase proved cross-school isolation the same two ways B2 did instead (specific integration tests — the cross-school activation-key rejection case — plus the extended RLS suite covering `Subscription`/`ActivationGrant`), not via a generator. Pushed forward again, not silently dropped; `B5` or later is the next candidate.
+
+## Post-completion gap closure (2026-08-27, via F3)
+
+F3's own change-log entry has the full detail; recorded here per the same convention B0's
+2026-08-25 gap-closure entry established. Both are small, additive reads over already-stored data —
+no schema migration, no business-rule change, zero new permission ids — found by F3 building a real
+consumer against this phase's own already-approved Scope bullet ("renewal history").
+
+- `GET /v1/platform/schools/:id/activation-grants` — this phase's Scope text named "renewal
+  history" as in scope, and `05 §4.1`/`04 §8` call for it on the Subscription screen, but no
+  endpoint ever listed `ActivationGrant` rows (only issuance existed). Added by F3, gated by the
+  same `platform.school.viewAll` permission `detail()` already uses.
+- `SchoolListItemDto` gained `subscriptionStatus`/`subscriptionExpiresAt`, and
+  `SchoolSubscriptionSummaryDto.status` gained its missing OpenAPI `enum:` (a real DTO-accuracy
+  gap `tsc` caught in `apps/web`, not a runtime bug). Needed for `05 §2.1`'s "schools requiring
+  attention" and the `04 §5` "Subscriptions" nav entry, neither of which had a data source before.
+
+`pnpm generate` and `pnpm generate:permission-table-doc` were re-run (139 rows, confirmed
+unchanged); `platform.integration.test.ts` gained two cases proving the new endpoint's real shape.
 
 ---
 

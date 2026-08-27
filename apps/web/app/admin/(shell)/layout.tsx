@@ -9,15 +9,12 @@ import { AppShell } from '@/components/shell';
  * `/admin/login` (unauthenticated, platform-branded, no chrome) doesn't
  * inherit this layout.
  *
- * Honest caveat (see CLAUDE.md's F2 change-log entry): Software Admin
- * login is not functional yet — B1 explicitly deferred platform-level
- * account provisioning (no `SchoolMembership` for a Software Admin
- * account), and B2/B3 haven't closed that gap. This shell is real,
- * complete code — `AppShell`, `RoleNavigation`, and `useNavigation` are
- * fully role-agnostic and exercised by component tests using a mocked
- * `SOFTWARE_ADMIN` session — but it cannot be reached end-to-end through
- * a real login today, the same documented gap `admin/login/page.tsx`
- * already flags.
+ * F3 closes the gap F1/F2 recorded here: `AppShell` now resolves a real
+ * `PlatformSession` for `SOFTWARE_ADMIN` (`usePlatformAuth`/
+ * `PlatformRouteGuard`, see `app-shell.tsx`) rather than the school-scoped
+ * `useAuth`/`RouteGuard` every other role uses — reachable end-to-end
+ * through a real login (`/admin/login` → `POST /platform/auth/login`)
+ * since `B3`.
  */
 export default function AdminShellLayout({ children }: { children: ReactNode }) {
   return <AppShell role="SOFTWARE_ADMIN">{children}</AppShell>;

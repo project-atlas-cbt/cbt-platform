@@ -314,6 +314,45 @@ describe('Full activation lifecycle (B3 DoD items 1-4, 6)', () => {
     );
   });
 
+  it('F3 gap-closure: activation-grant history lists both grants, newest first, never the key hash', async () => {
+    const res = await get(platformCtx, `/platform/schools/${schoolId}/activation-grants`);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      grants: Array<{
+        purpose: string;
+        status: string;
+        activatedAt: string | null;
+        issuedByDisplayName: string;
+      }>;
+    }>();
+    expect(body.grants).toHaveLength(2);
+    // Newest first: the re-issued (and since-redeemed) grant.
+    expect(body.grants[0]?.purpose).toBe('INITIAL_ACTIVATION');
+    expect(body.grants[0]?.status).toBe('ACTIVATED');
+    expect(body.grants[0]?.activatedAt).not.toBeNull();
+    expect(body.grants[0]?.issuedByDisplayName).toBe('Platform Admin');
+    // The original grant from school creation, revoked when the re-issue happened.
+    expect(body.grants[1]?.status).toBe('REVOKED');
+    for (const grant of body.grants) {
+      expect(grant).not.toHaveProperty('keyHash');
+    }
+  });
+
+  it('F3 gap-closure: the school list carries live subscription status/expiry', async () => {
+    const res = await get(platformCtx, '/platform/schools');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      schools: Array<{
+        id: string;
+        subscriptionStatus: string | null;
+        subscriptionExpiresAt: string | null;
+      }>;
+    }>();
+    const row = body.schools.find((s) => s.id === schoolId);
+    expect(row?.subscriptionStatus).toBe('ACTIVE');
+    expect(row?.subscriptionExpiresAt).not.toBeNull();
+  });
+
   it('DoD 4: suspend blocks access immediately (existing session + fresh login); reactivate restores it — both audited', async () => {
     const schoolCtx = await freshCtx(schoolHost, `10.${RUN}.10.4`);
     await loginSchool(schoolCtx, adminIdentifier, 'a-brand-new-password-123');

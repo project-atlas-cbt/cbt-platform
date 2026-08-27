@@ -352,7 +352,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Activation and renewal key history for a school (05 §4.1) — F3 gap-closure. */
+        get: operations["SchoolsAdminController_listActivationGrants"];
         put?: never;
         /** Issue a standalone renewal key against the current subscription period. */
         post: operations["SchoolsAdminController_issueActivationGrant"];
@@ -557,6 +558,10 @@ export interface components {
             studentCount: number;
             /** Format: date-time */
             createdAt: string;
+            /** @enum {string|null} */
+            subscriptionStatus: "PENDING" | "ACTIVE" | "EXPIRING" | "EXPIRED" | "SUSPENDED" | "CANCELLED" | null;
+            /** Format: date-time */
+            subscriptionExpiresAt: string | null;
         };
         SchoolListResponseDto: {
             schools: components["schemas"]["SchoolListItemDto"][];
@@ -581,7 +586,8 @@ export interface components {
         SchoolSubscriptionSummaryDto: {
             id: string;
             plan: string;
-            status: string;
+            /** @enum {string} */
+            status: "PENDING" | "ACTIVE" | "EXPIRING" | "EXPIRED" | "SUSPENDED" | "CANCELLED";
             /** Format: date-time */
             startAt: string;
             /** Format: date-time */
@@ -620,6 +626,25 @@ export interface components {
         };
         IssueSubscriptionResponseDto: {
             subscriptionId: string;
+        };
+        SchoolActivationGrantDto: {
+            id: string;
+            /** @enum {string} */
+            purpose: "INITIAL_ACTIVATION" | "RENEWAL";
+            /** @enum {string} */
+            status: "ISSUED" | "ACTIVATED" | "EXPIRED" | "REVOKED";
+            /** Format: date-time */
+            issuedAt: string;
+            issuedByDisplayName: string;
+            /** Format: date-time */
+            activatedAt: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            subscriptionId: string;
+            subscriptionPlan: string;
+        };
+        SchoolActivationGrantsResponseDto: {
+            grants: components["schemas"]["SchoolActivationGrantDto"][];
         };
         PlatformMetricsResponseDto: {
             totalSchools: number;
@@ -1156,6 +1181,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssueSubscriptionResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_listActivationGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolActivationGrantsResponseDto"];
                 };
             };
         };

@@ -18,7 +18,11 @@ import { type AuthenticatedPlatformUser } from '../identity/auth.guard.js';
 import { SchoolsAdminService } from './schools-admin.service.js';
 import { CreateSchoolDto } from './dto/create-school.dto.js';
 import { IssueSubscriptionDto, SchoolLifecycleReasonDto } from './dto/school-lifecycle.dto.js';
-import { SchoolDetailResponseDto, SchoolListResponseDto } from './dto/school-response.dto.js';
+import {
+  SchoolActivationGrantsResponseDto,
+  SchoolDetailResponseDto,
+  SchoolListResponseDto,
+} from './dto/school-response.dto.js';
 import {
   CreateSchoolResponseDto,
   IssueSubscriptionResponseDto,
@@ -144,5 +148,16 @@ export class SchoolsAdminController {
   ): Promise<IssueSubscriptionResponseDto> {
     const actor = currentPlatformUser(req);
     return this.schools.issueActivationGrant(id, actor.userId);
+  }
+
+  @Get(':id/activation-grants')
+  @AuthorizedPlatform('platform.school.viewAll')
+  @ApiOperation({
+    summary: 'Activation and renewal key history for a school (05 §4.1) — F3 gap-closure.',
+  })
+  @ApiOkResponse({ type: SchoolActivationGrantsResponseDto })
+  async listActivationGrants(@Param('id') id: string): Promise<SchoolActivationGrantsResponseDto> {
+    const grants = await this.schools.listActivationGrants(id);
+    return { grants };
   }
 }

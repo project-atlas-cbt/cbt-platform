@@ -586,6 +586,33 @@
         },
         "summary": "Issue a standalone renewal key against the current subscription period.",
         "tags": ["platform"]
+      },
+      "get": {
+        "operationId": "SchoolsAdminController_listActivationGrants",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolActivationGrantsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Activation and renewal key history for a school (05 §4.1) — F3 gap-closure.",
+        "tags": ["platform"]
       }
     },
     "/platform/metrics": {
@@ -1032,9 +1059,28 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "subscriptionStatus": {
+            "type": "string",
+            "enum": ["PENDING", "ACTIVE", "EXPIRING", "EXPIRED", "SUSPENDED", "CANCELLED"],
+            "nullable": true
+          },
+          "subscriptionExpiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
-        "required": ["id", "name", "subdomain", "status", "studentCount", "createdAt"]
+        "required": [
+          "id",
+          "name",
+          "subdomain",
+          "status",
+          "studentCount",
+          "createdAt",
+          "subscriptionStatus",
+          "subscriptionExpiresAt"
+        ]
       },
       "SchoolListResponseDto": {
         "type": "object",
@@ -1110,7 +1156,8 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": ["PENDING", "ACTIVE", "EXPIRING", "EXPIRED", "SUSPENDED", "CANCELLED"]
           },
           "startAt": {
             "type": "string",
@@ -1236,6 +1283,67 @@
           }
         },
         "required": ["subscriptionId"]
+      },
+      "SchoolActivationGrantDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": ["INITIAL_ACTIVATION", "RENEWAL"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ISSUED", "ACTIVATED", "EXPIRED", "REVOKED"]
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issuedByDisplayName": {
+            "type": "string"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "subscriptionId": {
+            "type": "string"
+          },
+          "subscriptionPlan": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "purpose",
+          "status",
+          "issuedAt",
+          "issuedByDisplayName",
+          "activatedAt",
+          "expiresAt",
+          "subscriptionId",
+          "subscriptionPlan"
+        ]
+      },
+      "SchoolActivationGrantsResponseDto": {
+        "type": "object",
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchoolActivationGrantDto"
+            }
+          }
+        },
+        "required": ["grants"]
       },
       "PlatformMetricsResponseDto": {
         "type": "object",
