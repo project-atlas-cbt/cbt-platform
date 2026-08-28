@@ -199,6 +199,26 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
     variant: 'school',
     items: [
       { id: 'dashboard', label: 'Dashboard', href: '', icon: LayoutDashboard, match: 'always' },
+      // F6 gap closure: HOD's `schoolConfig.{department,class,subject,
+      // session,term}.view` grants (packages/domain's permission table) had
+      // no nav item to reach them from — every other role that holds a
+      // view grant on these resources already had one. Same `match` array
+      // as SCHOOL_ADMIN/MODERATOR's own `academics` item; HOD's grants are
+      // view-only, so `useHasPermission` hides every mutating control
+      // inside the shared screens automatically.
+      {
+        id: 'academics',
+        label: 'Academics',
+        href: 'academics',
+        icon: GraduationCap,
+        match: [
+          'schoolConfig.department',
+          'schoolConfig.class',
+          'schoolConfig.subject',
+          'schoolConfig.session',
+          'schoolConfig.term',
+        ],
+      },
       {
         id: 'question-review',
         label: 'Question Review',

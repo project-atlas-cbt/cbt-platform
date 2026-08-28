@@ -1287,6 +1287,23 @@ B2's scope resolvers read `TeacherAssignment` and `HODAssignment` — changes to
 - Bulk import — explicitly B7's phase; `users.import.{teachers,students}` stay `awaitingResource`.
 - Two Background-jobs bullets this phase's own Scope text listed but honestly could not build in isolation: "credential-sheet generation for a class after import" needs `B7`'s import pipeline to trigger it (no batch "class full of freshly-imported students" event exists in B6 alone) — pushed forward to `B7`, which already owns this exact line in its own Background jobs list. "Invitation dispatch for staff," by contrast, **was** built in B6 — it turned out not to need bulk import at all; a single `POST /v1/teachers` (or `/hods`, `/moderators`) creation is itself the triggering event, dispatched synchronously via `IdentityService.issueStaffInvitation`, reusing `templates.ts`'s own `PASSWORD_RESET_TEMPLATE_NAME` exactly as that file's B1-era doc comment anticipated.
 
+## Post-completion gap closure (2026-08-28, during `F6`)
+
+`F6`'s Class Detail screen needed a class-scoped teacher list (its own DoD item 7: "students,
+teachers, exams") — no such endpoint existed; only the per-teacher `GET /v1/teachers/:id/assignments`
+did, which is teacher-centric (matching B6's own People-workspace framing), not class-centric.
+Confirmed with the project owner as a small additive gap-closure before building `F6`'s Teachers
+tab, rather than guessed at. Added: `GET /v1/classes/:id/teachers`
+(`teacher-assignment.controller.ts`'s new `teachersForClass` route, `TeacherAssignmentService
+.listForClass`), joining `TeacherAssignment` through its `classSubject` relation and enriching the
+result with teacher display name/staff id and subject name/code — mirroring `ClassRosterEntryDto`'s
+(B6) own enrichment precedent exactly, so the result is directly displayable with no second lookup
+per row. Reuses the existing `assignments.view` permission (already `SCHOOL`/`DEPARTMENT`/`SELF`-
+scoped across School Admin/Moderator/HOD/Teacher) — no new permission id, no schema change. One new
+integration test case in the existing `teacher-assignment.integration.test.ts` suite. A real
+`node dist/main.js` boot reconfirmed `PolicyCoverageService` reports the new route checked with zero
+violations (113 routes total, up from 112).
+
 ---
 
 # B7 — Bulk Import Pipeline

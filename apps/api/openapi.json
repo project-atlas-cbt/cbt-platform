@@ -2408,6 +2408,35 @@
         "tags": ["people"]
       }
     },
+    "/classes/{id}/teachers": {
+      "get": {
+        "operationId": "TeacherAssignmentController_teachersForClass",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassTeachersResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A class's currently assigned teachers, by subject.",
+        "tags": ["people"]
+      }
+    },
     "/students/{id}/subject-registrations": {
       "get": {
         "operationId": "StudentSubjectRegistrationController_list",
@@ -5099,6 +5128,58 @@
           }
         },
         "required": ["academicSessionId", "classSubjectIds"]
+      },
+      "ClassTeacherEntryDto": {
+        "type": "object",
+        "properties": {
+          "assignmentId": {
+            "type": "string"
+          },
+          "teacherProfileId": {
+            "type": "string"
+          },
+          "staffId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "subjectCode": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "assignmentId",
+          "teacherProfileId",
+          "staffId",
+          "displayName",
+          "subjectId",
+          "subjectName",
+          "subjectCode",
+          "startDate"
+        ]
+      },
+      "ClassTeachersResponseDto": {
+        "type": "object",
+        "properties": {
+          "teachers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClassTeacherEntryDto"
+            }
+          }
+        },
+        "required": ["teachers"]
       },
       "StudentSubjectRegistrationResponseDto": {
         "type": "object",

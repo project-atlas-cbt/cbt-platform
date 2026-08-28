@@ -1097,6 +1097,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/classes/{id}/teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A class's currently assigned teachers, by subject. */
+        get: operations["TeacherAssignmentController_teachersForClass"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/students/{id}/subject-registrations": {
         parameters: {
             query?: never;
@@ -2084,6 +2101,20 @@ export interface components {
         ReplaceTeacherAssignmentsDto: {
             academicSessionId: string;
             classSubjectIds: string[];
+        };
+        ClassTeacherEntryDto: {
+            assignmentId: string;
+            teacherProfileId: string;
+            staffId: string;
+            displayName: string;
+            subjectId: string;
+            subjectName: string;
+            subjectCode: string;
+            /** Format: date */
+            startDate: string;
+        };
+        ClassTeachersResponseDto: {
+            teachers: components["schemas"]["ClassTeacherEntryDto"][];
         };
         StudentSubjectRegistrationResponseDto: {
             id: string;
@@ -4077,6 +4108,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeacherAssignmentListResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherAssignmentController_teachersForClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassTeachersResponseDto"];
                 };
             };
         };

@@ -1,0 +1,198 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import { apiClient, unwrap } from '@/lib/api';
+
+/**
+ * F6 — the canonical read-side data layer for `academics.v1` (B5/B6). Moved
+ * here from `lib/onboarding/queries.ts` (F4), which now re-exports these
+ * same hooks so every existing onboarding import keeps working unchanged —
+ * onboarding and the Academic Structure Workspace read and write the exact
+ * same backend resources and must share one TanStack Query cache, not two
+ * independently-drifting copies.
+ *
+ * Query keys are unchanged from F4's own shapes (`['academics', ...]` /
+ * `['people', ...]`) — every mutation's `invalidateAcademics`/
+ * `invalidatePeople` helper (`lib/academics/mutations.ts`,
+ * `lib/onboarding/mutations.ts`) invalidates the `['academics']`/
+ * `['people']` prefix broadly, so a mutation from either phase refreshes
+ * both.
+ */
+
+export function useAcademicsContext(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['academics', 'context'],
+    queryFn: () => unwrap(apiClient.GET('/academics/context', {})),
+    ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
+  });
+}
+
+export function useSessions() {
+  return useQuery({
+    queryKey: ['academics', 'sessions'],
+    queryFn: () => unwrap(apiClient.GET('/academics/sessions', {})),
+  });
+}
+
+export function useSession(id: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'sessions', id],
+    queryFn: () =>
+      unwrap(apiClient.GET('/academics/sessions/{id}', { params: { path: { id: id as string } } })),
+    enabled: Boolean(id),
+  });
+}
+
+export function useTerms(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'sessions', sessionId, 'terms'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/sessions/{sessionId}/terms', {
+          params: { path: { sessionId: sessionId as string } },
+        }),
+      ),
+    enabled: Boolean(sessionId),
+  });
+}
+
+export function useDepartments() {
+  return useQuery({
+    queryKey: ['academics', 'departments'],
+    queryFn: () => unwrap(apiClient.GET('/academics/departments', {})),
+  });
+}
+
+export function useDepartment(id: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'departments', id],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/departments/{id}', { params: { path: { id: id as string } } }),
+      ),
+    enabled: Boolean(id),
+  });
+}
+
+export function useClasses(academicSessionId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', academicSessionId ?? 'all'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/classes', {
+          params: { query: academicSessionId ? { academicSessionId } : {} },
+        }),
+      ),
+  });
+}
+
+export function useClass(id: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', 'detail', id],
+    queryFn: () =>
+      unwrap(apiClient.GET('/academics/classes/{id}', { params: { path: { id: id as string } } })),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSubjects() {
+  return useQuery({
+    queryKey: ['academics', 'subjects'],
+    queryFn: () => unwrap(apiClient.GET('/academics/subjects', {})),
+  });
+}
+
+export function useSubject(id: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'subjects', id],
+    queryFn: () =>
+      unwrap(apiClient.GET('/academics/subjects/{id}', { params: { path: { id: id as string } } })),
+    enabled: Boolean(id),
+  });
+}
+
+export function useClassSubjects(classId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', classId, 'subjects'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/classes/{id}/subjects', {
+          params: { path: { id: classId as string } },
+        }),
+      ),
+    enabled: Boolean(classId),
+  });
+}
+
+export function useDepartmentHodAssignments(departmentId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'departments', departmentId, 'hod-assignments'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/departments/{id}/hod-assignments', {
+          params: { path: { id: departmentId as string } },
+        }),
+      ),
+    enabled: Boolean(departmentId),
+  });
+}
+
+/** `GET /v1/classes/:id/students` (B6) — the class roster. */
+export function useClassRoster(classId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', classId, 'students'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/classes/{id}/students', { params: { path: { id: classId as string } } }),
+      ),
+    enabled: Boolean(classId),
+  });
+}
+
+/** `GET /v1/classes/:id/teachers` — F6's own gap-closure (2026-08-28): the
+ * class roster's teacher-side counterpart, which did not exist before this
+ * phase (only the per-teacher `GET /teachers/:id/assignments` did). */
+export function useClassTeachers(classId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', classId, 'teachers'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/classes/{id}/teachers', { params: { path: { id: classId as string } } }),
+      ),
+    enabled: Boolean(classId),
+  });
+}
+
+export function useTeachers() {
+  return useQuery({
+    queryKey: ['people', 'teachers'],
+    queryFn: () => unwrap(apiClient.GET('/teachers', {})),
+  });
+}
+
+/** `enabled` matters here specifically: `GET /hods` requires
+ * `users.hod.view`, which HOD itself is denied (confirmed decision #2,
+ * `DepartmentDetailScreen`) — an HOD viewer must not fire this request at
+ * all, not merely ignore its result, or every Department Detail visit
+ * generates a needless 403. */
+export function useHods(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['people', 'hods'],
+    queryFn: () => unwrap(apiClient.GET('/hods', {})),
+    ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
+  });
+}
+
+export function useModerators() {
+  return useQuery({
+    queryKey: ['people', 'moderators'],
+    queryFn: () => unwrap(apiClient.GET('/moderators', {})),
+  });
+}
+
+export function useStudents() {
+  return useQuery({
+    queryKey: ['people', 'students'],
+    queryFn: () => unwrap(apiClient.GET('/students', {})),
+  });
+}

@@ -5,6 +5,7 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { runUniqueGuarded } from './prisma-error.util.js';
 import type {
+  ClassTeacherEntryDto,
   ReplaceTeacherAssignmentsDto,
   TeacherAssignmentResponseDto,
 } from './dto/teacher-assignment.dto.js';
@@ -149,5 +150,38 @@ export class TeacherAssignmentService {
     });
 
     return this.listForTeacher(schoolId, teacherProfileId);
+  }
+
+  /** `GET /v1/classes/:id/teachers` — F6 gap-closure (2026-08-28): the class
+   * roster's teacher-side counterpart. `TeacherAssignment` is keyed by
+   * `classSubjectId`, not `classId` directly, so this filters through the
+   * `classSubject` relation rather than requiring a separate lookup of the
+   * class's offerings first. Enriched with teacher and subject display
+   * fields, mirroring `StudentEnrollmentService.rosterForClass`'s own
+   * enrichment precedent — directly displayable, no second call per row. */
+  async listForClass(schoolId: string, classId: string): Promise<ClassTeacherEntryDto[]> {
+    const assignments = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherAssignment.findMany({
+        where: { schoolId, status: 'ACTIVE', classSubject: { classId } },
+        include: {
+          teacherProfile: { include: { membership: { include: { user: true } } } },
+          classSubject: { include: { subject: true } },
+        },
+        orderBy: [
+          { classSubject: { subject: { name: 'asc' } } },
+          { teacherProfile: { staffId: 'asc' } },
+        ],
+      }),
+    );
+    return assignments.map((assignment) => ({
+      assignmentId: assignment.id,
+      teacherProfileId: assignment.teacherProfileId,
+      staffId: assignment.teacherProfile.staffId,
+      displayName: assignment.teacherProfile.membership.user.displayName,
+      subjectId: assignment.classSubject.subjectId,
+      subjectName: assignment.classSubject.subject.name,
+      subjectCode: assignment.classSubject.subject.code,
+      startDate: assignment.startDate.toISOString().slice(0, 10),
+    }));
   }
 }

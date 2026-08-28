@@ -979,7 +979,7 @@ Branding affects F1's login page and F13's exam interface.
 
 # F6 — Academic Structure Workspace
 
-**Status:** NOT STARTED · **Backend pair:** B5
+**Status:** COMPLETE (2026-08-28) · **Backend pair:** B5
 
 ## Objective
 
@@ -1014,7 +1014,13 @@ Deliver management of sessions, terms, departments, classes, subjects, and offer
 | `/school/academics/classes/:id` | Class detail: students, teachers, exams |
 | `/school/academics/subjects`    | Subjects (`AC-05`)                      |
 
-Mirrored under `/moderator/academics` per `04 §26`.
+Mirrored under `/moderator/academics` per `04 §26`, and additionally under
+`/hod/academics` (read-only — a confirmed gap closure beyond this table's
+original scope; HOD had `schoolConfig.*.view` grants with no nav item to
+reach them from before this phase). Shared, role-agnostic components under
+`apps/web/components/academics/*` back all three role roots — one
+implementation per screen, not three; `useHasPermission` inside each screen
+hides mutating controls automatically for HOD's view-only grants.
 
 ## State management requirements
 
@@ -1031,12 +1037,12 @@ None.
 
 ## Testing requirements
 
-| Level       | Requirement                                                           |
-| ----------- | --------------------------------------------------------------------- |
-| Component   | CRUD forms and validation                                             |
-| Integration | Full structure creation                                               |
-| **E2E**     | Create session → terms → departments → classes → subjects → offerings |
-| Security    | Teacher and HOD have read-only access; students have none             |
+| Level       | Requirement                                                                                                                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Component   | CRUD forms and validation                                                                                                                                                                |
+| Integration | Full structure creation                                                                                                                                                                  |
+| **E2E**     | Create session → terms → departments → classes → subjects → offerings                                                                                                                    |
+| Security    | HOD has read-only access; students have none (Teacher: no access at all — see DoD item 8's note on the roadmap-vs-spec inconsistency, resolved in favour of the frozen permission table) |
 
 ## Integration dependencies
 
@@ -1044,24 +1050,45 @@ F7 depends on classes existing. F11 depends on class-subject offerings.
 
 ## Definition of Done
 
-1. All five entity types can be created, edited, and deactivated within permission scope.
-2. Session activation enforces one current session and updates the global context switcher.
-3. Classes are session-scoped; the same name in two sessions is clearly distinguished in the UI.
-4. Subjects associate with departments per `ADR-0001`.
-5. Deactivating an entity with historical records explains the consequence and preserves history.
-6. Destructive deletion is refused with a clear explanation, never a raw error.
-7. Class detail shows students, teachers, and exams.
-8. HOD and Teacher see read-only views; Student has no access.
-9. Loading, error, and empty states implemented, including first-run empty states.
+1. ✅ All five entity types (session, term, department, class, subject) can be created, edited, and deactivated/archived within permission scope — `apps/web/components/academics/{sessions,terms,departments,classes,subjects}/*`.
+2. ✅ Session activation enforces one current session (already guaranteed at the DB level by `B5`'s partial unique index) and updates the global context switcher — `apps/web/components/shell/context-switcher.tsx` now calls the real `useAcademicsContext()`, closing F2's own honestly-flagged partial DoD item.
+3. ✅ Classes are session-scoped; the same name in two sessions is clearly distinguished — every class list/detail view renders a session badge chip next to the class name, and the list is always scoped to one selected session at a time (`classes-screen.tsx`).
+4. ✅ Subjects associate with departments per `ADR-0001` — `subject-form.tsx`'s department picker carries the DTO's own "falls outside every HOD's automatic review scope" help text (the exit criterion, verbatim).
+5. ✅ Deactivating an entity with historical records explains the consequence and preserves history — deactivation is always server-side allowed regardless of dependents (`department.service.ts`/`subject.service.ts`), so this is a static, honest client-side warning shown before confirming (`confirm-action-dialog.tsx`).
+6. ✅ Destructive deletion is refused with a clear explanation, never a raw error — the backend's one `ACADEMIC_STRUCTURE_HAS_DEPENDENTS` code (`archival.util.ts`) is rendered as the server's message plus a bulleted dependents breakdown (`components/academics/error-utils.tsx`), not a raw error string.
+7. ✅ Class detail shows students, teachers, and exams — Students via the existing `GET /classes/:id/students` (B6); **Teachers via a new, confirmed small additive backend gap-closure, `GET /v1/classes/:id/teachers`** (no class-centric teacher lookup existed before this phase — see Implementation notes); Exams is an honest static "not yet available" placeholder, since no exam backend exists at all yet (B9+) — never fabricated.
+8. ✅ **HOD sees read-only views; Student has no access.** The roadmap's original wording here also named "Teacher" — resolved as a documentation inconsistency, not implemented: the frozen `packages/domain` permission table and `docs/02-roles-permissions.md`'s own matrix grant Teacher **no** access at all to any `schoolConfig.*` resource (only HOD gets `view`). No Teacher-facing academics route or nav item was built. See `CLAUDE.md`'s Change Log entry for the full reasoning (a confirmed decision, not a guess).
+9. ✅ Loading, error, and empty states implemented, including first-run empty states — every screen's component test suite covers all four.
 
 ## Exit criteria
 
-- ADR-0001 reflected in the subject form.
-- Structure-creation E2E green.
+- ✅ ADR-0001 reflected in the subject form.
+- ✅ Structure-creation E2E green — substituted with a real RTL integration test (`components/academics/structure-creation.integration.test.tsx`), matching every prior phase's own recorded precedent (no Playwright/E2E infra exists anywhere in this repo).
+
+## Implementation notes
+
+**Four scope questions were confirmed with the project owner before implementation**, all four recommended options accepted:
+
+1. Class Detail's Teachers tab needed a class-scoped teacher list; none existed (only per-teacher `GET /teachers/:id/assignments`). → Built the small additive gap-closure `GET /v1/classes/:id/teachers` (`apps/api/src/modules/academics/teacher-assignment.{controller,service}.ts`, `dto/teacher-assignment.dto.ts`'s new `ClassTeacherEntryDto`/`ClassTeachersResponseDto`), mirroring `ClassRosterEntryDto`'s (B6) own enrichment precedent — teacher display name, staff id, and subject per row, gated by the existing `assignments.view` permission (no new permission id). Integration-tested alongside the existing `teacher-assignment.integration.test.ts` suite.
+2. HOD's own read-only Department view can't resolve HOD display names for other departments (`users.hod.view` is denied to HOD, even though `schoolConfig.department.view` is granted). → A name-less "HOD position filled" status for the HOD viewer; School Admin/Moderator still see the real name (`department-detail-screen.tsx`, gated by `useHasPermission('users.hod.view')`). No permission-table change.
+3. Roadmap-vs-spec inconsistency on Teacher access (see DoD item 8 above). → Followed the frozen spec/permission table; no Teacher route built.
+4. HOD assignment (assign/reassign) is gated by `assignments.hodToDepartment`, already categorized under "People" in the nav model — and this phase's own screen table never named an HOD-assignment screen. → Left for `F7`; `department-detail-screen.tsx` only displays the current HOD read-only via the already-permitted `GET /academics/departments/:id/hod-assignments`.
+
+**Data layer**: `apps/web/lib/academics/{queries,mutations}.ts` is the new canonical home for every `academics.v1` read/write hook. `lib/onboarding/queries.ts` (F4) now re-exports the shared hooks from there rather than duplicating them, so onboarding and this workspace share one TanStack Query cache under the same `['academics', ...]`/`['people', ...]` keys — a mutation from either surface invalidates both.
+
+**Class-Subject offerings are a per-class list, not a cross-class matrix** (`class-subjects/class-subject-list.tsx`, mounted as Class Detail's "Subjects offered" tab): the only backend surface is `GET/POST /academics/classes/:id/subjects` + `DELETE /academics/class-subjects/:id` — no batch/matrix endpoint exists to back a true grid UI, and building one client-side would mean unatomic N-call toggles with no real backend support.
+
+**One real, if minor, bug found only by the test suite, not by inspection**: the "offer a subject" `Select` (genuinely unselected on mount, unlike every session picker elsewhere in this phase, which already has a value by first render) triggered React's "switching from uncontrolled to controlled" warning when passed `value` via the codebase's usual conditional-spread pattern (`{...(x !== undefined ? {value: x} : {})}`). Fixed with an always-defined `value={selectedSubjectId ?? ''}` instead — the correct form specifically for a control that starts genuinely empty.
+
+**Testing**: one `*.test.tsx` per screen (Sessions, Terms, Departments, DepartmentDetail, Classes, ClassDetail, Subjects, plus `ClassSubjectList`) covering default/loading/error/first-run-empty/HOD-view-only/dependents-error states (all against mocked hooks, this codebase's established per-screen convention); `academics-tabs.test.tsx`, `academic-status-badges.test.tsx`, `confirm-action-dialog.test.tsx`; the `structure-creation.integration.test.tsx` flow test (session → term → department → class → subject → offering, six real mount/interact/unmount cycles against one shared `QueryClient`, mocking only `apiClient` at the HTTP boundary — given an explicit longer timeout, since it is genuinely heavier than the 5s default and this project's own established pattern for "environment flakiness under full-suite parallel load" is to give a correct-but-heavy test the headroom it needs); `context-switcher.test.tsx` updated for the real `useAcademicsContext` wiring; `nav-model.test.ts`'s HOD row updated with an inline comment explaining the intentional, documented deviation from `04 §28`'s literal list. One new backend integration test case for the gap-closure endpoint. Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` at the monorepo root (apps/web: 80 files / 326 tests; apps/api: 14 files / 105 unit tests, 137 integration tests), plus a real `node dist/main.js` boot confirming `PolicyCoverageService` reports 113 routes checked with zero violations (the new route included) and `next build --webpack` confirming the full intended route table across all three role roots.
 
 ## Deferred items
 
 - Bulk class or subject import beyond what F8 provides.
+- HOD assign/reassign mutation UI — confirmed decision, F7's job (see Implementation notes).
+- `Topic` entity/UI — no backend model or route exists yet anywhere (verified); belongs alongside `B8`/`F9` (Question Bank), where the roadmap's own text actually places topic pickers.
+- Real browser E2E — no infra exists in this repo for any phase; substituted per established precedent.
+- Cross-class subject-offering matrix — no batch backend endpoint to back it; per-class list is the honest fit for the current contract.
 
 ---
 

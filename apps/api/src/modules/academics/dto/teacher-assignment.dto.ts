@@ -46,3 +46,39 @@ export class TeacherAssignmentListResponseDto {
   @ApiProperty({ type: TeacherAssignmentResponseDto, isArray: true })
   assignments!: TeacherAssignmentResponseDto[];
 }
+
+/** `GET /v1/classes/:id/teachers` — F6 gap-closure (no class-centric teacher
+ * lookup existed before this; only the per-teacher `GET /teachers/:id/
+ * assignments` did). Enriched the same way `ClassRosterEntryDto` (B6)
+ * already is, so Class Detail's Teachers tab is directly displayable
+ * without a second lookup per row. */
+export class ClassTeacherEntryDto {
+  @ApiProperty({ type: String })
+  assignmentId!: string;
+
+  @ApiProperty({ type: String })
+  teacherProfileId!: string;
+
+  @ApiProperty({ type: String })
+  staffId!: string;
+
+  @ApiProperty({ type: String })
+  displayName!: string;
+
+  @ApiProperty({ type: String })
+  subjectId!: string;
+
+  @ApiProperty({ type: String })
+  subjectName!: string;
+
+  @ApiProperty({ type: String })
+  subjectCode!: string;
+
+  @ApiProperty({ type: String, format: 'date' })
+  startDate!: string;
+}
+
+export class ClassTeachersResponseDto {
+  @ApiProperty({ type: ClassTeacherEntryDto, isArray: true })
+  teachers!: ClassTeacherEntryDto[];
+}

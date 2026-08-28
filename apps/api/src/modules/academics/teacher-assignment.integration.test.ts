@@ -349,6 +349,34 @@ describe('B6 TeacherAssignment', () => {
     expect(activeRows.filter((r) => r.status === 'ACTIVE')).toHaveLength(1);
   });
 
+  it("F6 gap-closure: GET /classes/:id/teachers lists the class's currently assigned teachers, enriched by subject", async () => {
+    const res = await get(admin, `/classes/${classAId}/teachers`);
+    expect(res.statusCode).toBe(200);
+    const teachers = res.json<{
+      teachers: {
+        assignmentId: string;
+        teacherProfileId: string;
+        staffId: string;
+        displayName: string;
+        subjectId: string;
+        subjectName: string;
+        subjectCode: string;
+        startDate: string;
+      }[];
+    }>().teachers;
+    // At this point in the suite the rehire test left both Mathematics and
+    // Physics ACTIVE for this teacher — ordered by subject name ascending.
+    expect(teachers).toHaveLength(2);
+    expect(teachers.map((t) => t.subjectName)).toEqual(['Mathematics', 'Physics']);
+    expect(teachers[0]?.teacherProfileId).toBe(teacherProfileId);
+    expect(teachers[0]?.subjectId).toBe(mathSubjectId);
+    expect(teachers[1]?.subjectId).toBe(physicsSubjectId);
+    for (const teacher of teachers) {
+      expect(teacher.displayName.length).toBeGreaterThan(0);
+      expect(teacher.staffId.length).toBeGreaterThan(0);
+    }
+  });
+
   it('rejects assigning a membership whose TeacherProfile exists but whose TEACHER role has since ended', async () => {
     // A real, if unusual, scenario: a TeacherProfile persists (07's own
     // "deactivating never deletes" rule) after the person's TEACHER role

@@ -10,11 +10,29 @@ import { useAuth } from '@/lib/auth';
  * SCHOOL_ADMIN only (`AGENTS.md`: other roles are never redirected by
  * onboarding completion) and always fresh (`staleTime: 0`), since a stale
  * `completedAt: null` would wrongly bounce a just-completed admin back into
- * the wizard. Every other query here is an ordinary admin-server-state read
- * (F0's TanStack Query convention) that each step's own "added so far" list
- * *and* `useOnboardingStepStatus` (`use-step-status.ts`) both consume —
- * TanStack Query dedupes identical keys, so this is one fetch, not two.
+ * the wizard.
+ *
+ * The academics/people read hooks this file used to own directly (session,
+ * term, department, class, subject, teacher/HOD/moderator/student lookups)
+ * moved to `lib/academics/queries.ts` (F6) — their canonical home now that a
+ * whole workspace, not just this wizard, consumes them. Re-exported here so
+ * every existing onboarding import keeps working unchanged; onboarding and
+ * F6 share one TanStack Query cache under the same `['academics', ...]` /
+ * `['people', ...]` keys.
  */
+export {
+  useAcademicsContext,
+  useSessions,
+  useTerms,
+  useDepartments,
+  useClasses,
+  useSubjects,
+  useTeachers,
+  useHods,
+  useModerators,
+  useStudents,
+} from '@/lib/academics/queries';
+
 export function useOnboardingStatus() {
   const { status, me } = useAuth();
   const enabled = status === 'authenticated' && !!me?.roles.includes('SCHOOL_ADMIN');
@@ -37,86 +55,5 @@ export function useSchoolBranding() {
   return useQuery({
     queryKey: ['school', 'branding'],
     queryFn: () => unwrap(apiClient.GET('/school/branding', {})),
-  });
-}
-
-export function useAcademicsContext() {
-  return useQuery({
-    queryKey: ['academics', 'context'],
-    queryFn: () => unwrap(apiClient.GET('/academics/context', {})),
-  });
-}
-
-export function useSessions() {
-  return useQuery({
-    queryKey: ['academics', 'sessions'],
-    queryFn: () => unwrap(apiClient.GET('/academics/sessions', {})),
-  });
-}
-
-export function useTerms(sessionId: string | undefined) {
-  return useQuery({
-    queryKey: ['academics', 'sessions', sessionId, 'terms'],
-    queryFn: () =>
-      unwrap(
-        apiClient.GET('/academics/sessions/{sessionId}/terms', {
-          params: { path: { sessionId: sessionId as string } },
-        }),
-      ),
-    enabled: Boolean(sessionId),
-  });
-}
-
-export function useDepartments() {
-  return useQuery({
-    queryKey: ['academics', 'departments'],
-    queryFn: () => unwrap(apiClient.GET('/academics/departments', {})),
-  });
-}
-
-export function useClasses(academicSessionId: string | undefined) {
-  return useQuery({
-    queryKey: ['academics', 'classes', academicSessionId ?? 'all'],
-    queryFn: () =>
-      unwrap(
-        apiClient.GET('/academics/classes', {
-          params: { query: academicSessionId ? { academicSessionId } : {} },
-        }),
-      ),
-  });
-}
-
-export function useSubjects() {
-  return useQuery({
-    queryKey: ['academics', 'subjects'],
-    queryFn: () => unwrap(apiClient.GET('/academics/subjects', {})),
-  });
-}
-
-export function useTeachers() {
-  return useQuery({
-    queryKey: ['people', 'teachers'],
-    queryFn: () => unwrap(apiClient.GET('/teachers', {})),
-  });
-}
-
-export function useHods() {
-  return useQuery({
-    queryKey: ['people', 'hods'],
-    queryFn: () => unwrap(apiClient.GET('/hods', {})),
-  });
-}
-
-export function useModerators() {
-  return useQuery({
-    queryKey: ['people', 'moderators'],
-    queryFn: () => unwrap(apiClient.GET('/moderators', {})),
-  });
-}
-
-export function useStudents() {
-  return useQuery({
-    queryKey: ['people', 'students'],
-    queryFn: () => unwrap(apiClient.GET('/students', {})),
   });
 }

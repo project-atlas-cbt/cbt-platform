@@ -5,6 +5,7 @@ import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { resolveActorRole } from './actor.util.js';
 import {
+  ClassTeachersResponseDto,
   ReplaceTeacherAssignmentsDto,
   TeacherAssignmentListResponseDto,
 } from './dto/teacher-assignment.dto.js';
@@ -68,5 +69,21 @@ export class TeacherAssignmentController {
       },
     );
     return { assignments };
+  }
+
+  // F6 gap-closure (2026-08-28): a class-centric teacher list — the only
+  // prior lookup was per-teacher (`GET /teachers/:id/assignments` above).
+  // Same permission as StudentEnrollmentController's own class-roster route,
+  // which this mirrors.
+  @Get('classes/:id/teachers')
+  @Authorized('assignments.view')
+  @ApiOperation({ summary: "A class's currently assigned teachers, by subject." })
+  @ApiOkResponse({ type: ClassTeachersResponseDto })
+  async teachersForClass(
+    @Req() req: FastifyRequest,
+    @Param('id') classId: string,
+  ): Promise<ClassTeachersResponseDto> {
+    const teachers = await this.assignments.listForClass(currentUser(req).schoolId, classId);
+    return { teachers };
   }
 }

@@ -44,9 +44,16 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
     ]);
   });
 
-  it('HOD: Dashboard, Question Review, Question Bank, Exams, Results, Department Analytics, Reports (04 §28)', () => {
+  it('HOD: Dashboard, Academics, Question Review, Question Bank, Exams, Results, Department Analytics, Reports (04 §28 + F6 gap closure)', () => {
+    // `04 §28`'s own list doesn't name "Academics" — HOD's real
+    // `schoolConfig.{department,class,subject,session,term}.view` grants
+    // (packages/domain's permission table) had no nav item to reach them
+    // from before F6, unlike every other role holding such a grant. Added
+    // as a confirmed, documented gap closure (CLAUDE.md's F6 Change Log
+    // entry), not a silent spec deviation.
     expect(ROLE_WORKSPACES.HOD.items.map((i) => i.label)).toEqual([
       'Dashboard',
+      'Academics',
       'Question Review',
       'Question Bank',
       'Exams',
