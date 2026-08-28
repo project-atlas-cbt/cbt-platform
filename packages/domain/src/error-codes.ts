@@ -110,6 +110,19 @@ export const BASE_ERROR_CODES = {
   // returned no row for a membership that should have produced exactly
   // one — an unexpected internal-consistency failure, not a client error.
   CREDENTIAL_RESET_FAILED: { httpStatus: 500, retryable: true },
+
+  // F4 (School Onboarding Wizard).
+  //
+  // ONBOARDING_FUNDAMENTALS_MISSING: POST /v1/school/onboarding/complete's
+  // server-side re-check of 05 §5.2's two hard blockers (no current
+  // session, no class) — defense in depth behind the client's own identical
+  // disabled-button check, never trusted alone (AGENTS.md §5/§6).
+  ONBOARDING_FUNDAMENTALS_MISSING: { httpStatus: 409, retryable: false },
+  // ONBOARDING_ALREADY_COMPLETE: PUT .../progress refuses to mutate a
+  // completed school's wizard state — server-side enforcement of "a
+  // completed school cannot re-enter onboarding," not just a frontend
+  // redirect.
+  ONBOARDING_ALREADY_COMPLETE: { httpStatus: 409, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

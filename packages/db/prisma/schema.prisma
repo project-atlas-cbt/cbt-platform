@@ -80,6 +80,18 @@ model School {
   /// derived). Null = no override — the subscription-derived status governs.
   platformOverride SchoolPlatformOverride? @map("platform_override")
 
+  // --- F4: onboarding wizard progress (03 §3, 05 §5.1-5.2), set via
+  // GET/PUT /v1/school/onboarding and POST /v1/school/onboarding/complete.
+  // Null = onboarding not yet completed — gates the School Admin's post-
+  // login landing route (never read by AuthGuard/AccessGateService; this is
+  // a routing concern, not an access-gate one).
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at") @db.Timestamptz(6)
+  /// Ephemeral UI-progress only: {currentStep: number, skippedSteps: number[]}.
+  /// Never consulted for business-rule enforcement — completion eligibility
+  /// is always recomputed live from AcademicSession/ClassGroup state on
+  /// POST .../complete, never cached here.
+  onboardingState       Json?     @map("onboarding_state")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

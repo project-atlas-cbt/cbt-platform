@@ -22,3 +22,15 @@ if (!Element.prototype.releasePointerCapture) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+// Radix Checkbox's indicator sizing (`@radix-ui/react-use-size`) calls
+// `ResizeObserver`, which jsdom doesn't implement either — only surfaces
+// when a `<Checkbox>` mounts already `checked` (F4's "make this the
+// current session" default-checked box is the first usage of that shape
+// in this codebase; every prior `<Checkbox>` test starts unchecked).
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

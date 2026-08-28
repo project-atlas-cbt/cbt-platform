@@ -721,6 +721,46 @@ rather than building pager UI they don't need, preserving their existing "small 
 pager" behaviour instead of silently truncating to the new 25-row default. `pnpm generate` was
 re-run (three new query params, three new response fields); no permission-table change.
 
+### 2026-08-28 — Third gap closure: onboarding-completion tracking + activation redeem's login identifier (via F4)
+
+F4 (School Onboarding Wizard) surfaced two gaps in this phase's own scope while building a real
+consumer against it — both confirmed with the project owner before implementation, both small and
+additive, no product-behaviour change beyond what F4 itself needed.
+
+**Onboarding-completion tracking, genuinely absent until now.** F4's resumability requirement
+("wizard progress persisted server-side") and its re-entry-blocked security requirement ("a
+completed school cannot re-enter onboarding") had no backing anywhere — `School` carried no
+onboarding-completion concept, and no endpoint reported one. `School` gained two columns:
+`onboardingCompletedAt` (`DateTime?`) and `onboardingState` (`Json?`, `{currentStep, skippedSteps}`
+— UI-progress only, never consulted for business-rule enforcement, which is always recomputed live
+from `AcademicSession`/`ClassGroup` state, the same "don't cache a derivable truth" discipline this
+phase's own `PlatformMetricsSnapshot` and B3's access-gate already follow). New
+`apps/api/src/modules/platform/school-onboarding.{controller,service}.ts`: `GET/PUT
+/school/onboarding(/progress)`, `POST /school/onboarding/complete` — the latter reuses
+`AcademicsContextService.get()` and `ClassGroupService.list()` (both already existed from `B5`)
+rather than duplicating queries, is idempotent on a second call, and is the real server-side
+enforcement of `05 §5.2`'s "no current session, no class" blockers (`ONBOARDING_FUNDAMENTALS_MISSING` 409) and the re-entry-blocked rule (`ONBOARDING_ALREADY_COMPLETE` 409 from the progress-PUT once
+completed) — never trusted from F4's own client-side check alone. New permission row
+`schoolConfig.onboarding.manage` (School Admin only) — 148→149 rows.
+
+**Activation redemption never surfaced the new admin's login identifier.** Found only during
+implementation verification, not anticipated in the original plan: `POST /activation/redeem`
+returned `Promise<void>`; the `SchoolMembership.loginIdentifier` set at school-creation time
+(`CreateSchoolDto.adminLoginIdentifier`, `schools-admin.service.ts`) was never surfaced back to the
+admin anywhere — not the redeem response, not the activation email template — leaving F4's
+`/activate` redeem-then-log-in handoff with nothing to log in with. Fixed by extending `redeem()`
+to return `ActivationRedeemResponseDto {status, loginIdentifier}`. Security note recorded explicitly
+at the time: this discloses a username (not a secret) only to a caller who already possesses a
+valid, unexpired, unredeemed activation key for that school — no new disclosure risk beyond what key
+possession already implies, the same reasoning `ActivationService` already uses for renewal's
+no-extra-session-check design.
+
+`pnpm generate` and `pnpm generate:permission-table-doc` re-run (149 rows). New
+`school-onboarding.integration.test.ts` (default shape, PUT round-trip, both 409s, successful
+completion with its audit event, idempotent re-completion, non-SCHOOL_ADMIN 403 on all three
+routes). No schema change beyond the two additive `School` columns; no existing business rule
+altered.
+
 ---
 
 # B4 — Media, Storage & Branding

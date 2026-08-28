@@ -4,10 +4,10 @@ import { Throttle } from '@nestjs/throttler';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
 import { PublicRoute } from '../authorization/decorators.js';
-import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
 import { ActivationService } from './activation.service.js';
 import {
   ActivationRedeemDto,
+  ActivationRedeemResponseDto,
   ActivationVerifyDto,
   ActivationVerifyResponseDto,
 } from './dto/activation.dto.js';
@@ -55,10 +55,9 @@ export class ActivationController {
     'Pre-authentication by necessity — an INITIAL_ACTIVATION redemption has no admin session yet; key possession is the authorization for either purpose (see ActivationService doc comment).',
   )
   @ApiOperation({ summary: 'Redeem an activation/renewal key (03 §3).' })
-  @ApiOkResponse({ type: StatusResponseDto })
-  async redeem(@Body() body: ActivationRedeemDto): Promise<StatusResponseDto> {
+  @ApiOkResponse({ type: ActivationRedeemResponseDto })
+  async redeem(@Body() body: ActivationRedeemDto): Promise<ActivationRedeemResponseDto> {
     const schoolId = this.requireTenant();
-    await this.activation.redeem(schoolId, body.key, body.newPassword);
-    return { status: 'ok' as const };
+    return this.activation.redeem(schoolId, body.key, body.newPassword);
   }
 }

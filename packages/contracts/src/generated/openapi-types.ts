@@ -569,6 +569,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/school/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own school's onboarding wizard progress. */
+        get: operations["SchoolOnboardingController_getStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/school/onboarding/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Advance/update the onboarding wizard step pointer. */
+        put: operations["SchoolOnboardingController_updateProgress"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/school/onboarding/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark onboarding complete (05 §5.2: requires a current session and a class). */
+        post: operations["SchoolOnboardingController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/academics/context": {
         parameters: {
             query?: never;
@@ -1636,6 +1687,14 @@ export interface components {
             /** @description Required for an INITIAL_ACTIVATION-purpose key; the admin has no password yet. */
             newPassword?: string;
         };
+        ActivationRedeemResponseDto: {
+            /**
+             * @example ok
+             * @enum {string}
+             */
+            status: "ok";
+            loginIdentifier: string;
+        };
         SchoolProfileResponseDto: {
             id: string;
             name: string;
@@ -1710,6 +1769,16 @@ export interface components {
             logoMediaId?: string | null;
             /** @description "#rrggbb". Pass null to clear (falls back to the platform default palette). */
             primaryColor?: string | null;
+        };
+        OnboardingStatusResponseDto: {
+            /** Format: date-time */
+            completedAt: string | null;
+            currentStep: number;
+            skippedSteps: number[];
+        };
+        UpdateOnboardingProgressDto: {
+            currentStep: number;
+            skippedSteps?: number[];
         };
         CurrentSessionSummaryDto: {
             id: string;
@@ -2757,7 +2826,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StatusResponseDto"];
+                    "application/json": components["schemas"]["ActivationRedeemResponseDto"];
                 };
             };
         };
@@ -2905,6 +2974,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchoolBrandingResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolOnboardingController_getStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatusResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolOnboardingController_updateProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateOnboardingProgressDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatusResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolOnboardingController_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatusResponseDto"];
                 };
             };
         };

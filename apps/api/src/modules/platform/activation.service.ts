@@ -69,7 +69,11 @@ export class ActivationService {
     };
   }
 
-  async redeem(schoolId: string, rawKey: string, newPassword: string | undefined): Promise<void> {
+  async redeem(
+    schoolId: string,
+    rawKey: string,
+    newPassword: string | undefined,
+  ): Promise<{ status: 'ok'; loginIdentifier: string }> {
     const grant = await this.findRedeemableGrant(schoolId, rawKey);
     const admin = await this.findSchoolAdmin(schoolId);
     if (!admin) throw invalidKey();
@@ -118,6 +122,8 @@ export class ActivationService {
       entityType: 'ActivationGrant',
       entityId: grant.id,
     });
+
+    return { status: 'ok' as const, loginIdentifier: admin.loginIdentifier };
   }
 
   private async findRedeemableGrant(schoolId: string, rawKey: string) {
@@ -141,7 +147,9 @@ export class ActivationService {
     return grant;
   }
 
-  private async findSchoolAdmin(schoolId: string): Promise<{ id: string; status: string } | null> {
+  private async findSchoolAdmin(
+    schoolId: string,
+  ): Promise<{ id: string; status: string; loginIdentifier: string } | null> {
     const assignment = await withTenant(prisma, schoolId, (tx) =>
       tx.roleAssignment.findFirst({
         where: { schoolId, role: 'SCHOOL_ADMIN', status: 'ACTIVE' },
@@ -149,6 +157,10 @@ export class ActivationService {
       }),
     );
     if (!assignment) return null;
-    return { id: assignment.membership.user.id, status: assignment.membership.user.status };
+    return {
+      id: assignment.membership.user.id,
+      status: assignment.membership.user.status,
+      loginIdentifier: assignment.membership.loginIdentifier,
+    };
   }
 }

@@ -78,6 +78,13 @@ import { TermService } from './term.service.js';
   // HodController calls .reassign() for PUT /v1/hods/:id/department. One-
   // directional (AcademicsModule needs nothing back from UsersModule), so
   // no cycle.
-  exports: [HodAssignmentService],
+  //
+  // F4: AcademicsContextService/ClassGroupService are exported so
+  // PlatformModule's SchoolOnboardingService can reuse their existing
+  // session/class lookups for POST /v1/school/onboarding/complete's
+  // fundamentals check, rather than duplicating those queries. Still
+  // one-directional — PlatformModule importing AcademicsModule introduces
+  // no cycle, since AcademicsModule has no dependency back on it.
+  exports: [HodAssignmentService, AcademicsContextService, ClassGroupService],
 })
 export class AcademicsModule {}

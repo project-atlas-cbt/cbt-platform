@@ -51,30 +51,30 @@ The student exam route runs its own client-side runtime inside the shared shell 
 
 ## Phase Map
 
-| ID  | Phase                                  | Backend pair | Can start before backend?                    | Status      |
-| --- | -------------------------------------- | ------------ | -------------------------------------------- | ----------- |
-| F0  | Frontend Foundation & Design System    | B0           | Partially — design system yes, API client no | COMPLETE    |
-| F1  | Authentication & Tenant Entry          | B1           | No                                           | NOT STARTED |
-| F2  | App Shell, Navigation & Notifications  | B2, B10      | Shell yes, permissions no                    | NOT STARTED |
-| F3  | Platform Admin Workspace               | B3           | No                                           | NOT STARTED |
-| F4  | School Onboarding Wizard               | B3, B4, B5   | Layout yes, data no                          | NOT STARTED |
-| F5  | School Settings & Branding             | B4           | No                                           | NOT STARTED |
-| F6  | Academic Structure Workspace           | B5           | No                                           | NOT STARTED |
-| F7  | People Management Workspace            | B6           | No                                           | NOT STARTED |
-| F8  | Bulk Import UI                         | B7           | No                                           | NOT STARTED |
-| F9  | Question Bank Workspace                | B8           | Editor shell yes                             | NOT STARTED |
-| F10 | Question Review Workspace              | B9           | No                                           | NOT STARTED |
-| F11 | Exam Builder                           | B11          | No                                           | NOT STARTED |
-| F12 | Exam Control Center                    | B12          | No                                           | NOT STARTED |
-| F13 | Student CBT Client                     | B13, B14     | **Offline engine yes**                       | NOT STARTED |
-| F14 | Student Results & Profile              | B15          | No                                           | NOT STARTED |
-| F15 | Staff Results & Publication            | B15          | No                                           | NOT STARTED |
-| F16 | Participation, Absence & Makeup        | B16          | No                                           | NOT STARTED |
-| F17 | Dashboards & Analytics                 | B17          | Layout yes                                   | NOT STARTED |
-| F18 | Reporting, Export & Search             | B18          | No                                           | NOT STARTED |
-| F19 | Session Rollover UI                    | B19          | No                                           | NOT STARTED |
-| F20 | Accessibility, Performance & Hardening | B20, B21     | Partially                                    | NOT STARTED |
-| F21 | Production Readiness                   | B23          | No                                           | NOT STARTED |
+| ID  | Phase                                  | Backend pair   | Can start before backend?                    | Status      |
+| --- | -------------------------------------- | -------------- | -------------------------------------------- | ----------- |
+| F0  | Frontend Foundation & Design System    | B0             | Partially — design system yes, API client no | COMPLETE    |
+| F1  | Authentication & Tenant Entry          | B1             | No                                           | NOT STARTED |
+| F2  | App Shell, Navigation & Notifications  | B2, B10        | Shell yes, permissions no                    | NOT STARTED |
+| F3  | Platform Admin Workspace               | B3             | No                                           | NOT STARTED |
+| F4  | School Onboarding Wizard               | B3, B4, B5, B6 | Yes                                          | COMPLETE    |
+| F5  | School Settings & Branding             | B4             | No                                           | NOT STARTED |
+| F6  | Academic Structure Workspace           | B5             | No                                           | NOT STARTED |
+| F7  | People Management Workspace            | B6             | No                                           | NOT STARTED |
+| F8  | Bulk Import UI                         | B7             | No                                           | NOT STARTED |
+| F9  | Question Bank Workspace                | B8             | Editor shell yes                             | NOT STARTED |
+| F10 | Question Review Workspace              | B9             | No                                           | NOT STARTED |
+| F11 | Exam Builder                           | B11            | No                                           | NOT STARTED |
+| F12 | Exam Control Center                    | B12            | No                                           | NOT STARTED |
+| F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | NOT STARTED |
+| F14 | Student Results & Profile              | B15            | No                                           | NOT STARTED |
+| F15 | Staff Results & Publication            | B15            | No                                           | NOT STARTED |
+| F16 | Participation, Absence & Makeup        | B16            | No                                           | NOT STARTED |
+| F17 | Dashboards & Analytics                 | B17            | Layout yes                                   | NOT STARTED |
+| F18 | Reporting, Export & Search             | B18            | No                                           | NOT STARTED |
+| F19 | Session Rollover UI                    | B19            | No                                           | NOT STARTED |
+| F20 | Accessibility, Performance & Hardening | B20, B21       | Partially                                    | NOT STARTED |
+| F21 | Production Readiness                   | B23            | No                                           | NOT STARTED |
 
 ---
 
@@ -760,7 +760,7 @@ confirmed the full intended route table (all `/admin/schools/[id]/*` sub-routes,
 
 # F4 — School Onboarding Wizard
 
-**Status:** NOT STARTED · **Backend pair:** B3, B4, B5, B6
+**Status:** COMPLETE · **Backend pair:** B3, B4, B5, B6
 
 ## Objective
 
@@ -826,27 +826,50 @@ Depends on F3 issuing keys. Delegates imports to F8; if F8 is not ready, staff a
 
 ## Definition of Done
 
-1. A valid activation key verifies and redeems; an invalid, used, or foreign key is refused with a clear message.
-2. All ten steps from `04 §3` are implemented.
-3. **The wizard resumes at the correct step with data intact after the browser is closed and reopened.**
-4. Branding preview shows the school's colour and logo across all six contexts from `03 §5`.
-5. Session and term creation enforces the single-current rule.
-6. Departments, classes, and subjects can be created, with the defaults from `03 §7` offered but not forced.
-7. Staff and students can be created individually or imported.
-8. Completion is blocked while required fundamentals are missing (`05 §5.2`): no current session, no admin, no class.
-9. A school **can** complete with one admin plus academic structure, adding staff later (`05 §5.2`).
-10. The review summary shows everything configured before commit.
-11. Completion marks the school operational and routes to the School Admin dashboard.
-12. Loading, error, and empty states implemented throughout.
+1. ✅ A valid activation key verifies and redeems; an invalid, used, or foreign key is refused with a clear message (`ActivateForm` branches on `ACTIVATION_KEY_INVALID`/`_ALREADY_USED`/`_EXPIRED`).
+2. ✅ All ten steps from `05 §5.1`'s `ON-01`..`ON-10` list are implemented. **Resolved spec inconsistency**: `04 §3`'s own ten-item list folds "Verify School" in as step 1 and merges session/terms into one step; `05 §5.1`'s ten-item list separates session/terms but doesn't count key-verification as a wizard step at all. F4's own route table (`/activate` vs `/onboarding/[step]` `ON-01`..`ON-10`) is authoritative and was followed literally: "Verify School" lives at the separate pre-wizard `/activate` route, not as one of the ten in-wizard steps (`lib/onboarding/steps-config.ts`'s own doc comment records this).
+3. ✅ **The wizard resumes at the correct step with data intact after the browser is closed and reopened** — proven by a dedicated test that discards the `QueryClient` and unmounts the whole tree between renders, not just a re-render (`app/onboarding/resumability.integration.test.tsx`).
+4. ✅ Branding preview shows the school's colour (and logo, once uploaded) across all six contexts from `03 §5` (Login/Dashboard/Exam interface/Buttons/Tables/Result pages) — illustrative mockups for the two that don't exist as real screens yet (Exam interface, Result pages: `B11`+/`B14`+), not fabricated live screens.
+5. ✅ Session and term creation enforces the single-current rule — via `B5`'s own `activate` endpoints (this phase never re-implements that rule, only calls it); step 3 offers "make this the current session" checked by default for onboarding's single-session flow.
+6. ✅ Departments, classes, and subjects can be created; `03 §7`'s Science/Business/Humanities defaults are suggested in the empty-state copy, never pre-created.
+7. ⚠️ Partial, by design: staff and students can be created **individually**. Bulk import is explicitly deferred — F8/B7 don't exist yet anywhere in the API (confirmed: no `/imports` path exists) — matching the roadmap's own named fallback ("if F8 is not ready, staff and student steps allow manual entry and defer import"). Recorded as Candidate/Deferred below, not silently dropped.
+8. ✅ Completion is blocked while required fundamentals are missing (`05 §5.2`) — enforced **twice**: client-side (`ReviewSummary`'s disabled "Complete Setup" button) and, independently, server-side (`POST /school/onboarding/complete`'s `ONBOARDING_FUNDAMENTALS_MISSING` 409 — a small, confirmed backend gap-closure this phase added, see below). "No admin" isn't a separate runtime check: B3's school-creation flow always creates the initial School Admin, so a session existing at all already guarantees one.
+9. ✅ A school **can** complete with one admin plus academic structure (current session + ≥1 class), adding staff/students later — only those two conditions gate completion; every other step is encouraged, never mandatory.
+10. ✅ The review summary (`ReviewSummary`, step 10) shows a count/status per domain with an Edit link back to that step.
+11. ✅ Completion marks the school operational (`School.onboardingCompletedAt`, new — see gap-closure below) and routes to `/school`.
+12. ✅ Loading (skeletons), error (inline `role="alert"` messages, `ApiError`-branched where useful), and empty states (`EmptyState` for upstream-dependency gaps, e.g. "no classes yet" on the Students step) implemented throughout every step.
 
 ## Exit criteria
 
-- Resumability test green — this is the requirement most likely to be skipped and most visible when missing.
-- Full E2E onboarding flow green.
+- ✅ Resumability test green (`app/onboarding/resumability.integration.test.tsx`).
+- ⚠️ Full E2E onboarding flow: proven via the component/integration test suite above (Playwright-driven browser E2E remains deferred exactly as F1/F2/F3 already recorded — no browser-automation harness exists in this codebase yet).
 
 ## Deferred items
 
 - Import of an existing school's historical data — not specified.
+- **Real bulk import for Staff/Students steps** — F8/B7, not built anywhere in `apps/api` yet; manual one-at-a-time entry only, per this phase's own DoD item 7.
+- Class-Subject matrix authoring and teacher-to-subject/class assignment during onboarding (`POST /academics/classes/{id}/subjects`, `PUT /teachers/{id}/assignments`) — deferred to `F6`/`F7`; onboarding only creates the bare `ClassGroup`/`Subject` entities.
+- Any "resend activation email" / "regenerate login identifier" self-service affordance on `/activate` — not requested by any DoD item.
+- Branding preview's Exam interface/Result pages becoming live-linked to the real screens once `B11`+/`B14`+ ship — illustrative mockups for now.
+
+## Implementation notes
+
+Followed the working-rules checklist first: read `03 §3`–`§9`, `04 §3`, `05 §5.1`–`§5.2`, this phase's own roadmap section, and the existing `B3`/`B4`/`B5`/`B6` implementation (`activation.service.ts`, `school-branding.controller.ts`, `academics-context.service.ts`, `class-group.service.ts`, `permission-table.ts`) before writing any code — planned in a dedicated plan-mode pass given the phase's size, per `B2`/`B3`/`B5`/`B6`'s own precedent. No gating ADR blocks F4.
+
+**One confirmed, small, additive backend gap-closure** (mirroring `B3`/`B4`/`F3`'s own precedent for this class of decision) — F4's own resumability and re-entry-blocked requirements had no backing anywhere: no `School` column recorded onboarding completion, and no endpoint reported one.
+
+- `School` gained two columns: `onboardingCompletedAt` (`DateTime?`) and `onboardingState` (`Json?`, `{currentStep, skippedSteps}` — UI-progress only, never consulted for business-rule enforcement, which is always recomputed live from `AcademicSession`/`ClassGroup` state).
+- New `apps/api/src/modules/platform/school-onboarding.{controller,service}.ts`: `GET/PUT /school/onboarding(/progress)`, `POST /school/onboarding/complete` — the latter reuses `AcademicsContextService.get()` and `ClassGroupService.list()` (both already existed from `B5`) rather than duplicating queries, is idempotent on a second call, and is the real server-side enforcement of DoD item 8 (`ONBOARDING_FUNDAMENTALS_MISSING` 409) and the re-entry-blocked rule (`ONBOARDING_ALREADY_COMPLETE` 409 from the progress-PUT once completed).
+- New permission row `schoolConfig.onboarding.manage` (School Admin only) — 148→149 rows, no other row changed.
+- A second, smaller gap found only during implementation verification, not anticipated in the original plan: `POST /activation/redeem` returned `Promise<void>` — the newly-activated School Admin's `login_identifier` (set at school-creation time, `CreateSchoolDto.adminLoginIdentifier`) was never surfaced anywhere, not in the redeem response, not in the activation email template, leaving `/activate`'s redeem-then-log-in handoff with nothing to log in with. Fixed by extending `redeem()` to return `{status, loginIdentifier}` — discloses a username (not a secret) only to a caller who already possesses a valid, unexpired, unredeemed key for that school, the same reasoning `ActivationService` already used for renewal's no-extra-session-check design.
+
+**Frontend**: `/activate` (pre-auth, `(school)` route group — verify→redeem→login for `INITIAL_ACTIVATION`; a `RENEWAL` key has no password to log in with, so it shows "renewal complete, please log in" instead of attempting a login it structurally cannot perform); `/onboarding` + `/onboarding/[step]` (a new top-level, pre-shell route group — no `AppShell`/nav, since no nav-model entry exists for a one-time setup flow), guarded by a new `OnboardingGuard` layered on top of F2's existing `RouteGuard` (kept deliberately onboarding-agnostic — zero blast radius on `AuthMe`/`/auth/me`). `TenantEntryPage` (`app/page.tsx`) gained one branch: a SCHOOL_ADMIN whose onboarding isn't complete is routed to `/onboarding` instead of `/school`; every other role's landing is unaffected (`useOnboardingStatus` is only ever _enabled_ for SCHOOL_ADMIN).
+
+Ten step components (`components/onboarding/steps/`) each follow the existing `schools/new`-style form pattern (`react-hook-form` + `zodResolver`, committing real data immediately via its own mutation — no cross-step client draft store, since resumability is itself server-persisted). `WizardShell` owns all navigation centrally (a single footer Continue/Skip/Back, not per-step navigation calls) — Continue is disabled on the two hard-blocker steps (3 Session, 6 Classes) until `useOnboardingStepStatus` (one shared aggregator hook reusing each step's own list queries — no duplicate fetches) reports that step done. `BrandingPreview` deliberately does **not** reuse `<ThemeProvider>` directly: that component writes a global `:root{...}` style tag, which would override the whole page's theme the instant the preview mounted inside step 2, not just the preview area (`:root` is never subtree-scoped) — found during implementation, not anticipated in the plan. Fixed by deriving the same palette and scoping the generated CSS custom properties to a unique class instead.
+
+**One pre-existing, cross-cutting test-environment gap found only by this phase's own tests, not by inspection**: Radix `Checkbox`'s indicator sizing (`@radix-ui/react-use-size`) calls `ResizeObserver`, which jsdom doesn't implement — invisible until step 3's "make this the current session" checkbox became this codebase's first `<Checkbox>` usage that mounts already `checked` (every prior `<Checkbox>` test started unchecked, never triggering the indicator's mount-time hook). Fixed once, globally, in `vitest.setup.ts` alongside the existing pointer-capture/scroll polyfills, not worked around per test file.
+
+**Testing**: component tests for all ten step components (default/valid/invalid/empty-upstream states), `WizardShell` (blocker gating, Skip availability, navigation), `StepProgress` (marker derivation), `OnboardingGuard` (re-entry redirect), `ReviewSummary` (enable/disable logic, the 409 error path), `BrandingPreview` (all six contexts, the `:root`-scoping fix), and `ActivateForm` (verify→redeem→login for `INITIAL_ACTIVATION`, the `RENEWAL` messaging branch, all three verify error codes) — plus the dedicated resumability integration test described in DoD item 3. Backend: `school-onboarding.integration.test.ts` (default shape, PUT round-trip, both 409s, successful completion with its audit event, idempotent re-completion, non-SCHOOL_ADMIN 403 on all three routes).
 
 ---
 
@@ -2475,27 +2498,27 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 
 ## Phase Completion Tracking
 
-| Phase | Status      | Backend pair | Started | Completed | Notes                                                           |
-| ----- | ----------- | ------------ | ------- | --------- | --------------------------------------------------------------- |
-| F0    | NOT STARTED | B0           | —       | —         | Design system may start now                                     |
-| F1    | NOT STARTED | B1           | —       | —         | Decided: ADR-0005, 0022                                         |
-| F2    | NOT STARTED | B2, B10      | —       | —         | Shell may start now                                             |
-| F3    | NOT STARTED | B3           | —       | —         |                                                                 |
-| F4    | NOT STARTED | B3, B4, B5   | —       | —         | Layout may start now                                            |
-| F5    | NOT STARTED | B4           | —       | —         |                                                                 |
-| F6    | NOT STARTED | B5           | —       | —         |                                                                 |
-| F7    | NOT STARTED | B6           | —       | —         |                                                                 |
-| F8    | NOT STARTED | B7           | —       | —         |                                                                 |
-| F9    | NOT STARTED | B8           | —       | —         | Editor shell may start now                                      |
-| F10   | NOT STARTED | B9           | —       | —         |                                                                 |
-| F11   | NOT STARTED | B11          | —       | —         |                                                                 |
-| F12   | NOT STARTED | B12          | —       | —         |                                                                 |
-| F13   | NOT STARTED | B13, B14     | —       | —         | **Offline engine may start now against the published contract** |
-| F14   | NOT STARTED | B15          | —       | —         |                                                                 |
-| F15   | NOT STARTED | B15          | —       | —         |                                                                 |
-| F16   | NOT STARTED | B16          | —       | —         |                                                                 |
-| F17   | NOT STARTED | B17          | —       | —         | Layout may start now                                            |
-| F18   | NOT STARTED | B18          | —       | —         |                                                                 |
-| F19   | NOT STARTED | B19          | —       | —         |                                                                 |
-| F20   | NOT STARTED | B20, B21     | —       | —         |                                                                 |
-| F21   | NOT STARTED | B23          | —       | —         |                                                                 |
+| Phase | Status      | Backend pair   | Started    | Completed  | Notes                                                                                                                     |
+| ----- | ----------- | -------------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| F0    | NOT STARTED | B0             | —          | —          | Design system may start now                                                                                               |
+| F1    | NOT STARTED | B1             | —          | —          | Decided: ADR-0005, 0022                                                                                                   |
+| F2    | NOT STARTED | B2, B10        | —          | —          | Shell may start now                                                                                                       |
+| F3    | NOT STARTED | B3             | —          | —          |                                                                                                                           |
+| F4    | COMPLETE    | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts` |
+| F5    | NOT STARTED | B4             | —          | —          |                                                                                                                           |
+| F6    | NOT STARTED | B5             | —          | —          |                                                                                                                           |
+| F7    | NOT STARTED | B6             | —          | —          |                                                                                                                           |
+| F8    | NOT STARTED | B7             | —          | —          |                                                                                                                           |
+| F9    | NOT STARTED | B8             | —          | —          | Editor shell may start now                                                                                                |
+| F10   | NOT STARTED | B9             | —          | —          |                                                                                                                           |
+| F11   | NOT STARTED | B11            | —          | —          |                                                                                                                           |
+| F12   | NOT STARTED | B12            | —          | —          |                                                                                                                           |
+| F13   | NOT STARTED | B13, B14       | —          | —          | **Offline engine may start now against the published contract**                                                           |
+| F14   | NOT STARTED | B15            | —          | —          |                                                                                                                           |
+| F15   | NOT STARTED | B15            | —          | —          |                                                                                                                           |
+| F16   | NOT STARTED | B16            | —          | —          |                                                                                                                           |
+| F17   | NOT STARTED | B17            | —          | —          | Layout may start now                                                                                                      |
+| F18   | NOT STARTED | B18            | —          | —          |                                                                                                                           |
+| F19   | NOT STARTED | B19            | —          | —          |                                                                                                                           |
+| F20   | NOT STARTED | B20, B21       | —          | —          |                                                                                                                           |
+| F21   | NOT STARTED | B23            | —          | —          |                                                                                                                           |

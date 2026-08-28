@@ -5,6 +5,7 @@ export {
   buildChangePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
+  newPasswordField,
   platformLoginSchema,
   resetPasswordSchema,
   type ChangePasswordValues,

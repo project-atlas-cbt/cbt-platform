@@ -271,10 +271,16 @@ reasoning and the honestly-scoped-down items). **`B6 — People, Profiles & Enro
 scope resolver closing B2's other fail-closed placeholder, and ADR-0011's mandatory registration
 auto-registration/reconciliation/deregistration — built immediately after `B5`, continuing straight
 down the backend critical path per the same explicit project-owner instruction (see this file's
-Change Log entry below). No DoD item was left partial. **`F5 — School Settings & Branding`**,
-**`F6 — Academic Structure Workspace`**, and **`F7 — People Management Workspace`** are all now
-open; any may proceed next per the pairing rule, and **`F4 — School Onboarding Wizard`** is reachable
-for the first time (its pair needed `B3`+`B4`+`B5`+`B6` together).
+Change Log entry below). No DoD item was left partial. **`F4 — School Onboarding Wizard`** — complete:
+the guided, resumable ten-step flow (`/activate` → `/onboarding/[step]` `ON-01`..`ON-10`) taking a
+school from a redeemed activation key to operational — the first phase to consume `B3`+`B4`+`B5`+`B6`
+together as one real user journey. One DoD item honestly partial (staff/student creation is
+one-at-a-time only; real bulk import waits on `F8`/`B7`, per the roadmap's own named fallback), plus
+a small, confirmed backend gap-closure this phase required (onboarding-completion tracking on
+`School`; the activation-redeem response gained the new admin's login identifier — see this file's
+Change Log entry below). **`F5 — School Settings & Branding`**, **`F6 — Academic Structure
+Workspace`**, and **`F7 — People Management Workspace`** are all now open; any may proceed next per
+the pairing rule.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -2048,3 +2054,114 @@ complete; F4/F5/F6/F7 all open, or `B7`/`B8` on the backend critical path)_.
 **Next: `F5`, `F6`, `F7`, or `F4` (frontend/backend phase-pairing default), or `B7 — Bulk Import
 Pipeline` / `B8 — Question Bank` if the backend critical path is prioritized instead — `B7` is worth
 particular consideration since it directly extends the people/enrollment surface `B6` just shipped.**
+
+### 2026-08-28 — `F4` complete: School Onboarding Wizard
+
+Requested explicitly: start `F4`. Followed the working-rules checklist first: read `03 §3`–`§9`
+(activation and the ten onboarding steps in full), `04 §3` (the module/screen map's own ten-step
+list), `05 §5.1`–`§5.2` (the `ON-01`..`ON-10` wizard spec and completion validations), the F4
+roadmap phase, and the existing `B3`/`B4`/`B5`/`B6` implementation (`activation.service.ts`,
+`school-branding.controller.ts`, `academics-context.service.ts`, `class-group.service.ts`,
+`permission-table.ts`) before writing any code — planned in a dedicated plan-mode pass given the
+phase's size, per `B2`/`B3`/`B5`/`B6`'s own precedent. No gating ADR blocks F4.
+
+**Resolved a real spec inconsistency, not silently picked a side**: `04 §3`'s own ten-item list
+folds "Verify School" in as step 1 and merges session/terms into one step, while `05 §5.1`'s own
+ten-item list separates session/terms into two steps but doesn't count key-verification as a wizard
+step at all. F4's own route table (`/activate` vs `/onboarding/[step]` `ON-01`..`ON-10`) is
+authoritative and was followed literally: "Verify School" lives at the separate pre-wizard
+`/activate` route, not as one of the ten in-wizard steps — recorded in
+`lib/onboarding/steps-config.ts`'s own doc comment, not just this entry.
+
+**One confirmed, small, additive backend gap-closure** (the same shape of decision as
+`B3`/`B4`/`F3`'s own precedent — confirmed before implementation, not silently expanded scope):
+F4's resumability requirement ("wizard progress persisted server-side") and its re-entry-blocked
+security requirement ("a completed school cannot re-enter onboarding") had no backing anywhere —
+`School` carried no onboarding-completion concept, and no endpoint reported one. `School` gained
+two columns (`onboardingCompletedAt: DateTime?`, `onboardingState: Json?` — UI-progress only, never
+consulted for business-rule enforcement, which is always recomputed live from
+`AcademicSession`/`ClassGroup` state); new `apps/api/src/modules/platform/school-onboarding.
+{controller,service}.ts` (`GET/PUT /school/onboarding(/progress)`, `POST
+/school/onboarding/complete`) reuses `AcademicsContextService.get()` and `ClassGroupService.list()`
+(both already existed from `B5`) rather than duplicating queries, is idempotent on a second call,
+and is the real server-side enforcement of `05 §5.2`'s completion blockers
+(`ONBOARDING_FUNDAMENTALS_MISSING` 409) and the re-entry-blocked rule
+(`ONBOARDING_ALREADY_COMPLETE` 409) — never trusted from the client's own check alone. New
+permission row `schoolConfig.onboarding.manage` (School Admin only) — 148→149 rows.
+
+**A second, smaller gap found only during implementation verification, not anticipated in the
+original plan**: `POST /activation/redeem` returned `Promise<void>`; the newly-activated School
+Admin's `login_identifier` (set at school-creation time, `CreateSchoolDto.adminLoginIdentifier`)
+was never surfaced anywhere — not the redeem response, not the activation email template — leaving
+`/activate`'s redeem-then-log-in handoff with nothing to log in with. Fixed by extending `redeem()`
+to return `{status, loginIdentifier}`; recorded explicitly that this discloses a username (not a
+secret) only to a caller who already possesses a valid, unexpired, unredeemed key for that school —
+the same reasoning `ActivationService` already uses for renewal's no-extra-session-check design.
+
+**Frontend**: `/activate` (pre-auth, `(school)` route group — verify→redeem→login for
+`INITIAL_ACTIVATION`; a `RENEWAL` key has no password to log in with, so it shows "renewal
+complete, please log in" instead of attempting a login it structurally cannot perform); `/onboarding`
+
+- `/onboarding/[step]` (a new top-level, pre-shell route group — no `AppShell`/nav, since no
+  nav-model entry exists for a one-time setup flow), guarded by a new `OnboardingGuard` layered on top
+  of F2's `RouteGuard` (kept deliberately onboarding-agnostic — zero blast radius on `AuthMe`/
+  `/auth/me`). `TenantEntryPage` (`app/page.tsx`) gained one branch: a SCHOOL_ADMIN whose onboarding
+  isn't complete is routed to `/onboarding` instead of `/school`; every other role's landing is
+  unaffected. Ten step components each follow the existing `schools/new`-style form pattern
+  (`react-hook-form` + `zodResolver`, committing real data immediately via its own mutation — no
+  cross-step client draft store, since resumability is itself server-persisted). `WizardShell` owns
+  all navigation centrally (one footer Continue/Skip/Back) — Continue is disabled on the two
+  hard-blocker steps (3 Session, 6 Classes) until a shared `useOnboardingStepStatus` aggregator
+  (reusing each step's own list queries, no duplicate fetches) reports that step done.
+
+**A real architectural pitfall found and avoided during implementation, not shipped and fixed
+later**: `BrandingPreview` (the six `03 §5` preview contexts) deliberately does **not** reuse
+`<ThemeProvider>` directly — that component writes a global `:root{...}` style tag, which would have
+overridden the whole page's theme the instant the preview mounted inside step 2, not just the
+preview area (`:root` is never subtree-scoped). Fixed by deriving the same palette and scoping the
+generated CSS custom properties to a unique class instead, proven by a dedicated test asserting the
+generated style block never contains `:root`.
+
+**One pre-existing, cross-cutting test-environment gap found only by this phase's own tests, not by
+inspection**: Radix `Checkbox`'s indicator sizing (`@radix-ui/react-use-size`) calls
+`ResizeObserver`, which jsdom doesn't implement — invisible until step 3's "make this the current
+session" checkbox became this codebase's first `<Checkbox>` usage that mounts already `checked`
+(every prior `<Checkbox>` test started unchecked). Fixed once, globally, in `vitest.setup.ts`
+alongside the existing pointer-capture/scroll polyfills, not worked around per test file.
+
+**Honestly partial, not silently dropped**: staff and students can be created individually only —
+real bulk import is `F8`/`B7`, confirmed not built anywhere in `apps/api` yet (no `/imports` path
+exists), matching the roadmap's own named fallback ("if F8 is not ready, staff and student steps
+allow manual entry and defer import"). Class-Subject matrix authoring and teacher-to-subject/class
+assignment during onboarding are deferred to `F6`/`F7` — onboarding only creates the bare
+`ClassGroup`/`Subject` entities. Browser E2E remains deferred exactly as F1/F2/F3 already recorded —
+substituted with the component/integration test suite below, including a dedicated resumability
+test.
+
+**Testing**: component tests for all ten step components (default/valid/invalid/empty-upstream
+states), `WizardShell`, `StepProgress`, `OnboardingGuard`, `ReviewSummary`, `BrandingPreview`, and
+`ActivateForm` (verify→redeem→login, the `RENEWAL` messaging branch, all three verify error codes) —
+218 tests in `apps/web` (up from 187). A dedicated resumability integration test
+(`app/onboarding/resumability.integration.test.tsx`) proves DoD item 3 by discarding the
+`QueryClient` and fully unmounting between two renders (not a re-render), asserting resumption comes
+from the server-persisted state alone. Backend: `school-onboarding.integration.test.ts` (default
+shape, PUT round-trip, both 409s, successful completion with its audit event, idempotent
+re-completion, non-SCHOOL_ADMIN 403 on all three routes) — 126 tests in `apps/api`'s integration
+suite (up from 121 before this phase's own fix to two mis-shaped error-envelope assertions the tests
+themselves had wrong, not the product).
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration`
+at the monorepo root, plus `pnpm generate` (new onboarding + activation-redeem contracts) and `pnpm
+generate:permission-table-doc` (149 rows).
+
+`docs/roadmaps/frontend-roadmap.md`'s F4 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-partial-with-reason, a full "Implementation notes" subsection, and
+an expanded Deferred items list. `docs/roadmaps/backend-roadmap.md`'s B3 section gained a "Third gap
+closure" note for the two additive schema/endpoint changes. `docs/roadmaps/roadmap-index.md`'s
+version, Current State, and Immediate Next Actions all updated to record `F4` complete.
+
+Project state moves from _Implementation (B6 complete; F4/F5/F6/F7 all open)_ to _Implementation
+(F4 complete; F5/F6/F7 all open, or `B7`/`B8` on the backend critical path)_.
+**Next: `F5`, `F6`, or `F7` (frontend/backend phase-pairing default), or `B7 — Bulk Import
+Pipeline` / `B8 — Question Bank` if the backend critical path is prioritized instead — `B7` would
+additionally let F4's Staff/Students steps close their one remaining honestly-partial DoD item.**

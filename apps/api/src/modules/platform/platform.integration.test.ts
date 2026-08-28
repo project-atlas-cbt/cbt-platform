@@ -283,6 +283,9 @@ describe('Full activation lifecycle (B3 DoD items 1-4, 6)', () => {
       newPassword: 'a-brand-new-password-123',
     });
     expect(redeem.statusCode).toBe(200);
+    // F4 gap-closure: redeem now returns the admin's login identifier, the
+    // only thing missing from the redeem-then-log-in handoff.
+    expect(redeem.json<{ loginIdentifier: string }>().loginIdentifier).toBeTruthy();
 
     const detail = await get(platformCtx, `/platform/schools/${schoolId}`);
     expect(detail.json<{ status: string }>().status).toBe('ACTIVE');

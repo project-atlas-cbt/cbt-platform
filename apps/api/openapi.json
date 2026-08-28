@@ -842,7 +842,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
+                  "$ref": "#/components/schemas/ActivationRedeemResponseDto"
                 }
               }
             }
@@ -1024,6 +1024,76 @@
           }
         },
         "summary": "Update logo and/or primary colour (School Admin only) — freely editable, audited.",
+        "tags": ["school"]
+      }
+    },
+    "/school/onboarding": {
+      "get": {
+        "operationId": "SchoolOnboardingController_getStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own school's onboarding wizard progress.",
+        "tags": ["school"]
+      }
+    },
+    "/school/onboarding/progress": {
+      "put": {
+        "operationId": "SchoolOnboardingController_updateProgress",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOnboardingProgressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Advance/update the onboarding wizard step pointer.",
+        "tags": ["school"]
+      }
+    },
+    "/school/onboarding/complete": {
+      "post": {
+        "operationId": "SchoolOnboardingController_complete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mark onboarding complete (05 §5.2: requires a current session and a class).",
         "tags": ["school"]
       }
     },
@@ -3867,6 +3937,20 @@
         },
         "required": ["key"]
       },
+      "ActivationRedeemResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"],
+            "example": "ok"
+          },
+          "loginIdentifier": {
+            "type": "string"
+          }
+        },
+        "required": ["status", "loginIdentifier"]
+      },
       "SchoolProfileResponseDto": {
         "type": "object",
         "properties": {
@@ -4120,6 +4204,45 @@
             "description": "\"#rrggbb\". Pass null to clear (falls back to the platform default palette)."
           }
         }
+      },
+      "OnboardingStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "completedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "currentStep": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "skippedSteps": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": ["completedAt", "currentStep", "skippedSteps"]
+      },
+      "UpdateOnboardingProgressDto": {
+        "type": "object",
+        "properties": {
+          "currentStep": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "skippedSteps": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": ["currentStep"]
       },
       "CurrentSessionSummaryDto": {
         "type": "object",

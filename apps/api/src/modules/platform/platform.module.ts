@@ -6,6 +6,7 @@ import { NOTIFICATION_TEMPLATE_REGISTRY } from '../../notifications/notification
 import { IdentityModule } from '../identity/identity.module.js';
 import { OperationsModule } from '../operations/operations.module.js';
 import { MediaModule } from '../media/media.module.js';
+import { AcademicsModule } from '../academics/academics.module.js';
 import { PlatformSessionService } from './platform-session.service.js';
 import { PlatformAuthGuard } from './platform-auth.guard.js';
 import { PlatformAuthService } from './platform-auth.service.js';
@@ -20,6 +21,8 @@ import { SchoolProfileService } from './school-profile.service.js';
 import { SchoolProfileController } from './school-profile.controller.js';
 import { SchoolBrandingService } from './school-branding.service.js';
 import { SchoolBrandingController } from './school-branding.controller.js';
+import { SchoolOnboardingService } from './school-onboarding.service.js';
+import { SchoolOnboardingController } from './school-onboarding.controller.js';
 import { registerPlatformTemplates } from './templates.js';
 
 /**
@@ -40,7 +43,7 @@ import { registerPlatformTemplates } from './templates.js';
  * way IdentityModule's own controller already relies on.
  */
 @Module({
-  imports: [IdentityModule, OperationsModule, MediaModule],
+  imports: [IdentityModule, OperationsModule, MediaModule, AcademicsModule],
   controllers: [
     PlatformAuthController,
     SchoolsAdminController,
@@ -48,6 +51,7 @@ import { registerPlatformTemplates } from './templates.js';
     ActivationController,
     SchoolProfileController,
     SchoolBrandingController,
+    SchoolOnboardingController,
   ],
   providers: [
     PlatformSessionService,
@@ -58,6 +62,7 @@ import { registerPlatformTemplates } from './templates.js';
     ActivationService,
     SchoolProfileService,
     SchoolBrandingService,
+    SchoolOnboardingService,
   ],
 })
 export class PlatformModule implements OnModuleInit {

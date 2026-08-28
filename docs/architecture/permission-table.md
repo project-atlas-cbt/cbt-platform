@@ -49,6 +49,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | Edit school name/details                                     | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
 | Upload/change logo                                           | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
 | Set primary colour                                           | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         |                                        |
+| Manage school onboarding wizard progress                     | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         |                                        |
 | Manage departments (derived split: view)                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL ⚠️ | —       | —         |                                        |
 | Manage departments (derived split: create/edit/delete)       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
 | Manage classes (derived split: view)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
@@ -69,6 +70,8 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Upload/change logo / SOFTWARE_ADMIN:** R1.
 - **Set primary colour / SOFTWARE_ADMIN:** R1.
 - **Set primary colour / SCHOOL_ADMIN:** "Full / One-time" resolved as freely-editable, not a one-time lock (audit finding A-18) — School Admin may change the primary colour at any time; every change is audited (AuditService, action SCHOOL_BRANDING_CHANGED).
+- **Manage school onboarding wizard progress / SOFTWARE_ADMIN:** R1.
+- **Manage school onboarding wizard progress / SCHOOL_ADMIN:** F4: the ten-step onboarding wizard (03 §3, 05 §5.1-5.2) is School-Admin-only — never delegated to any other school role.
 - **Manage departments (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Manage departments (derived split: view) / HOD:** Matrix cell is "View" — whole-school visibility, not department-limited.
 - **Manage departments (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1: school structural/administrative setup, not academic content — flagged for review, not itself ADR-decided.

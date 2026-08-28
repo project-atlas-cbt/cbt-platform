@@ -27,7 +27,11 @@ export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 // interpretation. Kept in sync manually; the server is still the real
 // enforcement point.
 const NEW_PASSWORD_MIN_LENGTH = 10;
-const newPasswordField = z
+// Exported for F4's /activate screen, which needs the identical
+// new-password-with-match-refine shape but isn't a password *reset* (no
+// token) — building its own local schema from this field rather than
+// duplicating NEW_PASSWORD_MIN_LENGTH a second time.
+export const newPasswordField = z
   .string()
   .min(NEW_PASSWORD_MIN_LENGTH, `Password must be at least ${NEW_PASSWORD_MIN_LENGTH} characters.`);
 

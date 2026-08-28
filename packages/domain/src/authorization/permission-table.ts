@@ -395,6 +395,23 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     },
   },
   {
+    id: 'schoolConfig.onboarding.manage',
+    section: 'School Configuration',
+    label: 'Manage school onboarding wizard progress',
+    action: 'UPDATE',
+    grants: {
+      SOFTWARE_ADMIN: granted('PLATFORM', 'R1.'),
+      SCHOOL_ADMIN: granted(
+        'SCHOOL',
+        'F4: the ten-step onboarding wizard (03 §3, 05 §5.1-5.2) is School-Admin-only — never delegated to any other school role.',
+      ),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
+  {
     id: 'schoolConfig.department.view',
     section: 'School Configuration',
     label: 'Manage departments (derived split: view)',
