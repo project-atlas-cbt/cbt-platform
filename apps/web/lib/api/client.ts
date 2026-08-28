@@ -45,10 +45,7 @@ export const apiClient = createClient<ApiPaths>({
  * module instance must serve whichever school subdomain the page happens
  * to be viewed at, and that can only be known at request time, not at
  * module-load time. Path and query are preserved untouched; only the
- * scheme/host/port change. `new Request(url, request)` is the standard way
- * to clone a `Request` with a different URL — `Request` instances satisfy
- * `RequestInit` structurally, so every other property (method, headers,
- * body, credentials) carries over unchanged.
+ * scheme/host/port change.
  *
  * Guarded by `typeof window` because this client is only ever called from
  * client components (TanStack Query is explicitly browser-side-only per
@@ -56,9 +53,26 @@ export const apiClient = createClient<ApiPaths>({
  * a tenant subdomain from anyway. The one genuinely server-side call F1
  * needs (pre-login tenant resolution) reads the inbound request's `Host`
  * header directly instead — see lib/api/resolve-tenant.server.ts.
+ *
+ * A real, F3-found bug this rewrite used to have: `new Request(rewritten,
+ * request)` — using the already-built `Request` as `init` — silently drops
+ * a POST/PUT/PATCH body under this exact "reconstruct a Request from
+ * another Request" pattern. Per the Fetch spec, a `Request` constructed
+ * with a streaming body must carry `duplex: "half"`, and that requirement
+ * does not propagate through a second reconstruction like this one.
+ * Firefox tolerates the gap by silently sending an empty body (surfacing
+ * downstream as a plain 400 on missing fields); Chrome enforces it far
+ * more strictly, and in this exact code path that surfaced as a deeply
+ * misleading `net::ERR_ALPN_NEGOTIATION_FAILED` instead of a clear error —
+ * found only by live browser testing of F3's admin login (every GET was
+ * unaffected, since a GET has no body to lose). Fixed by reading the body
+ * into an `ArrayBuffer` up front and passing it explicitly — safe here
+ * since this client only ever sends small JSON payloads; file uploads in
+ * this app go through presigned S3 URLs directly (B4), never through this
+ * JSON API client, so there is no real streaming-upload case to preserve.
  */
 const dynamicOriginMiddleware: Middleware = {
-  onRequest({ request }) {
+  async onRequest({ request }) {
     if (typeof window === 'undefined') return request;
     const origin = resolveApiOrigin(
       window.location.hostname,
@@ -68,7 +82,23 @@ const dynamicOriginMiddleware: Middleware = {
     );
     const current = new URL(request.url);
     const rewritten = new URL(`${current.pathname}${current.search}`, origin);
-    return new Request(rewritten, request);
+    // exactOptionalPropertyTypes forbids `body: undefined` as an explicit
+    // property value — the key must be entirely absent (not present with
+    // an undefined value) for a bodyless request, matching this codebase's
+    // established `primaryColor`-omission pattern (tenant-context.tsx).
+    const bodyInit = request.body ? { body: await request.clone().arrayBuffer() } : {};
+    return new Request(rewritten, {
+      method: request.method,
+      headers: request.headers,
+      credentials: request.credentials,
+      mode: request.mode,
+      cache: request.cache,
+      redirect: request.redirect,
+      referrer: request.referrer,
+      referrerPolicy: request.referrerPolicy,
+      integrity: request.integrity,
+      ...bodyInit,
+    });
   },
 };
 
