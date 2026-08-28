@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, type Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { AcademicsContextService } from '../academics/academics-context.service.js';
