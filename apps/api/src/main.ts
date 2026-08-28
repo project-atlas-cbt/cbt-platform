@@ -49,6 +49,20 @@ async function bootstrap() {
       cb(null, isAllowedOrigin(origin, webOrigin, rootDomain, allowInsecureSubdomains));
     },
     credentials: true, // same-site HttpOnly cookies per ADR-0022
+    // A real bug found only by live cross-origin browser testing of F4's
+    // onboarding wizard (its first PUT/PATCH calls), not by inspection or
+    // any integration test — every prior phase's automated suite drives the
+    // app via `app.inject()`, which bypasses CORS entirely, so nothing had
+    // ever exercised this preflight path for a non-GET/POST method before.
+    // @fastify/cors's own default `methods` is the literal string
+    // `'GET,HEAD,POST'` (see its `defaultOptions`) — with no explicit
+    // `methods` here, every PUT/PATCH/DELETE route in the API has been
+    // silently CORS-blocked for real cross-origin browser callers since
+    // B0's original CORS registration. This app has PUT/PATCH/DELETE routes
+    // throughout (school/branding updates, academics CRUD, people
+    // management, onboarding, ...), so the full method set is listed
+    // explicitly rather than guessed narrowly per caller.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
 
   app.setGlobalPrefix(API_VERSION_PREFIX.replace(/^\//, ''));
