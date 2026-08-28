@@ -2297,3 +2297,115 @@ backend critical path)_ to _Implementation (F5 complete; F6/F7 open, or `B7`/`B8
 critical path)_.
 **Next: `F6`, `F7` (frontend/backend phase-pairing default), or `B7 — Bulk Import Pipeline` /
 `B8 — Question Bank` if the backend critical path is prioritized instead.**
+
+### 2026-08-28 — Cross-cutting bug fix: platform admin CSRF token never bootstrapped outside `/admin/login`
+
+Found by live dev-server testing, not by inspection or any automated test — logging into the
+Platform Admin workspace, browsing to `/admin`, then logging out failed every time with `ApiError:
+Missing or invalid CSRF token`, thrown from `PlatformAuthProvider`'s `logout()`.
+
+**Root cause**: `app/admin/layout.tsx` wraps both `/admin/login` and `/admin/(shell)/*`, but the
+CSRF-bootstrap call (`useTenantResolution()`, which sets `apiClient`'s in-memory CSRF token as a
+side effect of `GET /tenant/resolve`) lived only on `/admin/login/page.tsx` — the assumption being
+that every session necessarily passes through that screen first. It doesn't: a hard refresh on
+`/admin` itself, a bookmarked deep link into the shell, or (as here) a fresh page load straight to
+`/admin` after the dev server restarted all reach `/admin/(shell)/*` without `/admin/login` ever
+mounting in that page load. With the bootstrap never run, `apiClient`'s `csrfToken` module variable
+stayed `null` for the whole session — every mutating platform call (logout included, and, more
+seriously, every school-lifecycle action a real Software Admin session would need to perform) would
+have failed the same way, not just logout.
+
+**Fix**: moved the `useTenantResolution()` call from `/admin/login/page.tsx` up to `AdminLayout`
+itself (`app/admin/layout.tsx`), the shared ancestor of both routes, converting the layout to a
+client component to do so. `useTenantResolution` is a TanStack Query keyed on `['tenant', 'resolve']`
+(F5's own conversion of it from a one-shot `useEffect`/`useState` pair) — mounting it from the layout
+as well as (previously) the login page would have deduped automatically with no extra request, so
+this is a pure relocation, not new fetch behaviour. `/admin/login/page.tsx`'s own now-redundant call
+and doc comment were removed, pointing at the layout instead. A new regression test
+(`app/admin/layout.test.tsx`) renders `AdminLayout` in isolation — no `/admin/login` anywhere in the
+tree, the exact "direct shell entry" shape — and asserts the CSRF token is still bootstrapped.
+
+No schema change, no migration, no permission-table change, no ADR involved, no roadmap phase status
+changed — this is a frontend bootstrap-ordering fix cutting across the whole Platform Admin
+workspace (`F2`'s shell plus every mutating call `F3` added on top of it), not scoped to any one
+phase. `apps/web`'s full suite reconfirmed green afterward (67 files / 249 tests, up from
+66/248 — the one new test file).
+
+### 2026-08-28 — Two more cross-cutting bug fixes: platform admin nav never rendered; a global 401 could loop forever
+
+Found in the same live-testing session as the CSRF fix above, from the browser devtools console
+after logging into the Platform Admin dashboard with the seeded Software Admin account: a
+`GET /v1/me/permissions 401` and a `GET /v1/auth/me 401` repeating continuously.
+
+**Bug 1 — the Platform Admin sidebar never rendered past its loading skeleton.**
+`RoleNavigation` (`components/shell/role-navigation.tsx`, shared by `SchoolAppShell` and
+`PlatformAppShell` since F3's variant split) called `useNavigation`/`usePermissions()` —
+`GET /me/permissions` — unconditionally for every role, including `SOFTWARE_ADMIN`. That route is
+`@Authorized(...)`, wired exclusively to the school `AuthGuard` (`AuthorizationController.me()`);
+a Software Admin session has no `SchoolMembership`/tenant at all, so the call 401'd every time and
+`useNavigation` never received data — the sidebar was stuck on its five-skeleton-bar loading state
+forever, real navigation links never appeared. F3's own `role-navigation.test.tsx` never caught
+this because it mocked a fully-granted `/me/permissions` response for every role, including
+`SOFTWARE_ADMIN` — asserting the filtering logic was correct, never that the endpoint itself could
+be reached by that session.
+
+Root fix: `identity.permissions.read`'s permission-table row already granted
+`SOFTWARE_ADMIN: granted('SELF')` (B2's own row comment: "not an explicit 02 row" — anticipating
+exactly this), and `AuthorizationService.effectivePermissions()`/`actorFromAuthenticatedUser` were
+already actor-kind-agnostic (B3) — the only missing piece was a route. Added
+`GET /v1/platform/auth/permissions` (`platform-auth.controller.ts`, `@AuthorizedPlatform`,
+reusing the same `MePermissionsResponseDto`/`effectivePermissions()` call) as the platform-scoped
+analog. No schema, no migration, no permission-table change — purely an additive route over
+already-graded logic.
+
+Frontend: `useNavigation`'s "compute nav items from a permission set" logic was extracted into a
+pure `computeNavItems` function (`lib/nav/use-navigation.ts`) shared by the existing `useNavigation`
+(school, `usePermissions`) and a new `usePlatformNavigation` (platform, the new
+`usePlatformPermissions` hook against `/platform/auth/permissions`). `RoleNavigation` itself was
+made purely presentational — it now receives a `NavigationResult` prop instead of fetching
+internally, mirroring `ProfileMenu`/`ContextSwitcher`'s own F3 "receive identity via props" refactor
+for exactly this class of problem. `SchoolAppShell`/`PlatformAppShell` (`app-shell.tsx`) each call
+their own hook and pass the result down through `ShellChrome`.
+
+**Bug 2 — a global 401 could retrigger itself forever.** Independently of Bug 1,
+`apiClient`'s `unauthenticatedMiddleware` (`lib/api/client.ts`) called `onUnauthenticated()` — which
+`AuthProvider` wires to `reload()`, i.e. `invalidateQueries(['auth','me'])` — on _every_ 401
+response, unconditionally. Because `AuthProvider` (the school session) is mounted globally at the
+root layout, its `/auth/me` query is always "active," so this invalidate forces an immediate
+refetch. On any page where `/auth/me` structurally cannot succeed — the platform admin host, which
+has no school at all, or an ordinary school session that has genuinely expired — that refetch's own
+401 retriggers the identical handler, which invalidates again, which refetches again: an unbounded
+loop bounded only by network round-trip time, not by anything that would stop it. This was already
+latent for any expired school session (not new, and not specific to the admin host), just never
+noticed until this session's console showed it happening continuously on `/admin`. Fixed by
+debouncing `unauthenticatedMiddleware` to fire once per unbroken run of 401s, resetting on the next
+successful response — a genuinely new session-loss event later still gets handled, but a already-
+known-gone session doesn't get re-announced on every single subsequent failed request.
+
+**Testing**: `lib/api/client.test.ts` (new — proves the debounce and its reset, working around
+`openapi-fetch`'s `createClient()` capturing `globalThis.fetch` once at module-eval time by
+`vi.resetModules()` + dynamic re-import per test, since a `beforeEach`-time `vi.stubGlobal` alone
+doesn't reach an already-constructed client); `lib/nav/use-navigation.test.tsx` gained a
+`usePlatformNavigation` case proving it sources `SOFTWARE_ADMIN` nav from
+`/platform/auth/permissions`, not `/me/permissions`; `components/shell/role-navigation.test.tsx`
+rewritten for the new presentational props (no more `apiClient` mocking needed there — coverage of
+the fetch/filter logic itself lives in `use-navigation.test.tsx`); `app-shell.test.tsx`'s platform-
+variant test gained a direct regression assertion (`/platform/auth/permissions` called,
+`/me/permissions` never) — which also surfaced and fixed a real test-isolation gap in that same
+file (the platform-variant `describe` block's own `beforeEach` cleared `mockUseAuth` but never
+reset `mockGet`'s call history, so an assertion checking "never called with X" could false-pass or
+false-fail depending on what the school-variant tests above it had already called). Backend:
+`platform.integration.test.ts` gained three cases for the new route (Software Admin gets its real
+effective permissions including `identity.permissions.read` itself; unauthenticated 401s the same
+as every other platform route; `GET /me/permissions` still correctly rejects a platform session —
+the direct proof of why this route needed to exist).
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm build` at the monorepo root, `pnpm
+generate` (the new route appears in `apps/api/openapi.json`/`packages/contracts`) and `pnpm
+generate:permission-table-doc` (150 rows, confirmed unchanged), `apps/api`'s integration suite for
+this file (16/16), and `apps/web`'s full suite (66 files / 242 tests, up from 66/249 — net changed
+by the `role-navigation.test.tsx` rewrite and the new `client.test.ts`/`use-navigation.test.tsx`
+cases; a handful of files hit this environment's already-documented worker-pool startup flakiness
+on the full run and were reconfirmed green individually, matching this project's established
+practice for that class of flake). No schema change, no ADR involved, no roadmap phase status
+changed.

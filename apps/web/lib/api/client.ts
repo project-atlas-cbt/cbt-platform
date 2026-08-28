@@ -151,10 +151,33 @@ export function setUnauthenticatedHandler(handler: (() => void) | null): void {
   onUnauthenticated = handler;
 }
 
+/**
+ * Debounces `onUnauthenticated` to once per unbroken run of 401s — a real
+ * infinite-request-loop bug found by live browser testing, not by
+ * inspection: `AuthProvider`'s own `reload()` (the handler this fires)
+ * calls `invalidateQueries(['auth','me'])`, which — because `AuthProvider`
+ * is mounted globally at the root layout and so its `/auth/me` query is
+ * always "active" — forces an immediate refetch. On any page where
+ * `/auth/me` structurally cannot succeed (the platform admin host, which
+ * has no school at all; or an ordinary school session that has genuinely
+ * expired), that refetch's own 401 response re-triggers this exact same
+ * handler, which invalidates again, which refetches again, forever — each
+ * cycle bounded only by network round-trip time, not by anything that
+ * would stop it. Reset on the next non-401 response so a *later*, genuinely
+ * new session-loss event still gets handled once, not silently swallowed
+ * for the rest of the tab's lifetime.
+ */
+let unauthenticatedHandled = false;
+
 const unauthenticatedMiddleware: Middleware = {
   onResponse({ response }) {
     if (response.status === 401) {
-      onUnauthenticated?.();
+      if (!unauthenticatedHandled) {
+        unauthenticatedHandled = true;
+        onUnauthenticated?.();
+      }
+    } else {
+      unauthenticatedHandled = false;
     }
     return response;
   },

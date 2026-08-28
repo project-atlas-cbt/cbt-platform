@@ -3,6 +3,9 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthorizedPlatform, PublicRoute } from '../authorization/decorators.js';
+import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
+import { AuthorizationService } from '../authorization/authorization.service.js';
+import { MePermissionsResponseDto } from '../authorization/dto/me-permissions-response.dto.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
 import { type AuthenticatedPlatformUser } from '../identity/auth.guard.js';
 import { PlatformAuthService } from './platform-auth.service.js';
@@ -24,7 +27,10 @@ function currentPlatformUser(req: FastifyRequest): AuthenticatedPlatformUser {
 @ApiTags('platform')
 @Controller('platform/auth')
 export class PlatformAuthController {
-  constructor(private readonly platformAuth: PlatformAuthService) {}
+  constructor(
+    private readonly platformAuth: PlatformAuthService,
+    private readonly authz: AuthorizationService,
+  ) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -66,5 +72,38 @@ export class PlatformAuthController {
   async me(@Req() req: FastifyRequest): Promise<PlatformMeResponseDto> {
     const user = currentPlatformUser(req);
     return this.platformAuth.me(user.userId);
+  }
+
+  /**
+   * The platform-scoped analog of `GET /v1/me/permissions` — a real gap
+   * found by live browser testing, not planned in any phase: that route is
+   * `@Authorized(...)`, wired exclusively to the school `AuthGuard`, so a
+   * Software Admin session (which has no `SchoolMembership`/tenant at all)
+   * could never reach it — every load of the Platform Admin shell's
+   * `RoleNavigation` 401'd on `/me/permissions` forever, leaving the
+   * sidebar stuck on its loading skeleton. `AuthorizationService
+   * .effectivePermissions()` was already actor-kind-agnostic (B3's
+   * `actorFromAuthenticatedUser` already branches `PLATFORM`/`SCHOOL`), and
+   * `identity.permissions.read`'s own permission-table row already grants
+   * `SOFTWARE_ADMIN: granted('SELF')` (B2's row comment: "not an explicit
+   * 02 row" — anticipating exactly this kind of platform-reachable use) —
+   * the only missing piece was a route wired through `@AuthorizedPlatform`
+   * instead of `@Authorized`. No schema, no permission-table, no ADR
+   * change: purely an additive route reusing existing, already-graded
+   * logic.
+   */
+  @Get('permissions')
+  @AuthorizedPlatform('identity.permissions.read')
+  @ApiOperation({
+    summary:
+      'The effective capability set for the current Software Admin session — platform-scoped analog of GET /me/permissions.',
+  })
+  @ApiOkResponse({ type: MePermissionsResponseDto })
+  permissions(@Req() req: FastifyRequest): MePermissionsResponseDto {
+    const actor = actorFromAuthenticatedUser(req.user!);
+    return {
+      roles: actor.roles,
+      permissions: this.authz.effectivePermissions(actor),
+    };
   }
 }

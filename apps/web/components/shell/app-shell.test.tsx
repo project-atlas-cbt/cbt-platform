@@ -131,6 +131,12 @@ describe('AppShell (platform variant — Software Admin)', () => {
     // it here too so "useAuth was never consulted" isn't polluted by calls
     // left over from the school-variant tests above.
     mockUseAuth.mockClear();
+    // Reset call history too, not just mockUseAuth — otherwise this describe
+    // block's "was /me/permissions never called" assertion below would see
+    // leftover calls from the school-variant tests above (which share this
+    // file's one mockGet instance), not just calls this block's own tests
+    // actually made.
+    mockGet.mockReset();
     mockGet.mockReturnValue(
       Promise.resolve({
         data: { roles: ['SOFTWARE_ADMIN'], permissions: [] },
@@ -167,6 +173,11 @@ describe('AppShell (platform variant — Software Admin)', () => {
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument(),
     );
+    // Regression: the nav used to be sourced from the school-only
+    // GET /me/permissions, which 401s forever for a platform session and
+    // left the sidebar stuck on its loading skeleton.
+    expect(mockGet).toHaveBeenCalledWith('/platform/auth/permissions', {});
+    expect(mockGet).not.toHaveBeenCalledWith('/me/permissions', {});
   });
 
   it('logging out redirects to /admin/login, not /login', async () => {

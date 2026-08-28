@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useNavigation } from './use-navigation';
+import { useNavigation, usePlatformNavigation } from './use-navigation';
 import { apiClient } from '@/lib/api';
 
 vi.mock('@/lib/api', async () => {
@@ -114,5 +114,59 @@ describe('useNavigation', () => {
       const ids = screen.getByTestId('state').textContent?.split(',') ?? [];
       expect(ids).toEqual(['assessment', 'profile']);
     });
+  });
+});
+
+/**
+ * Regression coverage for the real bug found by live browser testing: the
+ * Platform Admin shell used to call the school-only `useNavigation` (and
+ * therefore `GET /me/permissions`), which 401s forever for a Software Admin
+ * session — the sidebar never rendered past its loading skeleton.
+ * `usePlatformNavigation` is the fix: same filtering logic, sourced from
+ * `GET /platform/auth/permissions` instead.
+ */
+describe('usePlatformNavigation', () => {
+  function PlatformProbe() {
+    const { items, isLoading } = usePlatformNavigation('SOFTWARE_ADMIN');
+    if (isLoading || !items) return <div data-testid="state">loading</div>;
+    return <div data-testid="state">{items.map((i) => i.id).join(',')}</div>;
+  }
+
+  function renderPlatform() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <PlatformProbe />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    mockGet.mockReset();
+  });
+
+  it('sources SOFTWARE_ADMIN nav from GET /platform/auth/permissions, not /me/permissions', async () => {
+    mockGet.mockReturnValueOnce(
+      okResponse({
+        roles: ['SOFTWARE_ADMIN'],
+        permissions: [
+          {
+            resource: 'platform.school.viewAll',
+            section: 'Platform',
+            label: 'x',
+            action: 'READ',
+            scope: 'PLATFORM',
+          },
+        ],
+      }),
+    );
+    renderPlatform();
+    await waitFor(() => {
+      const ids = screen.getByTestId('state').textContent?.split(',') ?? [];
+      expect(ids).toContain('dashboard');
+      expect(ids).toContain('schools');
+      expect(ids).not.toContain('subscriptions');
+    });
+    expect(mockGet).toHaveBeenCalledWith('/platform/auth/permissions', {});
   });
 });

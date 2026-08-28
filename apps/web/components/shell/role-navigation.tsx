@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Role } from '@atlas/domain';
-import { useNavigation } from '@/lib/nav';
+import type { NavigationResult } from '@/lib/nav';
 import { ROLE_WORKSPACES } from '@/lib/nav/nav-model';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -15,9 +15,19 @@ import { cn } from '@/lib/utils';
  * shadcn/ui primitives... don't invent new visual language" — this is a
  * plain link list, deliberately not a generic icon-heavy SaaS sidebar
  * component, so it reads as institutional rather than templated).
+ *
+ * Purely presentational — `navigation` is computed by the caller
+ * (`SchoolAppShell` via `useNavigation`, `PlatformAppShell` via
+ * `usePlatformNavigation`) and passed in, rather than this component
+ * calling a permissions hook itself. This mirrors `ProfileMenu`/
+ * `ContextSwitcher`'s own F3 refactor ("receive identity via props instead
+ * of calling useAuth() directly") — it's what fixed a real bug: this
+ * component used to call the school-only `useNavigation` unconditionally
+ * for every role, so the Platform Admin sidebar's `GET /me/permissions`
+ * call 401'd forever and the nav never rendered past its loading skeleton.
  */
-export function RoleNavigation({ role }: { role: Role }) {
-  const { items } = useNavigation(role);
+export function RoleNavigation({ role, navigation }: { role: Role; navigation: NavigationResult }) {
+  const { items } = navigation;
   const pathname = usePathname();
   const root = ROLE_WORKSPACES[role].root;
 

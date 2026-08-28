@@ -208,6 +208,48 @@ describe('Platform auth (B3)', () => {
   });
 });
 
+/**
+ * A real gap found by live browser testing, not planned in any phase: the
+ * Platform Admin shell's nav (`RoleNavigation`, via `useNavigation`) called
+ * the school-only `GET /me/permissions` (`@Authorized`, `AuthGuard`-backed)
+ * unconditionally for every role, including `SOFTWARE_ADMIN` — whose
+ * session has no `SchoolMembership`/tenant at all, so that call 401'd
+ * forever and the sidebar never rendered past its loading skeleton.
+ * `GET /platform/auth/permissions` (`@AuthorizedPlatform`,
+ * `PlatformAuthGuard`-backed) is the platform-scoped analog, reusing the
+ * same `AuthorizationService.effectivePermissions()` logic B2 already made
+ * actor-kind-agnostic.
+ */
+describe('GET /platform/auth/permissions (gap closure: platform-scoped analog of /me/permissions)', () => {
+  it("returns the Software Admin's effective permissions, including identity.permissions.read itself", async () => {
+    const platformAdmin = await seedPlatformAdmin();
+    const ctx = await freshCtx(ADMIN_HOST, `10.${RUN}.9.5`);
+    await loginPlatform(ctx, platformAdmin.email, platformAdmin.password);
+
+    const res = await get(ctx, '/platform/auth/permissions');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ roles: string[]; permissions: { resource: string }[] }>();
+    expect(body.roles).toEqual(['SOFTWARE_ADMIN']);
+    expect(body.permissions.map((p) => p.resource)).toContain('identity.permissions.read');
+    expect(body.permissions.map((p) => p.resource)).toContain('platform.school.viewAll');
+  });
+
+  it('rejects an unauthenticated request the same way every other platform route does', async () => {
+    const ctx = await freshCtx(ADMIN_HOST, `10.${RUN}.9.6`);
+    const res = await get(ctx, '/platform/auth/permissions');
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('the school-scoped GET /me/permissions still rejects a platform session — this route exists precisely because that one cannot serve it', async () => {
+    const platformAdmin = await seedPlatformAdmin();
+    const ctx = await freshCtx(ADMIN_HOST, `10.${RUN}.9.7`);
+    await loginPlatform(ctx, platformAdmin.email, platformAdmin.password);
+
+    const res = await get(ctx, '/me/permissions');
+    expect(res.statusCode).toBe(401);
+  });
+});
+
 describe('Full activation lifecycle (B3 DoD items 1-4, 6)', () => {
   let platformCtx: RequestCtx;
   let schoolId: string;

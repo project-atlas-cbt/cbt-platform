@@ -8,6 +8,7 @@ import { RouteGuard } from '@/components/auth/route-guard';
 import { PlatformRouteGuard } from '@/components/auth/platform-route-guard';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useAuth, usePlatformAuth } from '@/lib/auth';
+import { useNavigation, usePlatformNavigation, type NavigationResult } from '@/lib/nav';
 import { ROLE_WORKSPACES } from '@/lib/nav/nav-model';
 import { RoleNavigation } from './role-navigation';
 import { ContextSwitcher } from './context-switcher';
@@ -52,6 +53,7 @@ function ShellChrome({
   schoolName,
   roles,
   identity,
+  navigation,
   onLogout,
   children,
 }: {
@@ -59,6 +61,7 @@ function ShellChrome({
   schoolName?: string;
   roles: Role[];
   identity: ProfileMenuIdentity | null;
+  navigation: NavigationResult;
   onLogout: () => Promise<void>;
   children: ReactNode;
 }) {
@@ -86,7 +89,7 @@ function ShellChrome({
       <OfflineIndicator />
       <div className="flex flex-1">
         <aside className="w-56 shrink-0 border-r border-border bg-surface">
-          <RoleNavigation role={role} />
+          <RoleNavigation role={role} navigation={navigation} />
         </aside>
         <main className="min-w-0 flex-1 p-6">
           <ErrorBoundary>{children}</ErrorBoundary>
@@ -99,6 +102,7 @@ function ShellChrome({
 function SchoolAppShell({ role, schoolName, children }: AppShellProps) {
   const router = useRouter();
   const { me, logout } = useAuth();
+  const navigation = useNavigation(role);
 
   async function handleLogout() {
     await logout();
@@ -116,6 +120,7 @@ function SchoolAppShell({ role, schoolName, children }: AppShellProps) {
             ? { displayName: me.user.displayName, secondaryLabel: me.membership.loginIdentifier }
             : null
         }
+        navigation={navigation}
         onLogout={handleLogout}
       >
         {children}
@@ -127,6 +132,10 @@ function SchoolAppShell({ role, schoolName, children }: AppShellProps) {
 function PlatformAppShell({ role, children }: Omit<AppShellProps, 'schoolName'>) {
   const router = useRouter();
   const { me, logout } = usePlatformAuth();
+  // Not `useNavigation` — see that hook's own doc comment for the bug this
+  // avoids: the school-scoped permissions query 401s forever for a
+  // Software Admin session, since it has no SchoolMembership to check.
+  const navigation = usePlatformNavigation(role);
 
   async function handleLogout() {
     await logout();
@@ -141,6 +150,7 @@ function PlatformAppShell({ role, children }: Omit<AppShellProps, 'schoolName'>)
         identity={
           me ? { displayName: me.user.displayName, secondaryLabel: 'Software Admin' } : null
         }
+        navigation={navigation}
         onLogout={handleLogout}
       >
         {children}

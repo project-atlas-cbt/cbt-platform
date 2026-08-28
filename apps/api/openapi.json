@@ -405,6 +405,26 @@
         "tags": ["platform"]
       }
     },
+    "/platform/auth/permissions": {
+      "get": {
+        "operationId": "PlatformAuthController_permissions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MePermissionsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The effective capability set for the current Software Admin session — platform-scoped analog of GET /me/permissions.",
+        "tags": ["platform"]
+      }
+    },
     "/platform/schools": {
       "get": {
         "operationId": "SchoolsAdminController_list",

@@ -293,6 +293,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/auth/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The effective capability set for the current Software Admin session — platform-scoped analog of GET /me/permissions. */
+        get: operations["PlatformAuthController_permissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/schools": {
         parameters: {
             query?: never;
@@ -2573,6 +2590,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformMeResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_permissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MePermissionsResponseDto"];
                 };
             };
         };
