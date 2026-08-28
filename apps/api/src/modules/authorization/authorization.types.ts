@@ -45,6 +45,14 @@ export interface ResourceContext {
    * (e.g. B9's Question -> Subject.departmentId). See
    * academics/department-scope.resolver.ts. */
   departmentId?: string;
+  /** ASSIGNED (B6): the ClassSubject a TeacherAssignment-gated resource
+   * belongs to — resolved by the caller (e.g. a future B8 Question ->
+   * ClassSubject join) before constructing this context. See
+   * academics/assigned-scope.resolver.ts. Same caveat as departmentId
+   * above: no controller anywhere constructs this field yet — the resolver
+   * is correct and registered, reachable only once a later phase's
+   * controller passes it. */
+  classSubjectId?: string;
 }
 
 export type AuthorizationOutcome = 'ALLOWED' | 'FORBIDDEN' | 'NOT_FOUND';

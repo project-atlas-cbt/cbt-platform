@@ -645,7 +645,28 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
   // User Management — R4 applies to every Software Admin write cell here;
   // see this file's header for why account lifecycle is treated as a
   // school-academic write rather than platform-unrestricted.
+  //
+  // B6: the four `.view` rows below (list/get a directory) didn't exist
+  // before this phase — no roadmap document names a dedicated read
+  // permission distinct from `.create`, and gating a GET behind a
+  // CREATE-typed id would be a real semantic mismatch. Each mirrors its
+  // sibling `.create` row's grant shape exactly, a minimal additive
+  // extension, not a new policy decision.
   // ------------------------------------------------------------------
+  {
+    id: 'users.moderator.view',
+    section: 'User Management',
+    label: 'View moderators',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: platformRead(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
   {
     id: 'users.moderator.create',
     section: 'User Management',
@@ -659,7 +680,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.moderator.edit',
@@ -674,7 +694,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.moderator.remove',
@@ -689,7 +708,20 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
+  },
+  {
+    id: 'users.hod.view',
+    section: 'User Management',
+    label: 'View HODs',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: platformRead(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
   },
   {
     id: 'users.hod.create',
@@ -704,7 +736,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.hod.edit',
@@ -719,7 +750,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.hod.remove',
@@ -734,7 +764,20 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
+  },
+  {
+    id: 'users.teacher.view',
+    section: 'User Management',
+    label: 'View teachers',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: platformRead(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
   },
   {
     id: 'users.teacher.create',
@@ -749,7 +792,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.teacher.edit',
@@ -764,7 +806,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.teacher.deactivate',
@@ -779,7 +820,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.teacher.resetCredentials',
@@ -794,7 +834,20 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'CredentialSheetService already exists (B1); no controller route yet (B6)',
+  },
+  {
+    id: 'users.student.view',
+    section: 'User Management',
+    label: 'View students',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: platformRead(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
   },
   {
     id: 'users.student.create',
@@ -809,7 +862,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.student.edit',
@@ -824,7 +876,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.student.deactivate',
@@ -839,7 +890,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'User provisioning endpoints (B6)',
   },
   {
     id: 'users.student.resetCredentials',
@@ -854,7 +904,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'CredentialSheetService already exists (B1); no controller route yet (B6)',
   },
   {
     id: 'users.import.teachers',
@@ -918,7 +967,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'TeacherAssignment (B6)',
   },
   {
     id: 'assignments.teacherToClass',
@@ -933,7 +981,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'TeacherAssignment (B6)',
   },
   {
     id: 'assignments.hodToDepartment',
@@ -962,7 +1009,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Enrollment (B6)',
   },
   {
     id: 'assignments.moveStudent',
@@ -977,7 +1023,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Enrollment (B6)',
   },
   {
     id: 'assignments.view',
@@ -995,7 +1040,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       ),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'TeacherAssignment/Enrollment (B6)',
   },
 
   // ------------------------------------------------------------------
@@ -2406,15 +2450,19 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SOFTWARE_ADMIN: breakGlass('R4: named explicitly in ADR-0012 as a break-glass example.'),
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
+      // B6 finalized this call: HOD gets no real write access to
+      // force-password-reset in this release — consistent with every other
+      // B6 Security bullet (Moderator/School Admin only manage people) and
+      // ADR-0017's general withdrawal of HOD operational authority over
+      // people/assignments. Stays read-only per R5 — no controller route
+      // grants HOD an actual reset-credential write path.
       HOD: limitedReadOnly(
         'DEPARTMENT',
-        '"Limited" — exact HOD-initiated force-reset scope (e.g. department teachers only, never students) finalized when B6 builds the operation. Recorded as read-only here per R5 until then, even though the row is EXECUTE-shaped — no controller route exists to grant real write access to.',
+        '"Limited" — HOD has no real write access to this action (B6 finalized: consistent with ADR-0017). Recorded as read-only per R5 — the row is EXECUTE-shaped, but no controller route grants HOD real write access.',
       ),
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource:
-      'Controller route (B6) — CredentialSheetService/PasswordService primitives already exist (B1).',
   },
   {
     id: 'account.deactivate',
@@ -2429,7 +2477,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Controller route (B6)',
   },
 ] as const;
 

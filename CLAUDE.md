@@ -12,8 +12,8 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 ## Project Status
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
-architecture decisions were completed first (see below); backend phases `B0`–`B3` and frontend
-phases `F0`–`F2` are now complete. See "Implementation Status" and "Change Log" further down in
+architecture decisions were completed first (see below); backend phases `B0`–`B6` and frontend
+phases `F0`–`F3` are now complete. See "Implementation Status" and "Change Log" further down in
 this file for what has actually shipped and what's next.
 
 The planning phase completed:
@@ -265,8 +265,16 @@ academic hierarchy (`AcademicSession`/`AcademicTerm`/`Department`/`ClassGroup`/`
 real `DEPARTMENT` scope resolver closing B2's fail-closed placeholder — built **ahead of `F5`, at
 explicit project-owner instruction**, a deliberate, stated deviation from the frontend/backend
 phase-pairing default (not a silent skip — see this file's Change Log entry below for the full
-reasoning and the honestly-scoped-down items). Both **`F5 — School Settings & Branding`** and
-**`F6 — Academic Structure Workspace`** are now open; either may proceed next per the pairing rule.
+reasoning and the honestly-scoped-down items). **`B6 — People, Profiles & Enrollment`** — complete:
+`people.v1` (student/teacher/HOD/moderator directories and lifecycle), `StudentEnrollment`/
+`TeacherAssignment`/`StudentSubjectRegistration` added to `AcademicsModule`, the real `ASSIGNED`
+scope resolver closing B2's other fail-closed placeholder, and ADR-0011's mandatory registration
+auto-registration/reconciliation/deregistration — built immediately after `B5`, continuing straight
+down the backend critical path per the same explicit project-owner instruction (see this file's
+Change Log entry below). No DoD item was left partial. **`F5 — School Settings & Branding`**,
+**`F6 — Academic Structure Workspace`**, and **`F7 — People Management Workspace`** are all now
+open; any may proceed next per the pairing rule, and **`F4 — School Onboarding Wizard`** is reachable
+for the first time (its pair needed `B3`+`B4`+`B5`+`B6` together).
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -1887,3 +1895,156 @@ Project state moves from _Implementation (F5, pending)_ to _Implementation (B5 c
 next)_. **Next: `F5 — School Settings & Branding` or `F6 — Academic Structure Workspace`** (either
 may proceed per the frontend/backend phase-pairing default), or `B6 — People, Profiles & Enrollment`
 if the backend critical path is prioritized instead.
+
+### 2026-08-28 — `B6` complete: people, profiles and enrollment, continuing the backend critical path
+
+Requested explicitly, same day as `B5`: continue straight down the backend critical path rather than
+switch to a frontend phase — the identical class of instruction that prioritized `B5` over `F5`
+earlier this session (`AGENTS.md` §2's source-of-truth hierarchy: an explicit current instruction
+outranks the roadmap's phase-pairing default). Not a silent skip of `F5`/`F6`/`F7` — all three remain
+open and are recorded as such below.
+
+Followed the working-rules checklist first: read `07 §6.7`–`§6.9`, `03 §11`–`§17`/`§58`/`§68`–`§70`,
+`05 §9`/`§11`–`§14`, `02`'s User Management/Assignments rows, the B6 roadmap phase, its two gating
+ADRs (0011, 0017 — both Accepted) in full, and audit findings M-02/C-10/M-05 — then planned in a
+dedicated plan-mode pass (two parallel research agents covering the roadmap/ADRs/specs and the
+existing implementation conventions, followed by a design-and-review pass verifying the highest-risk
+files directly) before writing any code, per B2/B3/B5's own precedent for a phase this size.
+
+**One product-modeling question genuinely forked and was put to the project owner rather than
+guessed, per `AGENTS.md` §3**: does `POST /v1/hods` create a brand-new person record, or promote an
+existing teacher's membership? **Confirmed: promote an existing teacher** — `POST /v1/hods` takes an
+existing teacher `membershipId` and adds an `HOD` `RoleAssignment` to it; no second, disconnected
+person record is ever created. This matches the schema's own pre-existing documentation ("a
+membership may hold more than one role, e.g. TEACHER + HOD") and avoids the real risk the rejected
+alternative carried: the same person ending up as two unlinked rows if they're both a subject teacher
+and later made HOD.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260828120000_b6_people_profiles_
+enrollment`): three new tables — `StudentEnrollment` (07 §6.7, session-scoped placement, field names
+following the ERD literally), `TeacherAssignment` (07 §6.8, "the core authorization entity"), and
+`StudentSubjectRegistration` (ADR-0011, keyed on the _enrollment_, not the student directly — the
+design choice that makes ADR-0011's "close registrations for subjects the new class doesn't offer"
+fall out structurally on a class move, with no explicit close-loop needed, since a superseded
+enrollment's own registrations are already historically frozen the moment it stops being `ACTIVE`).
+Two purely additive changes to already-shipped B1/B5 tables — new `@@unique([schoolId, id])`
+composite-FK-target indexes on `ClassSubject`, `StudentProfile`, and `TeacherProfile` (every other
+such target already had this line; these three simply hadn't needed it until B6 gave them FK-
+consuming children) — no behavior or data change. Hand-written migration SQL for RLS bootstrap (all
+three new tables) plus two partial unique indexes Prisma's DSL can't express, mirroring B5's own
+precedent exactly: `student_enrollments_one_active_per_session` (DoD item 9) and
+`teacher_assignments_one_active_per_pair` (scoped to `ACTIVE` rows only, so a rehire after ending the
+same pair stays possible).
+
+**No `StudentProfileStatus` enum extension was needed** — verified directly before assuming
+otherwise: `StudentProfileStatus` (`ACTIVE`/`GRADUATED`/`WITHDRAWN`/`ARCHIVED`, academic standing)
+and `UserStatus` (`INVITED`/`ACTIVE`/`SUSPENDED`/`INACTIVE`, account status) together already cover
+the roadmap's listed student lifecycle exactly as audit finding C-14's original account/academic
+split intended.
+
+**API work**: two modules, not the roadmap's literally-named three. A new `UsersModule`
+(`apps/api/src/modules/users/`) owns person directories/lifecycle — Student/Teacher/HOD/Moderator,
+built on B1's identity models — while `AcademicsModule` gained `StudentEnrollment`/
+`TeacherAssignment`/`StudentSubjectRegistration` exactly as that module's own doc comment (written
+during B5) already anticipated: "B6 adds StudentEnrollment/TeacherAssignment/
+StudentSubjectRegistration on top of this same module." `UsersModule` imports `AcademicsModule`
+one-directionally for `HodAssignmentService` (B5) — its first-ever export — needed only by
+`PUT /v1/hods/:id/department`, a new `HodAssignmentService.reassign()` method mirroring
+`SessionService`'s own close-then-activate transaction shape. `POST /v1/students/:id/enrollments`
+serves both "enroll" and "move" behind one endpoint (the roadmap's own wording), with the ADR-0011
+auto-registration/reconciliation logic in the same transaction. `PUT /v1/teachers/:id/assignments` is
+a full-replace (matching `05 §12.1`'s checkbox-editor UI) that diffs against the teacher's current
+`ACTIVE` assignments, ending removed pairs (never deleting — DoD item 5) and creating added ones.
+
+**The real `ASSIGNED` scope resolver** (`assigned-scope.resolver.ts`) closes B2's other fail-closed
+placeholder (`DEPARTMENT`, closed by B5, was the first), mirroring `department-scope.resolver.ts`'s
+exact shape: checks the actor holds an active `TeacherAssignment` for the resource's
+`classSubjectId`. `ResourceContext` gained that one field. Same caveat B5 already recorded for
+`DEPARTMENT`: no controller anywhere constructs a `ResourceContext` yet, so this resolver is correct
+and registered but reachable over HTTP only once a later phase (B8/B9) calls
+`AuthorizationService.evaluate()` with one — proven directly here instead, against real
+`TeacherAssignment` rows (DoD item 4: "assigning Mathematics/SS2A grants exactly that scope and
+nothing adjacent").
+
+**Staff invitation dispatch reuses B1's password-reset token mechanism directly**, exactly as
+`templates.ts`'s own B1-era doc comment predicted: "also a staff member's initial invitation once B6
+starts issuing those tokens the same way." A new `IdentityService.issueStaffInvitation(schoolId,
+userId)` — deliberately not `requestPasswordReset` itself, which requires `user.status === 'ACTIVE'`,
+an enumeration-resistance gate wrong for a freshly-created `INVITED` account. `IdentityService` is
+now exported from `IdentityModule` for this. This closed a real roadmap ambiguity honestly rather
+than assuming the conservative reading: "invitation dispatch for staff" (listed as a B6 Background
+job) turned out to need no queue/batch mechanism at all — a single `POST /v1/teachers` (or `/hods`,
+`/moderators`) call is itself the triggering event, dispatched synchronously. The sibling Background
+job, "credential-sheet generation for a class after import," genuinely does need `B7`'s import
+pipeline to trigger it and was pushed forward, not built here.
+
+**Two response-shape decisions recorded, not silently defaulted**: teacher/HOD/moderator credential
+reset returns a plain `{status: 'ok'}`, never a password — `CredentialState`'s own doc comment
+("staff: invitation link; student: system-generated password") makes the shown-once-password shape
+wrong for staff. `account.forcePasswordReset`'s HOD grant stays `limitedReadOnly('DEPARTMENT', ...)`
+— no controller route ever grants HOD real write access to reset anyone's credentials — finalizing
+that permission row's own B2-era "finalized when B6 builds the operation" comment consistent with
+ADR-0017's general withdrawal of HOD operational authority over people/assignments.
+
+**Permission table** (`packages/domain/src/authorization/permission-table.ts`): cleared eleven
+`awaitingResource` flags this phase's routes finally satisfy, and added four new `.view` rows
+(`users.{moderator,hod,teacher,student}.view`) — no roadmap document named a read permission distinct
+from `.create`, and gating a `GET` behind a `CREATE`-typed id would have been a real semantic
+mismatch; each mirrors its sibling `.create` row's grant shape exactly. `users.import.*` and
+`users.export` stay flagged — B7's/a later phase's job, not B6's. Two new domain-specific error codes
+registered in `packages/domain/src/error-codes.ts` alongside B5's own precedent
+(`HOD_ASSIGNMENT_REQUIRES_ACTIVE_ROLE`): `STUDENT_ENROLLMENT_REQUIRES_ACTIVE_ROLE`,
+`TEACHER_ASSIGNMENT_REQUIRES_ACTIVE_ROLE`, plus `HOD_PROMOTION_REQUIRES_ACTIVE_TEACHER_ROLE`,
+`ACADEMIC_STRUCTURE_SESSION_MISMATCH`, and `CREDENTIAL_RESET_FAILED`.
+
+**Two analogous `assertNoDependents` extensions, not just the one B5's own Change Log entry named in
+advance.** `ClassGroupService.delete()` now also counts `StudentEnrollment` rows — the named,
+expected extension. Found only while implementing, not anticipated: `ClassSubjectService.remove()`
+(B5) needed the identical treatment, since `TeacherAssignment` and `StudentSubjectRegistration` both
+FK against `ClassSubject` with `onDelete: Restrict` too — without it, a hard-delete attempt would
+have surfaced as a raw, unfriendly database constraint error instead of a clean `409`.
+
+**One real bug found only by the integration tests, not by inspection**:
+`ReplaceTeacherAssignmentsDto.classSubjectIds` was originally validated with `@IsUUID('4', { each:
+true })` — rejecting every real id in this codebase, which uses UUIDv7 primary keys throughout. Every
+`PUT /v1/teachers/:id/assignments` call failed with a generic `VALIDATION_ERROR` until fixed to the
+same version-less `@IsUUID()` every other id field in this codebase already uses.
+
+**Testing**: `users.integration.test.ts` (14 tests — all four groups' create/edit/deactivate/
+reactivate/reset-credentials, HOD promotion/reassignment/removal leaving prior assignments
+attributed to the previous HOD, School-Admin-only moderator management, cross-tenant denied, teacher
+cannot manage users); `student-enrollment.integration.test.ts` (9 tests — enroll, auto-registration,
+idempotent re-enrollment, roster, deregister/re-register, the 07 §35 class-movement worked example,
+ADR-0011 reconciliation, the sequential double-enrollment case, and `ClassGroupService.delete()`'s B6
+extension); `teacher-assignment.integration.test.ts` (6 tests — the ASSIGNED resolver proven true/
+false directly, full-replace diff semantics, historical preservation on removal, rehire after ending
+the same pair, the active-role invariant, cross-tenant); `student-enrollment-concurrency.integration.
+test.ts` (1 test, mirroring `session-activation-concurrency.integration.test.ts`'s own `pg_sleep`-
+forced-interleaving technique exactly, proving DoD item 9 at the database level, not merely via HTTP
+timing); `tests/tenancy/rls.integration.test.ts` gained the three new tables in its existing academic-
+structure describe block's `tables` array (same "economy" precedent as B3/B4/B5 — no new describe
+block), 47 tests total in that file, up from 38.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test && pnpm
+build && pnpm test:integration && pnpm spike`, plus `pnpm generate` (`people.v1` and the extended
+`academics.v1` routes appear in `apps/api/openapi.json`/`packages/contracts`) and `pnpm
+generate:permission-table-doc` (148 rows, up from 144 — the four new `.view` rows). A real `node
+dist/main.js` boot confirmed `PolicyCoverageService` reports 106 routes checked with zero violations
+(this codebase's established way of catching the cross-module DI/boot-only bugs every prior phase has
+hit at least once — none surfaced this time). One pre-existing, unrelated `apps/web` test flake
+(`app/admin/(shell)/schools/new/page.test.tsx`, a fuzzed-email-string case) was observed during the
+full-pipeline run and confirmed to pass in isolation — `apps/web` was not touched this session, so
+this is recorded as a pre-existing flake, not a B6 regression, and left for whichever session next
+touches that screen.
+
+`docs/roadmaps/backend-roadmap.md`'s B6 section gained status `COMPLETE`, every DoD item checked, a
+full "Implementation notes" subsection, and an expanded Deferred items list; its own B5 section's
+Deferred items line for `StudentEnrollment`'s dependent-check was updated to record the closure.
+`docs/roadmaps/roadmap-index.md`'s version, Current State, and Immediate Next Actions all updated to
+record `B6` complete and `F4`/`F5`/`F6`/`F7` all now reachable.
+
+Project state moves from _Implementation (B5 complete; F5 or F6 next)_ to _Implementation (B6
+complete; F4/F5/F6/F7 all open, or `B7`/`B8` on the backend critical path)_.
+**Next: `F5`, `F6`, `F7`, or `F4` (frontend/backend phase-pairing default), or `B7 — Bulk Import
+Pipeline` / `B8 — Question Bank` if the backend critical path is prioritized instead — `B7` is worth
+particular consideration since it directly extends the people/enrollment surface `B6` just shipped.**

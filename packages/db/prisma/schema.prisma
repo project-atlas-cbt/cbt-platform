@@ -300,10 +300,14 @@ model StudentProfile {
   createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  membership SchoolMembership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  membership  SchoolMembership    @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  enrollments StudentEnrollment[]
 
   @@unique([schoolId, membershipId])
   @@unique([schoolId, studentId])
+  // Composite-FK target for StudentEnrollment (B6) — every other
+  // composite-FK-target table already carries this exact line.
+  @@unique([schoolId, id])
   @@index([schoolId])
   @@map("student_profiles")
 }
@@ -320,10 +324,14 @@ model TeacherProfile {
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  membership SchoolMembership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  membership  SchoolMembership    @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  assignments TeacherAssignment[]
 
   @@unique([schoolId, membershipId])
   @@unique([schoolId, staffId])
+  // Composite-FK target for TeacherAssignment (B6) — every other
+  // composite-FK-target table already carries this exact line.
+  @@unique([schoolId, id])
   @@index([schoolId])
   @@map("teacher_profiles")
 }
@@ -764,11 +772,13 @@ model AcademicSession {
   createdAt DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  terms          AcademicTerm[]
-  classGroups    ClassGroup[]
-  classSubjects  ClassSubject[]
-  hodAssignments HODAssignment[]
+  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  terms              AcademicTerm[]
+  classGroups        ClassGroup[]
+  classSubjects      ClassSubject[]
+  hodAssignments     HODAssignment[]
+  studentEnrollments StudentEnrollment[]
+  teacherAssignments TeacherAssignment[]
 
   // Composite-FK target for AcademicTerm/ClassGroup/ClassSubject/
   // HODAssignment, matching the established (schoolId, id) convention.
@@ -847,15 +857,18 @@ model ClassGroup {
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  session       AcademicSession @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  session            AcademicSession     @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
   /// Restrict, not SetNull: a composite FK can't null just one of its two
   /// columns (schoolId is required), and our own archival rule already
   /// blocks hard-deleting a Department while any ClassGroup references it —
   /// Restrict is a correct database-level backstop under that rule, not a
   /// contradiction of "departmentId is nullable" (nullable only means a
   /// class *may be created* with no department).
-  department    Department?     @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
-  classSubjects ClassSubject[]
+  department         Department?         @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  classSubjects      ClassSubject[]
+  // B6: StudentEnrollment FKs against the (schoolId, id, academicSessionId)
+  // unique below (the same D-10-style guarantee ClassSubject already uses).
+  studentEnrollments StudentEnrollment[]
 
   // Composite-FK target for ClassSubject's session-agreement check (D-10) —
   // a three-column unique, not just (schoolId, id), so ClassSubject can FK
@@ -914,14 +927,22 @@ model ClassSubject {
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  subject Subject         @relation(fields: [schoolId, subjectId], references: [schoolId, id], onDelete: Restrict)
-  session AcademicSession @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  subject           Subject         @relation(fields: [schoolId, subjectId], references: [schoolId, id], onDelete: Restrict)
+  session           AcademicSession @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
   /// The load-bearing composite FK (D-10): targets ClassGroup's three-column
   /// unique above, not merely (schoolId, id) — so a row can only ever point
   /// at a (class, session) pair that actually agree.
-  classGroupSession ClassGroup @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Cascade)
+  classGroupSession ClassGroup      @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Cascade)
+
+  teacherAssignments TeacherAssignment[]
+  registrations      StudentSubjectRegistration[]
 
   @@unique([schoolId, classId, subjectId])
+  // Composite-FK target for TeacherAssignment/StudentSubjectRegistration
+  // (B6) — every other composite-FK-target table (SchoolMembership,
+  // AcademicSession, Department, Subject) already carries this exact line;
+  // ClassSubject didn't need it until B6 gave it FK-consuming children.
+  @@unique([schoolId, id])
   @@index([schoolId])
   @@index([schoolId, classId])
   @@index([schoolId, subjectId])
@@ -958,4 +979,139 @@ model HODAssignment {
   @@index([schoolId, departmentId])
   @@index([schoolId, academicSessionId])
   @@map("hod_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// B6 — People, Profiles & Enrollment (docs/roadmaps/backend-roadmap.md "B6").
+// StudentEnrollment/TeacherAssignment/StudentSubjectRegistration on top of
+// B5's session-scoped structural half, per academics.module.ts's own doc
+// comment anticipating exactly this. Person directory models (User/
+// SchoolMembership/RoleAssignment/StudentProfile/TeacherProfile) already
+// exist from B1 — B6 adds no new person-identity columns, only lifecycle
+// behaviour on top of them (UsersModule) plus these three placement/
+// assignment entities (AcademicsModule).
+// ---------------------------------------------------------------------------
+
+/// Session-scoped student placement (07 §6.7) — never a mutable
+/// current_class. Moving a student closes the old row (TRANSFERRED) and
+/// creates a new one in the same transaction; the old row is never
+/// overwritten (07 §35's worked example). Field names follow the ERD
+/// literally (student_profile_id, not membership_id).
+model StudentEnrollment {
+  id                String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId          String                  @map("school_id") @db.Uuid
+  studentProfileId  String                  @map("student_profile_id") @db.Uuid
+  academicSessionId String                  @map("academic_session_id") @db.Uuid
+  classId           String                  @map("class_id") @db.Uuid
+  startDate         DateTime                @map("start_date") @db.Date
+  endDate           DateTime?               @map("end_date") @db.Date
+  status            StudentEnrollmentStatus @default(ACTIVE)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  studentProfile    StudentProfile               @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Cascade)
+  session           AcademicSession              @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  /// D-10-style composite FK against ClassGroup's three-column unique —
+  /// structurally guarantees the enrollment's session agrees with the
+  /// class's own session, same pattern as ClassSubject.classGroupSession.
+  /// Restrict (not Cascade): a class must not be hard-deletable while a
+  /// live or historical enrollment still references it — backstops
+  /// ClassGroupService.delete()'s own dependent-count check.
+  classGroupSession ClassGroup                   @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Restrict)
+  registrations     StudentSubjectRegistration[]
+  // DoD item 9 ("a student cannot be enrolled twice concurrently in one
+  // session") is enforced by a partial unique index on
+  // (school_id, student_profile_id, academic_session_id) WHERE
+  // status = 'ACTIVE' — Prisma's DSL can't express a filtered unique index,
+  // so it's added by hand in this migration's raw SQL (same precedent as
+  // AcademicSession's "one CURRENT per school").
+
+  // Composite-FK target for StudentSubjectRegistration.
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, studentProfileId])
+  @@index([schoolId, classId])
+  @@index([schoolId, academicSessionId])
+  @@index([schoolId, status])
+  @@map("student_enrollments")
+}
+
+enum StudentEnrollmentStatus {
+  ACTIVE
+  TRANSFERRED // moved to another class — 07 §6.7's literal state list
+  COMPLETED
+  WITHDRAWN
+}
+
+/// 07 §6.8 — "the core authorization entity." Field names follow the ERD
+/// literally (teacher_profile_id, not membership_id), matching
+/// StudentEnrollment's same choice. The real ASSIGNED scope resolver
+/// (assigned-scope.resolver.ts) reads this table directly.
+model TeacherAssignment {
+  id                String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId          String                  @map("school_id") @db.Uuid
+  teacherProfileId  String                  @map("teacher_profile_id") @db.Uuid
+  classSubjectId    String                  @map("class_subject_id") @db.Uuid
+  academicSessionId String                  @map("academic_session_id") @db.Uuid
+  startDate         DateTime                @map("start_date") @db.Date
+  endDate           DateTime?               @map("end_date") @db.Date
+  status            TeacherAssignmentStatus @default(ACTIVE)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  teacherProfile TeacherProfile  @relation(fields: [schoolId, teacherProfileId], references: [schoolId, id], onDelete: Cascade)
+  classSubject   ClassSubject    @relation(fields: [schoolId, classSubjectId], references: [schoolId, id], onDelete: Restrict)
+  session        AcademicSession @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  // "At most one ACTIVE assignment per (teacher, classSubject) pair" is a
+  // partial unique index (added by hand in this migration's raw SQL,
+  // same reason as StudentEnrollment above) — not a plain @@unique, since
+  // re-assigning the same pair after ending it (rehire) must stay possible.
+
+  @@index([schoolId])
+  @@index([schoolId, teacherProfileId])
+  @@index([schoolId, classSubjectId])
+  @@index([schoolId, academicSessionId])
+  @@index([schoolId, status])
+  @@map("teacher_assignments")
+}
+
+enum TeacherAssignmentStatus {
+  ACTIVE
+  ENDED
+}
+
+/// ADR-0011 (Accepted, mandatory — resolves audit finding M-02). Keyed on
+/// (student enrollment, class subject), not directly on the student —
+/// auto-created on enrollment for every ACTIVE ClassSubject of the target
+/// class; a Moderator can deregister/re-register within an active
+/// enrollment. Tying registrations to the ENROLLMENT row (not the student
+/// directly) is what makes a past enrollment's registrations stay
+/// historically frozen once superseded by a move, with no explicit
+/// "close old registrations" step required — see
+/// StudentEnrollmentService's class-movement logic.
+model StudentSubjectRegistration {
+  id                  String                           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId            String                           @map("school_id") @db.Uuid
+  studentEnrollmentId String                           @map("student_enrollment_id") @db.Uuid
+  classSubjectId      String                           @map("class_subject_id") @db.Uuid
+  status              StudentSubjectRegistrationStatus @default(REGISTERED)
+  registeredAt        DateTime                         @default(now()) @map("registered_at") @db.Timestamptz(6)
+  deregisteredAt      DateTime?                        @map("deregistered_at") @db.Timestamptz(6)
+  createdAt           DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment   StudentEnrollment @relation(fields: [schoolId, studentEnrollmentId], references: [schoolId, id], onDelete: Cascade)
+  classSubject ClassSubject      @relation(fields: [schoolId, classSubjectId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, studentEnrollmentId, classSubjectId])
+  @@index([schoolId])
+  @@index([schoolId, studentEnrollmentId])
+  @@index([schoolId, classSubjectId])
+  @@index([schoolId, status])
+  @@map("student_subject_registrations")
+}
+
+enum StudentSubjectRegistrationStatus {
+  REGISTERED
+  DEREGISTERED
 }

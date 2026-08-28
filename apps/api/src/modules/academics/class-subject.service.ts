@@ -3,6 +3,7 @@ import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { assertNoDependents } from './archival.util.js';
 import { runUniqueGuarded } from './prisma-error.util.js';
 import type { ClassSubjectResponseDto, CreateClassSubjectDto } from './dto/class-subject.dto.js';
 
@@ -101,8 +102,18 @@ export class ClassSubjectService {
           message: 'Class-subject offering not found.',
         });
       }
-      // Leaf entity in B5 — no dependent check needed yet (B6's
-      // StudentSubjectRegistration will need one once it lands).
+      // B6: TeacherAssignment and StudentSubjectRegistration both FK against
+      // ClassSubject with onDelete: Restrict — this friendly pre-check
+      // matches that DB-level condition exactly, the same reasoning as
+      // ClassGroupService.delete()'s own B6 extension.
+      const [teacherAssignments, registrations] = await Promise.all([
+        tx.teacherAssignment.count({ where: { schoolId, classSubjectId: id } }),
+        tx.studentSubjectRegistration.count({ where: { schoolId, classSubjectId: id } }),
+      ]);
+      assertNoDependents('class-subject offering', {
+        'teacher assignment': teacherAssignments,
+        'student subject registration': registrations,
+      });
       await tx.classSubject.delete({ where: { id } });
     });
     await this.audit.record({

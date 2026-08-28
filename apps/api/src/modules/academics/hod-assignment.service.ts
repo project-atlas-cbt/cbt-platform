@@ -103,6 +103,76 @@ export class HodAssignmentService {
     return toResponseDto(created);
   }
 
+  /**
+   * `PUT /v1/hods/:id/department` (B6) — one transaction that ends the
+   * membership's current ACTIVE HODAssignment (if any) and creates the new
+   * one, mirroring `session.service.ts`'s own close-then-activate
+   * transaction shape. DoD item 7 ("prior approvals stay attributed to the
+   * previous HOD") falls out for free: nothing about a past HOD's authored
+   * approvals references HODAssignment by anything other than its own
+   * immutable id.
+   */
+  async reassign(
+    schoolId: string,
+    membershipId: string,
+    departmentId: string,
+    academicSessionId: string,
+    actor: ActorContext,
+  ): Promise<HodAssignmentResponseDto> {
+    const created = await withTenant(prisma, schoolId, async (tx) => {
+      const [department, session, activeHodRole] = await Promise.all([
+        tx.department.findUnique({ where: { id: departmentId } }),
+        tx.academicSession.findUnique({ where: { id: academicSessionId } }),
+        tx.roleAssignment.findFirst({
+          where: { schoolId, membershipId, role: 'HOD', status: 'ACTIVE' },
+          select: { id: true },
+        }),
+      ]);
+      if (!department) {
+        throw new AppHttpException({ code: 'NOT_FOUND', message: 'Department not found.' });
+      }
+      if (!session) {
+        throw new AppHttpException({ code: 'NOT_FOUND', message: 'Academic session not found.' });
+      }
+      if (!activeHodRole) {
+        throw new AppHttpException({
+          code: 'HOD_ASSIGNMENT_REQUIRES_ACTIVE_ROLE',
+          message: 'The referenced membership does not hold an active HOD role assignment.',
+        });
+      }
+
+      const current = await tx.hODAssignment.findFirst({
+        where: { schoolId, membershipId, status: 'ACTIVE' },
+      });
+      if (current) {
+        await tx.hODAssignment.update({
+          where: { id: current.id },
+          data: { status: 'ENDED', endDate: current.endDate ?? new Date() },
+        });
+      }
+
+      return tx.hODAssignment.create({
+        data: {
+          schoolId,
+          membershipId,
+          departmentId,
+          academicSessionId,
+          startDate: new Date(),
+        },
+      });
+    });
+
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.actorUserId,
+      actorRole: actor.actorRole,
+      action: 'HOD_ASSIGNMENT_REASSIGNED',
+      entityType: 'HODAssignment',
+      entityId: created.id,
+    });
+    return toResponseDto(created);
+  }
+
   async end(schoolId: string, id: string, actor: ActorContext): Promise<HodAssignmentResponseDto> {
     const existing = await withTenant(prisma, schoolId, (tx) =>
       tx.hODAssignment.findUnique({ where: { id } }),

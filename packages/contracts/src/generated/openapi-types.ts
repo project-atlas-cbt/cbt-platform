@@ -958,6 +958,406 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/{id}/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A student's full enrollment history (never overwritten, 07 §35). */
+        get: operations["StudentEnrollmentController_listForStudent"];
+        put?: never;
+        /** Enroll a student into a class for a session, or move them to another class within a session they are already enrolled in (07 §35) — one endpoint serves both. */
+        post: operations["StudentEnrollmentController_enroll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classes/{id}/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A class's current roster (07 §6.7). */
+        get: operations["StudentEnrollmentController_roster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teachers/{id}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A teacher's current active assignments. */
+        get: operations["TeacherAssignmentController_list"];
+        /** Replace a teacher's subject×class assignment set for a session (04 §25, 05 §12.1) — full-replace: removed pairs are ended (DoD item 5), not deleted. */
+        put: operations["TeacherAssignmentController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{id}/subject-registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A student's current enrollment's subject registrations. */
+        get: operations["StudentSubjectRegistrationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{id}/subject-registrations/{classSubjectId}/deregister": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deregister a student from an elective (ADR-0011) — effective for future exams only; historical attempts/results are untouched. */
+        post: operations["StudentSubjectRegistrationController_deregister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{id}/subject-registrations/{classSubjectId}/re-register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-register a student for a previously deregistered elective. */
+        post: operations["StudentSubjectRegistrationController_reRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's students (05 §9.1). */
+        get: operations["StudentController_list"];
+        put?: never;
+        /** Create a student. */
+        post: operations["StudentController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one student profile (05 §9.2). */
+        get: operations["StudentController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a student. */
+        patch: operations["StudentController_update"];
+        trace?: never;
+    };
+    "/students/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate a student's account (never deletes authored history). */
+        post: operations["StudentController_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate a student's account. */
+        post: operations["StudentController_reactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{id}/reset-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a fresh system-generated password for a student (audited; the resetter sees the plaintext exactly once, here — never retrievable again). */
+        post: operations["StudentController_resetCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's teachers (05 §11.1). */
+        get: operations["TeacherController_list"];
+        put?: never;
+        /** Create a teacher (dispatches an invitation email). */
+        post: operations["TeacherController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teachers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one teacher profile. */
+        get: operations["TeacherController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a teacher. */
+        patch: operations["TeacherController_update"];
+        trace?: never;
+    };
+    "/teachers/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate a teacher's account — their questions and exams remain, still attributed to them (DoD item 6). */
+        post: operations["TeacherController_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teachers/{id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate a teacher's account. */
+        post: operations["TeacherController_reactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teachers/{id}/reset-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a teacher a fresh invitation link to set a new password (audited). */
+        post: operations["TeacherController_resetCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's HODs (05 §13). */
+        get: operations["HodController_list"];
+        put?: never;
+        /** Promote an existing teacher to HOD (adds an HOD RoleAssignment to their membership — no new person record is created). */
+        post: operations["HodController_promote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hods/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one HOD (route :id is the membershipId). */
+        get: operations["HodController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hods/{id}/department": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set (or change) an HOD's department — ends the current HODAssignment (if any) and creates the new one atomically; prior approvals stay attributed to the previous HOD (DoD item 7). */
+        put: operations["HodController_setDepartment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hods/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove HOD standing — the person reverts to a plain teacher; nothing they authored or approved is affected. */
+        post: operations["HodController_remove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moderators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's moderators (05 §14) — School Admin only. */
+        get: operations["ModeratorController_list"];
+        put?: never;
+        /** Create a moderator (dispatches an invitation email). */
+        post: operations["ModeratorController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moderators/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one moderator. */
+        get: operations["ModeratorController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a moderator. */
+        patch: operations["ModeratorController_update"];
+        trace?: never;
+    };
+    "/moderators/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove a moderator's access (ends their role and deactivates the account). */
+        post: operations["ModeratorController_remove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1505,6 +1905,185 @@ export interface components {
             startDate: string;
             /** Format: date */
             endDate?: string;
+        };
+        EnrollStudentDto: {
+            academicSessionId: string;
+            classId: string;
+        };
+        StudentEnrollmentResponseDto: {
+            id: string;
+            studentProfileId: string;
+            academicSessionId: string;
+            classId: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "TRANSFERRED" | "COMPLETED" | "WITHDRAWN";
+        };
+        StudentEnrollmentListResponseDto: {
+            enrollments: components["schemas"]["StudentEnrollmentResponseDto"][];
+        };
+        ClassRosterEntryDto: {
+            enrollmentId: string;
+            studentProfileId: string;
+            studentId: string;
+            displayName: string;
+            /** Format: date */
+            startDate: string;
+        };
+        ClassRosterResponseDto: {
+            students: components["schemas"]["ClassRosterEntryDto"][];
+        };
+        TeacherAssignmentResponseDto: {
+            id: string;
+            teacherProfileId: string;
+            classSubjectId: string;
+            academicSessionId: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "ENDED";
+        };
+        TeacherAssignmentListResponseDto: {
+            assignments: components["schemas"]["TeacherAssignmentResponseDto"][];
+        };
+        ReplaceTeacherAssignmentsDto: {
+            academicSessionId: string;
+            classSubjectIds: string[];
+        };
+        StudentSubjectRegistrationResponseDto: {
+            id: string;
+            studentEnrollmentId: string;
+            classSubjectId: string;
+            subjectName: string;
+            subjectCode: string;
+            /** @enum {string} */
+            status: "REGISTERED" | "DEREGISTERED";
+            /** Format: date-time */
+            registeredAt: string;
+            /** Format: date-time */
+            deregisteredAt: string | null;
+        };
+        StudentSubjectRegistrationListResponseDto: {
+            registrations: components["schemas"]["StudentSubjectRegistrationResponseDto"][];
+        };
+        StudentResponseDto: {
+            membershipId: string;
+            userId: string;
+            studentProfileId: string;
+            firstName: string;
+            lastName: string;
+            displayName: string;
+            studentId: string;
+            admissionNumber: string | null;
+            loginIdentifier: string;
+            /** @enum {string} */
+            userStatus: "INVITED" | "ACTIVE" | "SUSPENDED" | "INACTIVE";
+            /** @enum {string} */
+            profileStatus: "ACTIVE" | "GRADUATED" | "WITHDRAWN" | "ARCHIVED";
+        };
+        StudentListResponseDto: {
+            students: components["schemas"]["StudentResponseDto"][];
+        };
+        CreateStudentDto: {
+            firstName: string;
+            lastName: string;
+            /** @example ST001 */
+            studentId: string;
+            admissionNumber?: string;
+            /** Format: date */
+            admissionDate?: string;
+        };
+        UpdateStudentDto: {
+            firstName?: string;
+            lastName?: string;
+            admissionNumber?: string;
+        };
+        CredentialResetResponseDto: {
+            membershipId: string;
+            loginIdentifier: string;
+            initialPassword: string;
+        };
+        TeacherResponseDto: {
+            membershipId: string;
+            userId: string;
+            teacherProfileId: string;
+            firstName: string;
+            lastName: string;
+            displayName: string;
+            email: string | null;
+            staffId: string;
+            loginIdentifier: string;
+            /** @enum {string} */
+            userStatus: "INVITED" | "ACTIVE" | "SUSPENDED" | "INACTIVE";
+            /** @enum {string} */
+            employmentStatus: "ACTIVE" | "ENDED";
+            isHod: boolean;
+        };
+        TeacherListResponseDto: {
+            teachers: components["schemas"]["TeacherResponseDto"][];
+        };
+        CreateTeacherDto: {
+            firstName: string;
+            lastName: string;
+            email: string;
+            /** @example STF001 */
+            staffId: string;
+        };
+        UpdateTeacherDto: {
+            firstName?: string;
+            lastName?: string;
+            email?: string;
+        };
+        HodResponseDto: {
+            membershipId: string;
+            userId: string;
+            teacherProfileId: string;
+            firstName: string;
+            lastName: string;
+            displayName: string;
+            staffId: string;
+            departmentId: string | null;
+            departmentName: string | null;
+        };
+        HodListResponseDto: {
+            hods: components["schemas"]["HodResponseDto"][];
+        };
+        PromoteHodDto: {
+            membershipId: string;
+        };
+        ReassignHodDepartmentDto: {
+            departmentId: string;
+            academicSessionId: string;
+        };
+        ModeratorResponseDto: {
+            membershipId: string;
+            userId: string;
+            firstName: string;
+            lastName: string;
+            displayName: string;
+            email: string | null;
+            loginIdentifier: string;
+            /** @enum {string} */
+            userStatus: "INVITED" | "ACTIVE" | "SUSPENDED" | "INACTIVE";
+        };
+        ModeratorListResponseDto: {
+            moderators: components["schemas"]["ModeratorResponseDto"][];
+        };
+        CreateModeratorDto: {
+            firstName: string;
+            lastName: string;
+            email: string;
+            loginIdentifier: string;
+        };
+        UpdateModeratorDto: {
+            firstName?: string;
+            lastName?: string;
+            email?: string;
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -3133,6 +3712,704 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HodAssignmentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentEnrollmentController_listForStudent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentEnrollmentListResponseDto"];
+                };
+            };
+        };
+    };
+    StudentEnrollmentController_enroll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollStudentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentEnrollmentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentEnrollmentController_roster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassRosterResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherAssignmentController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherAssignmentListResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherAssignmentController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceTeacherAssignmentsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherAssignmentListResponseDto"];
+                };
+            };
+        };
+    };
+    StudentSubjectRegistrationController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentSubjectRegistrationListResponseDto"];
+                };
+            };
+        };
+    };
+    StudentSubjectRegistrationController_deregister: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                classSubjectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentSubjectRegistrationResponseDto"];
+                };
+            };
+        };
+    };
+    StudentSubjectRegistrationController_reRegister: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                classSubjectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentSubjectRegistrationResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentListResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStudentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStudentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_reactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_resetCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialResetResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherListResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTeacherDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTeacherDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherController_deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherController_reactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeacherResponseDto"];
+                };
+            };
+        };
+    };
+    TeacherController_resetCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    HodController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodListResponseDto"];
+                };
+            };
+        };
+    };
+    HodController_promote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteHodDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodResponseDto"];
+                };
+            };
+        };
+    };
+    HodController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodResponseDto"];
+                };
+            };
+        };
+    };
+    HodController_setDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReassignHodDepartmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodResponseDto"];
+                };
+            };
+        };
+    };
+    HodController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodResponseDto"];
+                };
+            };
+        };
+    };
+    ModeratorController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeratorListResponseDto"];
+                };
+            };
+        };
+    };
+    ModeratorController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateModeratorDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeratorResponseDto"];
+                };
+            };
+        };
+    };
+    ModeratorController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeratorResponseDto"];
+                };
+            };
+        };
+    };
+    ModeratorController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateModeratorDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeratorResponseDto"];
+                };
+            };
+        };
+    };
+    ModeratorController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModeratorResponseDto"];
                 };
             };
         };

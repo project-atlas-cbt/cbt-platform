@@ -280,6 +280,53 @@ export class IdentityService {
     });
   }
 
+  /**
+   * B6: a staff member's (teacher/HOD/moderator) initial invitation —
+   * `templates.ts`'s own doc comment named this exact reuse when B1 built
+   * `PASSWORD_RESET_TEMPLATE_NAME`: "also a staff member's initial
+   * invitation once B6 starts issuing those tokens the same way."
+   * Deliberately not `requestPasswordReset` itself — that method requires
+   * `user.status === 'ACTIVE'` (an enumeration-resistance gate appropriate
+   * for a "forgot password" request), but a freshly created staff member is
+   * `INVITED`, not yet `ACTIVE`. Called once, synchronously, at the point
+   * UsersModule creates a teacher/HOD/moderator — CredentialSheetService is
+   * the equivalent primitive for students (system-generated password shown
+   * once), this is the parallel path for staff (invitation link).
+   */
+  async issueStaffInvitation(schoolId: string, userId: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new AppHttpException({ code: 'NOT_FOUND', message: 'User not found.' });
+    }
+    if (!user.email) {
+      throw new AppHttpException({
+        code: 'VALIDATION_ERROR',
+        message: 'Staff members require an email address to receive their invitation.',
+      });
+    }
+
+    const rawToken = randomBytes(32).toString('base64url');
+    const ttlSeconds = this.config.get('PASSWORD_RESET_TOKEN_TTL_SECONDS', { infer: true });
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.passwordResetToken.create({
+        data: {
+          schoolId,
+          userId: user.id,
+          tokenHash: hashToken(rawToken),
+          expiresAt: new Date(Date.now() + ttlSeconds * 1000),
+        },
+      }),
+    );
+
+    const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
+    const resetUrl = `${webOrigin}/reset-password?token=${rawToken}`;
+    await this.notifications.send({
+      to: user.email,
+      template: PASSWORD_RESET_TEMPLATE_NAME,
+      variables: { displayName: user.displayName, resetUrl },
+    });
+  }
+
   async confirmPasswordReset(
     schoolId: string,
     rawToken: string,

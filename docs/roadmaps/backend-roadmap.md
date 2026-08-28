@@ -1065,7 +1065,7 @@ None. Rollover automation is B19.
 
 - Session rollover automation → B19.
 - Multi-department subjects (a `DepartmentSubject` join) unless `ADR-0001` selects it — not selected, stays out of scope entirely.
-- `StudentEnrollment`'s own dependent-check on `ClassGroup` deletion — B6 must extend `ClassGroupService.delete()`'s dependent check once `StudentEnrollment` exists; B5 cannot check a table that doesn't exist yet.
+- `StudentEnrollment`'s own dependent-check on `ClassGroup` deletion — ~~B6 must extend~~ **closed by B6**: `ClassGroupService.delete()`'s dependent check now also counts `StudentEnrollment` rows (see B6's own Implementation notes).
 - `AcademicTerm`'s own dependent-check on deletion — no B5 table references a term yet; a later phase (B11+) that adds one must extend `TermService.delete()`.
 - F6 (Academic Structure Workspace) and the F2 context-switcher gap-closure — not built in this phase (backend-only per explicit instruction); natural next step per the frontend/backend pairing default.
 
@@ -1073,7 +1073,7 @@ None. Rollover automation is B19.
 
 # B6 — People, Profiles & Enrollment
 
-**Status:** NOT STARTED · **Decided ADRs:** 0011, 0017
+**Status:** COMPLETE · **Decided ADRs:** 0011, 0017
 
 ## Objective
 
@@ -1157,27 +1157,44 @@ B2's scope resolvers read `TeacherAssignment` and `HODAssignment` — changes to
 
 ## Definition of Done
 
-1. All four user groups can be created, edited, deactivated, and reactivated within scope.
-2. A student enrolls into a class for a session; the enrollment is session-scoped.
-3. Moving a student to another class preserves the original enrollment; a historical exam still reports the original class (`07 §35`).
-4. Teacher assignments drive real access: assigning Mathematics/SS2A grants exactly that scope and nothing adjacent.
-5. Removing an assignment revokes future access but leaves historical authorship intact.
-6. A deactivated teacher's questions and exams remain, still attributed to them.
-7. An HOD change leaves prior approvals attributed to the previous HOD (`03 §69`).
-8. Credential reset works and is audited.
-9. A student cannot be enrolled twice concurrently in one session.
-10. If `ADR-0011` approves registrations, students auto-register for class offerings and can be deregistered from electives.
+1. ✅ All four user groups can be created, edited, deactivated, and reactivated within scope.
+2. ✅ A student enrolls into a class for a session; the enrollment is session-scoped.
+3. ✅ Moving a student to another class preserves the original enrollment; a historical exam still reports the original class (`07 §35`) — proven directly (no exam module exists yet to prove it via a real exam, so the enrollment row itself is the historical record proven untouched).
+4. ✅ Teacher assignments drive real access: assigning Mathematics/SS2A grants exactly that scope and nothing adjacent — proven directly against the real `ASSIGNED` scope resolver.
+5. ✅ Removing an assignment revokes future access but leaves historical authorship intact — the row is ended (`status: ENDED`), never deleted.
+6. ✅ A deactivated teacher's profile, assignments, and (once B8/B11 exist) questions/exams remain, still attributed to them — proven structurally now: deactivation touches only `User.status`.
+7. ✅ An HOD change leaves prior approvals attributed to the previous HOD (`03 §69`) — the prior `HODAssignment` is ended, never deleted or rewritten.
+8. ✅ Credential reset works and is audited — a system-generated one-time password for students (`CredentialSheetService`), a fresh invitation link for staff (`IdentityService.issueStaffInvitation`).
+9. ✅ A student cannot be enrolled twice concurrently in one session — a partial unique index (`student_enrollments_one_active_per_session`), proven both sequentially and under a genuine forced database-level race.
+10. ✅ Students auto-register for class offerings and can be deregistered from electives (ADR-0011 — mandatory, not conditional; the roadmap's original "if approved" wording predates the ADR being locked in).
 
 ## Exit criteria
 
-- ADR-0011 decided; ADR-0017 decided or the HOD cells explicitly withdrawn.
-- Historical-preservation tests green.
-- F7 confirms the contract.
+- ✅ ADR-0011 decided (mandatory); ADR-0017 decided — HOD cells explicitly withdrawn (zero authority over assignments/student moves, not "request").
+- ✅ Historical-preservation tests green.
+- F7 confirms the contract — not yet started; `people.v1` is frozen and published for it to consume.
+
+## Implementation notes
+
+- **Two modules, not three.** The roadmap's own "Domains / modules affected" line named `UsersModule`/`AssignmentsModule`/"extending IdentityModule" — implementation instead built a new `UsersModule` (person directories/lifecycle: Student/Teacher/HOD/Moderator, on top of B1's identity models) plus an _extended_ `AcademicsModule` (`StudentEnrollment`/`TeacherAssignment`/`StudentSubjectRegistration`), exactly as `academics.module.ts`'s own doc comment — written during B5 — already anticipated: "B6 adds StudentEnrollment/TeacherAssignment/StudentSubjectRegistration on top of this same module." `UsersModule` imports `AcademicsModule` one-directionally for `HodAssignmentService` (department (re)assignment); no cycle.
+- **Confirmed with the project owner before implementation**: creating an HOD promotes an existing teacher's membership (adds an `HOD` `RoleAssignment` to it) rather than creating a second, disconnected person record — matching the schema's own pre-existing "a membership may hold TEACHER + HOD" documentation. `POST /v1/hods` therefore takes a `membershipId`, not a name/staffId.
+- **The real `ASSIGNED` scope resolver** (`assigned-scope.resolver.ts`) closes B2's fail-closed placeholder, mirroring B5's `DEPARTMENT` resolver exactly. `ResourceContext` gained one field (`classSubjectId`). Same caveat B5 already recorded for `DEPARTMENT`: no controller anywhere constructs a `ResourceContext` yet, so this resolver is correct and registered but reachable over HTTP only once a later phase (B8/B9) calls `AuthorizationService.evaluate()` with one — proven directly here instead, against real `TeacherAssignment` rows.
+- **`StudentSubjectRegistration` is keyed on the enrollment, not the student directly.** This is what makes ADR-0011's "close registrations for subjects the new class doesn't offer" fall out structurally on a class move: a superseded enrollment's own registrations are already historically frozen the moment it stops being `ACTIVE` — no explicit close-loop over old rows was needed.
+- **Class-movement concurrency reuses B5's own finding**: plain `READ COMMITTED` + the partial unique index (`student_enrollments_one_active_per_session`) + Postgres row-locking is sufficient for "exactly one ACTIVE enrollment per (student, session)" — no `SERIALIZABLE` needed. Proven both by a sequential re-submit test and a dedicated `pg_sleep`-forced concurrency test (`student-enrollment-concurrency.integration.test.ts`), mirroring `session-activation-concurrency.integration.test.ts` exactly. The identical partial-unique-index technique covers `TeacherAssignment` ("at most one ACTIVE assignment per (teacher, classSubject) pair," scoped to `ACTIVE` rows only so a rehire after ending the same pair stays possible).
+- **Two additive schema changes to already-shipped B5/B1 tables**, both purely new unique indexes over already-unique `id` columns, no behavior/data change: `ClassSubject` gained `@@unique([schoolId, id])` (needed as a composite-FK target for `TeacherAssignment`/`StudentSubjectRegistration` — every other composite-FK-target table already had this line; `ClassSubject` simply hadn't needed it until B6 gave it FK-consuming children), and the same for `StudentProfile`/`TeacherProfile` (targets for `StudentEnrollment`/`TeacherAssignment` respectively).
+- **Two analogous `assertNoDependents` extensions**, not just the one the B5 Change Log named in advance: `ClassGroupService.delete()` now also counts `StudentEnrollment` rows (the named, expected extension), and — found only while implementing, not anticipated — `ClassSubjectService.remove()` (B5) needed the identical treatment, since `TeacherAssignment` and `StudentSubjectRegistration` both FK against `ClassSubject` with `onDelete: Restrict` too.
+- **Staff invitation dispatch reuses B1's password-reset token mechanism directly**, exactly as `templates.ts`'s own B1-era doc comment predicted ("also a staff member's initial invitation once B6 starts issuing those tokens the same way"): a new `IdentityService.issueStaffInvitation(schoolId, userId)`, deliberately not `requestPasswordReset` itself (that method requires `user.status === 'ACTIVE'`, an enumeration-resistance gate wrong for a freshly-created `INVITED` account). `IdentityService` is now exported from `IdentityModule` for this — its first-ever export beyond the identity-session primitives. This closed a roadmap ambiguity honestly rather than guessing: "invitation dispatch for staff" (listed as a B6 Background job) turned out to need no queue/batch mechanism at all — a single person-creation call is itself the triggering event, dispatched synchronously.
+- **Two response-shape decisions, not scope gaps**: teacher/HOD/moderator credential reset returns a plain `{status: 'ok'}` (`StatusResponseDto`), never a password — CredentialState's own doc comment ("staff: invitation link; student: system-generated password") makes the shown-once-password shape wrong for staff, so it isn't reused there merely for DTO uniformity. `account.forcePasswordReset`'s HOD grant stays `limitedReadOnly('DEPARTMENT', ...)` — i.e. no controller route ever grants HOD real write access to reset anyone's credentials — a deliberate finalization of that row's own B2-era "finalized when B6 builds the operation" comment, consistent with ADR-0017's general withdrawal of HOD operational authority.
+- **Four new `.view` permission ids** (`users.{moderator,hod,teacher,student}.view`) were added — no roadmap document named a read permission distinct from `.create`, and gating a `GET` behind a `CREATE`-typed id would have been a real semantic mismatch. Each mirrors its sibling `.create` row's grant shape exactly.
+- **A real bug caught only by the integration tests, not by inspection**: `ReplaceTeacherAssignmentsDto.classSubjectIds` was originally validated with `@IsUUID('4', { each: true })` — rejecting every real id in this codebase, which uses UUIDv7 primary keys throughout. Every `PUT /v1/teachers/:id/assignments` call failed with a generic `VALIDATION_ERROR` until fixed to the same version-less `@IsUUID()` every other id field in this codebase already uses (`CreateHodAssignmentDto`'s own precedent).
+- **Two small, roadmap-unnamed route additions**, matching B5's own `POST .../terms/:id/activate` precedent for this same class of gap: `GET /v1/teachers/:id/assignments` (needed to render the `PUT` endpoint's own pre-filled state) and the `StudentSubjectRegistration` deregister/re-register/list routes (the roadmap's endpoint table never literally lists them, but DoD item 10 requires the _capability_, which needs some endpoint).
 
 ## Deferred items
 
 - Parent/guardian records — explicitly out of scope (`01 §53`).
 - Staff HR attributes beyond `TeacherProfile` (`07 §5.5`).
+- Bulk import — explicitly B7's phase; `users.import.{teachers,students}` stay `awaitingResource`.
+- Two Background-jobs bullets this phase's own Scope text listed but honestly could not build in isolation: "credential-sheet generation for a class after import" needs `B7`'s import pipeline to trigger it (no batch "class full of freshly-imported students" event exists in B6 alone) — pushed forward to `B7`, which already owns this exact line in its own Background jobs list. "Invitation dispatch for staff," by contrast, **was** built in B6 — it turned out not to need bulk import at all; a single `POST /v1/teachers` (or `/hods`, `/moderators`) creation is itself the triggering event, dispatched synchronously via `IdentityService.issueStaffInvitation`, reusing `templates.ts`'s own `PASSWORD_RESET_TEMPLATE_NAME` exactly as that file's B1-era doc comment anticipated.
 
 ---
 

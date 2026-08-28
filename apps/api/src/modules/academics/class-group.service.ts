@@ -174,10 +174,20 @@ export class ClassGroupService {
       if (!existing) {
         throw new AppHttpException({ code: 'NOT_FOUND', message: 'Class not found.' });
       }
-      // StudentEnrollment doesn't exist until B6 — not checked here. B6
-      // must extend this check once it lands (see CLAUDE.md's B5 entry).
-      const classSubjects = await tx.classSubject.count({ where: { schoolId, classId: id } });
-      assertNoDependents('class', { 'class-subject offering': classSubjects });
+      // B6: count ALL StudentEnrollment rows referencing the class, not
+      // only ACTIVE ones — the DB-level onDelete: Restrict on
+      // StudentEnrollment.classGroupSession blocks deletion regardless of
+      // status, so this friendly pre-check matches that condition exactly
+      // (the same reasoning Department's own check already applies: all
+      // classGroups/subjects are counted, not just active ones).
+      const [classSubjects, studentEnrollments] = await Promise.all([
+        tx.classSubject.count({ where: { schoolId, classId: id } }),
+        tx.studentEnrollment.count({ where: { schoolId, classId: id } }),
+      ]);
+      assertNoDependents('class', {
+        'class-subject offering': classSubjects,
+        'student enrollment': studentEnrollments,
+      });
       await tx.classGroup.delete({ where: { id } });
     });
     await this.audit.record({

@@ -92,6 +92,24 @@ export const BASE_ERROR_CODES = {
   // (matches the shape of every other pre-mutation invariant check in this
   // codebase, e.g. B1's credential validation).
   HOD_ASSIGNMENT_REQUIRES_ACTIVE_ROLE: { httpStatus: 400, retryable: false },
+
+  // B6 (People, Profiles & Enrollment) — mirrors HOD_ASSIGNMENT_REQUIRES_
+  // ACTIVE_ROLE's own shape exactly for the two sibling active-role
+  // invariant checks StudentEnrollmentService/TeacherAssignmentService add.
+  STUDENT_ENROLLMENT_REQUIRES_ACTIVE_ROLE: { httpStatus: 400, retryable: false },
+  TEACHER_ASSIGNMENT_REQUIRES_ACTIVE_ROLE: { httpStatus: 400, retryable: false },
+  // HOD_PROMOTION_REQUIRES_ACTIVE_TEACHER_ROLE: promoting a membership to
+  // HOD (confirmed promote-existing-teacher model) requires an active
+  // TEACHER RoleAssignment first.
+  HOD_PROMOTION_REQUIRES_ACTIVE_TEACHER_ROLE: { httpStatus: 400, retryable: false },
+  // ACADEMIC_STRUCTURE_SESSION_MISMATCH: an enrollment's target class
+  // doesn't belong to the given academicSessionId — a request-shaped
+  // validation failure, not found/conflict.
+  ACADEMIC_STRUCTURE_SESSION_MISMATCH: { httpStatus: 400, retryable: false },
+  // CREDENTIAL_RESET_FAILED: CredentialSheetService.issueInitialPasswords
+  // returned no row for a membership that should have produced exactly
+  // one — an unexpected internal-consistency failure, not a client error.
+  CREDENTIAL_RESET_FAILED: { httpStatus: 500, retryable: true },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

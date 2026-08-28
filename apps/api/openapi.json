@@ -2108,6 +2108,960 @@
         "summary": "End an HOD assignment (FR §13: \"School Admin -> remove HOD\").",
         "tags": ["academics"]
       }
+    },
+    "/students/{id}/enrollments": {
+      "post": {
+        "operationId": "StudentEnrollmentController_enroll",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollStudentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentEnrollmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Enroll a student into a class for a session, or move them to another class within a session they are already enrolled in (07 §35) — one endpoint serves both.",
+        "tags": ["people"]
+      },
+      "get": {
+        "operationId": "StudentEnrollmentController_listForStudent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentEnrollmentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A student's full enrollment history (never overwritten, 07 §35).",
+        "tags": ["people"]
+      }
+    },
+    "/classes/{id}/students": {
+      "get": {
+        "operationId": "StudentEnrollmentController_roster",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassRosterResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A class's current roster (07 §6.7).",
+        "tags": ["people"]
+      }
+    },
+    "/teachers/{id}/assignments": {
+      "get": {
+        "operationId": "TeacherAssignmentController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherAssignmentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A teacher's current active assignments.",
+        "tags": ["people"]
+      },
+      "put": {
+        "operationId": "TeacherAssignmentController_replace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceTeacherAssignmentsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherAssignmentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace a teacher's subject×class assignment set for a session (04 §25, 05 §12.1) — full-replace: removed pairs are ended (DoD item 5), not deleted.",
+        "tags": ["people"]
+      }
+    },
+    "/students/{id}/subject-registrations": {
+      "get": {
+        "operationId": "StudentSubjectRegistrationController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentSubjectRegistrationListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A student's current enrollment's subject registrations.",
+        "tags": ["people"]
+      }
+    },
+    "/students/{id}/subject-registrations/{classSubjectId}/deregister": {
+      "post": {
+        "operationId": "StudentSubjectRegistrationController_deregister",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classSubjectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentSubjectRegistrationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deregister a student from an elective (ADR-0011) — effective for future exams only; historical attempts/results are untouched.",
+        "tags": ["people"]
+      }
+    },
+    "/students/{id}/subject-registrations/{classSubjectId}/re-register": {
+      "post": {
+        "operationId": "StudentSubjectRegistrationController_reRegister",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classSubjectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentSubjectRegistrationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Re-register a student for a previously deregistered elective.",
+        "tags": ["people"]
+      }
+    },
+    "/students": {
+      "get": {
+        "operationId": "StudentController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's students (05 §9.1).",
+        "tags": ["people"]
+      },
+      "post": {
+        "operationId": "StudentController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStudentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a student.",
+        "tags": ["people"]
+      }
+    },
+    "/students/{id}": {
+      "get": {
+        "operationId": "StudentController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get one student profile (05 §9.2).",
+        "tags": ["people"]
+      },
+      "patch": {
+        "operationId": "StudentController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStudentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a student.",
+        "tags": ["people"]
+      }
+    },
+    "/students/{id}/deactivate": {
+      "post": {
+        "operationId": "StudentController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deactivate a student's account (never deletes authored history).",
+        "tags": ["people"]
+      }
+    },
+    "/students/{id}/reactivate": {
+      "post": {
+        "operationId": "StudentController_reactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reactivate a student's account.",
+        "tags": ["people"]
+      }
+    },
+    "/students/{id}/reset-credentials": {
+      "post": {
+        "operationId": "StudentController_resetCredentials",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialResetResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Issue a fresh system-generated password for a student (audited; the resetter sees the plaintext exactly once, here — never retrievable again).",
+        "tags": ["people"]
+      }
+    },
+    "/teachers": {
+      "get": {
+        "operationId": "TeacherController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's teachers (05 §11.1).",
+        "tags": ["people"]
+      },
+      "post": {
+        "operationId": "TeacherController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeacherDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a teacher (dispatches an invitation email).",
+        "tags": ["people"]
+      }
+    },
+    "/teachers/{id}": {
+      "get": {
+        "operationId": "TeacherController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get one teacher profile.",
+        "tags": ["people"]
+      },
+      "patch": {
+        "operationId": "TeacherController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeacherDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a teacher.",
+        "tags": ["people"]
+      }
+    },
+    "/teachers/{id}/deactivate": {
+      "post": {
+        "operationId": "TeacherController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deactivate a teacher's account — their questions and exams remain, still attributed to them (DoD item 6).",
+        "tags": ["people"]
+      }
+    },
+    "/teachers/{id}/reactivate": {
+      "post": {
+        "operationId": "TeacherController_reactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reactivate a teacher's account.",
+        "tags": ["people"]
+      }
+    },
+    "/teachers/{id}/reset-credentials": {
+      "post": {
+        "operationId": "TeacherController_resetCredentials",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Send a teacher a fresh invitation link to set a new password (audited).",
+        "tags": ["people"]
+      }
+    },
+    "/hods": {
+      "get": {
+        "operationId": "HodController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's HODs (05 §13).",
+        "tags": ["people"]
+      },
+      "post": {
+        "operationId": "HodController_promote",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteHodDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Promote an existing teacher to HOD (adds an HOD RoleAssignment to their membership — no new person record is created).",
+        "tags": ["people"]
+      }
+    },
+    "/hods/{id}": {
+      "get": {
+        "operationId": "HodController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get one HOD (route :id is the membershipId).",
+        "tags": ["people"]
+      }
+    },
+    "/hods/{id}/department": {
+      "put": {
+        "operationId": "HodController_setDepartment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignHodDepartmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set (or change) an HOD's department — ends the current HODAssignment (if any) and creates the new one atomically; prior approvals stay attributed to the previous HOD (DoD item 7).",
+        "tags": ["people"]
+      }
+    },
+    "/hods/{id}/remove": {
+      "post": {
+        "operationId": "HodController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove HOD standing — the person reverts to a plain teacher; nothing they authored or approved is affected.",
+        "tags": ["people"]
+      }
+    },
+    "/moderators": {
+      "get": {
+        "operationId": "ModeratorController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeratorListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's moderators (05 §14) — School Admin only.",
+        "tags": ["people"]
+      },
+      "post": {
+        "operationId": "ModeratorController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateModeratorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeratorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a moderator (dispatches an invitation email).",
+        "tags": ["people"]
+      }
+    },
+    "/moderators/{id}": {
+      "get": {
+        "operationId": "ModeratorController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeratorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get one moderator.",
+        "tags": ["people"]
+      },
+      "patch": {
+        "operationId": "ModeratorController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateModeratorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeratorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a moderator.",
+        "tags": ["people"]
+      }
+    },
+    "/moderators/{id}/remove": {
+      "post": {
+        "operationId": "ModeratorController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeratorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a moderator's access (ends their role and deactivates the account).",
+        "tags": ["people"]
+      }
     }
   },
   "info": {
@@ -3749,6 +4703,629 @@
           }
         },
         "required": ["membershipId", "departmentId", "academicSessionId", "startDate"]
+      },
+      "EnrollStudentDto": {
+        "type": "object",
+        "properties": {
+          "academicSessionId": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string"
+          }
+        },
+        "required": ["academicSessionId", "classId"]
+      },
+      "StudentEnrollmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "TRANSFERRED", "COMPLETED", "WITHDRAWN"]
+          }
+        },
+        "required": [
+          "id",
+          "studentProfileId",
+          "academicSessionId",
+          "classId",
+          "startDate",
+          "endDate",
+          "status"
+        ]
+      },
+      "StudentEnrollmentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "enrollments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentEnrollmentResponseDto"
+            }
+          }
+        },
+        "required": ["enrollments"]
+      },
+      "ClassRosterEntryDto": {
+        "type": "object",
+        "properties": {
+          "enrollmentId": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": ["enrollmentId", "studentProfileId", "studentId", "displayName", "startDate"]
+      },
+      "ClassRosterResponseDto": {
+        "type": "object",
+        "properties": {
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClassRosterEntryDto"
+            }
+          }
+        },
+        "required": ["students"]
+      },
+      "TeacherAssignmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "teacherProfileId": {
+            "type": "string"
+          },
+          "classSubjectId": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "ENDED"]
+          }
+        },
+        "required": [
+          "id",
+          "teacherProfileId",
+          "classSubjectId",
+          "academicSessionId",
+          "startDate",
+          "endDate",
+          "status"
+        ]
+      },
+      "TeacherAssignmentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeacherAssignmentResponseDto"
+            }
+          }
+        },
+        "required": ["assignments"]
+      },
+      "ReplaceTeacherAssignmentsDto": {
+        "type": "object",
+        "properties": {
+          "academicSessionId": {
+            "type": "string"
+          },
+          "classSubjectIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["academicSessionId", "classSubjectIds"]
+      },
+      "StudentSubjectRegistrationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "studentEnrollmentId": {
+            "type": "string"
+          },
+          "classSubjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "subjectCode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["REGISTERED", "DEREGISTERED"]
+          },
+          "registeredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deregisteredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "studentEnrollmentId",
+          "classSubjectId",
+          "subjectName",
+          "subjectCode",
+          "status",
+          "registeredAt",
+          "deregisteredAt"
+        ]
+      },
+      "StudentSubjectRegistrationListResponseDto": {
+        "type": "object",
+        "properties": {
+          "registrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentSubjectRegistrationResponseDto"
+            }
+          }
+        },
+        "required": ["registrations"]
+      },
+      "StudentResponseDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "studentId": {
+            "type": "string"
+          },
+          "admissionNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "loginIdentifier": {
+            "type": "string"
+          },
+          "userStatus": {
+            "type": "string",
+            "enum": ["INVITED", "ACTIVE", "SUSPENDED", "INACTIVE"]
+          },
+          "profileStatus": {
+            "type": "string",
+            "enum": ["ACTIVE", "GRADUATED", "WITHDRAWN", "ARCHIVED"]
+          }
+        },
+        "required": [
+          "membershipId",
+          "userId",
+          "studentProfileId",
+          "firstName",
+          "lastName",
+          "displayName",
+          "studentId",
+          "admissionNumber",
+          "loginIdentifier",
+          "userStatus",
+          "profileStatus"
+        ]
+      },
+      "StudentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentResponseDto"
+            }
+          }
+        },
+        "required": ["students"]
+      },
+      "CreateStudentDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "studentId": {
+            "type": "string",
+            "maxLength": 32,
+            "example": "ST001"
+          },
+          "admissionNumber": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "admissionDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": ["firstName", "lastName", "studentId"]
+      },
+      "UpdateStudentDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "admissionNumber": {
+            "type": "string",
+            "maxLength": 32
+          }
+        }
+      },
+      "CredentialResetResponseDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string"
+          },
+          "loginIdentifier": {
+            "type": "string"
+          },
+          "initialPassword": {
+            "type": "string"
+          }
+        },
+        "required": ["membershipId", "loginIdentifier", "initialPassword"]
+      },
+      "TeacherResponseDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "teacherProfileId": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "staffId": {
+            "type": "string"
+          },
+          "loginIdentifier": {
+            "type": "string"
+          },
+          "userStatus": {
+            "type": "string",
+            "enum": ["INVITED", "ACTIVE", "SUSPENDED", "INACTIVE"]
+          },
+          "employmentStatus": {
+            "type": "string",
+            "enum": ["ACTIVE", "ENDED"]
+          },
+          "isHod": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "membershipId",
+          "userId",
+          "teacherProfileId",
+          "firstName",
+          "lastName",
+          "displayName",
+          "email",
+          "staffId",
+          "loginIdentifier",
+          "userStatus",
+          "employmentStatus",
+          "isHod"
+        ]
+      },
+      "TeacherListResponseDto": {
+        "type": "object",
+        "properties": {
+          "teachers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeacherResponseDto"
+            }
+          }
+        },
+        "required": ["teachers"]
+      },
+      "CreateTeacherDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320
+          },
+          "staffId": {
+            "type": "string",
+            "maxLength": 32,
+            "example": "STF001"
+          }
+        },
+        "required": ["firstName", "lastName", "email", "staffId"]
+      },
+      "UpdateTeacherDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320
+          }
+        }
+      },
+      "HodResponseDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "teacherProfileId": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "staffId": {
+            "type": "string"
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "departmentName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "membershipId",
+          "userId",
+          "teacherProfileId",
+          "firstName",
+          "lastName",
+          "displayName",
+          "staffId",
+          "departmentId",
+          "departmentName"
+        ]
+      },
+      "HodListResponseDto": {
+        "type": "object",
+        "properties": {
+          "hods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HodResponseDto"
+            }
+          }
+        },
+        "required": ["hods"]
+      },
+      "PromoteHodDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string"
+          }
+        },
+        "required": ["membershipId"]
+      },
+      "ReassignHodDepartmentDto": {
+        "type": "object",
+        "properties": {
+          "departmentId": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          }
+        },
+        "required": ["departmentId", "academicSessionId"]
+      },
+      "ModeratorResponseDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "loginIdentifier": {
+            "type": "string"
+          },
+          "userStatus": {
+            "type": "string",
+            "enum": ["INVITED", "ACTIVE", "SUSPENDED", "INACTIVE"]
+          }
+        },
+        "required": [
+          "membershipId",
+          "userId",
+          "firstName",
+          "lastName",
+          "displayName",
+          "email",
+          "loginIdentifier",
+          "userStatus"
+        ]
+      },
+      "ModeratorListResponseDto": {
+        "type": "object",
+        "properties": {
+          "moderators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModeratorResponseDto"
+            }
+          }
+        },
+        "required": ["moderators"]
+      },
+      "CreateModeratorDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320
+          },
+          "loginIdentifier": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": ["firstName", "lastName", "email", "loginIdentifier"]
+      },
+      "UpdateModeratorDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320
+          }
+        }
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

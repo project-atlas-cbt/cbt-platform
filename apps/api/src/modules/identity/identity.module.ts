@@ -48,7 +48,18 @@ import { registerIdentityTemplates } from './templates.js';
   // this same per-identifier lockout primitive for Software Admin login —
   // it's already keyed by an arbitrary string, not literally a school id,
   // so no change to the service itself, just exporting it.
-  exports: [PasswordService, CredentialSheetService, AuthGuard, SessionService, AuthLockoutService],
+  //
+  // IdentityService (B6): UsersModule calls .issueStaffInvitation() when
+  // creating a teacher/HOD/moderator — token creation and NotificationChannel
+  // wiring stay centralised here rather than duplicated in UsersModule.
+  exports: [
+    PasswordService,
+    CredentialSheetService,
+    AuthGuard,
+    SessionService,
+    AuthLockoutService,
+    IdentityService,
+  ],
 })
 export class IdentityModule implements OnModuleInit {
   constructor(

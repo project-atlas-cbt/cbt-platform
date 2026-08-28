@@ -1,0 +1,153 @@
+import { Injectable } from '@nestjs/common';
+import { prisma, withTenant } from '@atlas/db';
+import type { Role } from '@atlas/domain';
+import { AppHttpException } from '../../common/app-http-exception.js';
+import { AuditService } from '../operations/audit-event.service.js';
+import { runUniqueGuarded } from './prisma-error.util.js';
+import type {
+  ReplaceTeacherAssignmentsDto,
+  TeacherAssignmentResponseDto,
+} from './dto/teacher-assignment.dto.js';
+
+interface ActorContext {
+  actorUserId: string;
+  actorRole: Role;
+}
+
+function toResponseDto(assignment: {
+  id: string;
+  teacherProfileId: string;
+  classSubjectId: string;
+  academicSessionId: string;
+  startDate: Date;
+  endDate: Date | null;
+  status: string;
+}): TeacherAssignmentResponseDto {
+  return {
+    id: assignment.id,
+    teacherProfileId: assignment.teacherProfileId,
+    classSubjectId: assignment.classSubjectId,
+    academicSessionId: assignment.academicSessionId,
+    startDate: assignment.startDate.toISOString().slice(0, 10),
+    endDate: assignment.endDate ? assignment.endDate.toISOString().slice(0, 10) : null,
+    status: assignment.status as TeacherAssignmentResponseDto['status'],
+  };
+}
+
+/** `people.v1` — TeacherAssignment (07 §6.8), "the core authorization
+ * entity." The real ASSIGNED scope resolver (assigned-scope.resolver.ts)
+ * reads this table directly. */
+@Injectable()
+export class TeacherAssignmentService {
+  constructor(private readonly audit: AuditService) {}
+
+  async listForTeacher(
+    schoolId: string,
+    teacherProfileId: string,
+  ): Promise<TeacherAssignmentResponseDto[]> {
+    const assignments = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherAssignment.findMany({
+        where: { schoolId, teacherProfileId, status: 'ACTIVE' },
+        orderBy: { startDate: 'desc' },
+      }),
+    );
+    return assignments.map(toResponseDto);
+  }
+
+  /**
+   * Full-replace: the teacher's whole subject×class set for a session,
+   * submitted as one list (05 §12.1's checkbox editor) — diffed against the
+   * teacher's current ACTIVE assignments for that session in one
+   * transaction. DoD item 5: removed pairs are ENDED (status + endDate),
+   * never deleted — future access is revoked, historical authorship stays
+   * intact. Re-adding a previously-ended pair (rehire) succeeds cleanly
+   * since the partial unique index only constrains ACTIVE rows.
+   */
+  async replaceForTeacher(
+    schoolId: string,
+    teacherProfileId: string,
+    dto: ReplaceTeacherAssignmentsDto,
+    actor: ActorContext,
+  ): Promise<TeacherAssignmentResponseDto[]> {
+    const result = await withTenant(prisma, schoolId, async (tx) => {
+      const teacherProfile = await tx.teacherProfile.findUnique({
+        where: { id: teacherProfileId },
+      });
+      if (!teacherProfile) {
+        throw new AppHttpException({ code: 'NOT_FOUND', message: 'Teacher not found.' });
+      }
+      const activeTeacherRole = await tx.roleAssignment.findFirst({
+        where: {
+          schoolId,
+          membershipId: teacherProfile.membershipId,
+          role: 'TEACHER',
+          status: 'ACTIVE',
+        },
+        select: { id: true },
+      });
+      if (!activeTeacherRole) {
+        throw new AppHttpException({
+          code: 'TEACHER_ASSIGNMENT_REQUIRES_ACTIVE_ROLE',
+          message: 'The referenced membership does not hold an active TEACHER role assignment.',
+        });
+      }
+
+      const desired = new Set(dto.classSubjectIds);
+      const current = await tx.teacherAssignment.findMany({
+        where: {
+          schoolId,
+          teacherProfileId,
+          academicSessionId: dto.academicSessionId,
+          status: 'ACTIVE',
+        },
+      });
+      const currentByClassSubjectId = new Map(current.map((a) => [a.classSubjectId, a]));
+
+      const toEnd = current.filter((a) => !desired.has(a.classSubjectId));
+      const toCreate = [...desired].filter((id) => !currentByClassSubjectId.has(id));
+
+      if (toEnd.length > 0) {
+        await tx.teacherAssignment.updateMany({
+          where: { schoolId, id: { in: toEnd.map((a) => a.id) } },
+          data: { status: 'ENDED', endDate: new Date() },
+        });
+      }
+      for (const classSubjectId of toCreate) {
+        const classSubject = await tx.classSubject.findUnique({ where: { id: classSubjectId } });
+        if (!classSubject) {
+          throw new AppHttpException({
+            code: 'NOT_FOUND',
+            message: `Class-subject offering ${classSubjectId} not found.`,
+          });
+        }
+        await runUniqueGuarded(
+          () =>
+            tx.teacherAssignment.create({
+              data: {
+                schoolId,
+                teacherProfileId,
+                classSubjectId,
+                academicSessionId: dto.academicSessionId,
+                startDate: new Date(),
+              },
+            }),
+          'This teacher already has an active assignment for this class-subject.',
+        );
+      }
+
+      return { added: toCreate.length, removed: toEnd.length };
+    });
+
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.actorUserId,
+      actorRole: actor.actorRole,
+      action: 'TEACHER_ASSIGNMENTS_REPLACED',
+      entityType: 'TeacherProfile',
+      entityId: teacherProfileId,
+      metadata: { academicSessionId: dto.academicSessionId, ...result },
+    });
+
+    return this.listForTeacher(schoolId, teacherProfileId);
+  }
+}

@@ -105,38 +105,46 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## User Management
 
-| Action                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                                                                 |
-| ------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ------------------------------------------------------------------------ |
-| Create Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Edit Moderator            | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Remove Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Create HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Edit HOD                  | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Remove HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Create Teacher            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Edit Teacher              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Deactivate Teacher        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Reset Teacher credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | CredentialSheetService already exists (B1); no controller route yet (B6) |
-| Create Student            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Edit Student              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Deactivate Student        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | User provisioning endpoints (B6)                                         |
-| Reset Student credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | CredentialSheetService already exists (B1); no controller route yet (B6) |
-| Import Teachers           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | Bulk import pipeline (B7)                                                |
-| Import Students           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | Bulk import pipeline (B7)                                                |
-| Export Users              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Export pipeline (B6/B18)                                                 |
+| Action                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                  |
+| ------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ------------------------- |
+| View moderators           | PLATFORM ⚠️    | SCHOOL       | —         | —          | —        | —       |                           |
+| Create Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                           |
+| Edit Moderator            | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                           |
+| Remove Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                           |
+| View HODs                 | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Create HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Edit HOD                  | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Remove HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| View teachers             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Create Teacher            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Edit Teacher              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Deactivate Teacher        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Reset Teacher credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| View students             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Create Student            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Edit Student              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Deactivate Student        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Reset Student credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Import Teachers           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | Bulk import pipeline (B7) |
+| Import Students           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | Bulk import pipeline (B7) |
+| Export Users              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Export pipeline (B6/B18)  |
 
 <details><summary>Notes</summary>
 
+- **View moderators / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Create Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Remove Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **View HODs / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Create HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Remove HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **View teachers / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Create Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Deactivate Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Reset Teacher credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **View students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Create Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Deactivate Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
@@ -149,14 +157,14 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Assignments
 
-| Action                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER | STUDENT | Awaiting                          |
-| ---------------------------- | -------------- | ------------ | --------- | ---------- | ------- | ------- | --------------------------------- |
-| Assign teacher → subject     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | TeacherAssignment (B6)            |
-| Assign teacher → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | TeacherAssignment (B6)            |
-| Assign HOD → department      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       |                                   |
-| Assign student → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | Enrollment (B6)                   |
-| Move student between classes | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | Enrollment (B6)                   |
-| View assignments             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | SELF ⚠️ | SELF    | TeacherAssignment/Enrollment (B6) |
+| Action                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER | STUDENT | Awaiting |
+| ---------------------------- | -------------- | ------------ | --------- | ---------- | ------- | ------- | -------- |
+| Assign teacher → subject     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       |          |
+| Assign teacher → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       |          |
+| Assign HOD → department      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       |          |
+| Assign student → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       |          |
+| Move student between classes | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       |          |
+| View assignments             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | SELF ⚠️ | SELF    |          |
 
 <details><summary>Notes</summary>
 
@@ -431,8 +439,8 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | View audit log       | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | SELF ⚠️ | SELF ⚠️ | AuditEvent retrieval endpoint (B10) — the write-path primitive itself ships with B2, see AuditService. |
 | Reset own password   | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    |                                                                                                        |
 | Change own profile   | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    | No profile-edit endpoint yet (future phase); identity read already exists (auth/me).                   |
-| Force password reset | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT ⚠️ | —       | —       | Controller route (B6) — CredentialSheetService/PasswordService primitives already exist (B1).          |
-| Deactivate account   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —             | —       | —       | Controller route (B6)                                                                                  |
+| Force password reset | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT ⚠️ | —       | —       |                                                                                                        |
+| Deactivate account   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —             | —       | —       |                                                                                                        |
 
 <details><summary>Notes</summary>
 
@@ -441,7 +449,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **View audit log / TEACHER:** "Own actions".
 - **View audit log / STUDENT:** "Own account".
 - **Force password reset / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
-- **Force password reset / HOD:** LIMITED (read-only placeholder): "Limited" — exact HOD-initiated force-reset scope (e.g. department teachers only, never students) finalized when B6 builds the operation. Recorded as read-only here per R5 until then, even though the row is EXECUTE-shaped — no controller route exists to grant real write access to.
+- **Force password reset / HOD:** LIMITED (read-only placeholder): "Limited" — HOD has no real write access to this action (B6 finalized: consistent with ADR-0017). Recorded as read-only per R5 — the row is EXECUTE-shaped, but no controller route grants HOD real write access.
 - **Deactivate account / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
 
 </details>

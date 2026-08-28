@@ -67,3 +67,17 @@ export {
   type ClassSubjectStatus,
   type HODAssignmentStatus,
 } from './academics/constants.js';
+export {
+  USER_STATUSES,
+  STUDENT_PROFILE_STATUSES,
+  EMPLOYMENT_STATUSES,
+  STUDENT_ENROLLMENT_STATUSES,
+  TEACHER_ASSIGNMENT_STATUSES,
+  STUDENT_SUBJECT_REGISTRATION_STATUSES,
+  type UserStatus,
+  type StudentProfileStatus,
+  type EmploymentStatus,
+  type StudentEnrollmentStatus,
+  type TeacherAssignmentStatus,
+  type StudentSubjectRegistrationStatus,
+} from './people/constants.js';

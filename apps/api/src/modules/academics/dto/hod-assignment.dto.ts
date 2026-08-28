@@ -55,3 +55,16 @@ export class HodAssignmentListResponseDto {
   @ApiProperty({ type: HodAssignmentResponseDto, isArray: true })
   assignments!: HodAssignmentResponseDto[];
 }
+
+/** `PUT /v1/hods/:id/department` (B6) — `:id` (membershipId) comes from the
+ * route param; ends the current HODAssignment (if any) and creates the new
+ * one in one transaction (HodAssignmentService.reassign). */
+export class ReassignHodDepartmentDto {
+  @ApiProperty({ type: String })
+  @IsUUID()
+  departmentId!: string;
+
+  @ApiProperty({ type: String })
+  @IsUUID()
+  academicSessionId!: string;
+}

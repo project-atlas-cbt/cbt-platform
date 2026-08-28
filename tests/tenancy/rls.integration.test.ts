@@ -519,15 +519,19 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
 
 /**
  * B5's seven new school-owned tables (AcademicSession, AcademicTerm,
- * Department, ClassGroup, Subject, ClassSubject, HODAssignment) — same
- * three-test shape as the B3/B4 blocks above (no-context-blocks-all,
- * scoped-visible, cross-tenant-by-id-blocked), run once per table. One
- * fixture chain per school (session -> term, department -> class ->
- * offering, membership+department -> HOD assignment) so every FK in the
- * chain is exercised, not just the leaf table.
+ * Department, ClassGroup, Subject, ClassSubject, HODAssignment) plus B6's
+ * three (StudentEnrollment, TeacherAssignment, StudentSubjectRegistration,
+ * added to this same block per B3/B4/B5's own "economy" precedent rather
+ * than a new describe block) — same three-test shape as the B3/B4 blocks
+ * above (no-context-blocks-all, scoped-visible, cross-tenant-by-id-blocked),
+ * run once per table. One fixture chain per school (session -> term,
+ * department -> class -> offering, membership+department -> HOD assignment,
+ * membership -> student/teacher profile -> enrollment/assignment ->
+ * registration) so every FK in the chain is exercised, not just the leaf
+ * table.
  */
 describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
-  'Row-Level Security tenant isolation — academic structure (B5, ADR-0023)',
+  'Row-Level Security tenant isolation — academic structure (B5/B6, ADR-0023)',
   () => {
     let owner: PrismaClient;
     let app: PrismaClient;
@@ -549,6 +553,16 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let classSubjectB: { id: string };
     let hodAssignmentA: { id: string };
     let hodAssignmentB: { id: string };
+    let studentProfileA: { id: string };
+    let studentProfileB: { id: string };
+    let teacherProfileA: { id: string };
+    let teacherProfileB: { id: string };
+    let studentEnrollmentA: { id: string };
+    let studentEnrollmentB: { id: string };
+    let teacherAssignmentA: { id: string };
+    let teacherAssignmentB: { id: string };
+    let studentSubjectRegistrationA: { id: string };
+    let studentSubjectRegistrationB: { id: string };
 
     beforeAll(async () => {
       await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
@@ -746,10 +760,116 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           },
         }),
       );
+
+      // B6's three new tables — reuses membershipA/B (already RLS-scoped,
+      // no new users/memberships needed for a pure tenant-isolation check).
+      studentProfileA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.studentProfile.create({
+          data: {
+            schoolId: schoolA.id,
+            membershipId: membershipA.id,
+            studentId: `ST-A-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+      studentProfileB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.studentProfile.create({
+          data: {
+            schoolId: schoolB.id,
+            membershipId: membershipB.id,
+            studentId: `ST-B-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+      teacherProfileA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.teacherProfile.create({
+          data: {
+            schoolId: schoolA.id,
+            membershipId: membershipA.id,
+            staffId: `STF-A-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+      teacherProfileB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.teacherProfile.create({
+          data: {
+            schoolId: schoolB.id,
+            membershipId: membershipB.id,
+            staffId: `STF-B-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+      studentEnrollmentA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.studentEnrollment.create({
+          data: {
+            schoolId: schoolA.id,
+            studentProfileId: studentProfileA.id,
+            academicSessionId: sessionA.id,
+            classId: classA.id,
+            startDate: start,
+          },
+        }),
+      );
+      studentEnrollmentB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.studentEnrollment.create({
+          data: {
+            schoolId: schoolB.id,
+            studentProfileId: studentProfileB.id,
+            academicSessionId: sessionB.id,
+            classId: classB.id,
+            startDate: start,
+          },
+        }),
+      );
+      teacherAssignmentA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.teacherAssignment.create({
+          data: {
+            schoolId: schoolA.id,
+            teacherProfileId: teacherProfileA.id,
+            classSubjectId: classSubjectA.id,
+            academicSessionId: sessionA.id,
+            startDate: start,
+          },
+        }),
+      );
+      teacherAssignmentB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.teacherAssignment.create({
+          data: {
+            schoolId: schoolB.id,
+            teacherProfileId: teacherProfileB.id,
+            classSubjectId: classSubjectB.id,
+            academicSessionId: sessionB.id,
+            startDate: start,
+          },
+        }),
+      );
+      studentSubjectRegistrationA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.studentSubjectRegistration.create({
+          data: {
+            schoolId: schoolA.id,
+            studentEnrollmentId: studentEnrollmentA.id,
+            classSubjectId: classSubjectA.id,
+          },
+        }),
+      );
+      studentSubjectRegistrationB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.studentSubjectRegistration.create({
+          data: {
+            schoolId: schoolB.id,
+            studentEnrollmentId: studentEnrollmentB.id,
+            classSubjectId: classSubjectB.id,
+          },
+        }),
+      );
     });
 
     afterAll(async () => {
       const ids = [schoolA.id, schoolB.id];
+      await owner.studentSubjectRegistration.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.teacherAssignment.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.studentEnrollment.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.studentProfile.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.teacherProfile.deleteMany({ where: { schoolId: { in: ids } } });
       await owner.hODAssignment.deleteMany({ where: { schoolId: { in: ids } } });
       await owner.classSubject.deleteMany({ where: { schoolId: { in: ids } } });
       await owner.classGroup.deleteMany({ where: { schoolId: { in: ids } } });
@@ -797,6 +917,27 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'hod_assignments',
         idA: () => hodAssignmentA.id,
         idB: () => hodAssignmentB.id,
+      },
+      // B6's three new tables — same economy as B3/B4/B5's own precedent:
+      // reusing this describe block's single fixture school pair rather
+      // than a whole new describe block.
+      {
+        label: 'student_enrollments',
+        table: 'student_enrollments',
+        idA: () => studentEnrollmentA.id,
+        idB: () => studentEnrollmentB.id,
+      },
+      {
+        label: 'teacher_assignments',
+        table: 'teacher_assignments',
+        idA: () => teacherAssignmentA.id,
+        idB: () => teacherAssignmentB.id,
+      },
+      {
+        label: 'student_subject_registrations',
+        table: 'student_subject_registrations',
+        idA: () => studentSubjectRegistrationA.id,
+        idB: () => studentSubjectRegistrationB.id,
       },
     ];
 
