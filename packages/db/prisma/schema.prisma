@@ -95,6 +95,9 @@ model School {
   /// (D-13 immutability), so this only fires if something else removes the
   /// row; the school simply falls back to no logo, never a dangling FK.
   logoMedia           MediaAsset?          @relation("SchoolLogo", fields: [logoMediaId], references: [id], onDelete: SetNull)
+  // --- B5: academic structure back-relations.
+  academicSessions    AcademicSession[]
+  departments         Department[]
 
   @@map("schools")
 }
@@ -253,6 +256,7 @@ model SchoolMembership {
   roleAssignments RoleAssignment[]
   studentProfile  StudentProfile?
   teacherProfile  TeacherProfile?
+  hodAssignments  HODAssignment[]
 
   // Composite-FK target for RoleAssignment/StudentProfile/TeacherProfile,
   // matching TenancyProbe's proven (schoolId, id) pattern.
@@ -669,4 +673,289 @@ model MediaAsset {
   @@index([schoolId, type])
   @@index([schoolId, status])
   @@map("media_assets")
+}
+
+// ---------------------------------------------------------------------------
+// Academic Structure (07 §6.1-6.9, 03 §6-9, 05 §7.1-7.5, ADR-0001/0011/0013)
+// — B5.
+//
+// Delivers the session-scoped academic hierarchy every later phase depends
+// on: AcademicSession, AcademicTerm, Department, ClassGroup, Subject,
+// ClassSubject, HODAssignment. TeacherAssignment/StudentEnrollment/
+// StudentSubjectRegistration (ADR-0011) are B6; Topic/Question.level
+// (ADR-0001) are B8 despite that ADR's own "Required changes" text loosely
+// naming B5 too — the roadmap's own B5 and B8 Scope sections both
+// independently place Topic in B8, which this phase follows (see CLAUDE.md's
+// B5 Change Log entry for the documentation-inconsistency note). ExamClass
+// (ADR-0013) is B11.
+// ---------------------------------------------------------------------------
+
+enum AcademicSessionStatus {
+  DRAFT
+  UPCOMING
+  CURRENT
+  CLOSED
+  ARCHIVED
+}
+
+enum AcademicTermStatus {
+  DRAFT
+  UPCOMING
+  CURRENT
+  CLOSED
+  ARCHIVED
+}
+
+enum DepartmentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// ADR-0001: "ClassGroup.level becomes load-bearing for authorization, so
+/// its values must be consistent within a school — level is now a
+/// controlled vocabulary, not free text." Fixed platform-wide enum
+/// (confirmed with the project owner during B5 planning), not a
+/// school-editable lookup table — B8's Question.level and B9's HOD/teacher
+/// scope joins, and B11's cross-class level-agreement check, all compare
+/// against this enum directly; a school-defined free-text level would break
+/// every one of those joins.
+enum ClassLevel {
+  JSS1
+  JSS2
+  JSS3
+  SS1
+  SS2
+  SS3
+}
+
+enum ClassGroupStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum SubjectStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ClassSubjectStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum HODAssignmentStatus {
+  ACTIVE
+  ENDED
+}
+
+/// School's academic year (07 §6.1). Exactly one CURRENT session per school
+/// is enforced structurally by a partial unique index in this migration's
+/// hand-written SQL (Prisma's DSL can't express a filtered unique index) —
+/// see this migration's raw SQL block and SessionService's activation
+/// transaction for the app-level transition semantics layered on top.
+model AcademicSession {
+  id        String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String                @map("school_id") @db.Uuid
+  name      String                @db.VarChar(32)
+  startDate DateTime              @map("start_date") @db.Date
+  endDate   DateTime              @map("end_date") @db.Date
+  status    AcademicSessionStatus @default(DRAFT)
+  createdAt DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  terms          AcademicTerm[]
+  classGroups    ClassGroup[]
+  classSubjects  ClassSubject[]
+  hodAssignments HODAssignment[]
+
+  // Composite-FK target for AcademicTerm/ClassGroup/ClassSubject/
+  // HODAssignment, matching the established (schoolId, id) convention.
+  @@unique([schoolId, id])
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@map("academic_sessions")
+}
+
+/// A term within a session (07 §6.2). `sequence` orders terms within their
+/// session (1, 2, 3) and is the uniqueness key alongside the session, not
+/// itself globally meaningful.
+model AcademicTerm {
+  id                String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId          String             @map("school_id") @db.Uuid
+  academicSessionId String             @map("academic_session_id") @db.Uuid
+  name              String             @db.VarChar(32)
+  sequence          Int
+  startDate         DateTime           @map("start_date") @db.Date
+  endDate           DateTime           @map("end_date") @db.Date
+  status            AcademicTermStatus @default(DRAFT)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session AcademicSession @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, academicSessionId, sequence])
+  @@index([schoolId])
+  @@index([schoolId, academicSessionId])
+  @@index([schoolId, status])
+  @@map("academic_terms")
+}
+
+/// NOT session-scoped — persists across sessions (07 §6.3, 03 §7: "not
+/// hard-coded restrictions", school-defined). HODAssignment (session-scoped)
+/// is what carries the temporal dimension, not Department itself.
+model Department {
+  id        String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String           @map("school_id") @db.Uuid
+  name      String           @db.VarChar(128)
+  code      String           @db.VarChar(16)
+  status    DepartmentStatus @default(ACTIVE)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subjects       Subject[]
+  classGroups    ClassGroup[]
+  hodAssignments HODAssignment[]
+
+  // Composite-FK target for Subject/ClassGroup/HODAssignment.
+  @@unique([schoolId, id])
+  @@unique([schoolId, code])
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@map("departments")
+}
+
+/// Session-scoped class identity (07 §6.4, ADR-0001 confirmed): "SS2A
+/// 2026/27" and "SS2A 2027/28" are distinct rows with distinct ids, so
+/// StudentEnrollment (B6) never overwrites history by reusing one row
+/// across academic years. `departmentId` is nullable — JSS classes
+/// typically have no department in the Nigerian secondary structure this
+/// platform targets first; streaming into Science/Arts/Commercial starts at
+/// SS level.
+model ClassGroup {
+  id                String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId          String           @map("school_id") @db.Uuid
+  academicSessionId String           @map("academic_session_id") @db.Uuid
+  departmentId      String?          @map("department_id") @db.Uuid
+  name              String           @db.VarChar(32)
+  level             ClassLevel
+  arm               String           @db.VarChar(16)
+  status            ClassGroupStatus @default(ACTIVE)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session       AcademicSession @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  /// Restrict, not SetNull: a composite FK can't null just one of its two
+  /// columns (schoolId is required), and our own archival rule already
+  /// blocks hard-deleting a Department while any ClassGroup references it —
+  /// Restrict is a correct database-level backstop under that rule, not a
+  /// contradiction of "departmentId is nullable" (nullable only means a
+  /// class *may be created* with no department).
+  department    Department?     @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  classSubjects ClassSubject[]
+
+  // Composite-FK target for ClassSubject's session-agreement check (D-10) —
+  // a three-column unique, not just (schoolId, id), so ClassSubject can FK
+  // against (schoolId, classId, academicSessionId) and structurally cannot
+  // reference a (class, session) pair that disagrees.
+  @@unique([schoolId, id, academicSessionId])
+  // Unique class identity within (school, session) — roadmap Database work.
+  @@unique([schoolId, academicSessionId, level, arm])
+  @@index([schoolId])
+  @@index([schoolId, academicSessionId])
+  @@index([schoolId, departmentId])
+  @@index([schoolId, status])
+  @@map("class_groups")
+}
+
+/// NOT session-scoped (07 §6.5: "can exist across multiple sessions").
+/// `departmentId` nullable per ADR-0001 — a subject with no department falls
+/// outside every HOD's automatic review scope and requires explicit
+/// assignment.
+model Subject {
+  id           String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId     String        @map("school_id") @db.Uuid
+  departmentId String?       @map("department_id") @db.Uuid
+  name         String        @db.VarChar(128)
+  code         String        @db.VarChar(16)
+  status       SubjectStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  /// Restrict, not SetNull — same reasoning as ClassGroup.department.
+  department    Department?    @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  classSubjects ClassSubject[]
+
+  // Composite-FK target for ClassSubject.
+  @@unique([schoolId, id])
+  @@unique([schoolId, code])
+  @@index([schoolId])
+  @@index([schoolId, departmentId])
+  @@index([schoolId, status])
+  @@map("subjects")
+}
+
+/// "Mathematics taught to SS2A in 2026/2027" (07 §6.6) — the future
+/// registration target for B6's StudentSubjectRegistration (ADR-0011).
+/// `academicSessionId` is redundant against `classId`'s own
+/// ClassGroup.academicSessionId (audit finding D-10) — the composite FK
+/// below is what makes divergence impossible at the database level, not
+/// just a service-layer check (roadmap Database work, DoD item 7).
+model ClassSubject {
+  id                String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId          String             @map("school_id") @db.Uuid
+  classId           String             @map("class_id") @db.Uuid
+  subjectId         String             @map("subject_id") @db.Uuid
+  academicSessionId String             @map("academic_session_id") @db.Uuid
+  status            ClassSubjectStatus @default(ACTIVE)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subject Subject         @relation(fields: [schoolId, subjectId], references: [schoolId, id], onDelete: Restrict)
+  session AcademicSession @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  /// The load-bearing composite FK (D-10): targets ClassGroup's three-column
+  /// unique above, not merely (schoolId, id) — so a row can only ever point
+  /// at a (class, session) pair that actually agree.
+  classGroupSession ClassGroup @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Cascade)
+
+  @@unique([schoolId, classId, subjectId])
+  @@index([schoolId])
+  @@index([schoolId, classId])
+  @@index([schoolId, subjectId])
+  @@index([schoolId, academicSessionId])
+  @@map("class_subjects")
+}
+
+/// References membership_id, not user_id (resolves audit finding D-11) — a
+/// person's HOD standing is a fact about their SchoolMembership at this
+/// school, not about the User globally, mirroring RoleAssignment/
+/// StudentProfile/TeacherProfile's own membershipId convention exactly.
+/// Session-scoped, mirroring ClassGroup's own session-scoping. Rejects a
+/// membership lacking an active HOD RoleAssignment — enforced at the
+/// service layer (see HodAssignmentService.create), not a DB constraint,
+/// since it's a cross-table invariant and this codebase avoids triggers.
+model HODAssignment {
+  id                String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId          String              @map("school_id") @db.Uuid
+  membershipId      String              @map("membership_id") @db.Uuid
+  departmentId      String              @map("department_id") @db.Uuid
+  academicSessionId String              @map("academic_session_id") @db.Uuid
+  startDate         DateTime            @map("start_date") @db.Date
+  endDate           DateTime?           @map("end_date") @db.Date
+  status            HODAssignmentStatus @default(ACTIVE)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  membership SchoolMembership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  department Department       @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  session    AcademicSession  @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([schoolId, membershipId])
+  @@index([schoolId, departmentId])
+  @@index([schoolId, academicSessionId])
+  @@map("hod_assignments")
 }

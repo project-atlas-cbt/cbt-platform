@@ -410,7 +410,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Department (B5)',
   },
   {
     id: 'schoolConfig.department.manage',
@@ -428,7 +427,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Department (B5)',
   },
   {
     id: 'schoolConfig.class.view',
@@ -443,7 +441,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'ClassGroup (B5)',
   },
   {
     id: 'schoolConfig.class.manage',
@@ -458,7 +455,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'ClassGroup (B5)',
   },
   {
     id: 'schoolConfig.subject.view',
@@ -473,7 +469,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Subject (B5)',
   },
   {
     id: 'schoolConfig.subject.manage',
@@ -488,7 +483,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Subject (B5)',
   },
   {
     id: 'schoolConfig.session.view',
@@ -503,7 +497,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'AcademicSession (B5)',
   },
   {
     id: 'schoolConfig.session.manage',
@@ -518,7 +511,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'AcademicSession (B5)',
   },
   {
     id: 'schoolConfig.term.view',
@@ -533,7 +525,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Term (B5)',
   },
   {
     id: 'schoolConfig.term.manage',
@@ -548,7 +539,28 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Term (B5)',
+  },
+  {
+    id: 'academics.context.view',
+    section: 'School Configuration',
+    label: 'View current academic context (school + session + term)',
+    action: 'READ',
+    grants: {
+      // Every role reads its *own* resolved context (no resource instance,
+      // no whole-school listing involved) — SELF, not SCHOOL, matching the
+      // Identity & Sessions section's identical "every role gets the same
+      // self-scope access" pattern, and required by DoD item 8's tiny-
+      // student-surface rule (STUDENT may only ever be SELF/SYSTEM/DENIED
+      // here, with one already-named SCHOOL exception this is not). No
+      // school context to view as a platform actor (Software Admin has no
+      // SchoolMembership) — denied outright.
+      SOFTWARE_ADMIN: denied(),
+      SCHOOL_ADMIN: granted('SELF'),
+      MODERATOR: granted('SELF'),
+      HOD: granted('SELF'),
+      TEACHER: granted('SELF'),
+      STUDENT: granted('SELF'),
+    },
   },
   {
     id: 'schoolConfig.settings.manage',
@@ -936,7 +948,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Department (B5) + HOD assignment (B6)',
   },
   {
     id: 'assignments.studentToClass',
@@ -951,7 +962,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'ClassGroup/Enrollment (B5/B6)',
+    awaitingResource: 'Enrollment (B6)',
   },
   {
     id: 'assignments.moveStudent',
@@ -966,7 +977,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'ClassGroup/Enrollment (B5/B6)',
+    awaitingResource: 'Enrollment (B6)',
   },
   {
     id: 'assignments.view',
@@ -2043,7 +2054,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Department (B5), B16/B17 analytics',
+    awaitingResource: 'B16/B17 analytics',
   },
   {
     id: 'analytics.class',
@@ -2058,7 +2069,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ClassGroup (B5), B16/B17 analytics',
+    awaitingResource: 'B16/B17 analytics',
   },
   {
     id: 'analytics.studentHistory',

@@ -956,7 +956,7 @@ for this phase.
 
 # B5 — Academic Structure
 
-**Status:** NOT STARTED · **Decided ADRs:** 0001 (subject↔department, question level), 0011 (student subject registration), 0013 (exam↔multiple classes)
+**Status:** COMPLETE · **Decided ADRs:** 0001 (subject↔department, question level), 0011 (student subject registration), 0013 (exam↔multiple classes)
 
 ## Objective
 
@@ -994,6 +994,7 @@ Deliver the school's academic hierarchy — sessions, terms, departments, classe
 | `POST /v1/academics/sessions/:id/activate` | Make current, enforcing the single-current invariant        |
 | `GET /v1/academics/context`                | Current school + session + term (`04 §66` context switcher) |
 | `GET /v1/academics/classes/:id/subjects`   | Offerings for a class                                       |
+| `POST /v1/academics/terms/:id/activate`    | Roadmap-unnamed addition — see Implementation notes         |
 
 ## Database work
 
@@ -1033,26 +1034,40 @@ None. Rollover automation is B19.
 
 ## Definition of Done
 
-1. A full academic structure can be created: session, terms, departments, classes, subjects, offerings.
-2. Exactly one session is `CURRENT`; a concurrent activation attempt fails at the database, not merely in application code.
-3. `SS2A` in two sessions are distinct entities with distinct enrollments.
-4. A deactivated department, subject, or class remains attached to historical records, which stay readable.
-5. Destructive deletion is refused where history exists, with a clear error.
-6. `Subject.department_id` resolves an HOD's subject scope (proven by the query B9 will use).
-7. Redundant session columns cannot diverge from their parents.
-8. `HODAssignment` references `membership_id` and rejects a membership lacking an active HOD role.
-9. Cross-tenant reads and writes are denied.
-10. `GET /v1/academics/context` returns the correct school/session/term for every role.
+1. ✅ A full academic structure can be created: session, terms, departments, classes, subjects, offerings.
+2. ✅ Exactly one session is `CURRENT`; a concurrent activation attempt fails at the database, not merely in application code.
+3. ✅ `SS2A` in two sessions are distinct entities with distinct enrollments.
+4. ✅ A deactivated department, subject, or class remains attached to historical records, which stay readable — proven within B5's own boundary (no exam/enrollment history exists yet to fully close the claim; B8/B11 complete it).
+5. ✅ Destructive deletion is refused where history exists, with a clear error (`ACADEMIC_STRUCTURE_HAS_DEPENDENTS`).
+6. ✅ `Subject.department_id` resolves an HOD's subject scope — proven directly against the real `DEPARTMENT` resolver (no B9 controller exists yet to exercise it through HTTP, which is expected; see Implementation notes).
+7. ✅ Redundant session columns cannot diverge from their parents (`ClassSubject`'s composite FK against `ClassGroup(schoolId, id, academicSessionId)`).
+8. ✅ `HODAssignment` references `membership_id` and rejects a membership lacking an active HOD role.
+9. ✅ Cross-tenant reads and writes are denied.
+10. ✅ `GET /v1/academics/context` returns the correct school/session/term for every role.
 
 ## Exit criteria
 
-- ADR-0001, ADR-0011, ADR-0013 decided and reflected in the schema.
-- F6 confirms the contract; F2 confirms the context endpoint.
+- ✅ ADR-0001, ADR-0011, ADR-0013 decided and reflected in the schema.
+- ⏸ F6 confirms the contract; F2 confirms the context endpoint — **not yet**: this phase was built backend-only, ahead of `F5`, at explicit project-owner instruction (see `CLAUDE.md`'s B5 Change Log entry). `academics.v1` is frozen and published; F2's context-switcher already has the exact "not yet available" placeholder this phase's `GET /v1/academics/context` fills, and F6 is the natural next frontend phase to wire both.
+
+## Implementation notes
+
+- **`Topic` documentation inconsistency, not a schema decision**: ADR-0001's own "Required changes" list names `Topic` under B5, but this phase's own Scope section above (and B8's) both independently place it in B8. B5 does not build `Topic` — see `CLAUDE.md`'s B5 Change Log entry for the full note.
+- **`ClassGroup.level`** is the confirmed fixed platform-wide `ClassLevel` enum (`JSS1`/`JSS2`/`JSS3`/`SS1`/`SS2`/`SS3`), not a per-school configurable list — confirmed with the project owner during planning, matching this codebase's existing controlled-vocabulary convention (`Role`, `SchoolStatus`, …) and ADR-0001's requirement that the value be load-bearing for B8/B9/B11.
+- **`POST /v1/academics/terms/:id/activate`** is a roadmap-unnamed addition: `GET /v1/academics/context`'s "current term" can never become non-null without it (DoD item 10 would otherwise be unsatisfiable). Mirrors the session-activation endpoint's exact transaction shape, scoped to `(school, session)` instead of `(school)`.
+- **Concurrency safety (DoD item 2) uses plain READ COMMITTED, not `SERIALIZABLE`.** The original plan called for explicit `SERIALIZABLE` isolation; implementation found this unnecessary — the partial unique index (`academic_sessions_one_current_per_school`) plus ordinary Postgres row-locking (two activations racing to close the same previously-current row serialize on that row's lock; two activations racing with no shared row yet still serialize via Postgres's own uncommitted-unique-index-entry wait) already guarantee exactly one winner and one clean rejection. Proven by a dedicated test (`session-activation-concurrency.integration.test.ts`) using a deliberate `pg_sleep` to force the exact interleaving, rather than relying on incidental HTTP-request timing.
+- **DEPARTMENT scope resolver** (`department-scope.resolver.ts`) closes B2's fail-closed placeholder. No B5 endpoint itself uses `DEPARTMENT` scope (all of B5's own permission rows are `SCHOOL`/denied), so the resolver is proven directly by a dedicated test rather than through a live HTTP route — `PermissionGuard` never constructs a `ResourceContext` today, so the resolver becomes reachable through a real endpoint only once a later phase (B9) explicitly calls `AuthorizationService.evaluate()` with one.
+- **Every unique-constraint violation is guarded**, not just the activation race: `runUniqueGuarded()` (`prisma-error.util.ts`) translates a raw Postgres unique violation into a clean `CONFLICT` on every create/update touching a `@@unique` (class identity, department/subject codes, term sequence, a subject offered twice to one class) — found by this phase's own integration tests (the duplicate-class-identity test originally surfaced as an unhandled 500), not by inspection.
+- **`packages/db` gained its first runtime (not type-only) export of `Prisma`** (`export { Prisma } from './client.js'`) — B5 is the first phase needing to catch a specific `PrismaClientKnownRequestError` at runtime; the package previously only forwarded `Prisma` as a type.
+- **A real bug in the test-authoring pattern, not the product**: the shared `post()` HTTP test helper (copied from `platform.integration.test.ts`'s own precedent) unconditionally set `Content-Type: application/json` even for bodyless POST calls — the exact class of bug `CLAUDE.md`'s B4 entry already documented once. B5's own action endpoints (activate/archive/deactivate/end) are bodyless POSTs, so this reproduced the identical failure (a generic 400 indistinguishable from a real bug) until fixed in this phase's own test file; `platform.integration.test.ts` itself was never affected only because none of its POST calls happen to be bodyless.
 
 ## Deferred items
 
 - Session rollover automation → B19.
-- Multi-department subjects (a `DepartmentSubject` join) unless `ADR-0001` selects it.
+- Multi-department subjects (a `DepartmentSubject` join) unless `ADR-0001` selects it — not selected, stays out of scope entirely.
+- `StudentEnrollment`'s own dependent-check on `ClassGroup` deletion — B6 must extend `ClassGroupService.delete()`'s dependent check once `StudentEnrollment` exists; B5 cannot check a table that doesn't exist yet.
+- `AcademicTerm`'s own dependent-check on deletion — no B5 table references a term yet; a later phase (B11+) that adds one must extend `TermService.delete()`.
+- F6 (Academic Structure Workspace) and the F2 context-switcher gap-closure — not built in this phase (backend-only per explicit instruction); natural next step per the frontend/backend pairing default.
 
 ---
 

@@ -49,3 +49,21 @@ export {
   ORPHAN_MEDIA_REPORT_CACHE_KEY,
   type OrphanMediaReportSnapshot,
 } from './media/orphan-media-report.js';
+export {
+  ACADEMIC_SESSION_STATUSES,
+  ACADEMIC_TERM_STATUSES,
+  DEPARTMENT_STATUSES,
+  CLASS_LEVELS,
+  CLASS_GROUP_STATUSES,
+  SUBJECT_STATUSES,
+  CLASS_SUBJECT_STATUSES,
+  HOD_ASSIGNMENT_STATUSES,
+  type AcademicSessionStatus,
+  type AcademicTermStatus,
+  type DepartmentStatus,
+  type ClassLevel,
+  type ClassGroupStatus,
+  type SubjectStatus,
+  type ClassSubjectStatus,
+  type HODAssignmentStatus,
+} from './academics/constants.js';

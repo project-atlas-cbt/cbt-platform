@@ -1,4 +1,3 @@
-export { prisma, createPrismaClient, PrismaClient } from './client.js';
-export type { Prisma } from './client.js';
+export { prisma, createPrismaClient, PrismaClient, Prisma } from './client.js';
 export { withTenant, TENANT_SESSION_VARIABLE, InvalidTenantContextError } from './tenancy.js';
 export { grantAppRole } from './grants.js';

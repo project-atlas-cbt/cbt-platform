@@ -51,3 +51,9 @@ if (process.env.NODE_ENV !== 'production') {
 
 export { PrismaClient } from '../generated/client/index.js';
 export type * from '../generated/client/index.js';
+// B5: the first consumer needing to catch a specific Prisma error class at
+// runtime (PrismaClientKnownRequestError, to translate a partial-unique-
+// index violation into ACADEMIC_ACTIVATION_CONFLICT) — `export type *`
+// above only forwards type declarations, not the runtime namespace object,
+// so `Prisma` needs its own explicit value export alongside it.
+export { Prisma } from '../generated/client/index.js';

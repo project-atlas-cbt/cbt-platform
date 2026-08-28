@@ -70,6 +70,28 @@ export const BASE_ERROR_CODES = {
   MEDIA_TOO_LARGE: { httpStatus: 422, retryable: false },
   MEDIA_DIMENSIONS_INVALID: { httpStatus: 422, retryable: false },
   MEDIA_NOT_READY: { httpStatus: 409, retryable: false },
+
+  // B5 (Academic Structure).
+  //
+  // ACADEMIC_ACTIVATION_CONFLICT: two concurrent activate() calls against
+  // the same school/session raced (Serializable-isolation write conflict,
+  // or the partial-unique-index rejection underneath it) — retryable,
+  // unlike every other CONFLICT-shaped code here, because this one really
+  // is transient: retrying once the other transaction has committed
+  // succeeds. Shared by both session- and term-activation (same failure
+  // shape, same client handling).
+  ACADEMIC_ACTIVATION_CONFLICT: { httpStatus: 409, retryable: true },
+  // ACADEMIC_STRUCTURE_HAS_DEPENDENTS: a hard-delete was attempted on a
+  // session/department/class/subject that other rows still reference —
+  // roadmap DoD item 5's "clear error" when destructive deletion is
+  // refused. Deactivation (never blocked) is the correct action instead.
+  ACADEMIC_STRUCTURE_HAS_DEPENDENTS: { httpStatus: 409, retryable: false },
+  // HOD_ASSIGNMENT_REQUIRES_ACTIVE_ROLE: the referenced SchoolMembership has
+  // no active HOD RoleAssignment (D-11 / roadmap DoD item 8) — a business-
+  // rule validation failure, not a malformed request, but still a 400
+  // (matches the shape of every other pre-mutation invariant check in this
+  // codebase, e.g. B1's credential validation).
+  HOD_ASSIGNMENT_REQUIRES_ACTIVE_ROLE: { httpStatus: 400, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

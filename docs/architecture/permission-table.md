@@ -49,16 +49,17 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | Edit school name/details                                     | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
 | Upload/change logo                                           | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
 | Set primary colour                                           | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         |                                        |
-| Manage departments (derived split: view)                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL ⚠️ | —       | —         | Department (B5)                        |
-| Manage departments (derived split: create/edit/delete)       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | Department (B5)                        |
-| Manage classes (derived split: view)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | ClassGroup (B5)                        |
-| Manage classes (derived split: create/edit/delete)           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | ClassGroup (B5)                        |
-| Manage subjects (derived split: view)                        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | Subject (B5)                           |
-| Manage subjects (derived split: create/edit/delete)          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | Subject (B5)                           |
-| Manage academic sessions (derived split: view)               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | AcademicSession (B5)                   |
-| Manage academic sessions (derived split: create/edit/delete) | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | AcademicSession (B5)                   |
-| Manage terms (derived split: view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         | Term (B5)                              |
-| Manage terms (derived split: create/edit/delete)             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         | Term (B5)                              |
+| Manage departments (derived split: view)                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL ⚠️ | —       | —         |                                        |
+| Manage departments (derived split: create/edit/delete)       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
+| Manage classes (derived split: view)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
+| Manage classes (derived split: create/edit/delete)           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
+| Manage subjects (derived split: view)                        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
+| Manage subjects (derived split: create/edit/delete)          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
+| Manage academic sessions (derived split: view)               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
+| Manage academic sessions (derived split: create/edit/delete) | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
+| Manage terms (derived split: view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
+| Manage terms (derived split: create/edit/delete)             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
+| View current academic context (school + session + term)      | —              | SELF         | SELF      | SELF      | SELF    | SELF      |                                        |
 | Manage school settings                                       | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | —         | —       | —         | School settings resource (B4 or later) |
 
 <details><summary>Notes</summary>
@@ -148,14 +149,14 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Assignments
 
-| Action                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER | STUDENT | Awaiting                              |
-| ---------------------------- | -------------- | ------------ | --------- | ---------- | ------- | ------- | ------------------------------------- |
-| Assign teacher → subject     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | TeacherAssignment (B6)                |
-| Assign teacher → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | TeacherAssignment (B6)                |
-| Assign HOD → department      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | Department (B5) + HOD assignment (B6) |
-| Assign student → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | ClassGroup/Enrollment (B5/B6)         |
-| Move student between classes | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | ClassGroup/Enrollment (B5/B6)         |
-| View assignments             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | SELF ⚠️ | SELF    | TeacherAssignment/Enrollment (B6)     |
+| Action                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER | STUDENT | Awaiting                          |
+| ---------------------------- | -------------- | ------------ | --------- | ---------- | ------- | ------- | --------------------------------- |
+| Assign teacher → subject     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | TeacherAssignment (B6)            |
+| Assign teacher → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | TeacherAssignment (B6)            |
+| Assign HOD → department      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       |                                   |
+| Assign student → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       | Enrollment (B6)                   |
+| Move student between classes | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       | Enrollment (B6)                   |
+| View assignments             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | SELF ⚠️ | SELF    | TeacherAssignment/Enrollment (B6) |
 
 <details><summary>Notes</summary>
 
@@ -346,8 +347,8 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | ---------------------------- | -------------- | ------------ | ------------- | ---------- | -------- | ------- | ------------------------------------- |
 | Platform analytics           | PLATFORM       | —            | —             | —          | —        | —       | Platform metrics (B3)                 |
 | School-wide analytics        | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | —          | —        | —       | B16/B17 analytics                     |
-| Department analytics         | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT ⚠️ | DEPARTMENT | —        | —       | Department (B5), B16/B17 analytics    |
-| Class analytics              | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | ASSIGNED | —       | ClassGroup (B5), B16/B17 analytics    |
+| Department analytics         | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT ⚠️ | DEPARTMENT | —        | —       | B16/B17 analytics                     |
+| Class analytics              | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | ASSIGNED | —       | B16/B17 analytics                     |
 | Student performance history  | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | ASSIGNED | SELF    | Result (B15), B16/B17 analytics       |
 | Question difficulty analysis | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT    | DEPARTMENT | OWNED    | —       | Question/Result analytics (B16/B17)   |
 | Exam completion statistics   | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | OWNED    | —       | ExamParticipation analytics (B16/B17) |

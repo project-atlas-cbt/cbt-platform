@@ -39,6 +39,12 @@ export interface ResourceContext {
    * own audit trail) — distinct from ownerMembershipId, which is about
    * authorship, not identity. */
   ownerUserId?: string;
+  /** DEPARTMENT (B5): the department this resource belongs to, either
+   * directly (a Department/HODAssignment resource) or via a two-hop join
+   * a later phase's caller resolves itself before constructing this context
+   * (e.g. B9's Question -> Subject.departmentId). See
+   * academics/department-scope.resolver.ts. */
+  departmentId?: string;
 }
 
 export type AuthorizationOutcome = 'ALLOWED' | 'FORBIDDEN' | 'NOT_FOUND';

@@ -1026,6 +1026,1088 @@
         "summary": "Update logo and/or primary colour (School Admin only) — freely editable, audited.",
         "tags": ["school"]
       }
+    },
+    "/academics/context": {
+      "get": {
+        "operationId": "AcademicsContextController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicsContextResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Current school + session + term (04 §66 context switcher), every role.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/sessions": {
+      "get": {
+        "operationId": "SessionController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicSessionListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's academic sessions (07 §6.1).",
+        "tags": ["academics"]
+      },
+      "post": {
+        "operationId": "SessionController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAcademicSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create an academic session (starts DRAFT).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/sessions/{id}": {
+      "get": {
+        "operationId": "SessionController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get one academic session.",
+        "tags": ["academics"]
+      },
+      "patch": {
+        "operationId": "SessionController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAcademicSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a DRAFT or UPCOMING session.",
+        "tags": ["academics"]
+      },
+      "delete": {
+        "operationId": "SessionController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Hard-delete a session (blocked if terms/classes/offerings/HOD assignments exist).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/sessions/{id}/activate": {
+      "post": {
+        "operationId": "SessionController_activate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Make this session CURRENT (roadmap-named endpoint, DoD item 2).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/sessions/{id}/archive": {
+      "post": {
+        "operationId": "SessionController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archive a session (FR AC-01).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/sessions/{sessionId}/terms": {
+      "get": {
+        "operationId": "TermController_list",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicTermListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a session's terms (07 §6.2).",
+        "tags": ["academics"]
+      },
+      "post": {
+        "operationId": "TermController_create",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAcademicTermDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicTermResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a term within a session.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/terms/{id}": {
+      "patch": {
+        "operationId": "TermController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAcademicTermDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicTermResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a DRAFT or UPCOMING term.",
+        "tags": ["academics"]
+      },
+      "delete": {
+        "operationId": "TermController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a term.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/terms/{id}/activate": {
+      "post": {
+        "operationId": "TermController_activate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcademicTermResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Make this term CURRENT within its session (feeds GET /academics/context).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/departments": {
+      "get": {
+        "operationId": "DepartmentController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's departments (07 §6.3).",
+        "tags": ["academics"]
+      },
+      "post": {
+        "operationId": "DepartmentController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDepartmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a department.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/departments/{id}": {
+      "get": {
+        "operationId": "DepartmentController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get one department.",
+        "tags": ["academics"]
+      },
+      "patch": {
+        "operationId": "DepartmentController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDepartmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a department.",
+        "tags": ["academics"]
+      },
+      "delete": {
+        "operationId": "DepartmentController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Hard-delete a department (blocked if subjects/classes/HOD assignments exist).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/departments/{id}/deactivate": {
+      "post": {
+        "operationId": "DepartmentController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deactivate a department (FR AC-03) — always allowed.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/classes": {
+      "get": {
+        "operationId": "ClassGroupController_list",
+        "parameters": [
+          {
+            "name": "academicSessionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassGroupListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's classes (07 §6.4), optionally filtered by session.",
+        "tags": ["academics"]
+      },
+      "post": {
+        "operationId": "ClassGroupController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateClassGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassGroupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a class within a session.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/classes/{id}": {
+      "get": {
+        "operationId": "ClassGroupController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassGroupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get one class.",
+        "tags": ["academics"]
+      },
+      "patch": {
+        "operationId": "ClassGroupController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClassGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassGroupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a class.",
+        "tags": ["academics"]
+      },
+      "delete": {
+        "operationId": "ClassGroupController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Hard-delete a class (blocked if offerings exist).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/classes/{id}/archive": {
+      "post": {
+        "operationId": "ClassGroupController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassGroupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archive a class (FR AC-04) — always allowed.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/subjects": {
+      "get": {
+        "operationId": "SubjectController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's subjects (07 §6.5).",
+        "tags": ["academics"]
+      },
+      "post": {
+        "operationId": "SubjectController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a subject.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/subjects/{id}": {
+      "get": {
+        "operationId": "SubjectController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get one subject.",
+        "tags": ["academics"]
+      },
+      "patch": {
+        "operationId": "SubjectController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a subject, including assigning its department (FR AC-05).",
+        "tags": ["academics"]
+      },
+      "delete": {
+        "operationId": "SubjectController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Hard-delete a subject (blocked if offerings exist).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/subjects/{id}/deactivate": {
+      "post": {
+        "operationId": "SubjectController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deactivate a subject — always allowed, never breaks history.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/classes/{id}/subjects": {
+      "get": {
+        "operationId": "ClassSubjectController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassSubjectListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Offerings for a class (roadmap-named endpoint, 07 §6.6).",
+        "tags": ["academics"]
+      },
+      "post": {
+        "operationId": "ClassSubjectController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateClassSubjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassSubjectResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Offer a subject to a class.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/class-subjects/{id}": {
+      "delete": {
+        "operationId": "ClassSubjectController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove a class-subject offering.",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/departments/{id}/hod-assignments": {
+      "get": {
+        "operationId": "HodAssignmentController_listForDepartment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodAssignmentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A department's HOD assignment history (07 §6.9).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/hod-assignments": {
+      "post": {
+        "operationId": "HodAssignmentController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateHodAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodAssignmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Assign an HOD to a department (rejects a membership without an active HOD role).",
+        "tags": ["academics"]
+      }
+    },
+    "/academics/hod-assignments/{id}/end": {
+      "post": {
+        "operationId": "HodAssignmentController_end",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodAssignmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "End an HOD assignment (FR §13: \"School Admin -> remove HOD\").",
+        "tags": ["academics"]
+      }
     }
   },
   "info": {
@@ -2084,6 +3166,589 @@
             "description": "\"#rrggbb\". Pass null to clear (falls back to the platform default palette)."
           }
         }
+      },
+      "CurrentSessionSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "UPCOMING", "CURRENT", "CLOSED", "ARCHIVED"]
+          }
+        },
+        "required": ["id", "name", "status"]
+      },
+      "CurrentTermSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "UPCOMING", "CURRENT", "CLOSED", "ARCHIVED"]
+          }
+        },
+        "required": ["id", "name", "sequence", "status"]
+      },
+      "AcademicsContextResponseDto": {
+        "type": "object",
+        "properties": {
+          "schoolId": {
+            "type": "string"
+          },
+          "schoolName": {
+            "type": "string"
+          },
+          "session": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CurrentSessionSummaryDto"
+              }
+            ]
+          },
+          "term": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CurrentTermSummaryDto"
+              }
+            ]
+          }
+        },
+        "required": ["schoolId", "schoolName", "session", "term"]
+      },
+      "AcademicSessionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "UPCOMING", "CURRENT", "CLOSED", "ARCHIVED"]
+          }
+        },
+        "required": ["id", "name", "startDate", "endDate", "status"]
+      },
+      "AcademicSessionListResponseDto": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AcademicSessionResponseDto"
+            }
+          }
+        },
+        "required": ["sessions"]
+      },
+      "CreateAcademicSessionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 32,
+            "example": "2026/2027"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": ["name", "startDate", "endDate"]
+      },
+      "UpdateAcademicSessionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "AcademicTermResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "UPCOMING", "CURRENT", "CLOSED", "ARCHIVED"]
+          }
+        },
+        "required": [
+          "id",
+          "academicSessionId",
+          "name",
+          "sequence",
+          "startDate",
+          "endDate",
+          "status"
+        ]
+      },
+      "AcademicTermListResponseDto": {
+        "type": "object",
+        "properties": {
+          "terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AcademicTermResponseDto"
+            }
+          }
+        },
+        "required": ["terms"]
+      },
+      "CreateAcademicTermDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 32,
+            "example": "First Term"
+          },
+          "sequence": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Order within the session (1, 2, 3)."
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": ["name", "sequence", "startDate", "endDate"]
+      },
+      "UpdateAcademicTermDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "DepartmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "INACTIVE"]
+          }
+        },
+        "required": ["id", "name", "code", "status"]
+      },
+      "DepartmentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "departments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DepartmentResponseDto"
+            }
+          }
+        },
+        "required": ["departments"]
+      },
+      "CreateDepartmentDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "Science"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 16,
+            "example": "SCI"
+          }
+        },
+        "required": ["name", "code"]
+      },
+      "UpdateDepartmentDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 16
+          }
+        }
+      },
+      "ClassGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          "arm": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "INACTIVE", "ARCHIVED"]
+          }
+        },
+        "required": ["id", "academicSessionId", "departmentId", "name", "level", "arm", "status"]
+      },
+      "ClassGroupListResponseDto": {
+        "type": "object",
+        "properties": {
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClassGroupResponseDto"
+            }
+          }
+        },
+        "required": ["classes"]
+      },
+      "CreateClassGroupDto": {
+        "type": "object",
+        "properties": {
+          "academicSessionId": {
+            "type": "string"
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null for classes with no department (e.g. JSS levels before streaming)."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 32,
+            "example": "SS2A"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          "arm": {
+            "type": "string",
+            "maxLength": 16,
+            "example": "A"
+          }
+        },
+        "required": ["academicSessionId", "name", "level", "arm"]
+      },
+      "UpdateClassGroupDto": {
+        "type": "object",
+        "properties": {
+          "departmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          "arm": {
+            "type": "string",
+            "maxLength": 16
+          }
+        }
+      },
+      "SubjectResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "INACTIVE"]
+          }
+        },
+        "required": ["id", "name", "code", "departmentId", "status"]
+      },
+      "SubjectListResponseDto": {
+        "type": "object",
+        "properties": {
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectResponseDto"
+            }
+          }
+        },
+        "required": ["subjects"]
+      },
+      "CreateSubjectDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "Mathematics"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 16,
+            "example": "MTH"
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true,
+            "description": "ADR-0001: a subject with no department falls outside every HOD's automatic review scope."
+          }
+        },
+        "required": ["name", "code"]
+      },
+      "UpdateSubjectDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ClassSubjectResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "subjectCode": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "INACTIVE"]
+          }
+        },
+        "required": [
+          "id",
+          "classId",
+          "subjectId",
+          "subjectName",
+          "subjectCode",
+          "academicSessionId",
+          "status"
+        ]
+      },
+      "ClassSubjectListResponseDto": {
+        "type": "object",
+        "properties": {
+          "offerings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClassSubjectResponseDto"
+            }
+          }
+        },
+        "required": ["offerings"]
+      },
+      "CreateClassSubjectDto": {
+        "type": "object",
+        "properties": {
+          "subjectId": {
+            "type": "string"
+          }
+        },
+        "required": ["subjectId"]
+      },
+      "HodAssignmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "membershipId": {
+            "type": "string"
+          },
+          "departmentId": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "ENDED"]
+          }
+        },
+        "required": [
+          "id",
+          "membershipId",
+          "departmentId",
+          "academicSessionId",
+          "startDate",
+          "endDate",
+          "status"
+        ]
+      },
+      "HodAssignmentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HodAssignmentResponseDto"
+            }
+          }
+        },
+        "required": ["assignments"]
+      },
+      "CreateHodAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string"
+          },
+          "departmentId": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": ["membershipId", "departmentId", "academicSessionId", "startDate"]
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

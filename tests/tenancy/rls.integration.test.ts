@@ -516,3 +516,328 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     });
   },
 );
+
+/**
+ * B5's seven new school-owned tables (AcademicSession, AcademicTerm,
+ * Department, ClassGroup, Subject, ClassSubject, HODAssignment) — same
+ * three-test shape as the B3/B4 blocks above (no-context-blocks-all,
+ * scoped-visible, cross-tenant-by-id-blocked), run once per table. One
+ * fixture chain per school (session -> term, department -> class ->
+ * offering, membership+department -> HOD assignment) so every FK in the
+ * chain is exercised, not just the leaf table.
+ */
+describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
+  'Row-Level Security tenant isolation — academic structure (B5, ADR-0023)',
+  () => {
+    let owner: PrismaClient;
+    let app: PrismaClient;
+    let schoolA: { id: string };
+    let schoolB: { id: string };
+    let userA: { id: string };
+    let userB: { id: string };
+    let sessionA: { id: string };
+    let sessionB: { id: string };
+    let termA: { id: string };
+    let termB: { id: string };
+    let deptA: { id: string };
+    let deptB: { id: string };
+    let classA: { id: string };
+    let classB: { id: string };
+    let subjectA: { id: string };
+    let subjectB: { id: string };
+    let classSubjectA: { id: string };
+    let classSubjectB: { id: string };
+    let hodAssignmentA: { id: string };
+    let hodAssignmentB: { id: string };
+
+    beforeAll(async () => {
+      await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
+      owner = createPrismaClient(ownerDatabaseUrl);
+      app = createPrismaClient(appDatabaseUrl);
+
+      schoolA = await owner.school.create({
+        data: {
+          name: `Academics RLS School A ${randomUUID()}`,
+          subdomain: `acad-rls-a-${Date.now()}`,
+        },
+      });
+      schoolB = await owner.school.create({
+        data: {
+          name: `Academics RLS School B ${randomUUID()}`,
+          subdomain: `acad-rls-b-${Date.now()}`,
+        },
+      });
+
+      userA = await owner.user.create({
+        data: { firstName: 'Hod', lastName: 'A', displayName: 'Hod A' },
+      });
+      userB = await owner.user.create({
+        data: { firstName: 'Hod', lastName: 'B', displayName: 'Hod B' },
+      });
+      const membershipA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.schoolMembership.create({
+          data: { schoolId: schoolA.id, userId: userA.id, loginIdentifier: `hod-a-${Date.now()}` },
+        }),
+      );
+      const membershipB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.schoolMembership.create({
+          data: { schoolId: schoolB.id, userId: userB.id, loginIdentifier: `hod-b-${Date.now()}` },
+        }),
+      );
+      await withTenant(owner, schoolA.id, (tx) =>
+        tx.roleAssignment.create({
+          data: { schoolId: schoolA.id, membershipId: membershipA.id, role: 'HOD' },
+        }),
+      );
+      await withTenant(owner, schoolB.id, (tx) =>
+        tx.roleAssignment.create({
+          data: { schoolId: schoolB.id, membershipId: membershipB.id, role: 'HOD' },
+        }),
+      );
+
+      const start = new Date('2026-09-01');
+      const end = new Date('2027-07-31');
+
+      sessionA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.academicSession.create({
+          data: {
+            schoolId: schoolA.id,
+            name: `RLS-A-${randomUUID().slice(0, 8)}`,
+            startDate: start,
+            endDate: end,
+          },
+        }),
+      );
+      sessionB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.academicSession.create({
+          data: {
+            schoolId: schoolB.id,
+            name: `RLS-B-${randomUUID().slice(0, 8)}`,
+            startDate: start,
+            endDate: end,
+          },
+        }),
+      );
+      termA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.academicTerm.create({
+          data: {
+            schoolId: schoolA.id,
+            academicSessionId: sessionA.id,
+            name: 'First Term',
+            sequence: 1,
+            startDate: start,
+            endDate: end,
+          },
+        }),
+      );
+      termB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.academicTerm.create({
+          data: {
+            schoolId: schoolB.id,
+            academicSessionId: sessionB.id,
+            name: 'First Term',
+            sequence: 1,
+            startDate: start,
+            endDate: end,
+          },
+        }),
+      );
+      deptA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.department.create({
+          data: {
+            schoolId: schoolA.id,
+            name: 'Science',
+            code: `SCI-A-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+      deptB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.department.create({
+          data: {
+            schoolId: schoolB.id,
+            name: 'Science',
+            code: `SCI-B-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+      classA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.classGroup.create({
+          data: {
+            schoolId: schoolA.id,
+            academicSessionId: sessionA.id,
+            departmentId: deptA.id,
+            name: 'SS2A',
+            level: 'SS2',
+            arm: 'A',
+          },
+        }),
+      );
+      classB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.classGroup.create({
+          data: {
+            schoolId: schoolB.id,
+            academicSessionId: sessionB.id,
+            departmentId: deptB.id,
+            name: 'SS2A',
+            level: 'SS2',
+            arm: 'A',
+          },
+        }),
+      );
+      subjectA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.subject.create({
+          data: {
+            schoolId: schoolA.id,
+            name: 'Mathematics',
+            code: `MTH-A-${randomUUID().slice(0, 6)}`,
+            departmentId: deptA.id,
+          },
+        }),
+      );
+      subjectB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.subject.create({
+          data: {
+            schoolId: schoolB.id,
+            name: 'Mathematics',
+            code: `MTH-B-${randomUUID().slice(0, 6)}`,
+            departmentId: deptB.id,
+          },
+        }),
+      );
+      classSubjectA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.classSubject.create({
+          data: {
+            schoolId: schoolA.id,
+            classId: classA.id,
+            subjectId: subjectA.id,
+            academicSessionId: sessionA.id,
+          },
+        }),
+      );
+      classSubjectB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.classSubject.create({
+          data: {
+            schoolId: schoolB.id,
+            classId: classB.id,
+            subjectId: subjectB.id,
+            academicSessionId: sessionB.id,
+          },
+        }),
+      );
+      hodAssignmentA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.hODAssignment.create({
+          data: {
+            schoolId: schoolA.id,
+            membershipId: membershipA.id,
+            departmentId: deptA.id,
+            academicSessionId: sessionA.id,
+            startDate: start,
+          },
+        }),
+      );
+      hodAssignmentB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.hODAssignment.create({
+          data: {
+            schoolId: schoolB.id,
+            membershipId: membershipB.id,
+            departmentId: deptB.id,
+            academicSessionId: sessionB.id,
+            startDate: start,
+          },
+        }),
+      );
+    });
+
+    afterAll(async () => {
+      const ids = [schoolA.id, schoolB.id];
+      await owner.hODAssignment.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.classSubject.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.classGroup.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.subject.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.department.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.academicTerm.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.academicSession.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.roleAssignment.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.schoolMembership.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.user.deleteMany({ where: { id: { in: [userA.id, userB.id] } } });
+      await owner.school.deleteMany({ where: { id: { in: ids } } });
+      await owner.$disconnect();
+      await app.$disconnect();
+    });
+
+    const tables: Array<{
+      label: string;
+      table: string;
+      idA: () => string;
+      idB: () => string;
+    }> = [
+      {
+        label: 'academic_sessions',
+        table: 'academic_sessions',
+        idA: () => sessionA.id,
+        idB: () => sessionB.id,
+      },
+      {
+        label: 'academic_terms',
+        table: 'academic_terms',
+        idA: () => termA.id,
+        idB: () => termB.id,
+      },
+      { label: 'departments', table: 'departments', idA: () => deptA.id, idB: () => deptB.id },
+      { label: 'class_groups', table: 'class_groups', idA: () => classA.id, idB: () => classB.id },
+      { label: 'subjects', table: 'subjects', idA: () => subjectA.id, idB: () => subjectB.id },
+      {
+        label: 'class_subjects',
+        table: 'class_subjects',
+        idA: () => classSubjectA.id,
+        idB: () => classSubjectB.id,
+      },
+      {
+        label: 'hod_assignments',
+        table: 'hod_assignments',
+        idA: () => hodAssignmentA.id,
+        idB: () => hodAssignmentB.id,
+      },
+    ];
+
+    it.each(tables)(
+      '$label: with no tenant context set, RLS blocks all rows (fails closed)',
+      async ({ table, idA, idB }) => {
+        const rows = await app.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM ${table} WHERE id IN ($1::uuid, $2::uuid)`,
+          idA(),
+          idB(),
+        );
+        expect(rows).toHaveLength(0);
+      },
+    );
+
+    it.each(tables)(
+      "$label: scoped to school A, only school A's row is visible",
+      async ({ table, idA, idB }) => {
+        const rows = await withTenant(app, schoolA.id, (tx) =>
+          tx.$queryRawUnsafe<Array<{ school_id: string }>>(
+            `SELECT school_id FROM ${table} WHERE id IN ($1::uuid, $2::uuid)`,
+            idA(),
+            idB(),
+          ),
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.school_id).toBe(schoolA.id);
+      },
+    );
+
+    it.each(tables)(
+      '$label: an explicit cross-tenant read by id returns nothing, even by primary key',
+      async ({ table, idB }) => {
+        const rows = await withTenant(app, schoolA.id, (tx) =>
+          tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id FROM ${table} WHERE id = $1::uuid`,
+            idB(),
+          ),
+        );
+        expect(rows).toHaveLength(0);
+      },
+    );
+  },
+);

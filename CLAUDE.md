@@ -259,9 +259,14 @@ closing F1's second honestly-flagged partial DoD item — the branded login page
 school's real logo and colour. Two DoD items honestly partial (asset-immutability and
 branding-doesn't-alter-history proven structurally/narrowly now, fully only once `B8`/later phases
 exist), plus real virus scanning and AWS bucket-policy provisioning explicitly out of scope (see
-this file's Change Log entry below). Per the frontend/backend phase-pairing rule, **`F5 — School
-Settings & Branding`** is next, proving `B4`'s contract end to end with the real branding-authoring
-screen before the backend critical path continues to `B5`.
+this file's Change Log entry below). **`B5 — Academic Structure`** — complete: the session-scoped
+academic hierarchy (`AcademicSession`/`AcademicTerm`/`Department`/`ClassGroup`/`Subject`/
+`ClassSubject`/`HODAssignment`) every later phase depends on, `GET /v1/academics/context`, and the
+real `DEPARTMENT` scope resolver closing B2's fail-closed placeholder — built **ahead of `F5`, at
+explicit project-owner instruction**, a deliberate, stated deviation from the frontend/backend
+phase-pairing default (not a silent skip — see this file's Change Log entry below for the full
+reasoning and the honestly-scoped-down items). Both **`F5 — School Settings & Branding`** and
+**`F6 — Academic Structure Workspace`** are now open; either may proceed next per the pairing rule.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -532,6 +537,8 @@ Deferred, not dropped. Must not be implemented opportunistically:
 ### Scope added by the decisions
 
 The decisions **added** three things the specifications did not model: `StudentSubjectRegistration` (ADR-0011), `ExamClass` multi-class targeting (ADR-0013), and `Topic` as a first-class entity (ADR-0001). Affected phases: `B5`, `B6`, `B8`, `B11`, `B12`, `B15`, `B17`, `B19`, `F6`, `F7`, `F9`, `F11`, `F12`.
+
+**Documentation inconsistency, noted during `B5` (2026-08-28), not silently resolved**: ADR-0001's own "Required changes" list names `Topic` under `B5`'s work — but `backend-roadmap.md`'s phase-by-phase Scope sections for both `B5` and `B8` independently place `Topic` in `B8` instead (it needs `Subject` to exist, which `B5` provides, but `B5`'s own Scope/DoD never lists it). `B5` followed the roadmap's phase-by-phase split as authoritative and did not build `Topic` — building it in `B5` would have double-delivered against `B8`'s own Definition of Done. The ADR's decision text is unedited; this note exists so a future reader isn't confused by the mismatch.
 
 ### Gaps the specifications did not cover — now closed by ADRs
 
@@ -1733,3 +1740,150 @@ practice for `main.ts`-level bootstrap concerns.
 No schema change, no migration, no permission-table change, no ADR involved, no roadmap phase status
 changed — this is an environment-configuration correctness fix cutting across every phase's local-dev
 experience, not scoped to any one of them.
+
+### 2026-08-28 — `B5` complete: academic structure, built ahead of `F5` at explicit instruction
+
+**Explicit deviation from the frontend/backend phase-pairing default, recorded per `AGENTS.md` §19's
+own "say so explicitly" requirement.** The documented next step per `roadmap-index.md` and this
+file's own prior entry was `F5 — School Settings & Branding`, proving `B4`'s contract before the
+backend critical path continued to `B5`. The project owner instead explicitly asked to start `B5`.
+Per `AGENTS.md` §2's source-of-truth hierarchy, an explicit current instruction outranks the
+roadmap's default posture — this is a deliberate, stated deviation, not a silent skip. `F5` and `F6`
+are both now open; either may proceed next.
+
+Followed the working-rules checklist first: read `07 §6.1`–`§6.9`, `03 §6`–`§9`, `05 §7.1`–`§7.5`,
+`06 §14`–`§19`/`§23`, the B5 roadmap phase, its three gating ADRs (0001/0011/0013, Gate 2, all
+Accepted) in full, and audit findings C-04/M-01/D-02/D-10/D-11 — then planned in a dedicated
+plan-mode pass (three parallel research agents covering the roadmap/ADRs, the specs, and the
+existing implementation conventions, followed by a design agent) before writing any code, given the
+phase's size, per B2/B3's own precedent for a phase this large.
+
+**Scope, confirmed against three independent research passes converging on one reading**: exactly
+seven models — `AcademicSession`, `AcademicTerm`, `Department`, `ClassGroup`, `Subject`,
+`ClassSubject`, `HODAssignment` — matching `backend-roadmap.md`'s own B5 Scope section, not the
+broader set ADR-0001's looser "Required changes" wording might suggest (see the Topic inconsistency
+note in this file's Decisions & Deferred Items section above). `TeacherAssignment`/
+`StudentEnrollment`/`StudentSubjectRegistration` stay `B6`; `Topic`/`Question.level` stay `B8`;
+`ExamClass` stays `B11`; rollover automation stays `B19` — B5's only obligation toward those is
+shaping `ClassSubject` and `ClassGroup.level` correctly as their future join targets, which this
+phase delivers.
+
+**Confirmed with the project owner during planning**: `ClassGroup.level` is a **fixed platform-wide
+Prisma enum** (`JSS1`/`JSS2`/`JSS3`/`SS1`/`SS2`/`SS3`), not a per-school configurable list —
+matching this codebase's existing controlled-vocabulary convention (`Role`, `SchoolStatus`, …) and
+ADR-0001's own requirement that the value be load-bearing for B8/B9/B11's authorization/exam-
+targeting joins. `arm` (e.g. `"A"`) is a separate free-text field, not folded into `level` — "JSS1A"
+is `{level: JSS1, arm: "A"}`.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260827225729_b5_academic_structure`):
+all seven models RLS-protected the same way every school-owned table has been since B0's bootstrap
+migration, plus two hand-written partial unique indexes Prisma's DSL can't express
+(`academic_sessions_one_current_per_school`, `academic_terms_one_current_per_session` — the latter
+scoped per-session, not per-school, since at most one session is ever CURRENT so "the current term"
+already resolves unambiguously through it). `Department`/`Subject` are deliberately **not**
+session-scoped (persist across sessions, per `07 §6.3`/`§6.5`); `ClassGroup`/`ClassSubject`/
+`HODAssignment` are. `ClassSubject`'s composite FK targets `ClassGroup(schoolId, id,
+academicSessionId)` — not just `(schoolId, id)` — which is what makes `ClassSubject.academicSessionId`
+structurally incapable of disagreeing with its own class's session (D-10, DoD item 7), a real
+database guarantee, not a service-layer check. `ClassGroup.departmentId`/`Subject.departmentId` use
+`onDelete: Restrict`, not `SetNull` as originally sketched — Prisma rejected the composite-FK
+`SetNull` (a required `schoolId` column can't be nulled independently of `departmentId`), and
+`Restrict` is the more correct choice anyway given the archival rule already blocks hard-deleting a
+Department while dependents exist.
+
+**API** (`apps/api/src/modules/academics/`, replacing B0's 12-line stub): `academics.v1` — full
+CRUD-with-archival for all seven entities, `POST /v1/academics/sessions/:id/activate`,
+`GET /v1/academics/context` (every role, DoD item 10), `GET /v1/academics/classes/:id/subjects`, and
+one roadmap-unnamed addition, `POST /v1/academics/terms/:id/activate` — without it, `GET
+/v1/academics/context`'s "current term" could never become non-null, making DoD item 10
+unsatisfiable. Session/term activation each run one transaction that closes the previous CURRENT row
+(if any) and activates the target; activating a session also bulk-closes any CURRENT term it's
+closing, so no non-current session is ever left with a dangling CURRENT term. **A real engineering
+refinement found during implementation**: the original plan called for explicit `SERIALIZABLE`
+isolation to make concurrent activations race-safe; implementation found this unnecessary — the
+partial unique index plus Postgres's own row-locking (two activations racing to close the same
+previously-current row serialize on that row's lock; two racing with no shared row yet still
+serialize via Postgres's uncommitted-unique-index-entry wait) already guarantee exactly one winner
+under plain READ COMMITTED. Proven by a dedicated test forcing the exact interleaving with a
+deliberate `pg_sleep`, rather than relying on incidental HTTP-request timing (which would have been
+non-deterministic). `HODAssignment` rejects a membership lacking an active `HOD` `RoleAssignment` —
+an application-layer check inside the same transaction as the insert, not a DB trigger (this
+codebase avoids cross-table triggers; B2's own `PlatformRoleAssignment` CHECK constraint is
+single-table only, not a precedent for this case).
+
+**Authorization**: cleared the ten `awaitingResource: '... (B5)'` flags B2 pre-graded and waiting on
+this phase (`schoolConfig.{department,class,subject,session,term}.{view,manage}`) plus
+`assignments.hodToDepartment` (B5 delivers both `Department` and `HODAssignment`); narrowed
+`assignments.studentToClass`/`assignments.moveStudent`'s flags to `Enrollment (B6)` only, and the two
+`analytics.*` rows' flags to `B16/B17 analytics` only, now that `Department`/`ClassGroup` exist. New
+row `academics.context.view`, granted `SELF` (not `SCHOOL`) to every school role — **a real DoD-8
+test catch**: the permission table's own test suite enforces that a STUDENT grant may only ever be
+`SELF`/`SYSTEM`/`DENIED` (one already-named `SCHOOL` exception, not this row), so the first draft's
+`SCHOOL` grant for this row failed that test immediately; `SELF` is in fact the more correct
+semantics anyway (every role reads its _own_ resolved context, not a whole-school listing). The real
+`DEPARTMENT` scope resolver (`department-scope.resolver.ts`) closes B2's fail-closed placeholder —
+checks the actor holds an active `HODAssignment` for the resource's department, registered via a
+small `DepartmentScopeResolverProvider` (`OnModuleInit`) so `AcademicsModule` itself stays a plain
+`@Module` decorator. Proven directly by a dedicated integration test (DoD item 6) rather than through
+a live HTTP route: no B9 endpoint exists yet to pass a `ResourceContext` into
+`AuthorizationService.evaluate()` (`PermissionGuard` never constructs one today), which is expected
+and correct for this phase — B5's job is only to make the resolver exist and be correct.
+
+**Two real bugs found only by writing and running the integration tests, not by inspection:**
+
+1. Every create/update touching a `@@unique` constraint (class identity within a session, department/
+   subject codes, term sequence, a subject offered twice to one class) had no unique-violation
+   handling — the duplicate-class-identity test surfaced this as an unhandled 500 instead of a clean 409. Fixed with a shared `runUniqueGuarded()` helper (`prisma-error.util.ts`) wrapping every
+   affected create/update, translating `PrismaClientKnownRequestError` `P2002` into a plain
+   `CONFLICT` with a specific message — distinct from the activation-specific
+   `ACADEMIC_ACTIVATION_CONFLICT` code, which stays reserved for the activation race. This is the
+   first phase needing to catch a specific Prisma error class at runtime, which surfaced a real gap
+   in `packages/db`: `Prisma` was exported as a type only (`export type { Prisma }`), never as the
+   runtime namespace object `PrismaClientKnownRequestError` lives on — fixed with a small additive
+   `export { Prisma } from './client.js'`.
+2. This phase's own HTTP integration-test helper reproduced the exact bodyless-POST `Content-Type`
+   bug `CLAUDE.md`'s B4 entry already documented once (copied from `platform.integration.test.ts`'s
+   own `post()` helper, which carries the identical latent bug — it has simply never been triggered
+   there, since none of its POST calls happen to be bodyless). B5's own action endpoints
+   (activate/archive/deactivate/end) are bodyless POSTs, so every one of them failed with a generic
+   400 until the helper was fixed to only set `Content-Type` when a payload is actually sent.
+
+**Testing**: 22 tests in `academics.integration.test.ts` (full structure creation; session/term
+activation switching including cascaded term closure; archival-with-dependents; destructive-deletion
+refusal; cross-tenant isolation; teacher/student/HOD authorization boundaries; the HODAssignment
+active-role invariant; `GET /v1/academics/context` for all five school roles) — all driven over real
+HTTP (`app.inject()`) against the real `AppModule` and real Postgres, per this codebase's established
+integration-test convention. A dedicated `session-activation-concurrency.integration.test.ts` proves
+DoD item 2's database-level guarantee directly against Postgres (bypassing the NestJS/HTTP layer
+entirely, since an ordinary `Promise.all([app.inject(...), app.inject(...)])` race isn't
+deterministic enough to reliably prove a database-level guarantee). A dedicated
+`department-scope.resolver.integration.test.ts` proves DoD item 6 directly against a real
+`HODAssignment` row. `tests/tenancy/rls.integration.test.ts` gained a new block covering all seven
+new tables (three-test shape × 7, matching B3/B4's own economy) — 38 tests in that file total, up
+from 17.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build && pnpm test:integration`, plus `pnpm generate` (`academics.v1` — 20 new routes — appears
+in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (144 rows,
+up from 143 — one new row, ten flags cleared, three narrowed). A real `node dist/main.js` boot
+confirmed `PolicyCoverageService` reports 74 routes checked with zero violations (this codebase's
+established pattern for catching the cross-module DI/boot-only bugs every prior phase has hit at
+least once — none surfaced this time).
+
+`docs/roadmaps/backend-roadmap.md`'s B5 section gained status `COMPLETE`, every DoD item checked with
+notes on what's proven now versus what completes once B8/B11 exist, a full "Implementation notes"
+subsection, and an expanded Deferred items list. `docs/roadmaps/roadmap-index.md`'s version, Current
+State, and Immediate Next Actions all updated to record the explicit F5-skip and the new "F5 or F6,
+either next" state. This file's Decisions & Deferred Items section gained the Topic/ADR-0001
+documentation-inconsistency note.
+
+**Honestly out of scope for this session**: `F6` (Academic Structure Workspace) and the F2
+context-switcher gap-closure it would complete — not built here, per the user's explicit "start B5"
+instruction (backend only). `StudentEnrollment`'s own dependent-check on `ClassGroup` deletion is a
+real, named gap `B6` must close once that table exists — `B5` cannot check a table that doesn't
+exist yet.
+
+Project state moves from _Implementation (F5, pending)_ to _Implementation (B5 complete; F5 or F6
+next)_. **Next: `F5 — School Settings & Branding` or `F6 — Academic Structure Workspace`** (either
+may proceed per the frontend/backend phase-pairing default), or `B6 — People, Profiles & Enrollment`
+if the backend critical path is prioritized instead.

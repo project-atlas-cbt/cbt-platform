@@ -569,6 +569,395 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/academics/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current school + session + term (04 §66 context switcher), every role. */
+        get: operations["AcademicsContextController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's academic sessions (07 §6.1). */
+        get: operations["SessionController_list"];
+        put?: never;
+        /** Create an academic session (starts DRAFT). */
+        post: operations["SessionController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one academic session. */
+        get: operations["SessionController_get"];
+        put?: never;
+        post?: never;
+        /** Hard-delete a session (blocked if terms/classes/offerings/HOD assignments exist). */
+        delete: operations["SessionController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a DRAFT or UPCOMING session. */
+        patch: operations["SessionController_update"];
+        trace?: never;
+    };
+    "/academics/sessions/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make this session CURRENT (roadmap-named endpoint, DoD item 2). */
+        post: operations["SessionController_activate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/sessions/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a session (FR AC-01). */
+        post: operations["SessionController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/sessions/{sessionId}/terms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a session's terms (07 §6.2). */
+        get: operations["TermController_list"];
+        put?: never;
+        /** Create a term within a session. */
+        post: operations["TermController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/terms/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a term. */
+        delete: operations["TermController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a DRAFT or UPCOMING term. */
+        patch: operations["TermController_update"];
+        trace?: never;
+    };
+    "/academics/terms/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make this term CURRENT within its session (feeds GET /academics/context). */
+        post: operations["TermController_activate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's departments (07 §6.3). */
+        get: operations["DepartmentController_list"];
+        put?: never;
+        /** Create a department. */
+        post: operations["DepartmentController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/departments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one department. */
+        get: operations["DepartmentController_get"];
+        put?: never;
+        post?: never;
+        /** Hard-delete a department (blocked if subjects/classes/HOD assignments exist). */
+        delete: operations["DepartmentController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a department. */
+        patch: operations["DepartmentController_update"];
+        trace?: never;
+    };
+    "/academics/departments/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate a department (FR AC-03) — always allowed. */
+        post: operations["DepartmentController_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's classes (07 §6.4), optionally filtered by session. */
+        get: operations["ClassGroupController_list"];
+        put?: never;
+        /** Create a class within a session. */
+        post: operations["ClassGroupController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/classes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one class. */
+        get: operations["ClassGroupController_get"];
+        put?: never;
+        post?: never;
+        /** Hard-delete a class (blocked if offerings exist). */
+        delete: operations["ClassGroupController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a class. */
+        patch: operations["ClassGroupController_update"];
+        trace?: never;
+    };
+    "/academics/classes/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a class (FR AC-04) — always allowed. */
+        post: operations["ClassGroupController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's subjects (07 §6.5). */
+        get: operations["SubjectController_list"];
+        put?: never;
+        /** Create a subject. */
+        post: operations["SubjectController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/subjects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one subject. */
+        get: operations["SubjectController_get"];
+        put?: never;
+        post?: never;
+        /** Hard-delete a subject (blocked if offerings exist). */
+        delete: operations["SubjectController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a subject, including assigning its department (FR AC-05). */
+        patch: operations["SubjectController_update"];
+        trace?: never;
+    };
+    "/academics/subjects/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate a subject — always allowed, never breaks history. */
+        post: operations["SubjectController_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/classes/{id}/subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Offerings for a class (roadmap-named endpoint, 07 §6.6). */
+        get: operations["ClassSubjectController_list"];
+        put?: never;
+        /** Offer a subject to a class. */
+        post: operations["ClassSubjectController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/class-subjects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a class-subject offering. */
+        delete: operations["ClassSubjectController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/departments/{id}/hod-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A department's HOD assignment history (07 §6.9). */
+        get: operations["HodAssignmentController_listForDepartment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/hod-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assign an HOD to a department (rejects a membership without an active HOD role). */
+        post: operations["HodAssignmentController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/hod-assignments/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End an HOD assignment (FR §13: "School Admin -> remove HOD"). */
+        post: operations["HodAssignmentController_end"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -921,6 +1310,201 @@ export interface components {
             logoMediaId?: string | null;
             /** @description "#rrggbb". Pass null to clear (falls back to the platform default palette). */
             primaryColor?: string | null;
+        };
+        CurrentSessionSummaryDto: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "DRAFT" | "UPCOMING" | "CURRENT" | "CLOSED" | "ARCHIVED";
+        };
+        CurrentTermSummaryDto: {
+            id: string;
+            name: string;
+            sequence: number;
+            /** @enum {string} */
+            status: "DRAFT" | "UPCOMING" | "CURRENT" | "CLOSED" | "ARCHIVED";
+        };
+        AcademicsContextResponseDto: {
+            schoolId: string;
+            schoolName: string;
+            session: components["schemas"]["CurrentSessionSummaryDto"] | null;
+            term: components["schemas"]["CurrentTermSummaryDto"] | null;
+        };
+        AcademicSessionResponseDto: {
+            id: string;
+            name: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string;
+            /** @enum {string} */
+            status: "DRAFT" | "UPCOMING" | "CURRENT" | "CLOSED" | "ARCHIVED";
+        };
+        AcademicSessionListResponseDto: {
+            sessions: components["schemas"]["AcademicSessionResponseDto"][];
+        };
+        CreateAcademicSessionDto: {
+            /** @example 2026/2027 */
+            name: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string;
+        };
+        UpdateAcademicSessionDto: {
+            name?: string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string;
+        };
+        AcademicTermResponseDto: {
+            id: string;
+            academicSessionId: string;
+            name: string;
+            sequence: number;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string;
+            /** @enum {string} */
+            status: "DRAFT" | "UPCOMING" | "CURRENT" | "CLOSED" | "ARCHIVED";
+        };
+        AcademicTermListResponseDto: {
+            terms: components["schemas"]["AcademicTermResponseDto"][];
+        };
+        CreateAcademicTermDto: {
+            /** @example First Term */
+            name: string;
+            /** @description Order within the session (1, 2, 3). */
+            sequence: number;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string;
+        };
+        UpdateAcademicTermDto: {
+            name?: string;
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string;
+        };
+        DepartmentResponseDto: {
+            id: string;
+            name: string;
+            code: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE";
+        };
+        DepartmentListResponseDto: {
+            departments: components["schemas"]["DepartmentResponseDto"][];
+        };
+        CreateDepartmentDto: {
+            /** @example Science */
+            name: string;
+            /** @example SCI */
+            code: string;
+        };
+        UpdateDepartmentDto: {
+            name?: string;
+            code?: string;
+        };
+        ClassGroupResponseDto: {
+            id: string;
+            academicSessionId: string;
+            departmentId: string | null;
+            name: string;
+            /** @enum {string} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+            arm: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE" | "ARCHIVED";
+        };
+        ClassGroupListResponseDto: {
+            classes: components["schemas"]["ClassGroupResponseDto"][];
+        };
+        CreateClassGroupDto: {
+            academicSessionId: string;
+            /** @description Null for classes with no department (e.g. JSS levels before streaming). */
+            departmentId?: string | null;
+            /** @example SS2A */
+            name: string;
+            /** @enum {string} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+            /** @example A */
+            arm: string;
+        };
+        UpdateClassGroupDto: {
+            departmentId?: string | null;
+            name?: string;
+            /** @enum {string} */
+            level?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+            arm?: string;
+        };
+        SubjectResponseDto: {
+            id: string;
+            name: string;
+            code: string;
+            departmentId: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE";
+        };
+        SubjectListResponseDto: {
+            subjects: components["schemas"]["SubjectResponseDto"][];
+        };
+        CreateSubjectDto: {
+            /** @example Mathematics */
+            name: string;
+            /** @example MTH */
+            code: string;
+            /** @description ADR-0001: a subject with no department falls outside every HOD's automatic review scope. */
+            departmentId?: string | null;
+        };
+        UpdateSubjectDto: {
+            name?: string;
+            code?: string;
+            departmentId?: string | null;
+        };
+        ClassSubjectResponseDto: {
+            id: string;
+            classId: string;
+            subjectId: string;
+            subjectName: string;
+            subjectCode: string;
+            academicSessionId: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE";
+        };
+        ClassSubjectListResponseDto: {
+            offerings: components["schemas"]["ClassSubjectResponseDto"][];
+        };
+        CreateClassSubjectDto: {
+            subjectId: string;
+        };
+        HodAssignmentResponseDto: {
+            id: string;
+            membershipId: string;
+            departmentId: string;
+            academicSessionId: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string | null;
+            /** @enum {string} */
+            status: "ACTIVE" | "ENDED";
+        };
+        HodAssignmentListResponseDto: {
+            assignments: components["schemas"]["HodAssignmentResponseDto"][];
+        };
+        CreateHodAssignmentDto: {
+            membershipId: string;
+            departmentId: string;
+            academicSessionId: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate?: string;
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -1742,6 +2326,813 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchoolBrandingResponseDto"];
+                };
+            };
+        };
+    };
+    AcademicsContextController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicsContextResponseDto"];
+                };
+            };
+        };
+    };
+    SessionController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicSessionListResponseDto"];
+                };
+            };
+        };
+    };
+    SessionController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAcademicSessionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicSessionResponseDto"];
+                };
+            };
+        };
+    };
+    SessionController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicSessionResponseDto"];
+                };
+            };
+        };
+    };
+    SessionController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    SessionController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAcademicSessionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicSessionResponseDto"];
+                };
+            };
+        };
+    };
+    SessionController_activate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicSessionResponseDto"];
+                };
+            };
+        };
+    };
+    SessionController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicSessionResponseDto"];
+                };
+            };
+        };
+    };
+    TermController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermListResponseDto"];
+                };
+            };
+        };
+    };
+    TermController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAcademicTermDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermResponseDto"];
+                };
+            };
+        };
+    };
+    TermController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    TermController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAcademicTermDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermResponseDto"];
+                };
+            };
+        };
+    };
+    TermController_activate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermResponseDto"];
+                };
+            };
+        };
+    };
+    DepartmentController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentListResponseDto"];
+                };
+            };
+        };
+    };
+    DepartmentController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDepartmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentResponseDto"];
+                };
+            };
+        };
+    };
+    DepartmentController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentResponseDto"];
+                };
+            };
+        };
+    };
+    DepartmentController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    DepartmentController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDepartmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentResponseDto"];
+                };
+            };
+        };
+    };
+    DepartmentController_deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentResponseDto"];
+                };
+            };
+        };
+    };
+    ClassGroupController_list: {
+        parameters: {
+            query?: {
+                academicSessionId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassGroupListResponseDto"];
+                };
+            };
+        };
+    };
+    ClassGroupController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClassGroupDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassGroupResponseDto"];
+                };
+            };
+        };
+    };
+    ClassGroupController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassGroupResponseDto"];
+                };
+            };
+        };
+    };
+    ClassGroupController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    ClassGroupController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClassGroupDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassGroupResponseDto"];
+                };
+            };
+        };
+    };
+    ClassGroupController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassGroupResponseDto"];
+                };
+            };
+        };
+    };
+    SubjectController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectListResponseDto"];
+                };
+            };
+        };
+    };
+    SubjectController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSubjectDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectResponseDto"];
+                };
+            };
+        };
+    };
+    SubjectController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectResponseDto"];
+                };
+            };
+        };
+    };
+    SubjectController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    SubjectController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSubjectDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectResponseDto"];
+                };
+            };
+        };
+    };
+    SubjectController_deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectResponseDto"];
+                };
+            };
+        };
+    };
+    ClassSubjectController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassSubjectListResponseDto"];
+                };
+            };
+        };
+    };
+    ClassSubjectController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClassSubjectDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassSubjectResponseDto"];
+                };
+            };
+        };
+    };
+    ClassSubjectController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    HodAssignmentController_listForDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodAssignmentListResponseDto"];
+                };
+            };
+        };
+    };
+    HodAssignmentController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateHodAssignmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodAssignmentResponseDto"];
+                };
+            };
+        };
+    };
+    HodAssignmentController_end: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodAssignmentResponseDto"];
                 };
             };
         };
