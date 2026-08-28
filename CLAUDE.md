@@ -13,7 +13,7 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
 architecture decisions were completed first (see below); backend phases `B0`–`B6` and frontend
-phases `F0`–`F5` are now complete. See "Implementation Status" and "Change Log" further down in
+phases `F0`–`F7` are now complete. See "Implementation Status" and "Change Log" further down in
 this file for what has actually shipped and what's next.
 
 The planning phase completed:
@@ -294,7 +294,12 @@ implementations, the real `ContextSwitcher` session/term wiring (closing F2's ow
 partial DoD item), and one confirmed small additive backend gap-closure (`GET /v1/classes/:id/
 teachers`). Four scope questions were confirmed with the project owner before implementation — see
 this file's Change Log entry below for the full reasoning. **`F7 — People Management Workspace`**
-is now the remaining open frontend phase, proving `B6`'s own contract.
+is now complete: real Student/Teacher/HOD/Moderator directories and profile screens across School
+Admin and Moderator (HOD gets zero F7 screens per ADR-0017), the `TeacherAssignmentMatrix` (this
+codebase's first matrix/grid component), and three confirmed small backend gap-closures (server-side
+pagination extended to all four directories, a class-level credential-sheet CSV download endpoint,
+and dedicated HOD edit/reset-credentials routes) — proving `B6`'s own contract. Every frontend phase
+through F7 is now complete; see this file's Change Log entry below for the full reasoning.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -2540,3 +2545,111 @@ path)_.
 **Next: `F7 — People Management Workspace`** (frontend/backend phase-pairing default — proves
 `B6`'s contract), or `B7 — Bulk Import Pipeline` / `B8 — Question Bank` if the backend critical path
 is prioritized instead.
+
+### 2026-08-28 — `F7` complete: People Management Workspace
+
+Requested explicitly: start `F7`. Followed the working-rules checklist first: three parallel
+Explore agents (roadmap/spec, backend API surface, frontend conventions), a Plan agent, and direct
+verification reads (Prisma schema relation names, `withTenant`'s transaction semantics, existing
+DTO shapes) before writing any code — planned in a dedicated plan-mode pass given the phase's size,
+per this project's own precedent for a phase this shape. No gating ADR blocks F7.
+
+**Three scope questions confirmed with the project owner before implementation, not guessed:**
+
+1. **Server-side pagination extended to all four directories** (Students/Teachers/HODs/
+   Moderators), not just Students as the DoD's literal wording named — a large school's teacher
+   count can also reach real scale, and the shared `ListPeopleQueryDto` base made the marginal cost
+   small.
+2. **The class credential-sheet endpoint regenerates unconditionally** for every ACTIVE student in
+   a class roster — no "skip already-activated" filter, given this is a development-phase
+   capability with no real student data yet (explicitly accepted disruption risk).
+3. **HOD gets its own dedicated backend routes** (`PATCH /hods/:id`, `POST /hods/:id/reset-
+credentials`) rather than the frontend silently calling the underlying Teacher endpoint — one
+   new permission row, `users.hod.resetCredentials` (151 rows, up from 150).
+
+**A real spec-verification correction, not an assumption**: `04 §24`'s "Moderator → Class
+Assignment" screen turned out to be a **student bulk class-move view** (roster + checkbox multi-
+select + "move selected students to…"), not a teacher-assignment view — that's `§25`, already
+covered by the Teacher Assignment Matrix (also mirrored under `/moderator/people/...`, confirmed,
+since Moderator holds identical `assignments.teacherToClass` grants to School Admin). No batch move
+endpoint exists, so `ClassAssignmentScreen` issues one `POST /students/:id/enrollments` per selected
+student via `Promise.allSettled`, reporting per-student success/failure.
+
+**Backend** (`apps/api/src/modules/users/`, `apps/api/src/modules/academics/`): the four directory
+`list()` endpoints gained `q`/`page`/`pageSize`/`sortBy`/`sortDir` (`ListPeopleQueryDto` base,
+mirroring the F3 `ListSchoolsQueryDto` precedent exactly) — with one confirmed technical difference
+from that precedent: `Promise.all([findMany, count])` runs _inside_ `withTenant`'s own callback,
+since `withTenant`'s `fn` already receives an active `Prisma.TransactionClient`, which has no
+`$transaction` method of its own (nested transactions aren't available the way the school-list
+precedent's plain `prisma.$transaction([...])` uses). `StudentResponseDto` gained `currentClassId`/
+`currentClassName`/`currentAcademicSessionId`/`departmentId`/`departmentName` (nullable) and a
+`classId` filter, resolved per page via one batched `StudentEnrollment` query — `05 §9.1`'s own
+directory column list names Class/Department/Session, which the response had no way to show before
+this. New `POST /v1/classes/:id/credential-sheet` (`class-credential-sheet.{controller,service}.ts`,
+in `AcademicsModule`) returns a raw `text/csv` attachment, not the usual JSON envelope — a one-time
+plaintext-password reveal, so a real file download keeps the plaintext out of client-side JS state
+longer than necessary; not idempotency-key-aware, documented inline rather than silently gapped.
+New `HodService.update`/`.resetCredentials` (decision 3), audited as `HOD_UPDATED`/
+`HOD_CREDENTIALS_RESET` so the trail reads as an HOD action, not a Teacher one.
+
+**A cross-package stale-build gotcha found only by running the integration tests, not by
+inspection** — the same class of gap this codebase has hit at every prior phase touching a
+`dist`-based package: the new permission row wasn't visible to a running `apps/api` until
+`@atlas/domain` was rebuilt (`pnpm --filter @atlas/domain run build`), surfacing as a bare 500 on
+the new HOD routes instead of a clean 403/200 in the meantime. The identical gotcha hit `apps/web`'s
+typecheck against `@atlas/contracts` after `pnpm run generate` (which regenerates the `.ts` source
+but not `packages/contracts`' own `dist/`) — fixed by rebuilding that package explicitly too. Both
+recorded here since this project's `pnpm run generate` step alone was not sufficient either time.
+
+**A real pre-existing bug found and fixed**: `lib/onboarding/mutations.ts`'s `useCreateStudent` was
+enrolling students against `student.membershipId` instead of `student.studentProfileId` —
+`StudentEnrollmentController`'s `:id` is `studentProfileId`, matching every other `/students/:id/
+...` route's convention. Since the mutation uses `onSettled` (not `onSuccess`), this failure was
+silent — every onboarding-created student's initial class enrollment likely 404'd without surfacing
+an error, since B6 shipped this endpoint. Fixed as part of this phase (F7 depends on the same
+route's correctness) and verified live.
+
+**Frontend** (`apps/web/components/people/*`, `apps/web/lib/people/{queries,mutations}.ts`, new
+route trees under `/school/people/*` and `/moderator/people/*`): Student directory (server-side
+search/sort/paginate/filter, mirroring `SchoolsListPage`'s URL-state pattern), Student profile
+(identity, enrollment history, ADR-0011 subject registrations, an honest "not yet available"
+assessment-history placeholder — no exam data exists until `B8`/`B11`+), move-class and credential-
+reveal dialogs with DoD-mandated explicit copy (history preserved; plaintext shown once), Teacher
+directory/profile, `TeacherAssignmentMatrix` (this codebase's first matrix/grid component — full-
+replace semantics, not per-cell auto-save, matching the backend's own contract), HOD directory with
+promote/department-assignment/edit/remove, Moderator directory (Create/Edit/Remove only — no
+Deactivate/Reset action exists in the permission table for Moderator), and the corrected `04 §24`
+Class Assignment screen. F6's existing Class Detail screen gained one small additive touch: a
+"Download credential sheet" button on its Students tab, the natural home since the roster already
+renders there. No `/hod/people/*` route tree and no `/moderator/people/moderators` route — both by
+design (ADR-0017; `05 §14`'s School-Admin-only rule).
+
+**Testing**: `class-credential-sheet.integration.test.ts` (new) and an extended
+`users.integration.test.ts` (new isolated `describe` block) — 61 integration tests across the
+affected files, all green against real Postgres/Redis. `apps/web` gained 5 new test files / 21
+tests (`students-screen`, `teacher-assignment-matrix` — the phase's highest-value test, proving
+pre-fill correctness and full-replace-not-per-cell submission — `people-tabs`, `moderators-screen`
+with the named Moderator-cannot-manage-Moderators security case, `class-assignment-screen` with
+per-student partial-failure reporting). Not every screen got a dedicated test file this pass —
+`student-detail-screen`, `teacher-detail-screen`, `hods-screen`, and four smaller dialogs are
+implemented, typechecked, and linted but not yet independently tested — recorded as Candidate/
+Deferred in `frontend-roadmap.md`'s F7 section, not silently claimed complete.
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration`
+(both `apps/api` and `apps/web`), plus `pnpm generate` (new query params/DTOs/routes published,
+151-row permission table) and a real `node dist/main.js` boot confirming `PolicyCoverageService`
+reports 116 routes checked with zero violations (up from 113). `next build --webpack` confirmed the
+full intended route table across both role roots.
+
+`docs/roadmaps/frontend-roadmap.md`'s F7 section gained status `COMPLETE`, every DoD item checked
+with file references, a full "Implementation notes" subsection, and an expanded Deferred items
+list. `docs/roadmaps/backend-roadmap.md`'s B6 section gained a "Post-completion gap closure (during
+F7)" note covering all three backend gap-closures. `docs/roadmaps/roadmap-index.md`'s version,
+Current State, and Immediate Next Actions all updated to record `F7` complete — every currently-open
+frontend phase is now closed out.
+
+Project state moves from _Implementation (F6 complete; F7 open, or `B7`/`B8` on the backend critical
+path)_ to _Implementation (F7 complete; all frontend phases through F7 closed out)_.
+**Next: `B7 — Bulk Import Pipeline`** (unblocked, extends the people/enrollment surface `B6`/`F7`
+just shipped, and would let F4's Staff/Students onboarding steps close their one remaining
+honestly-partial DoD item) or `B8 — Question Bank` on the backend critical path.

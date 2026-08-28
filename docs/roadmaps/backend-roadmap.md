@@ -1304,6 +1304,73 @@ integration test case in the existing `teacher-assignment.integration.test.ts` s
 `node dist/main.js` boot reconfirmed `PolicyCoverageService` reports the new route checked with zero
 violations (113 routes total, up from 112).
 
+## Post-completion gap closure (2026-08-28, during `F7`)
+
+`F7`'s own DoD item 1 requires server-side search/sort/pagination on the Student directory at
+1,500-student scale — none of the four `people.v1` directory endpoints (`GET /students`,
+`/teachers`, `/hods`, `/moderators`) supported query params before this; each was a plain
+`findMany` + `orderBy`. Confirmed with the project owner: extended to **all four** directories, not
+Students alone (a large school's teacher count can also reach real scale, and the shared DTO base
+made the marginal cost small). New `apps/api/src/modules/users/dto/list-query.dto.ts`
+(`ListPeopleQueryDto`, mirroring `ListSchoolsQueryDto`'s exact `q`/`page`/`pageSize`/`sortDir`
+shape — the F3 pagination gap-closure this one is modeled on), one `ListXQueryDto` subclass per
+entity with its own `sortBy` allow-list. Every `list()` service method now does
+`Promise.all([findMany, count])` **inside** `withTenant`'s own callback — not
+`tx.$transaction([...])` as the school-list precedent uses, since `withTenant`'s `fn` already
+receives an active `Prisma.TransactionClient`, which has no `$transaction` method of its own
+(nested nested transactions aren't available); this is a real, confirmed difference from the
+platform-module precedent, not an oversight. `StudentResponseDto` additionally gained
+`currentClassId`/`currentClassName`/`currentAcademicSessionId`/`departmentId`/`departmentName`
+(all nullable) and a `classId` filter param — `05 §9.1`'s own directory column list names Class/
+Department/Session, which the response had no way to show before this; resolved per page with one
+batched `StudentEnrollment` query keyed off the page's own student-profile ids, mirroring
+`SchoolsAdminService.list()`'s own per-page enrichment pattern.
+
+`F7`'s DoD item 8 ("a class credential sheet downloads") had no backing endpoint —
+`CredentialSheetService.issueInitialPasswords` (B1) was only ever called per-student, from
+`StudentService.resetCredentials`. New `POST /v1/classes/:id/credential-sheet`
+(`apps/api/src/modules/academics/class-credential-sheet.{controller,service}.ts`, registered in
+`AcademicsModule`) resolves the class roster via `StudentEnrollmentService.rosterForClass`,
+regenerates credentials for every one of its ACTIVE students unconditionally (confirmed with the
+project owner — no "skip already-activated" filter; the disruption risk to an already-logged-in
+student is real but explicitly accepted for now, since this is a development-phase capability with
+no real student data yet), and returns a raw `text/csv` attachment rather than the usual JSON
+envelope — a one-time plaintext-password reveal, so a real file download keeps the plaintext out
+of client-side JS state longer than the browser's own handling needs. Reuses
+`users.student.resetCredentials` — no new permission id. One audit event per class-level action,
+not one per student (matching the full-replace `PUT /teachers/:id/assignments`'s own "audit at the
+action's own granularity" precedent). Not idempotency-key-aware — `IdempotencyInterceptor` only
+recognizes a handler's normal return value, not one that calls `res.send()` directly; documented
+inline on the controller rather than silently gapped.
+
+**Decision C** — HOD gets its own dedicated routes, `PATCH /hods/:id` and
+`POST /hods/:id/reset-credentials`, rather than the frontend silently calling the underlying
+Teacher endpoint (an HOD _is_ a `TeacherProfile` with an extra role, so that alternative was
+technically available without new routes — rejected in favour of a cleaner permission-id match).
+Needed one new permission row, `users.hod.resetCredentials` (151 rows, up from 150), mirroring
+`users.teacher.resetCredentials`'s exact grant shape. Both new `HodService` methods duplicate the
+same small `tx.user.update(...)` / `identity.issueStaffInvitation(...)` shape
+`TeacherService.update`/`.resetCredentials` already implement, rather than cross-calling
+`TeacherService` — audited as `HOD_UPDATED`/`HOD_CREDENTIALS_RESET` so the trail reads as an HOD
+action, matching this file's own `HOD_PROMOTED`/`HOD_REMOVED` naming convention.
+
+**A cross-package stale-build gotcha found only by running the integration tests, not by
+inspection** — the same class of gap this codebase has hit at every prior phase that edits a
+`dist`-based package: adding the new permission row to `packages/domain/src/authorization/
+permission-table.ts` without rebuilding `@atlas/domain` left `apps/api` running against a stale
+compiled table, so the new HOD routes returned a bare 500 (an unhandled internal error from an
+unrecognized permission id) instead of a clean 403/200. Fixed by rebuilding
+(`pnpm --filter @atlas/domain run build`) before re-testing — recorded here since a permission-
+table source edit alone is not sufficient for a running `apps/api` (dev or test) to see it.
+
+One new integration test file (`class-credential-sheet.integration.test.ts` — full-class
+regenerate, zero-student class, cross-tenant rejection, permission boundary) and one new isolated
+`describe` block in `users.integration.test.ts` (pagination/search/sort across all four
+directories, the enrichment/filter addition, the HOD edit/reset-credentials routes and their
+security boundary) — 61 integration tests across the affected files, all green. A real
+`node dist/main.js` boot reconfirmed `PolicyCoverageService` reports 116 routes checked with zero
+violations (up from 113).
+
 ---
 
 # B7 — Bulk Import Pipeline

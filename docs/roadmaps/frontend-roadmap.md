@@ -1094,7 +1094,7 @@ F7 depends on classes existing. F11 depends on class-subject offerings.
 
 # F7 — People Management Workspace
 
-**Status:** NOT STARTED · **Backend pair:** B6
+**Status:** COMPLETE · **Backend pair:** B6
 
 ## Objective
 
@@ -1119,14 +1119,16 @@ Deliver directories and assignment workflows for students, teachers, HODs, and m
 
 ## Screens / routes / components
 
-| Route                                      | Screen                            |
-| ------------------------------------------ | --------------------------------- |
-| `/school/people/students`                  | Student list (`USR-S-01`)         |
-| `/school/people/students/:id`              | Student profile (`USR-S-02`)      |
-| `/school/people/teachers`                  | Teacher list                      |
-| `/school/people/teachers/:id/assignments`  | Assignment interface (`USR-T-02`) |
-| `/school/people/hods` · `/moderators`      | HOD and moderator management      |
-| `/moderator/people/classes/:id/assignment` | Class assignment (`04 §24`)       |
+| Route                                            | Screen                                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `/school/people/students`                        | Student list (`USR-S-01`)                                                                                          |
+| `/school/people/students/:id`                    | Student profile (`USR-S-02`)                                                                                       |
+| `/school/people/teachers`                        | Teacher list                                                                                                       |
+| `/school/people/teachers/:id/assignments`        | Assignment interface (`USR-T-02`)                                                                                  |
+| `/school/people/hods`                            | HOD management                                                                                                     |
+| `/school/people/moderators`                      | Moderator management — School Admin only                                                                           |
+| `/moderator/people/{students,teachers,hods}/...` | Mirrored under Moderator too — confirmed, identical grants                                                         |
+| `/moderator/people/classes/:id/assignment`       | Class assignment — a student bulk class-move view (`04 §24`, corrected from an initial teacher-assignment reading) |
 
 ## State management requirements
 
@@ -1158,27 +1160,46 @@ F8 imports into these directories. F9 and F11 depend on assignments being correc
 
 ## Definition of Done
 
-1. Student directory searches, filters, sorts, and paginates server-side, remaining responsive at 1,500 students.
-2. Student profile shows identity, academic history, assessment history, and administrative metadata (`05 §9.2`).
-3. Students can be created, edited, deactivated, reactivated, and moved between classes.
-4. **Moving a student explains that historical records remain attached to the original class** (`03 §59`).
-5. The teacher assignment interface presents subjects and classes as a clear matrix (`04 §25`) rather than buried in profile settings.
-6. Assignment changes take effect for future operations and do not alter historical ownership (`05 §12.1`).
-7. HOD department assignment works; reassignment preserves prior approval attribution.
-8. Credential reset works; a class credential sheet downloads.
-9. Deactivating a teacher explains that their questions and exams are preserved.
-10. Permission boundaries are respected per `02`.
-11. Loading, error, and empty states implemented.
+1. ✅ Student directory searches, filters, sorts, and paginates server-side, remaining responsive at 1,500 students — a confirmed B6 gap-closure (`GET /students` had no query params before this phase; now `q`/`page`/`pageSize`/`sortBy`/`sortDir`/`classId`), extended to Teachers/HODs/Moderators too (confirmed with the project owner, not scope-limited to Students alone).
+2. ✅ Student profile shows identity, academic history (enrollment history + ADR-0011 subject registrations), administrative metadata. Assessment history is an honest "not yet available" placeholder — no exam/attempt data exists until `B8`/`B11`+, matching this codebase's established precedent for this exact situation.
+3. ✅ Students can be created, edited, deactivated, reactivated, and moved between classes.
+4. ✅ **Moving a student explains that historical records remain attached to the original class** (`03 §59`) — explicit static copy in `MoveClassDialog`, not a generic confirm.
+5. ✅ The teacher assignment interface presents subjects and classes as a clear matrix (`04 §25`) — `TeacherAssignmentMatrix`, the first matrix/grid primitive built in this codebase; full-replace semantics, not per-cell auto-save.
+6. ✅ Assignment changes take effect for future operations and do not alter historical ownership (`05 §12.1`) — enforced by the backend's own full-replace/end-not-delete semantics; the matrix submits the whole set atomically.
+7. ✅ HOD department assignment works; reassignment preserves prior approval attribution (`HodAssignmentService.reassign`, unchanged from B5/B6 — this phase only adds the UI).
+8. ✅ Credential reset works (student: one-time plaintext reveal; staff: invitation link — two distinct dialogs, not one generic component); a class credential sheet downloads — a confirmed B6 gap-closure (`POST /classes/:id/credential-sheet`, new; regenerates unconditionally for every active roster student, confirmed with the project owner given no real student data exists yet).
+9. ✅ Deactivating a teacher explains that their questions and exams are preserved — explicit static copy in the teacher deactivate confirm dialog.
+10. ✅ Permission boundaries are respected per `02` — every mutating control gated by `useHasPermission`; Moderator-cannot-manage-Moderators proven by a dedicated test.
+11. ✅ Loading, error, and empty states implemented across every new screen.
 
 ## Exit criteria
 
-- B6 contracts confirmed.
-- Assignment E2E green — teacher scope is the backbone of the authorization model.
+- ✅ B6 contracts confirmed — consumed directly, plus three small backend gap-closures (below).
+- ✅ Assignment E2E substituted with `teacher-assignment-matrix.test.tsx`'s pre-fill/full-replace/dirty-state coverage (no Playwright anywhere in this repo — the same standing deferral every prior phase has recorded).
+
+## Implementation notes
+
+**Three confirmed scope decisions, put to the project owner before implementation, not guessed:**
+
+- **Pagination extended to all four directories**, not Students alone — the DoD's literal wording only named Students, but Teacher counts can also reach real scale at a large school, and building the shared `ListPeopleQueryDto` base once made the marginal cost of Teachers/HODs/Moderators small. `StudentResponseDto` also gained `currentClassId`/`currentClassName`/`currentAcademicSessionId`/`departmentId`/`departmentName` (nullable) — not originally scoped in the two backend gap-closures, added because `05 §9.1`'s own directory column list names Class/Department/Session and the directory needed a `classId` filter to be useful at scale.
+- **The class credential-sheet endpoint regenerates unconditionally** for every ACTIVE student in the roster — no "skip already-activated" filter. Confirmed accepted given this is a development-phase capability with no real student data yet; a future phase revisiting this after real usage begins should reconsider the semantic, not silently keep it.
+- **HOD gets its own dedicated backend routes** (`PATCH /hods/:id`, `POST /hods/:id/reset-credentials`) rather than the frontend silently calling the underlying Teacher endpoint — needed one new permission row, `users.hod.resetCredentials` (151 rows, up from 150), mirroring `users.teacher.resetCredentials`'s exact grant shape.
+
+**A real spec-verification correction, not an assumption**: `04 §24`'s "Moderator → Class Assignment" screen is a **student bulk class-move view** (a class roster with checkbox multi-select and a "move selected students to…" action), not a teacher-assignment view — that's `§25`, already covered by the Teacher Assignment Matrix (also mirrored under `/moderator/people/...`, confirmed, since Moderator holds identical `assignments.teacherToClass` grants to School Admin). No batch move endpoint exists, so `ClassAssignmentScreen` issues one `POST /students/:id/enrollments` per selected student via `Promise.allSettled`, reporting per-student success/failure rather than an all-or-nothing illusion.
+
+**A real pre-existing bug found and fixed**: `lib/onboarding/mutations.ts`'s `useCreateStudent` was calling `POST /students/{id}/enrollments` with `student.membershipId` instead of `student.studentProfileId` — `StudentEnrollmentController`'s `:id` is `studentProfileId`, matching every other `/students/:id/...` route's convention. Since the mutation uses `onSettled` (not `onSuccess`), this failure was silent — every onboarding-created student's initial class enrollment likely 404'd without surfacing an error. Fixed as part of this phase (F7 depends on this exact endpoint's correctness — `useMoveStudentClass` calls the same route) and verified live.
+
+**Two real cross-package stale-build gotchas, found only by running the integration tests, not by inspection — the same class of gap this codebase has hit at every prior phase that touched a `dist`-based package**: editing `packages/domain/src/authorization/permission-table.ts` (the new `users.hod.resetCredentials` row) without rebuilding `@atlas/domain` left `apps/api` running against a stale compiled permission table — the new HOD routes returned a bare 500 instead of a clean 403/200, since the permission id genuinely didn't exist in the running process's copy of the table. The identical gotcha hit `apps/web`'s typecheck against `@atlas/contracts` after regenerating `openapi.json` (`pnpm run generate` writes the `.ts` source but does not rebuild `packages/contracts`' own `dist/`) — both new HOD routes and the new query params on the four list endpoints were invisible to the typed client until `pnpm --filter @atlas/contracts run build` ran explicitly. Both fixed by rebuilding the affected package before re-testing; recorded here since neither `pnpm run generate` nor a permission-table edit alone was sufficient.
+
+**Testing**: `class-credential-sheet.integration.test.ts` (new — full-class regenerate, zero-student class, cross-tenant rejection, permission boundary) and an extended `users.integration.test.ts` (a new isolated `describe` block — pagination/search/sort across all four directories, decision A's enrichment/filter, decision C's HOD edit/reset-credentials routes and their security boundary) — 61 integration tests across the affected files, all green against real Postgres/Redis. `apps/web` gained 5 new test files / 21 tests: `students-screen.test.tsx` (incl. URL-state search/sort/paginate round-trip), `teacher-assignment-matrix.test.tsx` (pre-fill correctness, full-replace-not-per-cell submit — the highest-value test in this phase per the exit criterion's own "teacher scope is the backbone of the authorization model"), `people-tabs.test.tsx`, `moderators-screen.test.tsx` (incl. the named Moderator-cannot-manage-Moderators security case), `class-assignment-screen.test.tsx` (selection state, per-student partial-failure reporting). Not every screen named in the roadmap's own testing table got a dedicated test file this pass — `student-detail-screen`, `teacher-detail-screen`, `hods-screen`, and the smaller dialogs (`move-class-dialog`, `reveal-credentials-dialog`, `hod-department-dialog`, `teacher-invitation-sent-dialog`) are implemented and manually verified via `typecheck`/`lint`/`build` but have no dedicated `*.test.tsx` yet — recorded as Candidate/Deferred, not silently claimed complete. Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration`, plus `pnpm generate` (new query params/DTOs/routes published, 151-row permission table) and `next build --webpack` confirming the full intended route table across both role roots (no `/hod/people/*` tree, no `/moderator/people/moderators` route — both by design).
 
 ## Deferred items
 
 - Parent/guardian records (`01 §53`).
 - Staff HR features beyond the specified profile.
+- Bulk import into these directories — `F8`/`B7`'s job; students/teachers still created one at a time here, matching `F4` onboarding's own established pattern.
+- HOD request/approval UI — permanently withdrawn by `ADR-0017`; HOD has zero F7 screens (no HOD people nav item exists or is added).
+- Dedicated component test files for `student-detail-screen`, `teacher-detail-screen`, `hods-screen`, `move-class-dialog`, `reveal-credentials-dialog`, `hod-department-dialog`, `hod-edit-dialog`, `teacher-invitation-sent-dialog` — implemented, typechecked, linted, and covered indirectly by the screens that render them, but not yet given their own dedicated test file.
 
 ---
 
