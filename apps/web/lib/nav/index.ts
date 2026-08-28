@@ -5,5 +5,5 @@ export {
   type NavItem,
   type RoleWorkspace,
 } from './nav-model';
-export { usePermissions } from './use-permissions';
+export { usePermissions, useHasPermission } from './use-permissions';
 export { useNavigation, type NavigationResult } from './use-navigation';

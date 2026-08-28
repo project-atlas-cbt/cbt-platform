@@ -92,6 +92,21 @@ model School {
   /// POST .../complete, never cached here.
   onboardingState       Json?     @map("onboarding_state")
 
+  // --- F5/B3 gap-closure: result-policy defaults + lock (05 §47, 07 §8.1,
+  // ADR-0010's own "Required changes" list: "B5/B3: school-level defaults
+  // and the lock flag" — approved scope B3/B5 never actually built). Seeds
+  // Exam.result_policy/result_detail_visibility at exam creation once B11
+  // exists; resultPolicyLocked governs whether a teacher may override the
+  // seeded value (enforced by B15, not here — B15's own DoD item 7). Set via
+  // GET/PUT /v1/school/result-policy. Defaults are this gap-closure's own
+  // engineering call (no spec-mandated default exists): SCHOOL_ADMIN/not-
+  // AUTOMATIC so results never auto-release without an explicit action;
+  // SCORE_AND_COUNTS as a middle-ground default; unlocked until a School
+  // Admin chooses to lock it.
+  resultPolicy           ResultPolicy           @default(SCHOOL_ADMIN) @map("result_policy")
+  resultDetailVisibility ResultDetailVisibility @default(SCORE_AND_COUNTS) @map("result_detail_visibility")
+  resultPolicyLocked     Boolean                @default(false) @map("result_policy_locked")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -131,6 +146,26 @@ enum SchoolStatus {
 enum SchoolPlatformOverride {
   SUSPENDED
   DEACTIVATED
+}
+
+/// F5/B3 gap-closure (05 §47, ADR-0010) — who releases a result: the exam's
+/// own teacher, School Admin, or the system immediately upon finalisation.
+/// Seeds Exam.result_policy at exam creation once B11 exists.
+enum ResultPolicy {
+  TEACHER
+  SCHOOL_ADMIN
+  AUTOMATIC
+}
+
+/// F5/B3 gap-closure (ADR-0010's second, independent policy axis) — what a
+/// student sees once a result is released: bare score, score plus counts, or
+/// a full per-question review. Vocabulary is this gap-closure's own naming
+/// choice — no prior enum identifiers existed anywhere in the docs/code for
+/// this axis (ADR-0010 only describes it in prose).
+enum ResultDetailVisibility {
+  SCORE_ONLY
+  SCORE_AND_COUNTS
+  FULL_REVIEW
 }
 
 // ---------------------------------------------------------------------------

@@ -20,3 +20,17 @@ export function usePermissions() {
     staleTime: Infinity,
   });
 }
+
+/**
+ * Whether the current actor holds a specific `PERMISSION_TABLE` row id,
+ * outright (never through a break-glass-only grant — same exclusion
+ * `useNavigation` applies). First real consumer: F5's School Settings
+ * screens, gating edit controls for Moderator's view-only posture. `false`
+ * while permissions are still loading, matching `useNavigation`'s own
+ * fail-closed default.
+ */
+export function useHasPermission(resource: string): boolean {
+  const { data } = usePermissions();
+  if (!data) return false;
+  return data.permissions.some((p) => p.resource === resource && !p.breakGlass);
+}

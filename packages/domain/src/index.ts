@@ -39,6 +39,12 @@ export {
   type PlatformMetricsSnapshot,
 } from './platform/metrics-cache.js';
 export {
+  RESULT_POLICIES,
+  RESULT_DETAIL_VISIBILITIES,
+  type ResultPolicy,
+  type ResultDetailVisibility,
+} from './platform/result-policy.js';
+export {
   derivePalette,
   type BrandTokens,
   type NeutralTokens,

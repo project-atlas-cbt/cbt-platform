@@ -18,12 +18,9 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
 import { useSchoolBranding } from '@/lib/onboarding/queries';
-import {
-  useCompleteLogoUpload,
-  useRequestLogoUpload,
-  useUpdateBranding,
-} from '@/lib/onboarding/mutations';
-import { BrandingPreview } from '../branding-preview';
+import { useUpdateBranding } from '@/lib/branding/mutations';
+import { useLogoUpload } from '@/lib/branding/use-logo-upload';
+import { BrandingPreview } from '@/components/branding/branding-preview';
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const schema = z.object({
@@ -45,14 +42,11 @@ type Values = z.infer<typeof schema>;
  */
 export function Step02Branding() {
   const branding = useSchoolBranding();
-  const requestUpload = useRequestLogoUpload();
-  const completeUpload = useCompleteLogoUpload();
   const updateBranding = useUpdateBranding();
+  const logoUpload = useLogoUpload();
 
   const [pendingLogoId, setPendingLogoId] = useState<string | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
-  const [logoError, setLogoError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -68,28 +62,10 @@ export function Step02Branding() {
   }, [branding.data, form]);
 
   async function onLogoSelected(file: File) {
-    setLogoError(null);
-    setUploading(true);
-    try {
-      const target = await requestUpload.mutateAsync({
-        filename: file.name,
-        declaredMimeType: file.type,
-        declaredSizeBytes: file.size,
-      });
-      const putRes = await fetch(target.uploadUrl, { method: 'PUT', body: file });
-      if (!putRes.ok) throw new Error('Upload failed');
-      const completed = await completeUpload.mutateAsync(target.mediaAssetId);
-      if (completed.status === 'REJECTED') {
-        setLogoError(completed.rejectionReason ?? 'This file could not be used as a logo.');
-        return;
-      }
-      setPendingLogoId(completed.id);
-      setLogoPreviewUrl(URL.createObjectURL(file));
-    } catch {
-      setLogoError('Could not upload the logo. Please try a different file.');
-    } finally {
-      setUploading(false);
-    }
+    const result = await logoUpload.upload(file);
+    if (!result) return;
+    setPendingLogoId(result.mediaAssetId);
+    setLogoPreviewUrl(result.previewUrl);
   }
 
   async function onSubmit(values: Values) {
@@ -118,17 +94,17 @@ export function Step02Branding() {
           id="logo-upload"
           type="file"
           accept="image/png,image/jpeg,image/webp"
-          disabled={uploading}
+          disabled={logoUpload.uploading}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void onLogoSelected(file);
           }}
           className="text-sm text-text-secondary"
         />
-        {uploading ? <p className="text-sm text-text-muted">Uploading…</p> : null}
-        {logoError ? (
+        {logoUpload.uploading ? <p className="text-sm text-text-muted">Uploading…</p> : null}
+        {logoUpload.error ? (
           <p role="alert" className="text-sm font-medium text-danger">
-            {logoError}
+            {logoUpload.error}
           </p>
         ) : null}
       </div>

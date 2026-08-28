@@ -34,6 +34,7 @@ export class SchoolProfileService {
     const school = await prisma.school.update({
       where: { id: schoolId },
       data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.shortName !== undefined ? { shortName: dto.shortName } : {}),
         ...(dto.contactEmail !== undefined ? { contactEmail: dto.contactEmail } : {}),
         ...(dto.contactPhone !== undefined ? { contactPhone: dto.contactPhone } : {}),

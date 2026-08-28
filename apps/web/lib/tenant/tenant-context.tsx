@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { apiClient, setCsrfToken, unwrap } from '@/lib/api';
 import { ThemeProvider } from '@/lib/theme/theme-provider';
 
@@ -41,31 +42,34 @@ export interface TenantResolution {
  * hop and undermines 09 §29's reasoning for keeping the API off
  * serverless"). A plain cross-origin `fetch(..., { credentials: 'include'
  * })` from the browser sets the cookie directly.
+ *
+ * F5 gap-closure: this is now a TanStack Query (`['tenant', 'resolve']`),
+ * not a one-shot `useEffect`/`useState` pair, specifically so a branding
+ * change can invalidate it — `lib/branding/mutations.ts`'s
+ * `useUpdateBranding` does exactly that, which is what makes a colour/logo
+ * change repaint `<ThemeProvider>` app-wide immediately (F5 DoD item 3)
+ * rather than only within whichever screen made the change. The returned
+ * `{status, school}` shape is unchanged for `useTenant()`'s existing
+ * consumers.
  */
 export function useTenantResolution(): TenantResolution {
-  const [state, setState] = useState<TenantResolution>({ status: 'loading', school: null });
+  const query = useQuery({
+    queryKey: ['tenant', 'resolve'],
+    queryFn: () => unwrap(apiClient.GET('/tenant/resolve', {})),
+  });
 
   useEffect(() => {
-    let cancelled = false;
-    unwrap(apiClient.GET('/tenant/resolve', {}))
-      .then((result) => {
-        if (cancelled) return;
-        setCsrfToken(result.csrfToken);
-        setState({ status: 'resolved', school: result.school ?? null });
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Doctrine: never blank the whole screen for a partial-data
-        // failure — fall through to no school name / the default palette
-        // rather than blocking the login page from rendering at all.
-        setState({ status: 'error', school: null });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (query.data) setCsrfToken(query.data.csrfToken);
+  }, [query.data]);
 
-  return state;
+  if (query.isPending) return { status: 'loading', school: null };
+  if (query.isError) {
+    // Doctrine: never blank the whole screen for a partial-data failure —
+    // fall through to no school name / the default palette rather than
+    // blocking the login page from rendering at all.
+    return { status: 'error', school: null };
+  }
+  return { status: 'resolved', school: query.data.school ?? null };
 }
 
 const TenantContext = createContext<TenantResolution | null>(null);

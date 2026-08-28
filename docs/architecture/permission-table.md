@@ -43,25 +43,26 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## School Configuration
 
-| Action                                                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD       | TEACHER | STUDENT   | Awaiting                               |
-| ------------------------------------------------------------ | -------------- | ------------ | --------- | --------- | ------- | --------- | -------------------------------------- |
-| View school profile                                          | PLATFORM       | SCHOOL       | SCHOOL    | SCHOOL    | SCHOOL  | SCHOOL ⚠️ |                                        |
-| Edit school name/details                                     | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
-| Upload/change logo                                           | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |                                        |
-| Set primary colour                                           | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         |                                        |
-| Manage school onboarding wizard progress                     | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         |                                        |
-| Manage departments (derived split: view)                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL ⚠️ | —       | —         |                                        |
-| Manage departments (derived split: create/edit/delete)       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
-| Manage classes (derived split: view)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
-| Manage classes (derived split: create/edit/delete)           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
-| Manage subjects (derived split: view)                        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
-| Manage subjects (derived split: create/edit/delete)          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
-| Manage academic sessions (derived split: view)               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
-| Manage academic sessions (derived split: create/edit/delete) | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
-| Manage terms (derived split: view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |                                        |
-| Manage terms (derived split: create/edit/delete)             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |                                        |
-| View current academic context (school + session + term)      | —              | SELF         | SELF      | SELF      | SELF    | SELF      |                                        |
-| Manage school settings                                       | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | —         | —       | —         | School settings resource (B4 or later) |
+| Action                                                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD       | TEACHER | STUDENT   | Awaiting |
+| ------------------------------------------------------------ | -------------- | ------------ | --------- | --------- | ------- | --------- | -------- |
+| View school profile                                          | PLATFORM       | SCHOOL       | SCHOOL    | SCHOOL    | SCHOOL  | SCHOOL ⚠️ |          |
+| Edit school name/details                                     | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |          |
+| Upload/change logo                                           | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |          |
+| Set primary colour                                           | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         |          |
+| Manage school onboarding wizard progress                     | PLATFORM ⚠️    | SCHOOL ⚠️    | —         | —         | —       | —         |          |
+| Manage departments (derived split: view)                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL ⚠️ | —       | —         |          |
+| Manage departments (derived split: create/edit/delete)       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
+| Manage classes (derived split: view)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |          |
+| Manage classes (derived split: create/edit/delete)           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
+| Manage subjects (derived split: view)                        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |          |
+| Manage subjects (derived split: create/edit/delete)          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
+| Manage academic sessions (derived split: view)               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |          |
+| Manage academic sessions (derived split: create/edit/delete) | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
+| Manage terms (derived split: view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |          |
+| Manage terms (derived split: create/edit/delete)             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
+| View current academic context (school + session + term)      | —              | SELF         | SELF      | SELF      | SELF    | SELF      |          |
+| View school settings (result policy)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
+| Manage school settings                                       | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |          |
 
 <details><summary>Notes</summary>
 
@@ -83,8 +84,8 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Manage academic sessions (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
 - **Manage terms (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Manage terms (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
+- **View school settings (result policy) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Manage school settings / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
-- **Manage school settings / MODERATOR:** LIMITED (read-only placeholder): Exact writable settings subset for Moderator finalized when the School Settings resource is built.
 
 </details>
 

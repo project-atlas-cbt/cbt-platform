@@ -875,7 +875,7 @@ Ten step components (`components/onboarding/steps/`) each follow the existing `s
 
 # F5 — School Settings & Branding
 
-**Status:** NOT STARTED · **Backend pair:** B4, B3
+**Status:** COMPLETE (2026-08-28) · **Backend pair:** B4, B3
 
 ## Objective
 
@@ -937,27 +937,43 @@ Branding affects F1's login page and F13's exam interface.
 
 ## Definition of Done
 
-1. Profile edits save and reflect immediately.
-2. Logo upload validates type, size, and dimensions with clear errors, and replaces cleanly.
-3. Primary colour change produces a full derived palette and applies across the application.
-4. Preview shows login, dashboard, buttons, tables, exam interface, and results (`05 §6.1`).
-5. Assessment rules save and are applied as defaults for new exams.
-6. Result publication policy and student visibility save; the lock control behaves per `C-12`.
-7. Grading scale bands can be configured; existing results retain their original grade (`M-06`).
-8. Subscription status displays with expiry and days remaining (`01 §48`).
-9. An expired subscription shows the renewal message from `01 §48`, not a broken screen.
-10. Only permitted roles can edit each section.
-11. Branding changes do not alter historical reports (`05 §6.1`).
-12. Loading, error, and empty states implemented.
+1. ✅ Profile edits save and reflect immediately (`GET/PATCH /v1/school/profile`) — `name` added to the DTO as a small, confirmed gap-closure (`02`'s matrix already granted School Admin "Full" edit of "school name/details"; the DTO never carried it).
+2. ✅ Logo upload validates type, size, and dimensions with clear errors, and replaces cleanly — reuses F4's exact `useLogoUpload` sequence and `MediaModule`'s (B4) real content-sniffing validation, not reimplemented.
+3. ✅ Primary colour change produces a full derived palette and applies across the application — the real gap found this phase: `useTenantResolution` was a one-shot `useEffect`/`useState` pair with nothing able to invalidate it. Converted to a TanStack Query (`['tenant','resolve']`); `useUpdateBranding`'s `onSuccess` now invalidates it alongside `['school','branding']`, which is what repaints `<ThemeProvider>` app-wide immediately, not just within the settings screen. Proven by a dedicated test (`lib/tenant/tenant-context.test.tsx`) simulating exactly this invalidate-and-refetch sequence.
+4. ✅ Preview shows login, dashboard, buttons, tables, exam interface, and results (`05 §6.1`) — `<BrandingPreview>` moved (not duplicated) from F4's onboarding wizard to `components/branding/`, reused by both.
+5. **Honestly deferred, not built.** Confirmed with the project owner during planning: no ADR or schema defines a school-level default for exam duration/attempt-limit/navigation-policy — these are `Exam`-level fields that only come into existence with `B11` (Exam Builder), and nothing today would consume such a default even if one existed. Building it now would mean inventing vocabulary `B11` might define differently — the same reasoning this phase's own text already applied to Grading Scale. The Assessment Rules tab renders an honest "not yet available, waiting on B11" placeholder instead.
+6. **Real for the storage half, honestly partial for the "applied to exams" half.** Result publication policy (`resultPolicy`), student result visibility (`resultDetailVisibility`), and the lock flag (`resultPolicyLocked`) all save correctly via a new `GET/PUT /v1/school/result-policy` endpoint — a confirmed small backend gap-closure, not new scope: ADR-0010's own "Required changes" list assigned "B5/B3: school-level defaults and the lock flag" but neither phase actually built it. What isn't real yet: no `Exam` exists (`B11`) to seed from `resultPolicy`, and no `B15` marking/publication logic exists yet to honour `resultPolicyLocked` — this phase only stores the school's chosen defaults, correctly and auditably, ahead of the phases that will read them.
+7. **Honestly deferred, not built** — Grading Scale, exactly as this phase's own roadmap text already anticipated ("grading lands in a second pass" once `B15` exists). The Results screen shows an honest placeholder naming `B15` in its own sub-section, next to the real Result Policy controls above it.
+8. ✅ Subscription status displays with expiry and days remaining (`01 §48`) — first real frontend consumer of `GET /v1/school/subscription` (already fully sufficient from B3; no backend gap here). "Days remaining" is a trivial client-side derivation from `expiresAt`, not a separate field.
+9. ✅ An expired subscription shows the exact `01 §48` renewal message ("Subscription Expired — Please contact your software administrator to renew access"), distinguished from the ADR-0015 grace-period case (`inGracePeriod`), which shows a softer "renew soon" notice instead of the expired banner.
+10. ✅ Only permitted roles can edit each section — confirmed with the project owner: Moderator is view-only across every F5 screen (no edit rights anywhere in this phase), enforced both server-side (new `schoolConfig.settings.view` permission row, `schoolConfig.settings.manage`'s `MODERATOR` grant changed from a placeholder `limitedReadOnly` to `denied()`) and client-side (`useHasPermission`, a new small addition to `lib/nav/use-permissions.ts` — this phase's first real consumer of `GET /me/permissions` for gating an individual edit control, not just nav visibility).
+11. ✅ Branding changes do not alter historical reports (`05 §6.1`) — unchanged from B4's own structural proof (no historical-record-bearing entity references branding yet); this phase adds no new claim here.
+12. ✅ Loading, error, and empty states implemented for every one of the five screens (component tests cover each).
 
 ## Exit criteria
 
-- B4 contracts confirmed.
-- Branding propagation E2E green.
+- B4 contracts confirmed — real branding-authoring screen built and tested against them.
+- Branding propagation E2E substituted, per this codebase's established practice (browser E2E remains deferred exactly as F1–F4 already recorded): a component test proving the `['tenant','resolve']` invalidate-and-refetch mechanism, plus a manual live check (change colour in Settings → confirm the app shell repaints outside the settings page too).
+
+## Implementation notes
+
+**Two small, confirmed additive backend gap-closures, not new scope** (mirroring F3/F4's own precedent for this class of discovery — see `backend-roadmap.md`'s B3 section, "Fourth gap closure"): `School` gained `resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (new `ResultPolicy`/`ResultDetailVisibility` Prisma enums, `packages/domain/src/platform/result-policy.ts`) and a new `GET/PUT /v1/school/result-policy` endpoint (ADR-0010's own already-approved requirement, never built); and `UpdateSchoolProfileDto` gained `name` (`02`'s matrix already granted it). A third, smaller fix found by `tsc` while building the Subscription screen: `SchoolSubscriptionStatusResponseDto.status` was typed as plain `string`, not the real `SubscriptionStatus` enum — fixed with the exact `enum:` treatment `SchoolSubscriptionSummaryDto` (F3) already established as this codebase's precedent for that class of DTO-accuracy gap.
+
+**Shared branding code, moved not duplicated**: F4's onboarding wizard already had the complete, correct logo-upload sequence and the `BrandingPreview` component (including its `:root`-scoping fix). Rather than reimplementing either for F5's Branding screen, both moved to shared, phase-neutral locations — `components/branding/branding-preview.tsx` and a new `lib/branding/use-logo-upload.ts` hook wrapping the 3-call upload sequence — with the onboarding step's imports updated to the new locations. `useRequestLogoUpload`/`useCompleteLogoUpload`/`useUpdateBranding` moved to `lib/branding/mutations.ts` for the same reason (no onboarding-specific behaviour ever lived in them). Query hooks (`useSchoolProfile`, `useSchoolBranding`) deliberately were **not** moved — each phase keeps its own thin wrapper around the same shared query key, this codebase's established convention (`lib/onboarding/queries.ts`, `lib/platform/queries.ts`, and now `lib/school-settings/queries.ts` all do this), so a mutation from either phase still invalidates the other correctly.
+
+**The dirty-state/unsaved-changes guard is genuinely new** — no prior `beforeunload`/dirty-tracking pattern existed anywhere in this codebase before this phase (confirmed by a full-codebase search during planning). Built as two small, reusable, phase-neutral pieces: `lib/forms/use-unsaved-changes-guard.ts` (a `beforeunload` listener plus a `guardNavigation` wrapper for a tab strip's own `<Link>` clicks) and `components/forms/unsaved-changes-dialog.tsx` (the `Dialog`-based confirmation UI, never a native `confirm()`). A small `lib/forms/settings-dirty-context.tsx` lets each of Profile/Branding/Results register its own `form.formState.isDirty` (`useRegisterFormDirty`) without the tab-strip layout owning every form's state directly.
+
+**Real Moderator view-only enforcement, both layers**: `useHasPermission(resource)` (new, `lib/nav/use-permissions.ts`) is this codebase's first actual per-control permission check on the frontend — every prior consumer of `GET /me/permissions` (`useNavigation`) only ever gated whole nav sections, never an individual edit affordance. Every editable field/control across Profile, Branding, and Results is disabled (not merely hidden) and paired with an explicit "You have view-only access" message for an actor lacking the relevant permission — proven directly by dedicated Moderator-view test cases on all three screens.
+
+**A real, pre-existing linting rule caught during implementation, not a new decision**: the Subscription screen's "days remaining" derivation initially called `Date.now()` directly during render, which `eslint-plugin-react-hooks`'s `react-hooks/purity` rule correctly rejects (an impure call whose result can change between renders unpredictably). Fixed by snapshotting it once via `useState(() => Date.now())` — acceptable staleness for a page-load-scoped "days remaining" display, not a value any business rule depends on.
 
 ## Deferred items
 
 - Multi-theme or per-role theming — contradicts the one-colour philosophy (`01 §47`).
+- Assessment Rules (default duration/attempt-limit/navigation-policy) — deferred to whichever phase builds `B11`'s exam-configuration vocabulary; see DoD item 5 above.
+- Grading Scale — deferred to `B15`; see DoD item 7 above.
+- "User Policies" (`04 §19`'s nav breakdown names it; this phase's own route table never did) — confirmed with the project owner: omitted entirely, not invented. No spec beyond a bare nav label exists anywhere for what it should actually control. Recorded as Candidate/Deferred (`AGENTS.md` §14) pending real product definition.
+- Per-school timezone-aware date rendering (ADR-0027) for the Subscription screen's expiry date — reuses F3's existing browser-local-timezone `formatDate` utility (that utility's own doc comment already flags this as a platform-workspace simplification, not appropriate for a school-facing screen); a school-timezone-aware formatter doesn't exist anywhere in the frontend yet and would be a larger, separately-scoped addition for a single date field. Recorded as Candidate/Deferred, not silently accepted as correct.
 
 ---
 

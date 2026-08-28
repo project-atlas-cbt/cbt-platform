@@ -761,6 +761,57 @@ completion with its audit event, idempotent re-completion, non-SCHOOL_ADMIN 403 
 routes). No schema change beyond the two additive `School` columns; no existing business rule
 altered.
 
+### 2026-08-28 — Fourth gap closure: school-level result-policy defaults + lock flag (via F5)
+
+F5 (School Settings & Branding) surfaced a genuinely already-approved gap: ADR-0010's own "Required
+changes" list states plainly "B5/B3: school-level defaults and the lock flag" — but neither phase
+actually built it. A permission-table row (`schoolConfig.settings.manage`) had been pre-graded
+waiting on exactly this resource since B2 ("School settings resource (B4 or later)"). Confirmed with
+the project owner before implementation (the same class of confirmation as this section's prior two
+gap-closures) — closed as part of F5, not silently expanded scope.
+
+**Schema**: `School` gained `resultPolicy` (`ResultPolicy` — `TEACHER`/`SCHOOL_ADMIN`/`AUTOMATIC`),
+`resultDetailVisibility` (`ResultDetailVisibility` — `SCORE_ONLY`/`SCORE_AND_COUNTS`/`FULL_REVIEW`,
+this gap-closure's own naming choice — ADR-0010 only describes this axis in prose, no prior enum
+identifiers existed anywhere), and `resultPolicyLocked` (`Boolean`). Both enums and their constant
+arrays live in `packages/domain/src/platform/result-policy.ts`, mirroring `access-gate.ts`'s own
+precedent for hand-kept-in-sync string-literal vocabularies. Defaults (`SCHOOL_ADMIN`,
+`SCORE_AND_COUNTS`, `false`) are this gap-closure's own engineering call — no spec-mandated default
+exists — chosen so results never auto-release without an explicit action.
+
+**API**: new `GET/PUT /v1/school/result-policy` (`school-result-policy.{controller,service}.ts`,
+`apps/api/src/modules/platform/`), sibling to `SchoolProfileController`/`SchoolBrandingController` in
+every respect (DI shape, DTO validation via `@IsIn` against the domain-package constant arrays,
+`SCHOOL_RESULT_POLICY_CHANGED` audit event guarded on an actual diff, `actorRole` hardcoded to
+`SCHOOL_ADMIN` for the same reason `SchoolBrandingService` already does). These are _defaults_
+only — no `Exam` exists yet (`B11`) to seed from `resultPolicy`, and no `B15` marking/publication
+logic exists yet to honour `resultPolicyLocked`; this endpoint's job is exactly and only to store the
+school's chosen defaults correctly and auditably, ahead of the phases that will read them.
+
+**Permission table**: split the old placeholder `schoolConfig.settings.manage` row into a real
+`.view`/`.manage` pair, mirroring department/class/subject/session/term's own precedent —
+`schoolConfig.settings.view` (new, `SCHOOL_ADMIN`/`MODERATOR` both `granted('SCHOOL')`) and
+`schoolConfig.settings.manage` (`SCHOOL_ADMIN` only now — `MODERATOR` changed from the placeholder
+`limitedReadOnly(...)` to `denied()`, per F5's confirmed "Moderator is view-only everywhere in this
+phase" decision). The `awaitingResource` flag is deleted, not just annotated — 149→150 rows.
+
+**Two small, same-shape additive fixes bundled into this gap-closure, found while F5 built its first
+real consumer of adjacent endpoints**: `UpdateSchoolProfileDto` gained `name` (`02`'s matrix already
+granted School Admin "Full" edit of "school name/details," but the DTO never carried it — one field,
+one line in the service's partial-update object); and `SchoolSubscriptionStatusResponseDto.status`
+gained the `enum: SUBSCRIPTION_STATUSES` decoration `SchoolSubscriptionSummaryDto` (F3) already
+established as this codebase's precedent for this exact class of DTO-accuracy gap — it was plain
+`type: String` before, invisible until `tsc` caught it building F5's Subscription screen, the first
+frontend consumer of this endpoint.
+
+**Testing**: `school-result-policy.integration.test.ts` (defaults shape, full round-trip update,
+out-of-vocabulary rejection at the DTO layer, Moderator 200-view/403-edit, Teacher denied both ways,
+cross-tenant isolation) and a small addition to a new `school-profile.integration.test.ts` proving
+the `name` round-trip. `pnpm generate` and `pnpm generate:permission-table-doc` re-run (150 rows). A
+real `node dist/main.js` boot reconfirmed `PolicyCoverageService` reports the two new routes checked
+with zero violations. No existing business rule altered; no schema change beyond the three additive
+`School` columns and two new enums.
+
 ---
 
 # B4 — Media, Storage & Branding
@@ -3103,29 +3154,29 @@ These apply to **every** phase and are part of every Definition of Done.
 
 ## Phase Completion Tracking
 
-| Phase | Status      | Started    | Completed  | Notes                                           |
-| ----- | ----------- | ---------- | ---------- | ----------------------------------------------- |
-| B0    | COMPLETE    | 2026-08-25 | 2026-08-25 | Decided: ADR-0005, 0022, 0023, 0027, 0031, 0033 |
-| B1    | NOT STARTED | —          | —          | Decided: ADR-0005, 0019, 0022                   |
-| B2    | NOT STARTED | —          | —          | Decided: ADR-0012, 0023                         |
-| B3    | NOT STARTED | —          | —          | Decided: ADR-0015, 0016, 0019, 0012             |
-| B4    | NOT STARTED | —          | —          | Decided: ADR-0021                               |
-| B5    | NOT STARTED | —          | —          | Decided: ADR-0001, 0011, 0013                   |
-| B6    | NOT STARTED | —          | —          | Decided: ADR-0011, 0017                         |
-| B7    | NOT STARTED | —          | —          | Settle A-17 in phase                            |
-| B8    | NOT STARTED | —          | —          | Decided: ADR-0001                               |
-| B9    | NOT STARTED | —          | —          | Decided: ADR-0001, 0017                         |
-| B10   | NOT STARTED | —          | —          | Decided: ADR-0019                               |
-| B11   | NOT STARTED | —          | —          | Decided: ADR-0002, 0013, 0029                   |
-| B12   | NOT STARTED | —          | —          | Decided: ADR-0006, 0009, 0020                   |
-| B13   | NOT STARTED | —          | —          | Decided: ADR-0002, 0003, 0007, 0008, 0020, 0021 |
-| B14   | NOT STARTED | —          | —          | Decided: ADR-0003, 0004                         |
-| B15   | NOT STARTED | —          | —          | Decided: ADR-0010, 0018, 0025                   |
-| B16   | NOT STARTED | —          | —          | Decided: ADR-0014, 0024                         |
-| B17   | NOT STARTED | —          | —          | Decided: ADR-0002, 0025                         |
-| B18   | NOT STARTED | —          | —          | Decided: ADR-0030                               |
-| B19   | NOT STARTED | —          | —          | Decided: ADR-0026                               |
-| B20   | NOT STARTED | —          | —          | Decided: ADR-0028                               |
-| B21   | NOT STARTED | —          | —          | Decided: ADR-0032                               |
-| B22   | NOT STARTED | —          | —          |                                                 |
-| B23   | NOT STARTED | —          | —          |                                                 |
+| Phase | Status      | Started    | Completed  | Notes                                                                                                                                                                                                                                                                            |
+| ----- | ----------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0    | COMPLETE    | 2026-08-25 | 2026-08-25 | Decided: ADR-0005, 0022, 0023, 0027, 0031, 0033                                                                                                                                                                                                                                  |
+| B1    | NOT STARTED | —          | —          | Decided: ADR-0005, 0019, 0022                                                                                                                                                                                                                                                    |
+| B2    | NOT STARTED | —          | —          | Decided: ADR-0012, 0023                                                                                                                                                                                                                                                          |
+| B3    | NOT STARTED | —          | —          | Decided: ADR-0015, 0016, 0019, 0012. ADR-0010 also names "B5/B3: school-level defaults and the lock flag" as required — closed 2026-08-28 via F5's fourth gap-closure (see this file's B3 section), corrected here since this table previously listed ADR-0010 only against B15. |
+| B4    | NOT STARTED | —          | —          | Decided: ADR-0021                                                                                                                                                                                                                                                                |
+| B5    | NOT STARTED | —          | —          | Decided: ADR-0001, 0011, 0013                                                                                                                                                                                                                                                    |
+| B6    | NOT STARTED | —          | —          | Decided: ADR-0011, 0017                                                                                                                                                                                                                                                          |
+| B7    | NOT STARTED | —          | —          | Settle A-17 in phase                                                                                                                                                                                                                                                             |
+| B8    | NOT STARTED | —          | —          | Decided: ADR-0001                                                                                                                                                                                                                                                                |
+| B9    | NOT STARTED | —          | —          | Decided: ADR-0001, 0017                                                                                                                                                                                                                                                          |
+| B10   | NOT STARTED | —          | —          | Decided: ADR-0019                                                                                                                                                                                                                                                                |
+| B11   | NOT STARTED | —          | —          | Decided: ADR-0002, 0013, 0029                                                                                                                                                                                                                                                    |
+| B12   | NOT STARTED | —          | —          | Decided: ADR-0006, 0009, 0020                                                                                                                                                                                                                                                    |
+| B13   | NOT STARTED | —          | —          | Decided: ADR-0002, 0003, 0007, 0008, 0020, 0021                                                                                                                                                                                                                                  |
+| B14   | NOT STARTED | —          | —          | Decided: ADR-0003, 0004                                                                                                                                                                                                                                                          |
+| B15   | NOT STARTED | —          | —          | Decided: ADR-0010, 0018, 0025                                                                                                                                                                                                                                                    |
+| B16   | NOT STARTED | —          | —          | Decided: ADR-0014, 0024                                                                                                                                                                                                                                                          |
+| B17   | NOT STARTED | —          | —          | Decided: ADR-0002, 0025                                                                                                                                                                                                                                                          |
+| B18   | NOT STARTED | —          | —          | Decided: ADR-0030                                                                                                                                                                                                                                                                |
+| B19   | NOT STARTED | —          | —          | Decided: ADR-0026                                                                                                                                                                                                                                                                |
+| B20   | NOT STARTED | —          | —          | Decided: ADR-0028                                                                                                                                                                                                                                                                |
+| B21   | NOT STARTED | —          | —          | Decided: ADR-0032                                                                                                                                                                                                                                                                |
+| B22   | NOT STARTED | —          | —          |                                                                                                                                                                                                                                                                                  |
+| B23   | NOT STARTED | —          | —          |                                                                                                                                                                                                                                                                                  |

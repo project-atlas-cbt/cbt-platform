@@ -580,6 +580,26 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     },
   },
   {
+    // F5 gap-closure: the resource `awaitingResource` below used to name
+    // (result-policy defaults/lock, ADR-0010) now exists — split into its
+    // own .view row, mirroring department/class/subject/session/term's own
+    // view/manage pairing, since Moderator's confirmed posture here is
+    // read-only (not the "exact writable subset TBD" placeholder this row
+    // used to carry).
+    id: 'schoolConfig.settings.view',
+    section: 'School Configuration',
+    label: 'View school settings (result policy)',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: platformRead(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
+  {
     id: 'schoolConfig.settings.manage',
     section: 'School Configuration',
     label: 'Manage school settings',
@@ -587,15 +607,16 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     grants: {
       SOFTWARE_ADMIN: granted('PLATFORM', 'R1 — see schoolConfig.department.manage.'),
       SCHOOL_ADMIN: granted('SCHOOL'),
-      MODERATOR: limitedReadOnly(
-        'SCHOOL',
-        'Exact writable settings subset for Moderator finalized when the School Settings resource is built.',
-      ),
+      // F5 (confirmed with the project owner): Moderator is view-only on
+      // every F5 settings screen — no edit rights anywhere in this phase,
+      // consistent with their existing view-only posture on every other
+      // School Configuration row. Their read access now comes from the new
+      // schoolConfig.settings.view row above instead of a placeholder.
+      MODERATOR: denied(),
       HOD: denied(),
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'School settings resource (B4 or later)',
   },
 
   // ------------------------------------------------------------------

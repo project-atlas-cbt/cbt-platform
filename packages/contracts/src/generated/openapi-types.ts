@@ -569,6 +569,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/school/result-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own school's result-publication defaults and lock flag. */
+        get: operations["SchoolResultPolicyController_getResultPolicy"];
+        /** Update result-publication defaults and the override lock (School Admin only). */
+        put: operations["SchoolResultPolicyController_updateResultPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/school/onboarding": {
         parameters: {
             query?: never;
@@ -1706,6 +1724,7 @@ export interface components {
             address: string | null;
         };
         UpdateSchoolProfileDto: {
+            name?: string;
             shortName?: string;
             contactEmail?: string;
             contactPhone?: string;
@@ -1713,7 +1732,11 @@ export interface components {
         };
         SchoolSubscriptionStatusResponseDto: {
             plan: string;
-            status: string;
+            /**
+             * @description F5 gap-closure: gained an accurate enum: (matching SchoolSubscriptionSummaryDto's own precedent) — was plain type: String before, a real typing gap tsc caught building the first frontend consumer.
+             * @enum {string}
+             */
+            status: "PENDING" | "ACTIVE" | "EXPIRING" | "EXPIRED" | "SUSPENDED" | "CANCELLED";
             /** Format: date-time */
             startAt: string;
             /** Format: date-time */
@@ -1769,6 +1792,27 @@ export interface components {
             logoMediaId?: string | null;
             /** @description "#rrggbb". Pass null to clear (falls back to the platform default palette). */
             primaryColor?: string | null;
+        };
+        SchoolResultPolicyResponseDto: {
+            /** @enum {string} */
+            resultPolicy: "TEACHER" | "SCHOOL_ADMIN" | "AUTOMATIC";
+            /** @enum {string} */
+            resultDetailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            resultPolicyLocked: boolean;
+        };
+        UpdateSchoolResultPolicyDto: {
+            /**
+             * @description Who releases a result by default: TEACHER / SCHOOL_ADMIN / AUTOMATIC (05 §47).
+             * @enum {string}
+             */
+            resultPolicy?: "TEACHER" | "SCHOOL_ADMIN" | "AUTOMATIC";
+            /**
+             * @description What a student sees once a result is released (ADR-0010’s second axis).
+             * @enum {string}
+             */
+            resultDetailVisibility?: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            /** @description Whether a teacher may override the seeded resultPolicy on their own exams (B15 enforces this; F5 only stores the flag). */
+            resultPolicyLocked?: boolean;
         };
         OnboardingStatusResponseDto: {
             /** Format: date-time */
@@ -2974,6 +3018,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchoolBrandingResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolResultPolicyController_getResultPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolResultPolicyResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolResultPolicyController_updateResultPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSchoolResultPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolResultPolicyResponseDto"];
                 };
             };
         };

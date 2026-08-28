@@ -41,32 +41,10 @@ export function useUpdateSchoolProfile() {
   });
 }
 
-export function useRequestLogoUpload() {
-  return useMutation({
-    mutationFn: (body: { filename: string; declaredMimeType: string; declaredSizeBytes: number }) =>
-      unwrap(apiClient.POST('/school/branding/logo/upload-target', { body })),
-  });
-}
-
-export function useCompleteLogoUpload() {
-  return useMutation({
-    mutationFn: (mediaAssetId: string) =>
-      unwrap(
-        apiClient.POST('/school/branding/logo/upload-target/{id}/complete', {
-          params: { path: { id: mediaAssetId } },
-        }),
-      ),
-  });
-}
-
-export function useUpdateBranding() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (body: { logoMediaId?: string | null; primaryColor?: string | null }) =>
-      unwrap(apiClient.PUT('/school/branding', { body })),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['school', 'branding'] }),
-  });
-}
+// useRequestLogoUpload/useCompleteLogoUpload/useUpdateBranding moved to
+// lib/branding/mutations.ts (F5) — shared with the School Settings Branding
+// screen, since they had no onboarding-specific behaviour. Re-exported here
+// only if a future onboarding file needs them; none currently does.
 
 function invalidateAcademics(client: QueryClient) {
   return Promise.all([

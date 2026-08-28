@@ -1027,6 +1027,54 @@
         "tags": ["school"]
       }
     },
+    "/school/result-policy": {
+      "get": {
+        "operationId": "SchoolResultPolicyController_getResultPolicy",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolResultPolicyResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own school's result-publication defaults and lock flag.",
+        "tags": ["school"]
+      },
+      "put": {
+        "operationId": "SchoolResultPolicyController_updateResultPolicy",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSchoolResultPolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolResultPolicyResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update result-publication defaults and the override lock (School Admin only).",
+        "tags": ["school"]
+      }
+    },
     "/school/onboarding": {
       "get": {
         "operationId": "SchoolOnboardingController_getStatus",
@@ -3997,6 +4045,10 @@
       "UpdateSchoolProfileDto": {
         "type": "object",
         "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          },
           "shortName": {
             "type": "string",
             "maxLength": 32
@@ -4020,7 +4072,9 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": ["PENDING", "ACTIVE", "EXPIRING", "EXPIRED", "SUSPENDED", "CANCELLED"],
+            "description": "F5 gap-closure: gained an accurate enum: (matching SchoolSubscriptionSummaryDto's own precedent) — was plain type: String before, a real typing gap tsc caught building the first frontend consumer."
           },
           "startAt": {
             "type": "string",
@@ -4202,6 +4256,42 @@
             "type": "string",
             "nullable": true,
             "description": "\"#rrggbb\". Pass null to clear (falls back to the platform default palette)."
+          }
+        }
+      },
+      "SchoolResultPolicyResponseDto": {
+        "type": "object",
+        "properties": {
+          "resultPolicy": {
+            "type": "string",
+            "enum": ["TEACHER", "SCHOOL_ADMIN", "AUTOMATIC"]
+          },
+          "resultDetailVisibility": {
+            "type": "string",
+            "enum": ["SCORE_ONLY", "SCORE_AND_COUNTS", "FULL_REVIEW"]
+          },
+          "resultPolicyLocked": {
+            "type": "boolean"
+          }
+        },
+        "required": ["resultPolicy", "resultDetailVisibility", "resultPolicyLocked"]
+      },
+      "UpdateSchoolResultPolicyDto": {
+        "type": "object",
+        "properties": {
+          "resultPolicy": {
+            "type": "string",
+            "enum": ["TEACHER", "SCHOOL_ADMIN", "AUTOMATIC"],
+            "description": "Who releases a result by default: TEACHER / SCHOOL_ADMIN / AUTOMATIC (05 §47)."
+          },
+          "resultDetailVisibility": {
+            "type": "string",
+            "enum": ["SCORE_ONLY", "SCORE_AND_COUNTS", "FULL_REVIEW"],
+            "description": "What a student sees once a result is released (ADR-0010’s second axis)."
+          },
+          "resultPolicyLocked": {
+            "type": "boolean",
+            "description": "Whether a teacher may override the seeded resultPolicy on their own exams (B15 enforces this; F5 only stores the flag)."
           }
         }
       },

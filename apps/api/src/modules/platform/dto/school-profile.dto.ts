@@ -1,8 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
+import { SUBSCRIPTION_STATUSES, type SubscriptionStatus } from '@atlas/domain';
 
-/** `03 §4` Step 1 — School Profile onboarding step. */
+/** `03 §4` Step 1 — School Profile onboarding step. F5 gap-closure: `name`
+ * added — `02`'s matrix grants School Admin "Full" edit of "school
+ * name/details," but this DTO never actually carried it. `subdomain`
+ * deliberately stays out of scope here: it's ADR-0005's frozen
+ * tenant-resolution key, not an ordinary profile field. */
 export class UpdateSchoolProfileDto {
+  @ApiProperty({ type: String, required: false, maxLength: 255 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  name?: string;
+
   @ApiProperty({ type: String, required: false, maxLength: 32 })
   @IsOptional()
   @IsString()
@@ -56,8 +67,13 @@ export class SchoolSubscriptionStatusResponseDto {
   @ApiProperty({ type: String })
   plan!: string;
 
-  @ApiProperty({ type: String })
-  status!: string;
+  @ApiProperty({
+    type: String,
+    enum: SUBSCRIPTION_STATUSES,
+    description:
+      "F5 gap-closure: gained an accurate enum: (matching SchoolSubscriptionSummaryDto's own precedent) — was plain type: String before, a real typing gap tsc caught building the first frontend consumer.",
+  })
+  status!: SubscriptionStatus;
 
   @ApiProperty({ type: String, format: 'date-time' })
   startAt!: string;

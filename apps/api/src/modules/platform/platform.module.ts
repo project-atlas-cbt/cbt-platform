@@ -21,6 +21,8 @@ import { SchoolProfileService } from './school-profile.service.js';
 import { SchoolProfileController } from './school-profile.controller.js';
 import { SchoolBrandingService } from './school-branding.service.js';
 import { SchoolBrandingController } from './school-branding.controller.js';
+import { SchoolResultPolicyService } from './school-result-policy.service.js';
+import { SchoolResultPolicyController } from './school-result-policy.controller.js';
 import { SchoolOnboardingService } from './school-onboarding.service.js';
 import { SchoolOnboardingController } from './school-onboarding.controller.js';
 import { registerPlatformTemplates } from './templates.js';
@@ -51,6 +53,7 @@ import { registerPlatformTemplates } from './templates.js';
     ActivationController,
     SchoolProfileController,
     SchoolBrandingController,
+    SchoolResultPolicyController,
     SchoolOnboardingController,
   ],
   providers: [
@@ -62,6 +65,7 @@ import { registerPlatformTemplates } from './templates.js';
     ActivationService,
     SchoolProfileService,
     SchoolBrandingService,
+    SchoolResultPolicyService,
     SchoolOnboardingService,
   ],
 })

@@ -3,13 +3,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Step02Branding } from './step-02-branding';
 import { useSchoolBranding } from '@/lib/onboarding/queries';
-import { useUpdateBranding } from '@/lib/onboarding/mutations';
+import { useUpdateBranding } from '@/lib/branding/mutations';
 
 vi.mock('@/lib/onboarding/queries', () => ({ useSchoolBranding: vi.fn() }));
-vi.mock('@/lib/onboarding/mutations', () => ({
-  useRequestLogoUpload: () => ({ mutateAsync: vi.fn() }),
-  useCompleteLogoUpload: () => ({ mutateAsync: vi.fn() }),
-  useUpdateBranding: vi.fn(),
+vi.mock('@/lib/branding/mutations', () => ({ useUpdateBranding: vi.fn() }));
+vi.mock('@/lib/branding/use-logo-upload', () => ({
+  useLogoUpload: () => ({ upload: vi.fn(), uploading: false, error: null }),
 }));
 
 describe('Step02Branding', () => {

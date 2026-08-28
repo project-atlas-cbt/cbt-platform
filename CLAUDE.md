@@ -13,7 +13,7 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
 architecture decisions were completed first (see below); backend phases `B0`–`B6` and frontend
-phases `F0`–`F3` are now complete. See "Implementation Status" and "Change Log" further down in
+phases `F0`–`F5` are now complete. See "Implementation Status" and "Change Log" further down in
 this file for what has actually shipped and what's next.
 
 The planning phase completed:
@@ -278,9 +278,16 @@ together as one real user journey. One DoD item honestly partial (staff/student 
 one-at-a-time only; real bulk import waits on `F8`/`B7`, per the roadmap's own named fallback), plus
 a small, confirmed backend gap-closure this phase required (onboarding-completion tracking on
 `School`; the activation-redeem response gained the new admin's login identifier — see this file's
-Change Log entry below). **`F5 — School Settings & Branding`**, **`F6 — Academic Structure
-Workspace`**, and **`F7 — People Management Workspace`** are all now open; any may proceed next per
-the pairing rule.
+Change Log entry below). **`F5 — School Settings & Branding`** — complete: the real Profile/
+Branding/Results/Subscription settings screens (`/school/settings/*`), reusing F4's exact logo-
+upload sequence and `BrandingPreview` rather than duplicating them, a genuinely new dirty-state/
+unsaved-changes guard, and the first real per-control frontend permission check enforcing
+Moderator's confirmed view-only posture. Two DoD items honestly deferred by design (Assessment
+Rules, Grading Scale — both wait on `B11`/`B15` to exist), plus a confirmed small backend gap-
+closure ADR-0010 had assigned to `B3`/`B5` but neither built (`School.resultPolicy`/
+`resultDetailVisibility`/`resultPolicyLocked`, `GET/PUT /v1/school/result-policy` — see this file's
+Change Log entry below). **`F6 — Academic Structure Workspace`** and **`F7 — People Management
+Workspace`** are both now open; either may proceed next per the pairing rule.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -2165,3 +2172,128 @@ Project state moves from _Implementation (B6 complete; F4/F5/F6/F7 all open)_ to
 **Next: `F5`, `F6`, or `F7` (frontend/backend phase-pairing default), or `B7 — Bulk Import
 Pipeline` / `B8 — Question Bank` if the backend critical path is prioritized instead — `B7` would
 additionally let F4's Staff/Students steps close their one remaining honestly-partial DoD item.**
+
+### 2026-08-28 — `F5` complete: School Settings & Branding
+
+Requested explicitly: start `F5`. Followed the working-rules checklist first: read `04 §19`
+(Settings screen breakdown), `05 §6`, `§46`–`§47`, `§58`, `§66` (branding, grading, publication,
+settings module, configurable-policy list), `03 §5`/`§49`, `02`'s School Configuration rows, ADR-0010
+in full, the F5 roadmap phase, and the existing B3/B4 implementation (`school-profile.*`,
+`school-branding.*`, the onboarding wizard's branding step) — then planned in a dedicated plan-mode
+pass (two parallel Explore agents covering existing frontend/backend conventions) before writing any
+code, per this project's own precedent for a phase of this shape.
+
+**A real scope fork, resolved by asking rather than guessing (`AGENTS.md` §3), not silently decided
+either way.** F5's own roadmap text lists "Assessment rules" (default duration/attempt-limit/
+navigation-policy) as in scope, but research surfaced that — unlike Result Policy — no ADR or schema
+anywhere defines a school-level default for these: they're `Exam`-level fields that only come into
+existence with `B11` (Exam Builder, not yet built), and nothing today would ever consume such a
+default even if one existed. Confirmed with the project owner: **deferred, exactly like Grading
+Scale** (which the roadmap's own text already treats this way) — building it now would mean
+inventing vocabulary `B11` might define differently. Three further confirmed decisions from the same
+question round: **Result Policy defaults/lock built now** (a genuine already-approved gap — see
+below); **Moderator is view-only across every F5 screen**, no edit rights anywhere in this phase;
+**"User Policies" omitted entirely** — no spec detail exists beyond a bare nav label, and it isn't
+even in F5's own route table, so it's recorded as Candidate/Deferred rather than invented.
+
+**The Result Policy gap-closure** (full detail in `backend-roadmap.md`'s B3 "Fourth gap closure"
+note): ADR-0010's own "Required changes" list states "B5/B3: school-level defaults and the lock
+flag" — approved scope neither phase actually built, with a permission-table row
+(`schoolConfig.settings.manage`) that had been sitting pre-graded and waiting on exactly this since
+`B2`. Closed as a small, confirmed additive change, the same shape as F3/F4's own precedent for this
+class of discovery: new `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` columns
+(two new Prisma enums, `packages/domain/src/platform/result-policy.ts`), a new `GET/PUT
+/v1/school/result-policy` endpoint, and a split of the old placeholder permission row into a real
+`schoolConfig.settings.view`/`.manage` pair (150 rows, up from 149). These are _defaults_ only — no
+`Exam` exists yet to seed from `resultPolicy`, no `B15` marking/publication logic exists yet to honour
+`resultPolicyLocked`; this closes the storage half of ADR-0010's requirement, not the "applied to
+exams" half, which waits on `B11`/`B15` as those phases' own job.
+
+**Two smaller, same-shape gaps found and closed alongside it, both caught by building real frontend
+consumers, not by inspection**: `UpdateSchoolProfileDto` never carried `name`, even though `02`'s
+matrix already grants School Admin "Full" edit of "school name/details" — one field, added along
+with the Profile screen. And `SchoolSubscriptionStatusResponseDto.status` was plain `type: String`,
+not the real `SubscriptionStatus` enum — `tsc` caught this building the Subscription screen (F5's
+first real frontend consumer of that endpoint), fixed with the exact `enum:` treatment
+`SchoolSubscriptionSummaryDto` (F3) already established as this codebase's precedent for the class.
+
+**Frontend delivered**: five real routes under `/school/settings/` (`profile`, `branding`,
+`assessment` — honest placeholder, `results`, `subscription`), replacing the `[...slug]` catch-all's
+single placeholder, sharing one tab-strip layout mirroring F3's `SchoolDetailLayout`/
+`SchoolDetailTabs` pattern exactly. Branding reuses F4's onboarding wizard's logo-upload sequence and
+`BrandingPreview` component **moved, not duplicated**, to new shared, phase-neutral homes
+(`lib/branding/`, `components/branding/`) — the onboarding step now imports from there instead of
+owning a second copy. Query hooks deliberately were **not** consolidated the same way — each phase
+keeps its own thin wrapper around a shared query key (`lib/school-settings/queries.ts` joins
+`lib/onboarding/queries.ts`/`lib/platform/queries.ts` as this codebase's established convention),
+so a mutation from either phase invalidates the other correctly without a forced merge.
+
+**A real gap found and fixed, not a nice-to-have**: `useTenantResolution`
+(`lib/tenant/tenant-context.tsx`) was a one-shot `useEffect`/`useState` pair with no way for anything
+to invalidate it — meaning a branding save had no mechanism to repaint the live app-wide theme,
+DoD item 3's actual requirement. Converted to a TanStack Query (`['tenant','resolve']`); the shared
+`useUpdateBranding`'s `onSuccess` now invalidates it alongside `['school','branding']`. Proven by a
+dedicated test simulating exactly this invalidate-and-refetch sequence, not just asserted by reading
+the code.
+
+**A genuinely new pattern, not reused from anywhere**: no `beforeunload`/dirty-state guard existed
+anywhere in this codebase before this phase (confirmed by a full search during planning) — the
+roadmap's own "State management requirements" line for F5 called for one. Built as two small,
+reusable, phase-neutral pieces (`lib/forms/use-unsaved-changes-guard.ts`,
+`components/forms/unsaved-changes-dialog.tsx`) plus a small dirty-state context
+(`lib/forms/settings-dirty-context.tsx`) letting each editable tab register its own
+`form.formState.isDirty` without the tab-strip layout owning every form's state directly — a
+`Dialog`-based confirmation, never a native `confirm()`, per doctrine.
+
+**The first real per-control frontend permission check in this codebase**: every prior consumer of
+`GET /me/permissions` (`useNavigation`) only ever gated whole nav sections. A new `useHasPermission`
+(`lib/nav/use-permissions.ts`) checks one specific permission id outright — every editable control
+across Profile/Branding/Results is disabled (not merely hidden) with an explicit "view-only access"
+message for an actor lacking the grant, enforcing Moderator's confirmed posture on both layers
+(server-side via the permission table, client-side via this hook) — proven directly by dedicated
+Moderator-view test cases on all three screens.
+
+**One real, pre-existing linting rule caught during implementation**: the Subscription screen's
+"days remaining" derivation initially called `Date.now()` directly during render, which
+`eslint-plugin-react-hooks`'s `react-hooks/purity` rule correctly rejects. Fixed by snapshotting it
+once via `useState(() => Date.now())` — acceptable staleness for a page-load-scoped display, not a
+value any business rule depends on.
+
+**Honestly deferred, not silently dropped**: Assessment Rules and Grading Scale (both explained
+above); "User Policies" (no spec beyond a bare nav label); per-school timezone-aware date rendering
+for the Subscription screen's expiry date (ADR-0027) — reuses F3's existing browser-local-timezone
+`formatDate` utility, whose own doc comment already flags this as a platform-workspace
+simplification not fully appropriate for a school-facing screen; no school-timezone-aware formatter
+exists anywhere in the frontend yet, and building one is a larger, separately-scoped addition for a
+single date field.
+
+**Testing**: `school-result-policy.integration.test.ts` (6 cases — defaults shape, full round-trip
+update, out-of-vocabulary rejection, Moderator view/no-edit, Teacher denied both ways, cross-tenant
+isolation) and a new `school-profile.integration.test.ts` (the `name` round-trip) — `apps/api`'s
+integration suite green throughout, no regression. `apps/web` gained component tests for all five
+new screens' default/loading/error/empty-equivalent and Moderator-view-only states, the tab strip's
+active-state and dirty-guard interception, `useUnsavedChangesGuard`, and the `tenant-context`
+invalidate-propagation test described above — 248 tests total (up from 218), full suite green (one
+transient system-load timeout batch during a single run confirmed, by immediate re-run in isolation,
+to be environment flakiness unrelated to this phase's changes, matching this project's established
+practice for this class of flake).
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration`
+at the monorepo root, plus `pnpm generate` and `pnpm generate:permission-table-doc` (150 rows) and a
+real `node dist/main.js` boot reconfirming `PolicyCoverageService` reports the two new routes checked
+with zero violations. `next build --webpack` confirmed the full intended route table, including all
+five new `/school/settings/*` routes.
+
+`docs/roadmaps/frontend-roadmap.md`'s F5 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-deferred-with-reason, a full "Implementation notes" subsection, and
+an expanded Deferred items list. `docs/roadmaps/backend-roadmap.md`'s B3 section gained a "Fourth
+gap closure" note, plus a correction to its own Phase Completion Tracking table (previously listing
+ADR-0010 only against `B15`, despite the ADR's own text naming `B3`/`B5`). `docs/roadmaps/
+roadmap-index.md`'s version, Current State, and Immediate Next Actions all updated to record `F5`
+complete and `F6`/`F7` as the two now-open frontend phases.
+
+Project state moves from _Implementation (F4 complete; F5/F6/F7 all open, or `B7`/`B8` on the
+backend critical path)_ to _Implementation (F5 complete; F6/F7 open, or `B7`/`B8` on the backend
+critical path)_.
+**Next: `F6`, `F7` (frontend/backend phase-pairing default), or `B7 — Bulk Import Pipeline` /
+`B8 — Question Bank` if the backend critical path is prioritized instead.**
