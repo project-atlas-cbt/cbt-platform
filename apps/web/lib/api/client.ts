@@ -122,6 +122,14 @@ let csrfToken: string | null = null;
 export function setCsrfToken(token: string | null): void {
   csrfToken = token;
 }
+/** F7: the one non-JSON response this app makes (the class credential-sheet
+ * CSV download) can't go through `apiClient` (`openapi-fetch` is JSON-typed
+ * throughout) — it uses a manual `fetch` instead, which needs read access to
+ * the same token `csrfMiddleware` attaches automatically for every other
+ * mutating call. */
+export function getCsrfToken(): string | null {
+  return csrfToken;
+}
 
 const csrfMiddleware: Middleware = {
   onRequest({ request }) {

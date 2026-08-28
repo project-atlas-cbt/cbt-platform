@@ -228,9 +228,15 @@ export function useCreateStudent() {
           },
         }),
       );
+      // `StudentEnrollmentController`'s `:id` is `studentProfileId`, not
+      // `membershipId` — every other `/students/:id/...` route uses the
+      // same convention. A pre-existing bug found and fixed during F7
+      // (this call was passing `student.membershipId`, a different UUID,
+      // which would 404 silently since this mutation uses `onSettled` and
+      // just refetches regardless of the enrollment call's own outcome).
       await unwrap(
         apiClient.POST('/students/{id}/enrollments', {
-          params: { path: { id: student.membershipId } },
+          params: { path: { id: student.studentProfileId } },
           body: { academicSessionId: input.academicSessionId, classId: input.classId },
         }),
       );

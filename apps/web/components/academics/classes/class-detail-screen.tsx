@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -21,6 +22,8 @@ import {
   useDepartments,
   useSession,
 } from '@/lib/academics/queries';
+import { useHasPermission } from '@/lib/nav';
+import { useClassCredentialSheet } from '@/lib/people/mutations';
 import { ClassStatusBadge } from '../academic-status-badges';
 import { ClassSubjectList } from '../class-subjects/class-subject-list';
 import { cn } from '@/lib/utils';
@@ -99,8 +102,18 @@ export function ClassDetailScreen({ classId }: { classId: string }) {
   );
 }
 
+/** F7 gap-closure 2: the "Download credential sheet" action lives here —
+ * the roster is already rendered on this tab, avoiding a duplicate
+ * People-side class-roster view purely to host one button. Regenerates
+ * credentials for every active student in the class unconditionally
+ * (confirmed with the project owner) — a real disruption to any
+ * already-active student's password, so this stays gated behind the same
+ * permission the per-student reset already requires. */
 function ClassRosterTable({ classId }: { classId: string }) {
   const roster = useClassRoster(classId);
+  const canResetCredentials = useHasPermission('users.student.resetCredentials');
+  const credentialSheet = useClassCredentialSheet();
+
   if (roster.isPending) return <Skeleton className="h-32 w-full" />;
   if (roster.isError)
     return <ErrorState error={roster.error} onRetry={() => void roster.refetch()} />;
@@ -110,24 +123,38 @@ function ClassRosterTable({ classId }: { classId: string }) {
     );
   }
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Student ID</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Enrolled since</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {roster.data.students.map((s) => (
-          <TableRow key={s.enrollmentId}>
-            <TableCell>{s.studentId}</TableCell>
-            <TableCell>{s.displayName}</TableCell>
-            <TableCell>{s.startDate}</TableCell>
+    <div className="space-y-3">
+      {canResetCredentials ? (
+        <div className="flex justify-end">
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={credentialSheet.isPending}
+            onClick={() => void credentialSheet.mutateAsync(classId)}
+          >
+            <Download aria-hidden /> Download credential sheet
+          </Button>
+        </div>
+      ) : null}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Student ID</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>Enrolled since</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {roster.data.students.map((s) => (
+            <TableRow key={s.enrollmentId}>
+              <TableCell>{s.studentId}</TableCell>
+              <TableCell>{s.displayName}</TableCell>
+              <TableCell>{s.startDate}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
