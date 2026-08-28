@@ -1,10 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, withTenant } from '@atlas/db';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { HodAssignmentService } from '../academics/hod-assignment.service.js';
 import { AuditService } from '../operations/audit-event.service.js';
-import { HodResponseDto, PromoteHodDto } from './dto/hod.dto.js';
+import { IdentityService } from '../identity/identity.service.js';
+import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
+import {
+  HodListResponseDto,
+  HodResponseDto,
+  ListHodsQueryDto,
+  PromoteHodDto,
+  UpdateHodDto,
+} from './dto/hod.dto.js';
 import { notFound } from './person.util.js';
 
 interface ActorContext {
@@ -59,22 +67,52 @@ export class HodService {
   constructor(
     private readonly audit: AuditService,
     private readonly hodAssignments: HodAssignmentService,
+    private readonly identity: IdentityService,
   ) {}
 
-  async list(schoolId: string): Promise<HodResponseDto[]> {
-    const rows = await withTenant(prisma, schoolId, (tx) =>
-      tx.teacherProfile.findMany({
-        where: {
-          schoolId,
-          membership: {
-            roleAssignments: { some: { schoolId, role: 'HOD', status: 'ACTIVE' } },
-          },
-        },
-        include: INCLUDE,
-        orderBy: { staffId: 'asc' },
+  /** F7 gap-closure: server-side search/sort/paginate (DoD item 1, extended
+   * to all four directories — confirmed with the project owner). See
+   * `StudentService.list()`'s sibling doc comment for the `Promise.all`-on-
+   * one-`tx` reasoning. */
+  async list(schoolId: string, query: ListHodsQueryDto = {}): Promise<HodListResponseDto> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const sortDir = query.sortDir ?? 'asc';
+    const sortBy = query.sortBy ?? 'staffId';
+    const q = query.q?.trim();
+
+    const where: Prisma.TeacherProfileWhereInput = {
+      schoolId,
+      membership: {
+        roleAssignments: { some: { schoolId, role: 'HOD', status: 'ACTIVE' } },
+      },
+      ...(q && {
+        OR: [
+          { staffId: { contains: q, mode: 'insensitive' } },
+          { membership: { user: { firstName: { contains: q, mode: 'insensitive' } } } },
+          { membership: { user: { lastName: { contains: q, mode: 'insensitive' } } } },
+        ],
       }),
+    };
+    const orderBy: Prisma.TeacherProfileOrderByWithRelationInput =
+      sortBy === 'lastName'
+        ? { membership: { user: { lastName: sortDir } } }
+        : { staffId: sortDir };
+
+    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.teacherProfile.findMany({
+          where,
+          include: INCLUDE,
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.teacherProfile.count({ where }),
+      ]),
     );
-    return Promise.all(rows.map((row) => toResponseDto(schoolId, row)));
+    const hods = await Promise.all(rows.map((row) => toResponseDto(schoolId, row)));
+    return { hods, total, page, pageSize };
   }
 
   async get(schoolId: string, membershipId: string): Promise<HodResponseDto> {
@@ -155,6 +193,82 @@ export class HodService {
       actor,
     );
     return this.get(schoolId, membershipId);
+  }
+
+  /** F7 decision C — HOD gets its own dedicated `PATCH /hods/:id` route
+   * rather than the frontend calling the underlying Teacher endpoint
+   * directly. Edits the same underlying `User` row `TeacherService.update`
+   * would (an HOD *is* a TeacherProfile with an extra role — `hod.service.ts`'s
+   * own header comment), but audited as `HOD_UPDATED` so the trail reads as
+   * an HOD action, not a Teacher one. */
+  async update(
+    schoolId: string,
+    membershipId: string,
+    dto: UpdateHodDto,
+    actor: ActorContext,
+  ): Promise<HodResponseDto> {
+    await withTenant(prisma, schoolId, async (tx) => {
+      const existing = await tx.teacherProfile.findUnique({
+        where: { schoolId_membershipId: { schoolId, membershipId } },
+        include: INCLUDE,
+      });
+      if (!existing) return notFound('HOD');
+
+      if (dto.firstName !== undefined || dto.lastName !== undefined || dto.email !== undefined) {
+        const firstName = dto.firstName ?? existing.membership.user.firstName;
+        const lastName = dto.lastName ?? existing.membership.user.lastName;
+        await tx.user.update({
+          where: { id: existing.membership.userId },
+          data: {
+            firstName,
+            lastName,
+            displayName: `${firstName} ${lastName}`,
+            ...(dto.email !== undefined && { email: dto.email }),
+          },
+        });
+      }
+    });
+
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.actorUserId,
+      actorRole: actor.actorRole,
+      action: 'HOD_UPDATED',
+      entityType: 'SchoolMembership',
+      entityId: membershipId,
+    });
+    return this.get(schoolId, membershipId);
+  }
+
+  /** F7 decision C — `POST /hods/:id/reset-credentials`. Sends a fresh
+   * invitation link the same way `TeacherService.resetCredentials` does
+   * (an HOD is staff, not a student — never a shown-once password), gated
+   * on the new `users.hod.resetCredentials` permission row rather than
+   * reusing `users.teacher.resetCredentials`. */
+  async resetCredentials(
+    schoolId: string,
+    membershipId: string,
+    actor: ActorContext,
+  ): Promise<StatusResponseDto> {
+    const profile = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherProfile.findUnique({
+        where: { schoolId_membershipId: { schoolId, membershipId } },
+        include: INCLUDE,
+      }),
+    );
+    if (!profile) return notFound('HOD');
+
+    await this.identity.issueStaffInvitation(schoolId, profile.membership.userId);
+
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.actorUserId,
+      actorRole: actor.actorRole,
+      action: 'HOD_CREDENTIALS_RESET',
+      entityType: 'SchoolMembership',
+      entityId: membershipId,
+    });
+    return { status: 'ok' };
   }
 
   /** "Remove HOD" (05 §13): ends the HOD RoleAssignment — the person

@@ -1,10 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, withTenant } from '@atlas/db';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AuditService } from '../operations/audit-event.service.js';
 import { IdentityService } from '../identity/identity.service.js';
 import type {
   CreateModeratorDto,
+  ListModeratorsQueryDto,
+  ModeratorListResponseDto,
   ModeratorResponseDto,
   UpdateModeratorDto,
 } from './dto/moderator.dto.js';
@@ -53,18 +55,46 @@ export class ModeratorService {
     private readonly identity: IdentityService,
   ) {}
 
-  async list(schoolId: string): Promise<ModeratorResponseDto[]> {
-    const rows = await withTenant(prisma, schoolId, (tx) =>
-      tx.schoolMembership.findMany({
-        where: {
-          schoolId,
-          roleAssignments: { some: { schoolId, role: 'MODERATOR', status: 'ACTIVE' } },
-        },
-        include: { user: true },
-        orderBy: { loginIdentifier: 'asc' },
+  /** F7 gap-closure: server-side search/sort/paginate (DoD item 1, extended
+   * to all four directories). See `StudentService.list()`'s sibling doc
+   * comment for the `Promise.all`-on-one-`tx` reasoning. */
+  async list(
+    schoolId: string,
+    query: ListModeratorsQueryDto = {},
+  ): Promise<ModeratorListResponseDto> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const sortDir = query.sortDir ?? 'asc';
+    const sortBy = query.sortBy ?? 'loginIdentifier';
+    const q = query.q?.trim();
+
+    const where: Prisma.SchoolMembershipWhereInput = {
+      schoolId,
+      roleAssignments: { some: { schoolId, role: 'MODERATOR', status: 'ACTIVE' } },
+      ...(q && {
+        OR: [
+          { loginIdentifier: { contains: q, mode: 'insensitive' } },
+          { user: { firstName: { contains: q, mode: 'insensitive' } } },
+          { user: { lastName: { contains: q, mode: 'insensitive' } } },
+        ],
       }),
+    };
+    const orderBy: Prisma.SchoolMembershipOrderByWithRelationInput =
+      sortBy === 'lastName' ? { user: { lastName: sortDir } } : { loginIdentifier: sortDir };
+
+    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.schoolMembership.findMany({
+          where,
+          include: { user: true },
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.schoolMembership.count({ where }),
+      ]),
     );
-    return rows.map(toResponseDto);
+    return { moderators: rows.map(toResponseDto), total, page, pageSize };
   }
 
   async get(schoolId: string, membershipId: string): Promise<ModeratorResponseDto> {

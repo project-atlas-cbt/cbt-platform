@@ -1165,6 +1165,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/classes/{id}/credential-sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate and download a one-time credential sheet (CSV) for every active student in this class (audited; the plaintext passwords are never retrievable again). */
+        post: operations["ClassCredentialSheetController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/students": {
         parameters: {
             query?: never;
@@ -1172,7 +1189,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the school's students (05 §9.1). */
+        /** List the school's students (05 §9.1) — search, sort, class filter, and pagination (F7 gap closure). */
         get: operations["StudentController_list"];
         put?: never;
         /** Create a student. */
@@ -1259,7 +1276,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the school's teachers (05 §11.1). */
+        /** List the school's teachers (05 §11.1) — search, sort, pagination (F7 gap closure). */
         get: operations["TeacherController_list"];
         put?: never;
         /** Create a teacher (dispatches an invitation email). */
@@ -1346,7 +1363,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the school's HODs (05 §13). */
+        /** List the school's HODs (05 §13) — search, sort, pagination (F7 gap closure). */
         get: operations["HodController_list"];
         put?: never;
         /** Promote an existing teacher to HOD (adds an HOD RoleAssignment to their membership — no new person record is created). */
@@ -1368,6 +1385,24 @@ export interface paths {
         get: operations["HodController_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit an HOD's identity fields (F7 decision C — a dedicated HOD route, not a silent call into the Teacher endpoint). */
+        patch: operations["HodController_update"];
+        trace?: never;
+    };
+    "/hods/{id}/reset-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send an HOD a fresh invitation link to set a new password (audited). */
+        post: operations["HodController_resetCredentials"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1415,7 +1450,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the school's moderators (05 §14) — School Admin only. */
+        /** List the school's moderators (05 §14) — School Admin only; search, sort, pagination (F7 gap closure). */
         get: operations["ModeratorController_list"];
         put?: never;
         /** Create a moderator (dispatches an invitation email). */
@@ -2146,9 +2181,17 @@ export interface components {
             userStatus: "INVITED" | "ACTIVE" | "SUSPENDED" | "INACTIVE";
             /** @enum {string} */
             profileStatus: "ACTIVE" | "GRADUATED" | "WITHDRAWN" | "ARCHIVED";
+            currentClassId: string | null;
+            currentClassName: string | null;
+            currentAcademicSessionId: string | null;
+            departmentId: string | null;
+            departmentName: string | null;
         };
         StudentListResponseDto: {
             students: components["schemas"]["StudentResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         CreateStudentDto: {
             firstName: string;
@@ -2187,6 +2230,9 @@ export interface components {
         };
         TeacherListResponseDto: {
             teachers: components["schemas"]["TeacherResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         CreateTeacherDto: {
             firstName: string;
@@ -2213,9 +2259,17 @@ export interface components {
         };
         HodListResponseDto: {
             hods: components["schemas"]["HodResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         PromoteHodDto: {
             membershipId: string;
+        };
+        UpdateHodDto: {
+            firstName?: string;
+            lastName?: string;
+            email?: string;
         };
         ReassignHodDepartmentDto: {
             departmentId: string;
@@ -2234,6 +2288,9 @@ export interface components {
         };
         ModeratorListResponseDto: {
             moderators: components["schemas"]["ModeratorResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         CreateModeratorDto: {
             firstName: string;
@@ -4198,9 +4255,36 @@ export interface operations {
             };
         };
     };
-    StudentController_list: {
+    ClassCredentialSheetController_issue: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StudentController_list: {
+        parameters: {
+            query?: {
+                /** @description Matches the entity's own identifier and first/last name. */
+                q?: string;
+                page?: number;
+                pageSize?: number;
+                sortDir?: "asc" | "desc";
+                sortBy?: "studentId" | "lastName";
+                classId?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4351,7 +4435,14 @@ export interface operations {
     };
     TeacherController_list: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Matches the entity's own identifier and first/last name. */
+                q?: string;
+                page?: number;
+                pageSize?: number;
+                sortDir?: "asc" | "desc";
+                sortBy?: "staffId" | "lastName";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4502,7 +4593,14 @@ export interface operations {
     };
     HodController_list: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Matches the entity's own identifier and first/last name. */
+                q?: string;
+                page?: number;
+                pageSize?: number;
+                sortDir?: "asc" | "desc";
+                sortBy?: "staffId" | "lastName";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4563,6 +4661,52 @@ export interface operations {
             };
         };
     };
+    HodController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateHodDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HodResponseDto"];
+                };
+            };
+        };
+    };
+    HodController_resetCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
     HodController_setDepartment: {
         parameters: {
             query?: never;
@@ -4611,7 +4755,14 @@ export interface operations {
     };
     ModeratorController_list: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Matches the entity's own identifier and first/last name. */
+                q?: string;
+                page?: number;
+                pageSize?: number;
+                sortDir?: "asc" | "desc";
+                sortBy?: "loginIdentifier" | "lastName";
+            };
             header?: never;
             path?: never;
             cookie?: never;

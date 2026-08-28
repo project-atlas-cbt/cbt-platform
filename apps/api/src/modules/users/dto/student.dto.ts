@@ -1,11 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import {
   STUDENT_PROFILE_STATUSES,
   USER_STATUSES,
   type StudentProfileStatus,
   type UserStatus,
 } from '@atlas/domain';
+import { ListPeopleQueryDto } from './list-query.dto.js';
 
 export class CreateStudentDto {
   @ApiProperty({ type: String, maxLength: 64 })
@@ -95,9 +96,58 @@ export class StudentResponseDto {
    * see C-14's split). Never touched by deactivate/reactivate. */
   @ApiProperty({ type: String, enum: STUDENT_PROFILE_STATUSES })
   profileStatus!: StudentProfileStatus;
+
+  /** F7 gap-closure: the student's current (ACTIVE) enrollment, if any —
+   * `05 §9.1`'s directory column list names Class/Department/Session, which
+   * `StudentResponseDto` had no way to show before this. All nullable: a
+   * newly-created student may have no enrollment yet. */
+  @ApiProperty({ type: String, nullable: true })
+  currentClassId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  currentClassName!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  currentAcademicSessionId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  departmentId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  departmentName!: string | null;
 }
 
 export class StudentListResponseDto {
   @ApiProperty({ type: StudentResponseDto, isArray: true })
   students!: StudentResponseDto[];
+
+  @ApiProperty({ type: Number })
+  total!: number;
+
+  @ApiProperty({ type: Number })
+  page!: number;
+
+  @ApiProperty({ type: Number })
+  pageSize!: number;
+}
+
+const STUDENT_LIST_SORT_FIELDS = ['studentId', 'lastName'] as const;
+type StudentListSortField = (typeof STUDENT_LIST_SORT_FIELDS)[number];
+
+/** F7 gap-closure — `admissionNumber` is deliberately excluded from
+ * `sortBy`: it's nullable and not a field a directory search meaningfully
+ * sorts by, mirroring `ListSchoolsQueryDto`'s own precedent of documenting
+ * why a field is excluded rather than silently omitting it. */
+export class ListStudentsQueryDto extends ListPeopleQueryDto {
+  @ApiPropertyOptional({ type: String, enum: STUDENT_LIST_SORT_FIELDS })
+  @IsOptional()
+  @IsIn(STUDENT_LIST_SORT_FIELDS)
+  sortBy?: StudentListSortField;
+
+  /** Filters the directory to students currently (ACTIVE) enrolled in this
+   * class — decision A's own filtering requirement. */
+  @ApiPropertyOptional({ type: String })
+  @IsOptional()
+  @IsUUID()
+  classId?: string;
 }

@@ -1,11 +1,30 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { resolveActorRole } from '../academics/actor.util.js';
 import { ReassignHodDepartmentDto } from '../academics/dto/hod-assignment.dto.js';
 import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
-import { HodListResponseDto, HodResponseDto, PromoteHodDto } from './dto/hod.dto.js';
+import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
+import {
+  HodListResponseDto,
+  HodResponseDto,
+  ListHodsQueryDto,
+  PromoteHodDto,
+  UpdateHodDto,
+} from './dto/hod.dto.js';
 import { HodService } from './hod.service.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
@@ -19,11 +38,15 @@ export class HodController {
 
   @Get()
   @Authorized('users.hod.view')
-  @ApiOperation({ summary: "List the school's HODs (05 §13)." })
+  @ApiOperation({
+    summary: "List the school's HODs (05 §13) — search, sort, pagination (F7 gap closure).",
+  })
   @ApiOkResponse({ type: HodListResponseDto })
-  async list(@Req() req: FastifyRequest): Promise<HodListResponseDto> {
-    const hods = await this.hods.list(currentUser(req).schoolId);
-    return { hods };
+  async list(
+    @Req() req: FastifyRequest,
+    @Query() query: ListHodsQueryDto,
+  ): Promise<HodListResponseDto> {
+    return this.hods.list(currentUser(req).schoolId, query);
   }
 
   @Get(':id')
@@ -46,6 +69,44 @@ export class HodController {
   async promote(@Req() req: FastifyRequest, @Body() body: PromoteHodDto): Promise<HodResponseDto> {
     const user = currentUser(req);
     return this.hods.promote(user.schoolId, body, {
+      actorUserId: user.userId,
+      actorRole: resolveActorRole(user),
+    });
+  }
+
+  @Patch(':id')
+  @Authorized('users.hod.edit')
+  @ApiOperation({
+    summary:
+      "Edit an HOD's identity fields (F7 decision C — a dedicated HOD route, not a " +
+      'silent call into the Teacher endpoint).',
+  })
+  @ApiOkResponse({ type: HodResponseDto })
+  async update(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() body: UpdateHodDto,
+  ): Promise<HodResponseDto> {
+    const user = currentUser(req);
+    return this.hods.update(user.schoolId, id, body, {
+      actorUserId: user.userId,
+      actorRole: resolveActorRole(user),
+    });
+  }
+
+  @Post(':id/reset-credentials')
+  @HttpCode(HttpStatus.OK)
+  @Authorized('users.hod.resetCredentials')
+  @ApiOperation({
+    summary: 'Send an HOD a fresh invitation link to set a new password (audited).',
+  })
+  @ApiOkResponse({ type: StatusResponseDto })
+  async resetCredentials(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+  ): Promise<StatusResponseDto> {
+    const user = currentUser(req);
+    return this.hods.resetCredentials(user.schoolId, id, {
       actorUserId: user.userId,
       actorRole: resolveActorRole(user),
     });

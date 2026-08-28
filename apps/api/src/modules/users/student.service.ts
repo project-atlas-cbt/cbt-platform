@@ -1,12 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, withTenant } from '@atlas/db';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { runUniqueGuarded } from '../academics/prisma-error.util.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { CredentialSheetService } from '../identity/credential-sheet.service.js';
 import { CredentialResetResponseDto } from './dto/credential-reset.dto.js';
-import type { CreateStudentDto, StudentResponseDto, UpdateStudentDto } from './dto/student.dto.js';
+import type {
+  CreateStudentDto,
+  ListStudentsQueryDto,
+  StudentListResponseDto,
+  StudentResponseDto,
+  UpdateStudentDto,
+} from './dto/student.dto.js';
 import { createPersonMembership, notFound } from './person.util.js';
 
 interface ActorContext {
@@ -27,7 +33,16 @@ type StudentRow = {
   };
 };
 
-function toResponseDto(row: StudentRow): StudentResponseDto {
+type CurrentEnrollment = {
+  studentProfileId: string;
+  currentClassId: string | null;
+  currentClassName: string | null;
+  currentAcademicSessionId: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+};
+
+function toResponseDto(row: StudentRow, enrollment?: CurrentEnrollment): StudentResponseDto {
   return {
     membershipId: row.membership.id,
     userId: row.membership.userId,
@@ -40,10 +55,50 @@ function toResponseDto(row: StudentRow): StudentResponseDto {
     loginIdentifier: row.membership.loginIdentifier,
     userStatus: row.membership.user.status as StudentResponseDto['userStatus'],
     profileStatus: row.status as StudentResponseDto['profileStatus'],
+    currentClassId: enrollment?.currentClassId ?? null,
+    currentClassName: enrollment?.currentClassName ?? null,
+    currentAcademicSessionId: enrollment?.currentAcademicSessionId ?? null,
+    departmentId: enrollment?.departmentId ?? null,
+    departmentName: enrollment?.departmentName ?? null,
   };
 }
 
 const INCLUDE = { membership: { include: { user: true } } } as const;
+
+/** F7 gap-closure (decision A) — resolves each given student's current
+ * (ACTIVE) enrollment in one batched query, mirroring
+ * `SchoolsAdminService.list()`'s own per-page enrichment pattern
+ * (`studentCount`/subscription via a second query keyed off the page's own
+ * ids, not N+1 per-row queries). `classGroupSession` is `StudentEnrollment`'s
+ * actual relation field name to `ClassGroup` (not `classGroup`) — see the
+ * schema's own D-10-style composite-FK comment on that field. */
+async function resolveCurrentEnrollments(
+  tx: Prisma.TransactionClient,
+  schoolId: string,
+  studentProfileIds: string[],
+): Promise<Map<string, CurrentEnrollment>> {
+  if (studentProfileIds.length === 0) return new Map();
+  const enrollments = await tx.studentEnrollment.findMany({
+    where: { schoolId, studentProfileId: { in: studentProfileIds }, status: 'ACTIVE' },
+    include: {
+      classGroupSession: {
+        include: { department: { select: { id: true, name: true } } },
+      },
+    },
+  });
+  const map = new Map<string, CurrentEnrollment>();
+  for (const enrollment of enrollments) {
+    map.set(enrollment.studentProfileId, {
+      studentProfileId: enrollment.studentProfileId,
+      currentClassId: enrollment.classGroupSession.id,
+      currentClassName: enrollment.classGroupSession.name,
+      currentAcademicSessionId: enrollment.academicSessionId,
+      departmentId: enrollment.classGroupSession.department?.id ?? null,
+      departmentName: enrollment.classGroupSession.department?.name ?? null,
+    });
+  }
+  return map;
+}
 
 /** `people.v1` — Student directory & lifecycle (05 §9). Deactivate/
  * reactivate toggle `User.status` only — `StudentProfile`/
@@ -56,23 +111,72 @@ export class StudentService {
     private readonly credentialSheets: CredentialSheetService,
   ) {}
 
-  async list(schoolId: string): Promise<StudentResponseDto[]> {
-    const rows = await withTenant(prisma, schoolId, (tx) =>
-      tx.studentProfile.findMany({
-        where: { schoolId },
-        include: INCLUDE,
-        orderBy: { studentId: 'asc' },
+  /** F7 gap-closure: server-side search/sort/paginate (DoD item 1), plus
+   * decision A's Class/Department/Session enrichment and `classId` filter.
+   * `withTenant`'s callback already runs inside one open transaction
+   * (`Prisma.TransactionClient` has no `$transaction` of its own — nested
+   * `tx.$transaction([...])`, the school-list precedent's own shape, isn't
+   * available here), so `findMany`/`count` run as two plain awaited calls
+   * on the same `tx` instead. */
+  async list(schoolId: string, query: ListStudentsQueryDto = {}): Promise<StudentListResponseDto> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const sortDir = query.sortDir ?? 'asc';
+    const sortBy = query.sortBy ?? 'studentId';
+    const q = query.q?.trim();
+
+    const where: Prisma.StudentProfileWhereInput = {
+      schoolId,
+      ...(q && {
+        OR: [
+          { studentId: { contains: q, mode: 'insensitive' } },
+          { membership: { user: { firstName: { contains: q, mode: 'insensitive' } } } },
+          { membership: { user: { lastName: { contains: q, mode: 'insensitive' } } } },
+        ],
       }),
-    );
-    return rows.map(toResponseDto);
+      ...(query.classId && {
+        enrollments: { some: { classId: query.classId, status: 'ACTIVE' } },
+      }),
+    };
+    const orderBy: Prisma.StudentProfileOrderByWithRelationInput =
+      sortBy === 'lastName'
+        ? { membership: { user: { lastName: sortDir } } }
+        : { studentId: sortDir };
+
+    const { rows, total } = await withTenant(prisma, schoolId, async (tx) => {
+      const [rows, total] = await Promise.all([
+        tx.studentProfile.findMany({
+          where,
+          include: INCLUDE,
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.studentProfile.count({ where }),
+      ]);
+      const enrollmentMap = await resolveCurrentEnrollments(
+        tx,
+        schoolId,
+        rows.map((row) => row.id),
+      );
+      return { rows: rows.map((row) => toResponseDto(row, enrollmentMap.get(row.id))), total };
+    });
+
+    return { students: rows, total, page, pageSize };
   }
 
   async get(schoolId: string, studentProfileId: string): Promise<StudentResponseDto> {
-    const row = await withTenant(prisma, schoolId, (tx) =>
-      tx.studentProfile.findUnique({ where: { id: studentProfileId }, include: INCLUDE }),
-    );
-    if (!row) return notFound('Student');
-    return toResponseDto(row);
+    const result = await withTenant(prisma, schoolId, async (tx) => {
+      const row = await tx.studentProfile.findUnique({
+        where: { id: studentProfileId },
+        include: INCLUDE,
+      });
+      if (!row) return null;
+      const enrollmentMap = await resolveCurrentEnrollments(tx, schoolId, [row.id]);
+      return toResponseDto(row, enrollmentMap.get(row.id));
+    });
+    if (!result) return notFound('Student');
+    return result;
   }
 
   async create(
@@ -144,10 +248,12 @@ export class StudentService {
           data: { admissionNumber: dto.admissionNumber },
         });
       }
-      return tx.studentProfile.findUniqueOrThrow({
+      const row = await tx.studentProfile.findUniqueOrThrow({
         where: { id: studentProfileId },
         include: INCLUDE,
       });
+      const enrollmentMap = await resolveCurrentEnrollments(tx, schoolId, [row.id]);
+      return toResponseDto(row, enrollmentMap.get(row.id));
     });
 
     await this.audit.record({
@@ -158,7 +264,7 @@ export class StudentService {
       entityType: 'StudentProfile',
       entityId: studentProfileId,
     });
-    return toResponseDto(updated);
+    return updated;
   }
 
   private async setUserStatus(
@@ -175,10 +281,12 @@ export class StudentService {
       });
       if (!existing) return notFound('Student');
       await tx.user.update({ where: { id: existing.membership.userId }, data: { status } });
-      return tx.studentProfile.findUniqueOrThrow({
+      const row = await tx.studentProfile.findUniqueOrThrow({
         where: { id: studentProfileId },
         include: INCLUDE,
       });
+      const enrollmentMap = await resolveCurrentEnrollments(tx, schoolId, [row.id]);
+      return toResponseDto(row, enrollmentMap.get(row.id));
     });
     await this.audit.record({
       schoolId,
@@ -188,7 +296,7 @@ export class StudentService {
       entityType: 'StudentProfile',
       entityId: studentProfileId,
     });
-    return toResponseDto(updated);
+    return updated;
   }
 
   async deactivate(

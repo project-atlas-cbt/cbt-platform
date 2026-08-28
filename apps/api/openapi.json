@@ -2540,10 +2540,89 @@
         "tags": ["people"]
       }
     },
+    "/classes/{id}/credential-sheet": {
+      "post": {
+        "operationId": "ClassCredentialSheetController_issue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Regenerate and download a one-time credential sheet (CSV) for every active student in this class (audited; the plaintext passwords are never retrievable again).",
+        "tags": ["people"]
+      }
+    },
     "/students": {
       "get": {
         "operationId": "StudentController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Matches the entity's own identifier and first/last name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"]
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["studentId", "lastName"]
+            }
+          },
+          {
+            "name": "classId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -2556,7 +2635,7 @@
             }
           }
         },
-        "summary": "List the school's students (05 §9.1).",
+        "summary": "List the school's students (05 §9.1) — search, sort, class filter, and pagination (F7 gap closure).",
         "tags": ["people"]
       },
       "post": {
@@ -2744,7 +2823,56 @@
     "/teachers": {
       "get": {
         "operationId": "TeacherController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Matches the entity's own identifier and first/last name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"]
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["staffId", "lastName"]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -2757,7 +2885,7 @@
             }
           }
         },
-        "summary": "List the school's teachers (05 §11.1).",
+        "summary": "List the school's teachers (05 §11.1) — search, sort, pagination (F7 gap closure).",
         "tags": ["people"]
       },
       "post": {
@@ -2945,7 +3073,56 @@
     "/hods": {
       "get": {
         "operationId": "HodController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Matches the entity's own identifier and first/last name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"]
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["staffId", "lastName"]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -2958,7 +3135,7 @@
             }
           }
         },
-        "summary": "List the school's HODs (05 §13).",
+        "summary": "List the school's HODs (05 §13) — search, sort, pagination (F7 gap closure).",
         "tags": ["people"]
       },
       "post": {
@@ -3016,6 +3193,72 @@
           }
         },
         "summary": "Get one HOD (route :id is the membershipId).",
+        "tags": ["people"]
+      },
+      "patch": {
+        "operationId": "HodController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateHodDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HodResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit an HOD's identity fields (F7 decision C — a dedicated HOD route, not a silent call into the Teacher endpoint).",
+        "tags": ["people"]
+      }
+    },
+    "/hods/{id}/reset-credentials": {
+      "post": {
+        "operationId": "HodController_resetCredentials",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Send an HOD a fresh invitation link to set a new password (audited).",
         "tags": ["people"]
       }
     },
@@ -3090,7 +3333,56 @@
     "/moderators": {
       "get": {
         "operationId": "ModeratorController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Matches the entity's own identifier and first/last name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"]
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["loginIdentifier", "lastName"]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -3103,7 +3395,7 @@
             }
           }
         },
-        "summary": "List the school's moderators (05 §14) — School Admin only.",
+        "summary": "List the school's moderators (05 §14) — School Admin only; search, sort, pagination (F7 gap closure).",
         "tags": ["people"]
       },
       "post": {
@@ -5274,6 +5566,26 @@
           "profileStatus": {
             "type": "string",
             "enum": ["ACTIVE", "GRADUATED", "WITHDRAWN", "ARCHIVED"]
+          },
+          "currentClassId": {
+            "type": "string",
+            "nullable": true
+          },
+          "currentClassName": {
+            "type": "string",
+            "nullable": true
+          },
+          "currentAcademicSessionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "departmentName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -5287,7 +5599,12 @@
           "admissionNumber",
           "loginIdentifier",
           "userStatus",
-          "profileStatus"
+          "profileStatus",
+          "currentClassId",
+          "currentClassName",
+          "currentAcademicSessionId",
+          "departmentId",
+          "departmentName"
         ]
       },
       "StudentListResponseDto": {
@@ -5298,9 +5615,18 @@
             "items": {
               "$ref": "#/components/schemas/StudentResponseDto"
             }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
           }
         },
-        "required": ["students"]
+        "required": ["students", "total", "page", "pageSize"]
       },
       "CreateStudentDto": {
         "type": "object",
@@ -5427,9 +5753,18 @@
             "items": {
               "$ref": "#/components/schemas/TeacherResponseDto"
             }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
           }
         },
-        "required": ["teachers"]
+        "required": ["teachers", "total", "page", "pageSize"]
       },
       "CreateTeacherDto": {
         "type": "object",
@@ -5524,9 +5859,18 @@
             "items": {
               "$ref": "#/components/schemas/HodResponseDto"
             }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
           }
         },
-        "required": ["hods"]
+        "required": ["hods", "total", "page", "pageSize"]
       },
       "PromoteHodDto": {
         "type": "object",
@@ -5536,6 +5880,23 @@
           }
         },
         "required": ["membershipId"]
+      },
+      "UpdateHodDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 320
+          }
+        }
       },
       "ReassignHodDepartmentDto": {
         "type": "object",
@@ -5598,9 +5959,18 @@
             "items": {
               "$ref": "#/components/schemas/ModeratorResponseDto"
             }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
           }
         },
-        "required": ["moderators"]
+        "required": ["moderators", "total", "page", "pageSize"]
       },
       "CreateModeratorDto": {
         "type": "object",

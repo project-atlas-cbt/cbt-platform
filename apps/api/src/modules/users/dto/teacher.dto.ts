@@ -1,11 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import {
   EMPLOYMENT_STATUSES,
   USER_STATUSES,
   type EmploymentStatus,
   type UserStatus,
 } from '@atlas/domain';
+import { ListPeopleQueryDto } from './list-query.dto.js';
 
 export class CreateTeacherDto {
   @ApiProperty({ type: String, maxLength: 64 })
@@ -95,4 +96,24 @@ export class TeacherResponseDto {
 export class TeacherListResponseDto {
   @ApiProperty({ type: TeacherResponseDto, isArray: true })
   teachers!: TeacherResponseDto[];
+
+  @ApiProperty({ type: Number })
+  total!: number;
+
+  @ApiProperty({ type: Number })
+  page!: number;
+
+  @ApiProperty({ type: Number })
+  pageSize!: number;
+}
+
+const TEACHER_LIST_SORT_FIELDS = ['staffId', 'lastName'] as const;
+type TeacherListSortField = (typeof TEACHER_LIST_SORT_FIELDS)[number];
+
+/** F7 gap-closure — see `ListStudentsQueryDto`'s sibling doc comment. */
+export class ListTeachersQueryDto extends ListPeopleQueryDto {
+  @ApiPropertyOptional({ type: String, enum: TEACHER_LIST_SORT_FIELDS })
+  @IsOptional()
+  @IsIn(TEACHER_LIST_SORT_FIELDS)
+  sortBy?: TeacherListSortField;
 }

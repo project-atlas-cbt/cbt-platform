@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -17,6 +18,7 @@ import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
 import {
   CreateTeacherDto,
+  ListTeachersQueryDto,
   TeacherListResponseDto,
   TeacherResponseDto,
   UpdateTeacherDto,
@@ -34,11 +36,15 @@ export class TeacherController {
 
   @Get()
   @Authorized('users.teacher.view')
-  @ApiOperation({ summary: "List the school's teachers (05 §11.1)." })
+  @ApiOperation({
+    summary: "List the school's teachers (05 §11.1) — search, sort, pagination (F7 gap closure).",
+  })
   @ApiOkResponse({ type: TeacherListResponseDto })
-  async list(@Req() req: FastifyRequest): Promise<TeacherListResponseDto> {
-    const teachers = await this.teachers.list(currentUser(req).schoolId);
-    return { teachers };
+  async list(
+    @Req() req: FastifyRequest,
+    @Query() query: ListTeachersQueryDto,
+  ): Promise<TeacherListResponseDto> {
+    return this.teachers.list(currentUser(req).schoolId, query);
   }
 
   @Get(':id')

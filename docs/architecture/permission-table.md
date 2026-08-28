@@ -119,6 +119,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | Create HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
 | Edit HOD                  | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
 | Remove HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
+| Reset HOD credentials     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
 | View teachers             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
 | Create Teacher            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
 | Edit Teacher              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
@@ -143,6 +144,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Create HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Remove HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Reset HOD credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **View teachers / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Create Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.

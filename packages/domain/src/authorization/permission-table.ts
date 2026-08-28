@@ -804,6 +804,24 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     },
   },
   {
+    // F7 decision C — HOD gets its own dedicated reset-credentials route
+    // (`POST /hods/:id/reset-credentials`) rather than the frontend calling
+    // the underlying Teacher endpoint directly. Mirrors
+    // `users.teacher.resetCredentials`'s exact grant shape.
+    id: 'users.hod.resetCredentials',
+    section: 'User Management',
+    label: 'Reset HOD credentials',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: breakGlassWrite(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
+  {
     id: 'users.teacher.view',
     section: 'User Management',
     label: 'View teachers',

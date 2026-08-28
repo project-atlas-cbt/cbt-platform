@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, withTenant } from '@atlas/db';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { runUniqueGuarded } from '../academics/prisma-error.util.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { IdentityService } from '../identity/identity.service.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
-import type { CreateTeacherDto, TeacherResponseDto, UpdateTeacherDto } from './dto/teacher.dto.js';
+import type {
+  CreateTeacherDto,
+  ListTeachersQueryDto,
+  TeacherListResponseDto,
+  TeacherResponseDto,
+  UpdateTeacherDto,
+} from './dto/teacher.dto.js';
 import { createPersonMembership, notFound } from './person.util.js';
 
 interface ActorContext {
@@ -64,15 +70,47 @@ export class TeacherService {
     private readonly identity: IdentityService,
   ) {}
 
-  async list(schoolId: string): Promise<TeacherResponseDto[]> {
-    const rows = await withTenant(prisma, schoolId, (tx) =>
-      tx.teacherProfile.findMany({
-        where: { schoolId },
-        include: INCLUDE,
-        orderBy: { staffId: 'asc' },
+  /** F7 gap-closure: server-side search/sort/paginate (DoD item 1's own
+   * "1,500 students" scale applies equally to a large school's teacher
+   * count — confirmed with the project owner to extend to all four
+   * directories, not just Students). See `StudentService.list()`'s sibling
+   * doc comment for why `Promise.all` on the same `tx`, not nested
+   * `tx.$transaction([...])`. */
+  async list(schoolId: string, query: ListTeachersQueryDto = {}): Promise<TeacherListResponseDto> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const sortDir = query.sortDir ?? 'asc';
+    const sortBy = query.sortBy ?? 'staffId';
+    const q = query.q?.trim();
+
+    const where: Prisma.TeacherProfileWhereInput = {
+      schoolId,
+      ...(q && {
+        OR: [
+          { staffId: { contains: q, mode: 'insensitive' } },
+          { membership: { user: { firstName: { contains: q, mode: 'insensitive' } } } },
+          { membership: { user: { lastName: { contains: q, mode: 'insensitive' } } } },
+        ],
       }),
+    };
+    const orderBy: Prisma.TeacherProfileOrderByWithRelationInput =
+      sortBy === 'lastName'
+        ? { membership: { user: { lastName: sortDir } } }
+        : { staffId: sortDir };
+
+    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.teacherProfile.findMany({
+          where,
+          include: INCLUDE,
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.teacherProfile.count({ where }),
+      ]),
     );
-    return rows.map(toResponseDto);
+    return { teachers: rows.map(toResponseDto), total, page, pageSize };
   }
 
   async get(schoolId: string, teacherProfileId: string): Promise<TeacherResponseDto> {

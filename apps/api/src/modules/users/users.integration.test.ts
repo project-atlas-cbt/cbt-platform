@@ -513,3 +513,230 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+/**
+ * F7 gap-closure 1 — server-side pagination/search/sort on all four
+ * directories, plus decision A's Class/Department/Session student
+ * enrichment/filter, plus decision C's dedicated HOD edit/reset-credentials
+ * routes. A new, isolated `describe` block (its own school/admin context)
+ * rather than folding into the block above — these tests need a known,
+ * deliberately-sized population to assert pagination slicing against, which
+ * the existing block's shared, sequentially-mutated fixtures aren't shaped
+ * for. Mirrors `platform.integration.test.ts`'s own pagination `describe`
+ * block precedent (search+total, page/pageSize slicing+sort ordering,
+ * out-of-range page, invalid sortBy 400).
+ */
+describe('F7 — People directory pagination, search, sort, and HOD edit routes', () => {
+  let schoolId: string;
+  let host: string;
+  let admin: RequestCtx;
+
+  beforeAll(async () => {
+    const school = await createSchool();
+    schoolId = school.id;
+    host = `${school.subdomain}.${ROOT_DOMAIN}`;
+    createdSchoolIds.push(schoolId);
+    const { user } = await seedUser({
+      schoolId,
+      loginIdentifier: 'f7-admin',
+      password: 'a-real-password-123',
+      role: 'SCHOOL_ADMIN',
+    });
+    createdUserIds.push(user.id);
+    admin = await freshCtx(host, `10.${RUN}.3.1`);
+    await login(admin, 'f7-admin', 'a-real-password-123');
+  });
+
+  it('paginates, searches, and sorts the student directory', async () => {
+    const names = ['Amaka', 'Bola', 'Chidi', 'Dayo', 'Emeka'];
+    for (const [i, firstName] of names.entries()) {
+      const res = await post(admin, '/students', {
+        firstName,
+        lastName: 'PagTest',
+        studentId: `PAG-STU-${String(i).padStart(3, '0')}-${randomUUID().slice(0, 6)}`,
+      });
+      expect(res.statusCode).toBe(201);
+    }
+
+    const page1 = await get(admin, '/students?pageSize=2&page=1&sortBy=studentId&sortDir=asc');
+    expect(page1.statusCode).toBe(200);
+    const page1Body = page1.json<{
+      students: unknown[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>();
+    expect(page1Body.students).toHaveLength(2);
+    expect(page1Body.total).toBeGreaterThanOrEqual(5);
+    expect(page1Body.page).toBe(1);
+    expect(page1Body.pageSize).toBe(2);
+
+    const searchRes = await get(admin, '/students?q=Chidi');
+    expect(searchRes.statusCode).toBe(200);
+    const searchBody = searchRes.json<{ students: { firstName: string }[]; total: number }>();
+    expect(searchBody.total).toBe(1);
+    expect(searchBody.students[0]?.firstName).toBe('Chidi');
+
+    const outOfRange = await get(admin, '/students?page=999&pageSize=2');
+    expect(outOfRange.statusCode).toBe(200);
+    const outOfRangeBody = outOfRange.json<{ students: unknown[]; total: number }>();
+    expect(outOfRangeBody.students).toHaveLength(0);
+    expect(outOfRangeBody.total).toBeGreaterThanOrEqual(5);
+
+    const invalidSort = await get(admin, '/students?sortBy=notAField');
+    expect(invalidSort.statusCode).toBe(400);
+  });
+
+  it('paginates and searches the teacher, HOD, and moderator directories', async () => {
+    const teacherRes = await post(admin, '/teachers', {
+      firstName: 'Segun',
+      lastName: 'PagTeacher',
+      email: `segun-${randomUUID().slice(0, 8)}@example.com`,
+      staffId: `PAG-STF-${randomUUID().slice(0, 6)}`,
+    });
+    expect(teacherRes.statusCode).toBe(201);
+
+    const teacherList = await get(admin, '/teachers?q=Segun');
+    expect(teacherList.statusCode).toBe(200);
+    const teacherBody = teacherList.json<{
+      teachers: unknown[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>();
+    expect(teacherBody.total).toBe(1);
+    expect(teacherBody.page).toBe(1);
+    expect(teacherBody.pageSize).toBe(25);
+
+    const modRes = await post(admin, '/moderators', {
+      firstName: 'Ngozi',
+      lastName: 'PagMod',
+      email: `ngozi-${randomUUID().slice(0, 8)}@example.com`,
+      loginIdentifier: `pag-mod-${randomUUID().slice(0, 8)}`,
+    });
+    expect(modRes.statusCode).toBe(201);
+    const modList = await get(admin, '/moderators?q=Ngozi&sortBy=lastName&sortDir=desc');
+    expect(modList.statusCode).toBe(200);
+    expect(modList.json<{ total: number }>().total).toBe(1);
+
+    const hodPromote = await post(admin, '/hods', {
+      membershipId: teacherRes.json<{ membershipId: string }>().membershipId,
+    });
+    expect(hodPromote.statusCode).toBe(201);
+    const hodList = await get(admin, '/hods?q=Segun');
+    expect(hodList.statusCode).toBe(200);
+    expect(hodList.json<{ total: number }>().total).toBe(1);
+  });
+
+  it('enriches and filters the student directory by current class (decision A)', async () => {
+    const sessionRes = await post(admin, '/academics/sessions', {
+      name: `F7 Session ${randomUUID().slice(0, 8)}`,
+      startDate: '2026-09-01',
+      endDate: '2027-07-31',
+    });
+    const sessionId = sessionRes.json<{ id: string }>().id;
+
+    const deptRes = await post(admin, '/academics/departments', {
+      name: 'F7 Dept',
+      code: `F7D-${randomUUID().slice(0, 6)}`,
+    });
+    const departmentId = deptRes.json<{ id: string }>().id;
+
+    const classRes = await post(admin, '/academics/classes', {
+      academicSessionId: sessionId,
+      departmentId,
+      name: 'F7 Class',
+      level: 'SS2',
+      arm: 'A',
+    });
+    const classId = classRes.json<{ id: string }>().id;
+
+    const studentRes = await post(admin, '/students', {
+      firstName: 'Enrolled',
+      lastName: 'Student',
+      studentId: `ENR-${randomUUID().slice(0, 8)}`,
+    });
+    const enrolledStudentProfileId = studentRes.json<{ studentProfileId: string }>()
+      .studentProfileId;
+
+    const enrollRes = await post(admin, `/students/${enrolledStudentProfileId}/enrollments`, {
+      academicSessionId: sessionId,
+      classId,
+    });
+    expect(enrollRes.statusCode).toBe(200);
+
+    const detail = await get(admin, `/students/${enrolledStudentProfileId}`);
+    const detailBody = detail.json<{
+      currentClassId: string | null;
+      currentClassName: string | null;
+      currentAcademicSessionId: string | null;
+      departmentId: string | null;
+      departmentName: string | null;
+    }>();
+    expect(detailBody.currentClassId).toBe(classId);
+    expect(detailBody.currentClassName).toBe('F7 Class');
+    expect(detailBody.currentAcademicSessionId).toBe(sessionId);
+    expect(detailBody.departmentId).toBe(departmentId);
+    expect(detailBody.departmentName).toBe('F7 Dept');
+
+    const filtered = await get(admin, `/students?classId=${classId}`);
+    expect(filtered.statusCode).toBe(200);
+    const filteredBody = filtered.json<{ students: { studentProfileId: string }[] }>();
+    expect(filteredBody.students.some((s) => s.studentProfileId === enrolledStudentProfileId)).toBe(
+      true,
+    );
+  });
+
+  it("edits an HOD's identity and resets their credentials via dedicated HOD routes (decision C)", async () => {
+    const teacherRes = await post(admin, '/teachers', {
+      firstName: 'Kunle',
+      lastName: 'HodEdit',
+      email: `kunle-${randomUUID().slice(0, 8)}@example.com`,
+      staffId: `HED-${randomUUID().slice(0, 6)}`,
+    });
+    const membershipId = teacherRes.json<{ membershipId: string }>().membershipId;
+    const promote = await post(admin, '/hods', { membershipId });
+    expect(promote.statusCode).toBe(201);
+
+    const editRes = await patch(admin, `/hods/${membershipId}`, { lastName: 'HodEdited' });
+    expect(editRes.statusCode).toBe(200);
+    expect(editRes.json<{ lastName: string }>().lastName).toBe('HodEdited');
+
+    const resetRes = await post(admin, `/hods/${membershipId}/reset-credentials`);
+    expect(resetRes.statusCode).toBe(200);
+    expect(resetRes.json<{ status: string }>().status).toBe('ok');
+
+    const events = await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.findMany({
+        where: { schoolId, action: { in: ['HOD_UPDATED', 'HOD_CREDENTIALS_RESET'] } },
+      }),
+    );
+    expect(events.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a Teacher cannot edit or reset an HOD (security boundary for the new routes)', async () => {
+    const teacherRes = await post(admin, '/teachers', {
+      firstName: 'Wale',
+      lastName: 'HodSec',
+      email: `wale-${randomUUID().slice(0, 8)}@example.com`,
+      staffId: `HSEC-${randomUUID().slice(0, 6)}`,
+    });
+    const membershipId = teacherRes.json<{ membershipId: string }>().membershipId;
+    await post(admin, '/hods', { membershipId });
+
+    const { user } = await seedUser({
+      schoolId,
+      loginIdentifier: 'f7-teacher-sec',
+      password: 'a-real-password-123',
+      role: 'TEACHER',
+    });
+    createdUserIds.push(user.id);
+    const teacherCtx = await freshCtx(host, `10.${RUN}.3.2`);
+    await login(teacherCtx, 'f7-teacher-sec', 'a-real-password-123');
+
+    const editRes = await patch(teacherCtx, `/hods/${membershipId}`, { lastName: 'ShouldNotWork' });
+    expect(editRes.statusCode).toBe(403);
+    const resetRes = await post(teacherCtx, `/hods/${membershipId}/reset-credentials`);
+    expect(resetRes.statusCode).toBe(403);
+  });
+});

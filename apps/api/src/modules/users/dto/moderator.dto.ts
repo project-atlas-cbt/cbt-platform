@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { USER_STATUSES, type UserStatus } from '@atlas/domain';
+import { ListPeopleQueryDto } from './list-query.dto.js';
 
 export class CreateModeratorDto {
   @ApiProperty({ type: String, maxLength: 64 })
@@ -76,4 +77,24 @@ export class ModeratorResponseDto {
 export class ModeratorListResponseDto {
   @ApiProperty({ type: ModeratorResponseDto, isArray: true })
   moderators!: ModeratorResponseDto[];
+
+  @ApiProperty({ type: Number })
+  total!: number;
+
+  @ApiProperty({ type: Number })
+  page!: number;
+
+  @ApiProperty({ type: Number })
+  pageSize!: number;
+}
+
+const MODERATOR_LIST_SORT_FIELDS = ['loginIdentifier', 'lastName'] as const;
+type ModeratorListSortField = (typeof MODERATOR_LIST_SORT_FIELDS)[number];
+
+/** F7 gap-closure — see `ListStudentsQueryDto`'s sibling doc comment. */
+export class ListModeratorsQueryDto extends ListPeopleQueryDto {
+  @ApiPropertyOptional({ type: String, enum: MODERATOR_LIST_SORT_FIELDS })
+  @IsOptional()
+  @IsIn(MODERATOR_LIST_SORT_FIELDS)
+  sortBy?: ModeratorListSortField;
 }

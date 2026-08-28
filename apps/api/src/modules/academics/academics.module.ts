@@ -4,6 +4,8 @@ import { OperationsModule } from '../operations/operations.module.js';
 import { AcademicsContextController } from './academics-context.controller.js';
 import { AcademicsContextService } from './academics-context.service.js';
 import { AssignedScopeResolverProvider } from './assigned-scope-resolver.provider.js';
+import { ClassCredentialSheetController } from './class-credential-sheet.controller.js';
+import { ClassCredentialSheetService } from './class-credential-sheet.service.js';
 import { ClassGroupController } from './class-group.controller.js';
 import { ClassGroupService } from './class-group.service.js';
 import { ClassSubjectController } from './class-subject.controller.js';
@@ -58,6 +60,7 @@ import { TermService } from './term.service.js';
     StudentEnrollmentController,
     TeacherAssignmentController,
     StudentSubjectRegistrationController,
+    ClassCredentialSheetController,
   ],
   providers: [
     AcademicsContextService,
@@ -73,6 +76,7 @@ import { TermService } from './term.service.js';
     TeacherAssignmentService,
     StudentSubjectRegistrationService,
     AssignedScopeResolverProvider,
+    ClassCredentialSheetService,
   ],
   // B6: HodAssignmentService is this module's first-ever export — UsersModule's
   // HodController calls .reassign() for PUT /v1/hods/:id/department. One-

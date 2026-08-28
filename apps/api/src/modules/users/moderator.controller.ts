@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -16,6 +17,7 @@ import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import {
   CreateModeratorDto,
+  ListModeratorsQueryDto,
   ModeratorListResponseDto,
   ModeratorResponseDto,
   UpdateModeratorDto,
@@ -33,11 +35,17 @@ export class ModeratorController {
 
   @Get()
   @Authorized('users.moderator.view')
-  @ApiOperation({ summary: "List the school's moderators (05 §14) — School Admin only." })
+  @ApiOperation({
+    summary:
+      "List the school's moderators (05 §14) — School Admin only; search, sort, pagination " +
+      '(F7 gap closure).',
+  })
   @ApiOkResponse({ type: ModeratorListResponseDto })
-  async list(@Req() req: FastifyRequest): Promise<ModeratorListResponseDto> {
-    const moderators = await this.moderators.list(currentUser(req).schoolId);
-    return { moderators };
+  async list(
+    @Req() req: FastifyRequest,
+    @Query() query: ListModeratorsQueryDto,
+  ): Promise<ModeratorListResponseDto> {
+    return this.moderators.list(currentUser(req).schoolId, query);
   }
 
   @Get(':id')
