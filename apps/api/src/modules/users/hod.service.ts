@@ -24,8 +24,39 @@ const INCLUDE = {
   membership: { include: { user: true } },
 } as const;
 
-async function toResponseDto(
+type CurrentDepartmentAssignment = {
+  departmentId: string;
+  departmentName: string;
+};
+
+/** Batched — one query for every membership on the current page, mirroring
+ * `StudentService`'s own `resolveCurrentEnrollments` precedent (a single
+ * `findMany` keyed off the page's own ids, not a per-row query). Previously
+ * this was a separate `withTenant(...)` transaction *per HOD row*, a real
+ * N+1 found during review: 25 HODs on one page meant 25 extra sequential
+ * round-trips beyond the paginated `findMany`/`count` — never caught by a
+ * test since correctness was unaffected, only cost. */
+async function resolveCurrentDepartmentAssignments(
+  tx: Prisma.TransactionClient,
   schoolId: string,
+  membershipIds: string[],
+): Promise<Map<string, CurrentDepartmentAssignment>> {
+  if (membershipIds.length === 0) return new Map();
+  const assignments = await tx.hODAssignment.findMany({
+    where: { schoolId, membershipId: { in: membershipIds }, status: 'ACTIVE' },
+    include: { department: { select: { id: true, name: true } } },
+  });
+  const map = new Map<string, CurrentDepartmentAssignment>();
+  for (const assignment of assignments) {
+    map.set(assignment.membershipId, {
+      departmentId: assignment.department.id,
+      departmentName: assignment.department.name,
+    });
+  }
+  return map;
+}
+
+function toResponseDto(
   row: {
     id: string;
     staffId: string;
@@ -35,13 +66,8 @@ async function toResponseDto(
       user: { firstName: string; lastName: string; displayName: string };
     };
   },
-): Promise<HodResponseDto> {
-  const currentAssignment = await withTenant(prisma, schoolId, (tx) =>
-    tx.hODAssignment.findFirst({
-      where: { schoolId, membershipId: row.membership.id, status: 'ACTIVE' },
-      include: { department: { select: { id: true, name: true } } },
-    }),
-  );
+  currentAssignment?: CurrentDepartmentAssignment,
+): HodResponseDto {
   return {
     membershipId: row.membership.id,
     userId: row.membership.userId,
@@ -50,8 +76,8 @@ async function toResponseDto(
     lastName: row.membership.user.lastName,
     displayName: row.membership.user.displayName,
     staffId: row.staffId,
-    departmentId: currentAssignment?.department.id ?? null,
-    departmentName: currentAssignment?.department.name ?? null,
+    departmentId: currentAssignment?.departmentId ?? null,
+    departmentName: currentAssignment?.departmentName ?? null,
   };
 }
 
@@ -99,8 +125,8 @@ export class HodService {
         ? { membership: { user: { lastName: sortDir } } }
         : { staffId: sortDir };
 
-    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
-      Promise.all([
+    const { hods, total } = await withTenant(prisma, schoolId, async (tx) => {
+      const [rows, total] = await Promise.all([
         tx.teacherProfile.findMany({
           where,
           include: INCLUDE,
@@ -109,21 +135,34 @@ export class HodService {
           take: pageSize,
         }),
         tx.teacherProfile.count({ where }),
-      ]),
-    );
-    const hods = await Promise.all(rows.map((row) => toResponseDto(schoolId, row)));
+      ]);
+      const assignmentMap = await resolveCurrentDepartmentAssignments(
+        tx,
+        schoolId,
+        rows.map((row) => row.membership.id),
+      );
+      return {
+        hods: rows.map((row) => toResponseDto(row, assignmentMap.get(row.membership.id))),
+        total,
+      };
+    });
     return { hods, total, page, pageSize };
   }
 
   async get(schoolId: string, membershipId: string): Promise<HodResponseDto> {
-    const row = await withTenant(prisma, schoolId, (tx) =>
-      tx.teacherProfile.findUnique({
+    const result = await withTenant(prisma, schoolId, async (tx) => {
+      const row = await tx.teacherProfile.findUnique({
         where: { schoolId_membershipId: { schoolId, membershipId } },
         include: INCLUDE,
-      }),
-    );
-    if (!row) return notFound('HOD');
-    return toResponseDto(schoolId, row);
+      });
+      if (!row) return null;
+      const assignmentMap = await resolveCurrentDepartmentAssignments(tx, schoolId, [
+        row.membership.id,
+      ]);
+      return toResponseDto(row, assignmentMap.get(row.membership.id));
+    });
+    if (!result) return notFound('HOD');
+    return result;
   }
 
   async promote(
@@ -131,10 +170,10 @@ export class HodService {
     dto: PromoteHodDto,
     actor: ActorContext,
   ): Promise<HodResponseDto> {
-    const profile = await withTenant(prisma, schoolId, async (tx) => {
+    await withTenant(prisma, schoolId, async (tx) => {
       const teacherProfile = await tx.teacherProfile.findUnique({
         where: { schoolId_membershipId: { schoolId, membershipId: dto.membershipId } },
-        include: INCLUDE,
+        select: { id: true },
       });
       if (!teacherProfile) {
         throw new AppHttpException({
@@ -162,7 +201,6 @@ export class HodService {
           data: { schoolId, membershipId: dto.membershipId, role: 'HOD' },
         });
       }
-      return teacherProfile;
     });
 
     await this.audit.record({
@@ -173,7 +211,11 @@ export class HodService {
       entityType: 'SchoolMembership',
       entityId: dto.membershipId,
     });
-    return toResponseDto(schoolId, profile);
+    // Re-fetched (rather than reusing the profile fetched inside the
+    // transaction above) so the response goes through the same batched
+    // department-assignment resolution `get()` already does — one shared
+    // code path instead of a second, response-shaping copy here.
+    return this.get(schoolId, dto.membershipId);
   }
 
   /** `PUT /v1/hods/:id/department` — `:id` is the membershipId; delegates
@@ -314,13 +356,9 @@ export class HodService {
       entityId: membershipId,
     });
 
-    const row = await withTenant(prisma, schoolId, (tx) =>
-      tx.teacherProfile.findUnique({
-        where: { schoolId_membershipId: { schoolId, membershipId } },
-        include: INCLUDE,
-      }),
-    );
-    if (!row) return notFound('Teacher');
-    return toResponseDto(schoolId, row);
+    // `get()` still resolves correctly here: the HODAssignment ended just
+    // above is no longer `status: 'ACTIVE'`, so the batched resolver
+    // naturally reports no current department for this membership.
+    return this.get(schoolId, membershipId);
   }
 }

@@ -33,13 +33,23 @@ export function TeacherAssignmentMatrix({ teacherProfileId }: { teacherProfileId
   const assignments = useTeacherAssignments(teacherProfileId);
   const replaceAssignments = useReplaceTeacherAssignments(teacherProfileId);
 
+  // `GET /teachers/:id/assignments` returns ACTIVE assignments across every
+  // academic session, not just the current one (no session rollover
+  // automation exists yet to end a prior session's rows). Filtering here to
+  // `academicSessionId === sessionId` is what keeps a stale prior-session
+  // classSubjectId from ever entering `selection` — and therefore from ever
+  // being resubmitted as "desired" in a `PUT .../assignments` call scoped to
+  // the *current* session, which would otherwise get silently recreated
+  // under the wrong session (found during review, not by a failing test).
   const serverSelection = useMemo(() => {
     const set = new Set<string>();
     for (const assignment of assignments.data?.assignments ?? []) {
-      if (assignment.status === 'ACTIVE') set.add(assignment.classSubjectId);
+      if (assignment.status === 'ACTIVE' && assignment.academicSessionId === sessionId) {
+        set.add(assignment.classSubjectId);
+      }
     }
     return set;
-  }, [assignments.data]);
+  }, [assignments.data, sessionId]);
 
   const [pendingSelection, setPendingSelection] = useState<Set<string> | null>(null);
   const [error, setError] = useState<ReactNode | null>(null);

@@ -121,6 +121,20 @@ export class TeacherAssignmentService {
             message: `Class-subject offering ${classSubjectId} not found.`,
           });
         }
+        // Defense-in-depth: a classSubjectId belonging to a different
+        // session than `dto.academicSessionId` must never be allowed to
+        // create a TeacherAssignment row here — that row's own
+        // `academicSessionId` would then disagree with the session its
+        // `classSubjectId` actually belongs to. The frontend matrix already
+        // filters its selection by session, but this endpoint accepts a
+        // caller-supplied `classSubjectIds` array directly and must not rely
+        // on the client alone to keep that invariant.
+        if (classSubject.academicSessionId !== dto.academicSessionId) {
+          throw new AppHttpException({
+            code: 'ACADEMIC_STRUCTURE_SESSION_MISMATCH',
+            message: `Class-subject offering ${classSubjectId} does not belong to the given academic session.`,
+          });
+        }
         await runUniqueGuarded(
           () =>
             tx.teacherAssignment.create({

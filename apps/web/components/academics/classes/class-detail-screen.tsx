@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ClipboardList, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
 } from '@/lib/academics/queries';
 import { useHasPermission } from '@/lib/nav';
 import { useClassCredentialSheet } from '@/lib/people/mutations';
+import { describeAcademicsError } from '../error-utils';
 import { ClassStatusBadge } from '../academic-status-badges';
 import { ClassSubjectList } from '../class-subjects/class-subject-list';
 import { cn } from '@/lib/utils';
@@ -113,6 +114,16 @@ function ClassRosterTable({ classId }: { classId: string }) {
   const roster = useClassRoster(classId);
   const canResetCredentials = useHasPermission('users.student.resetCredentials');
   const credentialSheet = useClassCredentialSheet();
+  const [credentialSheetError, setCredentialSheetError] = useState<ReactNode | null>(null);
+
+  async function handleDownloadCredentialSheet() {
+    setCredentialSheetError(null);
+    try {
+      await credentialSheet.mutateAsync(classId);
+    } catch (err) {
+      setCredentialSheetError(describeAcademicsError(err));
+    }
+  }
 
   if (roster.isPending) return <Skeleton className="h-32 w-full" />;
   if (roster.isError)
@@ -125,15 +136,23 @@ function ClassRosterTable({ classId }: { classId: string }) {
   return (
     <div className="space-y-3">
       {canResetCredentials ? (
-        <div className="flex justify-end">
+        <div className="flex flex-col items-end gap-2">
           <Button
             variant="secondary"
             size="sm"
             loading={credentialSheet.isPending}
-            onClick={() => void credentialSheet.mutateAsync(classId)}
+            onClick={() => void handleDownloadCredentialSheet()}
           >
             <Download aria-hidden /> Download credential sheet
           </Button>
+          {credentialSheetError ? (
+            <div
+              role="alert"
+              className="w-full rounded-md border border-danger/30 bg-danger-subtle px-3 py-2 text-sm text-danger-subtle-foreground"
+            >
+              {credentialSheetError}
+            </div>
+          ) : null}
         </div>
       ) : null}
       <Table>

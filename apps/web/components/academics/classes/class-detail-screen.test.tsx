@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ClassDetailScreen } from './class-detail-screen';
 import {
   useClass,
@@ -12,7 +13,9 @@ import {
   useSubjects,
 } from '@/lib/academics/queries';
 import { useAddClassSubject, useRemoveClassSubject } from '@/lib/academics/mutations';
+import { useClassCredentialSheet } from '@/lib/people/mutations';
 import { useHasPermission } from '@/lib/nav';
+import { NetworkError } from '@/lib/api';
 
 vi.mock('@/lib/academics/queries', () => ({
   useClass: vi.fn(),
@@ -27,6 +30,7 @@ vi.mock('@/lib/academics/mutations', () => ({
   useAddClassSubject: vi.fn(),
   useRemoveClassSubject: vi.fn(),
 }));
+vi.mock('@/lib/people/mutations', () => ({ useClassCredentialSheet: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 
 const mockUseClass = vi.mocked(useClass);
@@ -36,6 +40,7 @@ const mockUseClassTeachers = vi.mocked(useClassTeachers);
 const mockUseDepartments = vi.mocked(useDepartments);
 const mockUseSession = vi.mocked(useSession);
 const mockUseSubjects = vi.mocked(useSubjects);
+const mockUseClassCredentialSheet = vi.mocked(useClassCredentialSheet);
 const mockUseHasPermission = vi.mocked(useHasPermission);
 
 const CLASS = {
@@ -47,6 +52,22 @@ const CLASS = {
   arm: 'A',
   status: 'ACTIVE',
 };
+
+// `ClassRosterTable` calls `useClassCredentialSheet()` (F7's "Download
+// credential sheet" button), mocked below like every other mutation this
+// screen uses. Still wrapped in a real `QueryClientProvider`: this is a
+// regression guard for a real bug found during review — `useMutation` (and
+// any other real TanStack Query hook a future change might add here)
+// throws immediately on render without one, whether or not it's mocked at
+// the module level, and this file previously had no provider at all.
+function renderScreen() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <ClassDetailScreen classId="c1" />
+    </QueryClientProvider>,
+  );
+}
 
 describe('ClassDetailScreen', () => {
   beforeEach(() => {
@@ -68,12 +89,16 @@ describe('ClassDetailScreen', () => {
       mutateAsync: vi.fn(),
       isPending: false,
     } as never);
+    mockUseClassCredentialSheet.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    } as never);
     mockUseHasPermission.mockReturnValue(true);
   });
 
   it('shows a loading skeleton while the class is loading', () => {
     mockUseClass.mockReturnValue({ isPending: true, isError: false, data: undefined } as never);
-    render(<ClassDetailScreen classId="c1" />);
+    renderScreen();
     expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
   });
 
@@ -85,7 +110,7 @@ describe('ClassDetailScreen', () => {
       error: new Error('boom'),
       refetch,
     } as never);
-    render(<ClassDetailScreen classId="c1" />);
+    renderScreen();
     expect(screen.getByRole('alert')).toHaveTextContent('boom');
   });
 
@@ -96,7 +121,7 @@ describe('ClassDetailScreen', () => {
       isError: false,
       data: { students: [] },
     } as never);
-    render(<ClassDetailScreen classId="c1" />);
+    renderScreen();
     expect(screen.getByRole('heading', { name: 'SS2A' })).toBeInTheDocument();
     expect(screen.getByText('SS2')).toBeInTheDocument();
     expect(screen.getByText('2026/2027')).toBeInTheDocument();
@@ -109,8 +134,34 @@ describe('ClassDetailScreen', () => {
       isError: false,
       data: { students: [] },
     } as never);
-    render(<ClassDetailScreen classId="c1" />);
+    renderScreen();
     expect(screen.getByText('No students enrolled yet')).toBeInTheDocument();
+  });
+
+  // Regression test for a real bug found during review: the "Download
+  // credential sheet" button called `mutateAsync` fire-and-forget (`void
+  // mutateAsync(...)`) with no `.catch()` and no error UI reading the
+  // mutation's own `isError`/`error` state — a failed download produced no
+  // user-facing feedback at all, just a spinner that silently stopped.
+  it('shows an inline error if the credential sheet download fails, instead of failing silently', async () => {
+    mockUseClass.mockReturnValue({ isPending: false, isError: false, data: CLASS } as never);
+    mockUseClassRoster.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: {
+        students: [
+          { enrollmentId: 'e1', studentId: 'ST001', displayName: 'Ada Okoye', startDate: '2026-09-01' },
+        ],
+      },
+    } as never);
+    const mutateAsync = vi.fn().mockRejectedValue(new NetworkError());
+    mockUseClassCredentialSheet.mockReturnValue({ mutateAsync, isPending: false } as never);
+
+    renderScreen();
+    await userEvent.click(screen.getByRole('button', { name: /download credential sheet/i }));
+
+    expect(mutateAsync).toHaveBeenCalledWith('c1');
+    expect(await screen.findByRole('alert')).toHaveTextContent(/something went wrong/i);
   });
 
   it("the Teachers tab shows this phase's own gap-closure data", async () => {
@@ -138,7 +189,7 @@ describe('ClassDetailScreen', () => {
         ],
       },
     } as never);
-    render(<ClassDetailScreen classId="c1" />);
+    renderScreen();
     await userEvent.click(screen.getByRole('button', { name: 'Teachers' }));
     expect(screen.getByText('Ade Ola')).toBeInTheDocument();
     expect(screen.getByText(/Mathematics/)).toBeInTheDocument();
@@ -151,7 +202,7 @@ describe('ClassDetailScreen', () => {
       isError: false,
       data: { students: [] },
     } as never);
-    render(<ClassDetailScreen classId="c1" />);
+    renderScreen();
     await userEvent.click(screen.getByRole('button', { name: 'Exams' }));
     expect(screen.getByText(/aren't available yet/i)).toBeInTheDocument();
   });
@@ -180,7 +231,7 @@ describe('ClassDetailScreen', () => {
         ],
       },
     } as never);
-    render(<ClassDetailScreen classId="c1" />);
+    renderScreen();
     await userEvent.click(screen.getByRole('button', { name: 'Subjects offered' }));
     expect(screen.getByText(/Mathematics/)).toBeInTheDocument();
   });

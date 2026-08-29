@@ -78,7 +78,9 @@ describe('TeacherAssignmentMatrix', () => {
     mockUseTeacherAssignments.mockReturnValue({
       isPending: false,
       isError: false,
-      data: { assignments: [{ classSubjectId: 'cs1', status: 'ACTIVE' }] },
+      data: {
+        assignments: [{ classSubjectId: 'cs1', status: 'ACTIVE', academicSessionId: 'sess1' }],
+      },
       refetch: vi.fn(),
     } as never);
     mockUseReplaceTeacherAssignments.mockReturnValue({
@@ -148,5 +150,43 @@ describe('TeacherAssignmentMatrix', () => {
     mutateAsync.mockResolvedValueOnce({ assignments: [] });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
     expect(mutateAsync).toHaveBeenCalledWith({ academicSessionId: 'sess1', classSubjectIds: [] });
+  });
+
+  // Regression test for a real bug found during review: `GET /teachers/:id/
+  // assignments` returns ACTIVE assignments across every academic session,
+  // not just the current one (no rollover automation ends a prior session's
+  // rows yet). A stale prior-session assignment must never be pre-checked,
+  // and must never ride along in a full-replace submit for the *current*
+  // session — otherwise the backend would silently recreate it under the
+  // wrong `academicSessionId`.
+  it('excludes a prior-session ACTIVE assignment from pre-fill and from the submitted set', async () => {
+    mockUseTeacherAssignments.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: {
+        assignments: [
+          { classSubjectId: 'cs1', status: 'ACTIVE', academicSessionId: 'sess1' },
+          // A stale assignment from a prior, no-longer-current session,
+          // still ACTIVE because nothing ever ended it.
+          { classSubjectId: 'cs2', status: 'ACTIVE', academicSessionId: 'sess0-prior' },
+        ],
+      },
+      refetch: vi.fn(),
+    } as never);
+    render(<TeacherAssignmentMatrix teacherProfileId="t1" />);
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes[0]).toBeChecked(); // cs1 — current session
+    expect(checkboxes[1]).not.toBeChecked(); // cs2 — prior session, must not be pre-checked
+
+    // Toggle an unrelated cell so Save becomes enabled, then submit.
+    await userEvent.click(checkboxes[2]!); // cs3 on
+    mutateAsync.mockResolvedValueOnce({ assignments: [] });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    const call = firstReplaceCallArg(mutateAsync);
+    expect(call.academicSessionId).toBe('sess1');
+    // cs2 (the prior-session assignment) must never appear here.
+    expect(call.classSubjectIds.sort()).toEqual(['cs1', 'cs3']);
   });
 });

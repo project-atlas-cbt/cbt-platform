@@ -420,6 +420,65 @@ describe('B6 TeacherAssignment', () => {
     );
   });
 
+  it('rejects a classSubjectId belonging to a different academic session than the one submitted (defense-in-depth for a real bug found during review)', async () => {
+    // A second, distinct session with its own class-subject offering.
+    // Nothing ever ends a TeacherAssignment on session rollover (no B19
+    // automation exists yet), so a stale classSubjectId from another
+    // session reaching this endpoint is a realistic scenario, not a
+    // contrived one — this is exactly what the frontend matrix's own
+    // session filter (found in the same review) exists to prevent from
+    // being submitted in the first place; this test proves the backend
+    // itself refuses it too, rather than relying on the client alone. Uses
+    // its own fresh teacher (rather than the describe block's shared
+    // `teacherProfileId`) so this test's outcome doesn't depend on the
+    // exact diff state prior tests in this file happen to leave behind.
+    const otherSessionRes = await post(admin, '/academics/sessions', {
+      name: `Asn Other Session ${randomUUID().slice(0, 8)}`,
+      startDate: '2027-09-01',
+      endDate: '2028-07-31',
+    });
+    const otherSessionId = otherSessionRes.json<{ id: string }>().id;
+    const otherClassRes = await post(admin, '/academics/classes', {
+      academicSessionId: otherSessionId,
+      name: 'SS2A',
+      level: 'SS2',
+      arm: 'B',
+    });
+    const otherClassId = otherClassRes.json<{ id: string }>().id;
+    const otherOfferingId = (
+      await post(admin, `/academics/classes/${otherClassId}/subjects`, {
+        subjectId: mathSubjectId,
+      })
+    ).json<{ id: string }>().id;
+
+    const freshTeacherRes = await post(admin, '/teachers', {
+      firstName: 'Chidi',
+      lastName: 'Eze',
+      email: `chidi-${randomUUID().slice(0, 8)}@example.com`,
+      staffId: `STF-MISMATCH-${randomUUID().slice(0, 6)}`,
+    });
+    const freshTeacherProfileId = freshTeacherRes.json<{ teacherProfileId: string }>()
+      .teacherProfileId;
+
+    const res = await put(admin, `/teachers/${freshTeacherProfileId}/assignments`, {
+      academicSessionId: sessionId,
+      classSubjectIds: [otherOfferingId],
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe(
+      'ACADEMIC_STRUCTURE_SESSION_MISMATCH',
+    );
+
+    // No TeacherAssignment row was created for the mismatched offering —
+    // the whole call fails atomically, nothing partially applied.
+    const stray = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherAssignment.findFirst({
+        where: { schoolId, teacherProfileId: freshTeacherProfileId },
+      }),
+    );
+    expect(stray).toBeNull();
+  });
+
   it('cross-tenant: another school cannot see or modify this assignment set', async () => {
     const otherSchool = await createSchool();
     createdSchoolIds.push(otherSchool.id);

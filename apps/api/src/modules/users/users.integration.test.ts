@@ -628,6 +628,71 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     expect(hodList.json<{ total: number }>().total).toBe(1);
   });
 
+  // Regression test for a real bug found during review: `HodService.list()`
+  // previously resolved each row's department via its own separate
+  // `withTenant(...)` transaction inside a per-row `toResponseDto` call (an
+  // N+1 query pattern) rather than one batched query keyed off the page's
+  // ids — the fix's real risk is a map-key mixup mis-attributing one HOD's
+  // department to another, which only a multi-HOD-on-one-page assertion can
+  // actually catch (a single-HOD test can't distinguish "always resolves
+  // department X" from "correctly resolves this HOD's own department").
+  it("resolves each HOD's own department correctly when multiple HODs share one list page", async () => {
+    const deptXRes = await post(admin, '/academics/departments', {
+      name: `HOD List Dept X ${randomUUID().slice(0, 6)}`,
+      code: `HLX-${randomUUID().slice(0, 6)}`,
+    });
+    const deptXId = deptXRes.json<{ id: string }>().id;
+    const deptYRes = await post(admin, '/academics/departments', {
+      name: `HOD List Dept Y ${randomUUID().slice(0, 6)}`,
+      code: `HLY-${randomUUID().slice(0, 6)}`,
+    });
+    const deptYId = deptYRes.json<{ id: string }>().id;
+    const sessionRes = await post(admin, '/academics/sessions', {
+      name: `HOD List Session ${randomUUID().slice(0, 8)}`,
+      startDate: '2026-09-01',
+      endDate: '2027-07-31',
+    });
+    const sessionId = sessionRes.json<{ id: string }>().id;
+
+    const teacherXRes = await post(admin, '/teachers', {
+      firstName: 'Multi',
+      lastName: `HodListX-${randomUUID().slice(0, 6)}`,
+      email: `multix-${randomUUID().slice(0, 8)}@example.com`,
+      staffId: `HLX-STF-${randomUUID().slice(0, 6)}`,
+    });
+    const teacherXMembershipId = teacherXRes.json<{ membershipId: string }>().membershipId;
+    const teacherYRes = await post(admin, '/teachers', {
+      firstName: 'Multi',
+      lastName: `HodListY-${randomUUID().slice(0, 6)}`,
+      email: `multiy-${randomUUID().slice(0, 8)}@example.com`,
+      staffId: `HLY-STF-${randomUUID().slice(0, 6)}`,
+    });
+    const teacherYMembershipId = teacherYRes.json<{ membershipId: string }>().membershipId;
+
+    await post(admin, '/hods', { membershipId: teacherXMembershipId });
+    await post(admin, '/hods', { membershipId: teacherYMembershipId });
+    await put(admin, `/hods/${teacherXMembershipId}/department`, {
+      departmentId: deptXId,
+      academicSessionId: sessionId,
+    });
+    await put(admin, `/hods/${teacherYMembershipId}/department`, {
+      departmentId: deptYId,
+      academicSessionId: sessionId,
+    });
+
+    const list = await get(admin, '/hods?q=HodList&pageSize=50');
+    expect(list.statusCode).toBe(200);
+    const hods = list.json<{
+      hods: { membershipId: string; departmentId: string | null; departmentName: string | null }[];
+    }>().hods;
+    const hodX = hods.find((h) => h.membershipId === teacherXMembershipId);
+    const hodY = hods.find((h) => h.membershipId === teacherYMembershipId);
+    expect(hodX?.departmentId).toBe(deptXId);
+    expect(hodY?.departmentId).toBe(deptYId);
+    // The core mixup risk: neither HOD's department bled into the other's.
+    expect(hodX?.departmentId).not.toBe(hodY?.departmentId);
+  });
+
   it('enriches and filters the student directory by current class (decision A)', async () => {
     const sessionRes = await post(admin, '/academics/sessions', {
       name: `F7 Session ${randomUUID().slice(0, 8)}`,
