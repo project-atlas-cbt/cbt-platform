@@ -12,7 +12,7 @@
  * teacher cannot manage users.
  */
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { parseCookie } from 'cookie';
@@ -27,6 +27,15 @@ const RUN = Math.floor(Math.random() * 200) + 1;
 let app: NestFastifyApplication;
 const passwords = new PasswordService();
 
+// ConsoleNotificationChannel captures `console.log` by reference in its
+// constructor's default parameter — spying *after* the app (and therefore
+// that instance) is already constructed would bind to a stale reference and
+// silently miss every call. Installed at module scope, before `beforeAll`
+// boots the app, matching identity.integration.test.ts's own established
+// pattern exactly (needed here for the invitation-acceptance gap-closure
+// test below, which reads the real dispatched link back out).
+const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
 beforeAll(async () => {
   app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
     logger: false,
@@ -37,6 +46,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
+  consoleLogSpy.mockRestore();
 });
 
 async function createSchool() {
@@ -294,6 +304,30 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
     expect(events.length).toBeGreaterThan(0);
   });
 
+  it('a newly created student can actually log in with their issued credentials (gap closure: User.status never left INVITED)', async () => {
+    const createRes = await post(admin, '/students', {
+      firstName: 'Chinedu',
+      lastName: 'Eze',
+      studentId: `ST-${randomUUID().slice(0, 8)}`,
+    });
+    expect(createRes.statusCode).toBe(201);
+    const created = createRes.json<{
+      studentProfileId: string;
+      loginIdentifier: string;
+      userStatus: string;
+    }>();
+    expect(created.userStatus).toBe('INVITED');
+
+    const resetRes = await post(admin, `/students/${created.studentProfileId}/reset-credentials`);
+    expect(resetRes.statusCode).toBe(200);
+    const { initialPassword } = resetRes.json<{ initialPassword: string }>();
+
+    const loginCtx = await freshCtx(host, `10.${RUN}.2.5`);
+    const loginRes = await login(loginCtx, created.loginIdentifier, initialPassword);
+    expect(loginRes.statusCode).toBe(200);
+    expect(loginCtx.sessionCookie).toBeDefined();
+  });
+
   it('rejects a duplicate studentId as a clean 409, not a raw 500', async () => {
     const first = await post(admin, '/students', {
       firstName: 'B',
@@ -350,6 +384,53 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
       tx.auditEvent.findMany({ where: { schoolId, action: 'TEACHER_CREDENTIALS_RESET' } }),
     );
     expect(events.length).toBeGreaterThan(0);
+  });
+
+  it('a newly invited teacher can log in after accepting their invitation (gap closure: User.status now leaves INVITED)', async () => {
+    const email = `invitee-${randomUUID().slice(0, 8)}@example.com`;
+    consoleLogSpy.mockClear();
+    const createRes = await post(admin, '/teachers', {
+      firstName: 'Ngozi',
+      lastName: 'Adeyemi',
+      email,
+      staffId: `STF-${randomUUID().slice(0, 8)}`,
+    });
+    expect(createRes.statusCode).toBe(201);
+    const created = createRes.json<{
+      teacherProfileId: string;
+      loginIdentifier: string;
+      userStatus: string;
+    }>();
+    expect(created.userStatus).toBe('INVITED');
+
+    // Before the fix, this next login would fail with USER_NOT_ACTIVE —
+    // confirmPasswordReset set a real password but never left User.status
+    // at INVITED, so AuthGuard/evaluateLogin rejected every subsequent
+    // login attempt regardless of how correct the credential was.
+    const logged = consoleLogSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).toContain(`to=${email}`);
+    const match = /token=([\w-]+)/.exec(logged);
+    expect(match).not.toBeNull();
+    const token = match![1];
+
+    const confirmCtx = await freshCtx(host, `10.${RUN}.2.6`);
+    const confirmRes = await post(confirmCtx, '/auth/password/reset/confirm', {
+      token,
+      newPassword: 'a-freshly-accepted-password-1',
+    });
+    expect(confirmRes.statusCode).toBe(200);
+
+    const loginCtx = await freshCtx(host, `10.${RUN}.2.7`);
+    const loginRes = await login(
+      loginCtx,
+      created.loginIdentifier,
+      'a-freshly-accepted-password-1',
+    );
+    expect(loginRes.statusCode).toBe(200);
+    expect(loginCtx.sessionCookie).toBeDefined();
+
+    const meRes = await get(loginCtx, '/auth/me');
+    expect(meRes.statusCode).toBe(200);
   });
 
   let hodMembershipId: string;

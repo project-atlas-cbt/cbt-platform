@@ -14,7 +14,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { platformLoginSchema, usePlatformAuth, type PlatformLoginValues } from '@/lib/auth';
+import { useTenantResolution } from '@/lib/tenant';
+import {
+  platformLoginSchema,
+  resolveLoginErrorMessage,
+  usePlatformAuth,
+  type PlatformLoginValues,
+} from '@/lib/auth';
 
 /**
  * `/admin/login`'s real form — F3 closes the gap `/admin/(shell)/layout.tsx`
@@ -36,6 +42,14 @@ const GENERIC_LOGIN_ERROR = 'Incorrect email or password. Please try again.';
 export function PlatformLoginForm() {
   const router = useRouter();
   const { login } = usePlatformAuth();
+  // `AdminLayout` (app/admin/layout.tsx) already calls useTenantResolution()
+  // for the CSRF bootstrap — this call dedupes against that same
+  // ['tenant','resolve'] query (TanStack Query, not a second request) and
+  // exists only to read its status here. See LoginForm's identical guard
+  // for the race this closes: submitting before the CSRF token exists gets
+  // a 403 from CsrfGuard that this form used to show as "wrong password".
+  const { status: tenantStatus } = useTenantResolution();
+  const csrfReady = tenantStatus !== 'loading';
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<PlatformLoginValues>({
     resolver: zodResolver(platformLoginSchema),
@@ -49,8 +63,8 @@ export function PlatformLoginForm() {
       // Software Admin has exactly one landing route — no role-priority
       // redirect logic to hand off to (unlike LoginForm's "/").
       router.replace('/admin');
-    } catch {
-      setFormError(GENERIC_LOGIN_ERROR);
+    } catch (err) {
+      setFormError(resolveLoginErrorMessage(err, GENERIC_LOGIN_ERROR));
     }
   }
 
@@ -94,7 +108,12 @@ export function PlatformLoginForm() {
             {formError}
           </p>
         ) : null}
-        <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
+        <Button
+          type="submit"
+          className="w-full"
+          loading={form.formState.isSubmitting}
+          disabled={!csrfReady || form.formState.isSubmitting}
+        >
           Sign in
         </Button>
       </form>

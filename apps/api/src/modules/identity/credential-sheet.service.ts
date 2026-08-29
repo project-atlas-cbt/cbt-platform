@@ -52,12 +52,26 @@ export class CredentialSheetService {
       const initialPassword = this.passwords.generateInitialPassword();
       const passwordHash = await this.passwords.hash(initialPassword);
 
-      await prisma.user.update({
+      // Gap closure (2026-08-30): a student created by createPersonMembership
+      // starts `status: 'INVITED'`, and — unlike staff, who "accept" via
+      // confirmPasswordReset — a student has no separate acceptance step at
+      // all: this is the one and only moment their account becomes usable.
+      // Read-before-write so a repeat credential-sheet issuance (e.g. F7's
+      // per-class regenerate, or a lone student's reset-credentials call)
+      // never overwrites a SUSPENDED/INACTIVE account back to ACTIVE — only
+      // INVITED specifically means "never claimed yet." Mirrors
+      // IdentityService.confirmPasswordReset's identical guard for staff.
+      const existingUser = await prisma.user.findUniqueOrThrow({
         where: { id: membership.userId },
-        data: { passwordHash, credentialState: 'MUST_CHANGE_PASSWORD' },
       });
-
-      const user = await prisma.user.findUniqueOrThrow({ where: { id: membership.userId } });
+      const user = await prisma.user.update({
+        where: { id: membership.userId },
+        data: {
+          passwordHash,
+          credentialState: 'MUST_CHANGE_PASSWORD',
+          ...(existingUser.status === 'INVITED' ? { status: 'ACTIVE' as const } : {}),
+        },
+      });
       rows.push({
         studentId: membership.studentProfile.studentId,
         displayName: user.displayName,

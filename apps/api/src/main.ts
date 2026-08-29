@@ -2,13 +2,17 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ConfigService } from '@nestjs/config';
+import { SwaggerModule } from '@nestjs/swagger';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
-import type { Env } from '@atlas/config';
+import { getProductName, type Env } from '@atlas/config';
 import { AppModule } from './app.module.js';
 import { API_VERSION_PREFIX } from './openapi/version.js';
 import { isAllowedOrigin } from './security/cors.js';
 import { startImportWorkers } from './modules/imports/import-worker-bootstrap.js';
+import { buildOpenApiConfig } from './openapi/document.js';
+import { injectSharedComponents } from './openapi/shared-components.js';
+import { ErrorEnvelopeDto } from './common/error-envelope.dto.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
@@ -73,10 +77,41 @@ async function bootstrap() {
   // those providers' own comments (the ValidationPipe one records a real
   // bug this exact gap caused, found via F3's pagination gap-closure).
 
+  // Interactive API docs (Swagger UI), mounted at /docs — there was
+  // previously no live, browsable way to see the API's endpoints at all:
+  // `pnpm generate` (openapi/emit.ts) only ever wrote a committed
+  // apps/api/openapi.json for @atlas/contracts to generate types from,
+  // never a route this running process itself served. Reuses that exact
+  // same document-building path (buildOpenApiConfig + injectSharedComponents
+  // + ErrorEnvelopeDto as an extra model) rather than a second one that
+  // could drift — only the destination differs (a live UI here, a file
+  // there). `SwaggerModule.setup()` registers its own routes directly on
+  // the underlying Fastify instance, not through Nest's controller
+  // routing, so `app.setGlobalPrefix()` above doesn't affect where it
+  // lands either way. Outside production only, mirroring `hsts`/
+  // `allowInsecureSubdomains`'s own "differs by environment" posture in
+  // this same file: the document lists every endpoint, DTO shape, and — via
+  // each operation's summary — the permission id it enforces, which is a
+  // real information-disclosure surface to leave open on a live,
+  // publicly-reachable multi-tenant commercial deployment.
+  if (!isProduction) {
+    const productName = getProductName({
+      PRODUCT_NAME: config.get('PRODUCT_NAME', { infer: true }),
+    });
+    const openApiDocument = SwaggerModule.createDocument(app, buildOpenApiConfig(productName), {
+      extraModels: [ErrorEnvelopeDto],
+    });
+    injectSharedComponents(openApiDocument);
+    SwaggerModule.setup('docs', app, openApiDocument);
+  }
+
   const port = config.get('API_PORT', { infer: true });
   const host = config.get('API_HOST', { infer: true });
   await app.listen(port, host);
   console.log(`[api] listening on http://${host}:${port}${API_VERSION_PREFIX}`);
+  if (!isProduction) {
+    console.log(`[api] API docs available at http://${host}:${port}/docs`);
+  }
 
   // B7: the two import BullMQ Worker consumers, started only here — never
   // via Nest's module lifecycle — so no integration test that boots

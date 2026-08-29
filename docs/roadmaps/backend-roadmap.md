@@ -320,6 +320,45 @@ Requires the `ADR-0019` messaging channel to be operational for staff password r
 - Multi-factor authentication — not in any specification; record as a candidate, do not implement (`AGENTS.md §14`).
 - Single sign-on / school directory federation — future expansion.
 
+## Post-completion gap closure (2026-08-30, found by manual testing after `B6`/`F7`/`F8`)
+
+**A real, product-breaking bug, not a design decision** — found by the project owner manually
+testing the School Admin → create teacher → accept invitation → log in journey for the first time;
+no automated test in this codebase had ever exercised it end to end before this. Every person
+`createPersonMembership` creates (`apps/api/src/modules/users/person.util.ts`) starts
+`User.status: 'INVITED'` per this phase's own DoD item 3 ("`INVITED`... users cannot authenticate").
+That's correct as a starting state — but nothing anywhere ever transitioned it to `'ACTIVE'` once
+the person actually claimed their account, except one narrow, bespoke case:
+`ActivationService.redeem()` (`B3`), built specifically for the first School Admin's activation-key
+flow. `IdentityService.confirmPasswordReset()` (this phase) and `CredentialSheetService
+.issueInitialPasswords()` (this phase's own primitive, called from `B6` onward for every student)
+both updated `passwordHash`/`credentialState` only — never `status`. B6's `issueStaffInvitation()`
+was built explicitly to reuse this same `confirmPasswordReset` endpoint for staff invitations
+(`templates.ts`'s own B1-era doc comment anticipated the reuse), which is what turned a latent gap
+in this phase's own scope into a real, reachable one: **every teacher, HOD, moderator, and student
+created since `B6` shipped could have a correct password set and still never pass `AuthGuard`'s
+`user.status === 'ACTIVE'` check** — rejected as `USER_NOT_ACTIVE` on every login attempt,
+regardless of credential correctness. This is why the gap belongs here, at the phase that owns
+`User.status` semantics and both broken call sites, rather than at `B6`, which only exposed it.
+
+**Fix**: both methods now read the user's current `status` before writing, and set it to `'ACTIVE'`
+only when it was still `'INVITED'` — mirroring `ActivationService.redeem()`'s own transition and its
+own precondition check, so a `SUSPENDED`/`INACTIVE` account that happens to reuse an old, still-valid
+token is never silently reactivated; an ordinary already-`ACTIVE` user's forgot-password reset is an
+unaffected no-op. No schema change, no new endpoint, no permission-table change — a two-file,
+narrowly-scoped correctness fix (`AGENTS.md §15`).
+
+**Why no test caught this for two phases**: both `identity.integration.test.ts`'s and `users
+.integration.test.ts`'s own fixture helpers seed test users directly via Prisma with
+`status: 'ACTIVE'` hardcoded as the default — bypassing `createPersonMembership` (and therefore this
+bug) entirely. Every existing "password reset" integration test therefore only ever exercised an
+already-`ACTIVE` user forgetting their password, never a freshly `INVITED` one accepting an
+invitation or receiving credentials for the first time. Closed with two new end-to-end regression
+tests in `users.integration.test.ts` (real `POST /teachers`/`POST /students` → real invitation
+email/credential-sheet issuance → real login, over real HTTP) — both independently confirmed to fail
+with the exact reported symptom (`401`, `USER_NOT_ACTIVE`) against the pre-fix code, and to pass
+against the fix.
+
 ---
 
 # B2 — Authorization & Tenancy Engine

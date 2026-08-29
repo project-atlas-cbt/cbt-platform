@@ -362,9 +362,29 @@ export class IdentityService {
 
     const passwordHash = await this.passwords.hash(newPassword);
     await withTenant(prisma, schoolId, async (tx) => {
+      // Gap closure (2026-08-30): this endpoint is also where a freshly
+      // invited staff member (B6's `issueStaffInvitation`, sharing this
+      // exact token mechanism per its own doc comment) accepts their
+      // invitation — but a User created by createPersonMembership starts
+      // `status: 'INVITED'`, and nothing else in this codebase ever
+      // transitions it to `ACTIVE` except ActivationService.redeem()'s
+      // bespoke first-School-Admin bootstrap. Every teacher/HOD/moderator
+      // created since B6 could therefore set a real password here and
+      // still never pass AuthGuard's `status === 'ACTIVE'` check
+      // afterward — mirrors that same redeem() transition, and is
+      // conditional for the identical reason its own `status !== 'INVITED'`
+      // guard exists: an ordinary forgot-password reset (the only other
+      // caller of this method) always finds an already-ACTIVE user, so this
+      // is a no-op there; a SUSPENDED/INACTIVE account reusing a still-valid
+      // token from before it was suspended must not be silently reactivated.
+      const user = await tx.user.findUniqueOrThrow({ where: { id: token.userId } });
       await tx.user.update({
         where: { id: token.userId },
-        data: { passwordHash, credentialState: 'OK' },
+        data: {
+          passwordHash,
+          credentialState: 'OK',
+          ...(user.status === 'INVITED' ? { status: 'ACTIVE' as const } : {}),
+        },
       });
       await tx.passwordResetToken.update({
         where: { id: token.id },

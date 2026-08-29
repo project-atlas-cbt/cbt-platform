@@ -3315,3 +3315,62 @@ to _Implementation (F9 complete; all frontend phases through F9 closed out)_.
 close its one remaining honestly-partial DoD item (the HOD's real rejection reason) and the full
 review-cycle E2E its own Exit criteria still records as outstanding. A future `F10` (Question Review
 Workspace) remains open whenever the frontend/backend phase-pairing default is next prioritized.
+
+### 2026-08-30 — Authentication audit and three cross-cutting gap closures
+
+Requested explicitly: a thorough, read-only audit of the full login flow (frontend → backend) after
+live testing reported login failures, followed by fixes once specific findings were confirmed worth
+fixing, plus two further real bugs found by the project owner's own manual testing afterward. No
+roadmap phase status changed — every fix here closes a gap in an already-`COMPLETE` phase (`B1`,
+`B3`, `B6`), per this codebase's own established "Post-completion gap closure" convention.
+
+**1–3, closed together** (`B1`'s `IdentityModule`/`B3`'s `PlatformAuthModule`, plus F1/F3's login
+forms): a CSRF-bootstrap race where the login POST could fire before `GET /tenant/resolve` set the
+CSRF token, surfacing as a 403 indistinguishable from a wrong password; both login forms collapsing
+every failure type (CSRF/validation/network, not just genuine bad credentials) into the same generic
+enumeration-resistant message, hiding the real cause during testing; and login-identifier/email
+lookups being case-sensitive and untrimmed with no consistency between the lockout key (already
+lowercased) and the actual credential check. Fixed: both forms now disable submission until the CSRF
+bootstrap settles; a new shared `resolveLoginErrorMessage()` (`apps/web/lib/auth/`) only shows the
+generic text for a genuine `UNAUTHENTICATED` outcome; `LoginDto`/`PasswordResetRequestDto`/
+`PlatformLoginDto` trim their identifier/email fields, and both `IdentityService.evaluateLogin`/
+`requestPasswordReset` and `PlatformAuthService.evaluateLogin` now do a case-insensitive
+(`mode: 'insensitive'`) lookup. New regression coverage on both sides (5 new backend integration
+tests, 12 new frontend component/unit tests).
+
+**API docs.** There was no live, browsable way to see the API's endpoints at all — `pnpm generate`
+only ever wrote a committed `openapi.json` file, never a route the running process itself served.
+`main.ts` now mounts `SwaggerModule.setup('docs', app, ...)` (outside production only, mirroring this
+file's existing `hsts`/`allowInsecureSubdomains` environment-gating — the document discloses every
+endpoint, DTO shape, and permission id), reusing the exact same document-building path
+`openapi/emit.ts` already used rather than a second one that could drift. Needed one new dependency,
+`@fastify/static` (an optional peer `@nestjs/swagger` requires under Fastify to serve the UI assets)
+— added, installed, and verified via a real compiled boot (HTML shell, static JS/CSS bundle, and the
+underlying JSON document all confirmed served).
+
+**A genuine, product-breaking bug found by the project owner's own manual testing, not by the audit
+above**: every person `createPersonMembership` creates (`B1`) starts `User.status: 'INVITED'` —
+correct as a starting state — but nothing ever transitioned it to `'ACTIVE'` except one narrow,
+bespoke case (`ActivationService.redeem()`, `B3`, built only for the first School Admin's
+activation-key flow). `IdentityService.confirmPasswordReset()` and `CredentialSheetService
+.issueInitialPasswords()` (both `B1`-owned primitives `B6` extended to staff invitations and student
+credential issuance respectively) only ever updated `passwordHash`/`credentialState`, never `status`
+— so every teacher, HOD, moderator, and student created since `B6` shipped could have a fully correct
+password set and still fail every login attempt with `USER_NOT_ACTIVE`. Full detail (why it happened,
+why no test caught it for two phases, and the precise fix) is in `backend-roadmap.md`'s `B1` section,
+"Post-completion gap closure" — not duplicated here. Fixed: both methods now read the user's current
+status and transition `INVITED → ACTIVE` only when it was still `INVITED`, mirroring
+`ActivationService.redeem()`'s own precondition-checked transition exactly, so a `SUSPENDED`/
+`INACTIVE` account reusing an old still-valid token is never silently reactivated. Two new end-to-end
+regression tests (`users.integration.test.ts`: real teacher-invitation and real student-credential
+issuance, each carried through to a real login) were confirmed to fail with the exact reported
+symptom against the pre-fix code and pass against the fix.
+
+Full pipeline green throughout: `pnpm --filter @atlas/api {typecheck,lint,test,test:integration}`
+and `pnpm --filter @atlas/web {typecheck,lint,test}`, plus a real `node dist/main.js` boot after each
+backend change. No schema change, no permission-table change, no ADR involved. `docs/roadmaps/
+backend-roadmap.md`'s `B1` section gained its first "Post-completion gap closure" entry.
+
+Project state remains _Implementation (F9 complete; all frontend phases through F9 closed out)_ —
+these were gap closures on already-complete phases, not a new phase.
+**Next: `B9 — Question Review & Governance`**, unchanged.

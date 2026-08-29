@@ -15,7 +15,8 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { loginSchema, useAuth, type LoginValues } from '@/lib/auth';
+import { useTenant } from '@/lib/tenant';
+import { loginSchema, resolveLoginErrorMessage, useAuth, type LoginValues } from '@/lib/auth';
 
 /**
  * DoD item 3: a generic error revealing nothing about account existence —
@@ -43,6 +44,19 @@ export function LoginForm({
 }: LoginFormProps) {
   const router = useRouter();
   const { login } = useAuth();
+  // <TenantProvider> (the (school) route group's layout) fetches
+  // GET /tenant/resolve and only sets the CSRF token once it resolves —
+  // submitting before that finishes sends the login POST with no
+  // X-CSRF-Token header, which CsrfGuard correctly rejects (403). A real
+  // bug found by live testing, not by inspection: that rejection surfaced
+  // to the user as this form's own generic "wrong password" message,
+  // making a pure timing issue indistinguishable from bad credentials.
+  // Disabling submission until the bootstrap settles ('resolved' or
+  // 'error' — either way the CSRF cookie/token attempt has completed)
+  // closes the race outright rather than relying on it usually being fast
+  // enough.
+  const { status: tenantStatus } = useTenant();
+  const csrfReady = tenantStatus !== 'loading';
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -57,8 +71,8 @@ export function LoginForm({
       // lands (role-priority redirect, forced-change gate) — this just
       // hands off to it rather than duplicating that logic here.
       router.replace('/');
-    } catch {
-      setFormError(GENERIC_LOGIN_ERROR);
+    } catch (err) {
+      setFormError(resolveLoginErrorMessage(err, GENERIC_LOGIN_ERROR));
     }
   }
 
@@ -104,7 +118,12 @@ export function LoginForm({
             {formError}
           </p>
         ) : null}
-        <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
+        <Button
+          type="submit"
+          className="w-full"
+          loading={form.formState.isSubmitting}
+          disabled={!csrfReady || form.formState.isSubmitting}
+        >
           Sign in
         </Button>
         {showForgotPasswordLink ? (
