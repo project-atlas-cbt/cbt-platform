@@ -1312,6 +1312,45 @@ Used by F4's onboarding steps and by F7's directories.
 
 Full pipeline green: `pnpm --filter @atlas/web run lint && pnpm --filter @atlas/web run typecheck && pnpm --filter @atlas/web run test -- --run && pnpm --filter @atlas/web run build` — 100 test files / 406 tests (up from 90/373), including 24 new tests across 10 new files. One transient full-suite worker-pool-startup timeout (this environment's already-documented flakiness — see `F7`'s own Change Log entry for the identical class of issue) hit two unrelated files, including one of this phase's own; both reconfirmed green in isolation immediately after.
 
+## Post-completion gap closure (thorough review, three fixes)
+
+A dedicated bug-hunting pass over the shipped implementation (not new scope) found three real,
+fixable issues in `useImportFlow`/`pollingInterval` — no product/architecture decision needed for
+any of them:
+
+1. **`pollingInterval` (`lib/imports/queries.ts`) never polled while a job was still
+   `PENDING_VALIDATION`** — only `VALIDATING`. Every job is created in `PENDING_VALIDATION` and
+   only flips to `VALIDATING` once the BullMQ worker actually dequeues it
+   (`ImportValidationService.validate`'s own guard accepts either status); the very first
+   `GET /imports/:id` fetch after job creation can land inside that window. With
+   `refetchOnWindowFocus: false` set app-wide (`query-provider.tsx`), a job caught in that window
+   stopped refetching forever — the UI stuck on an un-refreshing "Validating…" spinner with no
+   recovery short of a manual page reload, exactly the failure mode `import-queue.service.ts`'s own
+   `enqueueValidation` comment already anticipated ("a job stuck in PENDING_VALIDATION... forever
+   with no error anywhere"). Fixed by polling on `PENDING_VALIDATION` at the same 2s cadence as
+   `VALIDATING`.
+2. **`confirm()` (`use-import-flow.ts`) had no try/catch around `confirmImport.mutateAsync`** — a
+   failed confirm was an unhandled promise rejection, since every call site invokes it as
+   `void actions.confirm()`. The UI itself still rendered the right error (via `confirmImport.error`,
+   set internally regardless), so this was a reliability/console-noise bug, not a user-visible one —
+   but inconsistent with `selectFile`'s own established try/catch convention in the same file. Fixed
+   with a deliberately-empty catch (documented inline as deliberate).
+3. **`cancel()` never reset `confirmImport`'s own mutation state.** Since `confirmImport` is one
+   long-lived `useMutation` instance for the whole `useImportFlow` lifetime, a failed confirm on job
+   A left `confirmImport.error` set; cancelling and starting a fresh job B could render that stale
+   error the instant job B reached `validated`, before job B had ever attempted a confirm of its own.
+   Fixed by calling `confirmImport.reset()` inside `cancel()`.
+
+Regression coverage added: `lib/imports/queries.test.ts` (a direct table-driven test of
+`pollingInterval`, now exported for this purpose) and
+`components/imports/use-import-flow.confirm-error.test.tsx` (two cases — no
+`unhandledrejection` event fires on a failed confirm; a second job started after a failed first
+confirm never shows the first job's stale error). Full pipeline reconfirmed green after the fixes:
+`pnpm --filter @atlas/web run lint && pnpm --filter @atlas/web run typecheck && pnpm --filter
+@atlas/web run test -- --run` (every affected file, plus a full-suite run — the same transient
+worker-pool-startup flakiness this section's own precedent already documents hit a handful of
+unrelated files on one run; all reconfirmed green individually).
+
 ---
 
 # F9 — Question Bank Workspace

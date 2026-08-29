@@ -23,9 +23,21 @@ export type ImportRowStatus = 'VALID' | 'INVALID' | 'COMMITTED' | 'FAILED';
  * inventing exponential backoff for an already-bounded, already-fast
  * operation. Every other status (including the resting `VALIDATED` review
  * state and every terminal status) stops polling.
+ *
+ * `PENDING_VALIDATION` polls on the same 2s cadence as `VALIDATING` — a
+ * freshly-created job is briefly in this state until the BullMQ worker
+ * actually dequeues it (`ImportValidationService.validate`'s own guard
+ * accepts either status), and the very first `GET /imports/:id` fetch can
+ * land inside that window. `refetchOnWindowFocus` is `false` app-wide
+ * (`query-provider.tsx`), so there is no other recovery path — missing this
+ * status here left the UI stuck on an un-refreshing "Validating…" spinner
+ * whenever that window was hit, exactly the failure mode
+ * `import-queue.service.ts`'s own `enqueueValidation` comment already
+ * anticipated ("a job stuck in PENDING_VALIDATION... forever with no error
+ * anywhere").
  */
-function pollingInterval(status: ImportJobStatus | undefined): number | false {
-  if (status === 'VALIDATING') return 2000;
+export function pollingInterval(status: ImportJobStatus | undefined): number | false {
+  if (status === 'PENDING_VALIDATION' || status === 'VALIDATING') return 2000;
   if (status === 'IMPORTING') return 5000;
   return false;
 }

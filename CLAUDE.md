@@ -3148,3 +3148,38 @@ all frontend phases through F8 closed out)_.
 → B2 → B3 → B5 → B6 → B8 → B9 → B11 → …`) — unaffected by `F8`'s own always-parallelisable position.
 A future `F9` (Question Bank Workspace) remains open whenever the frontend/backend phase-pairing
 default is next prioritized.
+
+### 2026-08-29 — `F8` gap closure: thorough implementation review, three fixes
+
+Requested explicitly, same day as `F8` itself: a thorough review of the just-shipped implementation
+looking for bugs, not new scope. Read every F8 data-layer/state-machine file end to end. Three real,
+fixable issues surfaced — no product/architecture decision needed for any of them; full detail is
+in `docs/roadmaps/frontend-roadmap.md`'s F8 section, "Post-completion gap closure" note, not
+duplicated here:
+
+1. `lib/imports/queries.ts`'s `pollingInterval` never polled while a job was still
+   `PENDING_VALIDATION` (only `VALIDATING`) — every job is created in that status and only flips once
+   the BullMQ worker dequeues it, so the very first fetch after creation could land inside that
+   window and, with `refetchOnWindowFocus: false` set app-wide, stop refetching forever. Fixed by
+   polling `PENDING_VALIDATION` on the same 2s cadence.
+2. `use-import-flow.ts`'s `confirm()` had no try/catch around `confirmImport.mutateAsync` — a failed
+   confirm was an unhandled promise rejection (every call site invokes it as
+   `void actions.confirm()`), inconsistent with `selectFile`'s own established try/catch convention
+   in the same file. Fixed with a deliberately-empty, documented catch.
+3. `cancel()` never reset `confirmImport`'s own mutation state, so a failed confirm on one job could
+   leave its stale error rendered against a _different_, freshly-started job that had never attempted
+   a confirm of its own. Fixed by calling `confirmImport.reset()` inside `cancel()`.
+
+Regression coverage added: `lib/imports/queries.test.ts` (`pollingInterval` exported and
+table-tested directly) and `components/imports/use-import-flow.confirm-error.test.tsx` (no
+`unhandledrejection` fires on a failed confirm; a new job never inherits a prior job's stale confirm
+error). Full pipeline reconfirmed green after every fix: `pnpm --filter @atlas/web run lint &&
+pnpm --filter @atlas/web run typecheck && pnpm --filter @atlas/web run test -- --run` — every
+affected file individually, plus a full-suite run (97 files / 388 tests green; this environment's
+already-documented worker-pool-startup flakiness hit a handful of unrelated files on one run, all
+reconfirmed green individually immediately after).
+
+No schema change, no permission-table change, no product-behaviour change, no roadmap phase status
+changed. Project state remains _Implementation (F8 complete; all frontend phases through F8 closed
+out)_ — this was a same-phase gap closure, not a new phase. **Next: `B9 — Question Review &
+Governance`**, unchanged.
