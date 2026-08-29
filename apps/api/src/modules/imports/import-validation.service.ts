@@ -1,0 +1,240 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
+import { ObjectStorageService } from '../../storage/object-storage.service.js';
+import { ImportParseError, parseImportFile } from './import-file-parser.js';
+import { IMPORT_TEMPLATES, IMPORT_TEMPLATE_VERSION } from './import-templates.js';
+import {
+  validateStudentRow,
+  validateTeacherRow,
+  type StudentValidationContext,
+  type TeacherValidationContext,
+} from './import-row-validator.js';
+
+/** A-17's own recommended number, adopted as the engineering default —
+ * generous headroom above the DoD's 1,500-row fixture. */
+export const MAX_IMPORT_ROWS = 5000;
+
+const ID_COLUMN: Record<'STUDENTS' | 'TEACHERS', string> = {
+  STUDENTS: 'Student ID',
+  TEACHERS: 'Staff ID',
+};
+
+function countOccurrences(values: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    if (!value) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * The validation half of B7's pipeline (`Upload → Parse → Validate →
+ * Preview → Confirm → Import → Summary`, `05 §10.1`) — parses the uploaded
+ * file, resolves every row's references against real school data via
+ * batched (never per-row) lookups, and writes one ImportRow per data row.
+ * A whole-file rejection (bad template version, unparsable file, missing
+ * required columns, row-count cap) never creates any ImportRow — only a
+ * `FAILED` ImportJob with a `failureReason`, exactly like `MediaAsset
+ * .rejectionReason`'s own convention.
+ *
+ * Deliberately a plain injectable Nest service, run from a BullMQ `Worker`
+ * constructed *inside apps/api itself* (`ImportQueueService`), not
+ * `apps/worker` — see that class's own doc comment for the full reasoning
+ * (this service needs no Nest DI reuse concern of its own; the constraint
+ * lives one layer up, in what actually invokes it).
+ */
+@Injectable()
+export class ImportValidationService {
+  private readonly logger = new Logger(ImportValidationService.name);
+
+  constructor(private readonly storage: ObjectStorageService) {}
+
+  async validate(schoolId: string, importJobId: string): Promise<void> {
+    const job = await withTenant(prisma, schoolId, (tx) =>
+      tx.importJob.findUnique({ where: { id: importJobId } }),
+    );
+    if (!job || job.schoolId !== schoolId) {
+      this.logger.warn(`validate(): ImportJob ${importJobId} not found for school ${schoolId}.`);
+      return;
+    }
+    // Idempotent no-op re-entry — BullMQ's own jobId dedup already prevents
+    // a concurrent double-run, but a stray manual re-trigger against an
+    // already-resolved job should never re-validate.
+    if (job.status !== 'PENDING_VALIDATION' && job.status !== 'VALIDATING') return;
+
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.importJob.update({ where: { id: importJobId }, data: { status: 'VALIDATING' } }),
+    );
+
+    try {
+      const asset = await withTenant(prisma, schoolId, (tx) =>
+        tx.mediaAsset.findUnique({ where: { id: job.sourceMediaAssetId } }),
+      );
+      if (!asset || !asset.sniffedMimeType) {
+        await this.fail(schoolId, importJobId, 'The uploaded file could not be read.');
+        return;
+      }
+
+      const buffer = await this.storage.getObject(asset.storageKey);
+      const parsed = await parseImportFile(buffer, asset.sniffedMimeType);
+
+      if (parsed.version === null) {
+        await this.fail(
+          schoolId,
+          importJobId,
+          'This file is missing the template version marker. Please download the current ' +
+            'template and re-enter your data into it.',
+        );
+        return;
+      }
+      if (parsed.version !== IMPORT_TEMPLATE_VERSION) {
+        await this.fail(
+          schoolId,
+          importJobId,
+          `This file was prepared against template version ${parsed.version}, but the current ` +
+            `version is ${IMPORT_TEMPLATE_VERSION}. Please download the current template.`,
+        );
+        return;
+      }
+      // Captured as a plain number, not `parsed.version` — a property
+      // access's narrowing doesn't reliably survive being read from inside
+      // a nested `withTenant(...)` closure below.
+      const templateVersion = parsed.version;
+
+      const def = IMPORT_TEMPLATES[job.type];
+      const missingColumns = def.columns.filter((column) => !parsed.headers.includes(column));
+      if (missingColumns.length > 0) {
+        await this.fail(
+          schoolId,
+          importJobId,
+          `This file is missing required column(s): ${missingColumns.join(', ')}.`,
+        );
+        return;
+      }
+
+      if (parsed.rows.length > MAX_IMPORT_ROWS) {
+        await this.fail(
+          schoolId,
+          importJobId,
+          `This file has ${parsed.rows.length} rows, exceeding the ${MAX_IMPORT_ROWS}-row limit ` +
+            'per import.',
+        );
+        return;
+      }
+
+      const idColumn = ID_COLUMN[job.type];
+      const idsInFile = parsed.rows.map((row) => row[idColumn] ?? '');
+      const idCountsInFile = countOccurrences(idsInFile);
+
+      const outcomes = await withTenant(prisma, schoolId, async (tx) => {
+        const existingMemberships = await tx.schoolMembership.findMany({
+          where: { schoolId, loginIdentifier: { in: idsInFile.filter(Boolean) } },
+          select: { loginIdentifier: true },
+        });
+        const existingIds = new Set(existingMemberships.map((m) => m.loginIdentifier));
+
+        if (job.type === 'STUDENTS') {
+          // createStudentImport always resolves a real session before
+          // creating a STUDENTS-type job (or throws) — null here would be a
+          // real bug elsewhere, so this is asserted, not silently coerced.
+          if (!job.targetAcademicSessionId) {
+            throw new Error('This import job has no target academic session.');
+          }
+          const [classes, departments] = await Promise.all([
+            tx.classGroup.findMany({
+              where: { schoolId, academicSessionId: job.targetAcademicSessionId, status: 'ACTIVE' },
+              select: { id: true, name: true, departmentId: true },
+            }),
+            tx.department.findMany({
+              where: { schoolId, status: 'ACTIVE' },
+              select: { id: true, name: true },
+            }),
+          ]);
+          const ctx: StudentValidationContext = {
+            existingStudentIds: existingIds,
+            idCountsInFile,
+            classesByName: new Map(
+              classes.map((c) => [
+                c.name.toLowerCase(),
+                { id: c.id, departmentId: c.departmentId },
+              ]),
+            ),
+            departmentsByName: new Map(
+              departments.map((d) => [d.name.toLowerCase(), { id: d.id }]),
+            ),
+          };
+          return parsed.rows.map((row, i) => ({
+            rowNumber: i + 1,
+            rawData: row,
+            errors: validateStudentRow(row, ctx),
+          }));
+        }
+
+        const ctx: TeacherValidationContext = { existingStaffIds: existingIds, idCountsInFile };
+        return parsed.rows.map((row, i) => ({
+          rowNumber: i + 1,
+          rawData: row,
+          errors: validateTeacherRow(row, ctx),
+        }));
+      });
+
+      const validRows = outcomes.filter((o) => o.errors.length === 0).length;
+      const invalidRows = outcomes.length - validRows;
+
+      await withTenant(prisma, schoolId, async (tx) => {
+        if (outcomes.length > 0) {
+          await tx.importRow.createMany({
+            data: outcomes.map((o) => ({
+              schoolId,
+              importJobId,
+              rowNumber: o.rowNumber,
+              rawData: o.rawData,
+              status: o.errors.length === 0 ? ('VALID' as const) : ('INVALID' as const),
+              // exactOptionalPropertyTypes: omit the key entirely when
+              // there are no errors, rather than assigning `undefined`
+              // (which Prisma's Json input type doesn't accept — it wants
+              // either a real value or the key absent).
+              ...(o.errors.length > 0 && {
+                errors: o.errors as unknown as Prisma.InputJsonValue,
+              }),
+            })),
+          });
+        }
+        await tx.importJob.update({
+          where: { id: importJobId },
+          data: {
+            status: 'VALIDATED',
+            templateVersion,
+            totalRows: outcomes.length,
+            validRows,
+            invalidRows,
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof ImportParseError) {
+        await this.fail(schoolId, importJobId, error.message);
+        return;
+      }
+      // An unexpected (non-parse) failure — surface it the same way rather
+      // than leaving the job stuck in VALIDATING forever, but log loudly
+      // since this is not an expected/user-facing failure mode.
+      this.logger.error(`validate(): unexpected failure for ImportJob ${importJobId}`, error);
+      await this.fail(
+        schoolId,
+        importJobId,
+        'An unexpected error occurred while validating this file.',
+      );
+    }
+  }
+
+  private async fail(schoolId: string, importJobId: string, reason: string): Promise<void> {
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.importJob.update({
+        where: { id: importJobId },
+        data: { status: 'FAILED', failureReason: reason },
+      }),
+    );
+  }
+}

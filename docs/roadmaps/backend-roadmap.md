@@ -1375,7 +1375,8 @@ violations (up from 113).
 
 # B7 — Bulk Import Pipeline
 
-**Status:** NOT STARTED · **Gating ADRs:** none (settle `A-17` within the phase)
+**Status:** COMPLETE (2026-08-29) · **Gating ADRs:** none (A-17 settled within the phase — see
+Exit criteria)
 
 ## Objective
 
@@ -1453,27 +1454,148 @@ Question import (`05 §18`) requires B8's question model. Sequence student/teach
 
 ## Definition of Done
 
-1. A 1,500-row student file uploads, validates in the background, and reports valid and invalid counts matching a hand-checked fixture.
-2. The preview shows exactly what will happen before anything is written (`05 §10.2`).
-3. Confirm imports **only** valid rows; invalid rows are never silently imported.
-4. Duplicate student IDs within the file and against existing records are both detected.
-5. Invalid class, department, and session references are rejected with actionable per-row messages.
-6. An error file downloads and can be corrected and re-uploaded.
-7. Imported questions land as `DRAFT` and are never auto-approved.
-8. A crashed import job resumes without duplicating rows.
-9. Row limit and file-size cap are enforced with clear errors.
-10. Import completion is audited with counts.
+1. ✅ A 1,500-row student file uploads, validates in the background, and reports valid and invalid counts matching a hand-checked fixture — `import-1500-rows.integration.test.ts`, row split mirroring `01 §7`'s own worked-example numbers (1,487 valid / 13 needing correction).
+2. ✅ The preview shows exactly what will happen before anything is written (`05 §10.2`) — `GET /v1/imports/:id` reports valid/invalid counts and per-row detail before `confirm()` is ever called; proven directly (no student exists until after confirm+commit).
+3. ✅ Confirm imports **only** valid rows; invalid rows are never silently imported — `ImportCommitService` only ever selects `WHERE status = 'VALID'`.
+4. ✅ Duplicate student IDs within the file and against existing records are both detected — `import-row-validator.ts`'s `idCountsInFile`/`existingStudentIds` checks, unit- and integration-tested.
+5. ✅ Invalid class and department references are rejected with actionable per-row messages. Session: enforced structurally — `targetAcademicSessionId` is resolved (explicit or the school's current session) before validation ever runs, so no row can reference an invalid session at all.
+6. ✅ An error file downloads and can be corrected and re-uploaded — `GET /v1/imports/:id/errors`, includes the template's own version marker so a hand-corrected copy is directly re-uploadable.
+7. **Deferred with `B8`** — question import itself is out of scope for this phase (see Deferred items); the `DRAFT`-only rule is `B8`'s own job to prove once it exists.
+8. ✅ A crashed import job resumes without duplicating rows — `import-commit-resume.integration.test.ts` proves both partial-progress states (`resultMembershipId` set but not yet `COMMITTED`; already-`COMMITTED`) resume/skip correctly in one `commit()` call.
+9. ✅ Row limit (5,000) and file-size cap (5MB) are enforced with clear errors — whole-file `FAILED` with a specific message; proven at both the `MediaModule` gate (declared-size) and the validation job (real row count).
+10. ✅ Import completion is audited with counts — `AuditService.record()` at `COMPLETED`, `metadata: {totalRows, committedRows, failedRows}`.
 
 ## Exit criteria
 
-- `A-17` decisions recorded (formats, limits, template versioning, staging expiry).
-- Performance verified: a 1,500-row import completes within an agreed time budget.
-- F8 confirms the contract.
+- ✅ `A-17` decisions recorded: CSV **and** `.xlsx` both supported (confirmed with the project owner,
+  not CSV-only); 5,000-row cap and 5MB file cap (A-17's own recommended numbers, adopted as the
+  engineering default); a leading `# template-version: N` marker line, checked exactly, with a
+  whole-file rejection and a "please re-download the current template" message on mismatch; 24h
+  staging expiry (`ImportJob.expiresAt`), enforced lazily by `confirm()` and formally by a new
+  `apps/worker` sweep (`import-expiry.queue.ts`).
+- ✅ Performance verified: the 1,500-row fixture's full validate-and-commit run completes in ~60s
+  in this single-process local dev/test environment, well inside the 120s budget the test itself
+  asserts (30s validate / 90s commit sub-budgets) — an "agreed time budget" in the absence of a
+  tuned production benchmark.
+- **Deferred** — F8 (Bulk Import UI) doesn't exist yet; this contract is ready for it to confirm
+  when built.
+
+## Implementation notes
+
+**Scope confirmed with the project owner before implementation, not guessed**: CSV **and** `.xlsx`
+both supported in this pass (not the more conservative CSV-only option), matching A-17's own full
+recommendation — `csv-parse` for CSV, `exceljs` for `.xlsx` (chosen over the more common `xlsx`/
+SheetJS package for its actively-maintained status and clean security history).
+
+**A dedicated `IMPORT_SOURCE` upload-target/complete pair** (`imports.controller.ts`'s
+`upload-target`/`upload-target/:id/complete` routes), not the generic `MediaController`'s own
+`POST /media/uploads` — `MediaAssetType` gained `IMPORT_SOURCE`, but it's deliberately unreachable
+through that generic endpoint. Reason: `media.upload`'s permission grant includes Teacher/HOD at a
+(placeholder, B8-pending) `SCHOOL` scope, which does not apply to import files at all; mixing the
+two would let a Teacher/HOD request an inert-but-real upload slot they can never act on. Mirrors
+`SCHOOL_LOGO`'s own precedent exactly (see `MediaModule`'s doc comment for why one route can't
+cleanly enforce two different permission rows on request-body content).
+
+**A real content-sniffing gap, found and fixed deliberately**: `file-type`'s magic-byte sniffing
+cannot identify plain-text CSV at all (no fixed binary signature — the same limitation this
+codebase's own `content-validation.ts` already documents for excluding SVG). `validateContent()`
+gained a narrow, explicit fallback: when nothing sniffs and `text/csv` is an allowed type for the
+asset, decode the buffer as UTF-8 with `TextDecoder(..., {fatal: true})` (unlike `Buffer#toString`,
+which silently replaces invalid sequences) and reject any NUL byte — a "this is plausibly text, not
+binary" gate, not a structural CSV proof. The **real** proof is the import validation job actually
+parsing the file; `.xlsx` keeps the existing sniff path unchanged (it's a real, sniffable zip/OOXML
+container).
+
+**A genuine, documented architecture deviation from "background jobs live in `apps/worker`"**: the
+validation and commit job _processors_ (BullMQ `Worker`s) are constructed only from `apps/api`'s own
+real `main.ts` `bootstrap()`, never via Nest's module lifecycle (`OnModuleInit`) and never inside
+`apps/worker`. Two reasons converged: (1) `ImportValidationService`/`ImportCommitService` deliberately
+reuse real, already-tested, Nest-DI-resolved domain services — `StudentEnrollmentService.enroll()`
+(ADR-0011 reconciliation), `IdentityService.issueStaffInvitation()`, `AuditService.record()`,
+`runUniqueGuarded`, `createPersonMembership` — none of which `apps/worker` can reach (it has no Nest
+DI and cannot import `apps/api/src` at all, only `packages/*`); reimplementing that logic there would
+duplicate real business rules with a real risk of behavioural drift from the manual-creation path.
+(2) Auto-starting a live BullMQ consumer via `OnModuleInit` would mean _every_ integration test that
+boots `AppModule` directly (this codebase's established pattern) also starts consuming import jobs
+against the same long-lived local Redis B1's own `rate-limit.integration.test.ts` flakiness note
+already documents — a real risk, not hypothetical. `ImportQueueService` (in `apps/api`, normal Nest
+lifecycle) owns only the `Queue` handles (safe to have open in every test); `import-worker-bootstrap
+.ts`'s `startImportWorkers(app)` constructs the `Worker`s imperatively, called once from `main.ts`,
+using `app.get(...)` to pull the real service instances out of the booted app — the standard
+technique for reusing a Nest app's DI graph outside the normal request-handling path. Should this
+ever need independent horizontal scaling, only this thin wrapper moves to `apps/worker` — the two
+services themselves have no dependency on which process runs them. The staging-expiry _sweep_
+(`import-expiry.queue.ts`) has no such reuse tension — a periodic status transition needing only
+`prisma`/`withTenant`, the exact shape `orphan-media-report.queue.ts` already has — so it stays in
+`apps/worker`, unlike the two per-request processors.
+
+**Resumability (DoD item 8) is a two-level progress marker, not a single flag**: `ImportRowStatus`
+stays `VALID` through both "not started" and "person created, enrollment/invitation not yet
+confirmed" — `resultMembershipId` (nullable) is what distinguishes them. `ImportCommitService`'s own
+`WHERE status = 'VALID'` query is deliberately not also filtered on `resultMembershipId IS NULL`
+(the original design considered this, then corrected it): a row whose person creation already
+happened before a crash must resume from _enrollment/invitation_, not attempt to re-create the
+person (which would hit the `loginIdentifier` unique constraint). `StudentEnrollmentService.enroll()`
+is already idempotent for a repeat call with the same class (its own "avoid manufacturing a needless
+CONFLICT" doc comment); a repeat `issueStaffInvitation()` call simply re-sends one invitation email —
+an accepted, bounded cost for the rare crash-mid-row case, not a correctness issue.
+
+**Class/Department resolution is by name, not by re-deriving `level`+`arm`**: `ClassGroup.name` is
+the school's own freeform label (not auto-derived from `level`/`arm`), matched case-insensitively —
+the CSV template's own "Class" column example (`SS1A`) is exactly this label. An engineering
+judgment call, not specified in the docs: a _blank_ Department cell is always accepted, even for a
+class that does carry one (the class itself is the authoritative source); a _non-blank_ Department
+that doesn't resolve, or resolves but disagrees with the row's own Class, is a real per-row error.
+
+**Two real bugs found only by running the tests, not by inspection**: `exceljs` is a CJS package
+whose named export (`import { Workbook } from 'exceljs'`) doesn't resolve under native ESM `node`
+(only under `tsc`/Vitest's more permissive interop) — found only by a real `node dist/main.js` boot,
+this codebase's now-standing class of gotcha (S3_CLIENT, SessionService export, Serwist, ... every
+prior phase has hit one). Fixed with the default-import-and-destructure pattern Node's own error
+message suggests. Separately, the template-download route's path param (`.../templates/:type`) is
+lowercase in the URL (`students`/`teachers`), matching this API's own path-segment convention, but
+was validated directly against the uppercase `ImportJobType` vocabulary — every real call 400'd.
+Fixed with a `@Transform` normalising the param before `@IsIn` ever sees it.
+
+**One more small, reasoned deviation from the roadmap's own literal endpoint table** (in addition to
+the `IMPORT_SOURCE` upload-target pair already covered above): `GET /v1/imports` (list) was added —
+F8 needs an import-history view, and every other resource in this codebase gets a list endpoint.
+Every route beyond the two type-specific creation routes (`POST /imports/students`,
+`POST /imports/teachers`) is gated by `users.import.students` specifically — documented inline at
+each call site as a deliberate equivalence, not an inaccuracy: that row's grant shape is identical to
+`users.import.teachers`' own (same three roles, same scope) for every actor that matters, and once a
+job exists its own `type` no longer changes who may act on it.
+
+**Schema**: one migration (`20260829062531_b7_bulk_import_pipeline`) — `ImportJob`/`ImportRow` +
+three enums, `MediaAssetType` gained `IMPORT_SOURCE`, RLS bootstrap for both new tables (hand-written,
+same convention as every prior phase). `ImportJob.targetAcademicSessionId` is nullable — TEACHERS
+imports never resolve or need one, matching the manual `TeacherService.create` flow's own signature.
+`ImportJob.uploaderRole` is captured at creation time specifically because the commit job runs in the
+background with no HTTP request/actor context of its own, yet still calls into services that require
+a real `Role` for their own audit trail.
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration`
+(monorepo-wide — apps/api 27 integration files/167 tests, apps/worker 3/12, `tests/tenancy/rls
+.integration.test.ts` now 53 tests covering both new tables), plus `pnpm generate` (`imports.v1`
+published) and `pnpm generate:permission-table-doc` (151 rows, confirmed unchanged — this phase built
+entirely against the two permission ids already pre-graded by `B2`). A real `node dist/main.js` boot
+confirmed `PolicyCoverageService` reports 125 routes checked with zero violations.
 
 ## Deferred items
 
-- Direct Excel formula evaluation — parse values only.
+- Question import — needs `B8`'s `Question` model, which doesn't exist yet; the roadmap's own
+  "sequence student/teacher import first if B8 is not ready" note is exactly what this phase did.
+  `questionBank.import`/`questionBank.export`'s own `awaitingResource` flags stay in place.
+- Export pipeline — a separate phase's scope (`users.export`'s own permission-table row is flagged
+  `awaitingResource: 'Export pipeline (B6/B18)'`, not B7).
+- Direct Excel formula evaluation — parse cached/literal cell values only (`exceljs`'s own default
+  behaviour already satisfies this; no special handling was needed).
 - Import of results or attempts — not in scope; academic evidence is generated, never imported.
+- Automatic credential-sheet issuance on student import — deliberately not built. Matches the
+  existing manual-creation flow exactly (a newly-imported student starts `INVITED`/
+  `MUST_SET_PASSWORD`, same as one created via `POST /students`); the already-built per-class
+  `POST /v1/classes/:id/credential-sheet` (F7/B6) already covers "download credentials for a batch
+  of freshly-created students," so no new capability was needed.
 
 ---
 

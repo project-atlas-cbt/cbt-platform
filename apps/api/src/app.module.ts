@@ -16,6 +16,7 @@ import { AuthorizationModule } from './modules/authorization/authorization.modul
 import { IdentityModule } from './modules/identity/identity.module.js';
 import { AcademicsModule } from './modules/academics/academics.module.js';
 import { UsersModule } from './modules/users/users.module.js';
+import { ImportsModule } from './modules/imports/imports.module.js';
 import { QuestionsModule } from './modules/questions/questions.module.js';
 import { ExamsModule } from './modules/exams/exams.module.js';
 import { ExecutionModule } from './modules/execution/execution.module.js';
@@ -46,6 +47,7 @@ import { MediaModule } from './modules/media/media.module.js';
     IdentityModule,
     AcademicsModule,
     UsersModule,
+    ImportsModule,
     QuestionsModule,
     ExamsModule,
     ExecutionModule,

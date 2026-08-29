@@ -38,6 +38,8 @@
     "class-validator": "^0.15.1",
     "cookie": "^2.0.1",
     "cookie-signature": "^1.2.2",
+    "csv-parse": "^7.0.2",
+    "exceljs": "^4.4.0",
     "fastify": "5.11.3",
     "file-type": "^21.0.0",
     "image-size": "^2.0.2",

@@ -109,30 +109,30 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## User Management
 
-| Action                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                  |
-| ------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ------------------------- |
-| View moderators           | PLATFORM ⚠️    | SCHOOL       | —         | —          | —        | —       |                           |
-| Create Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                           |
-| Edit Moderator            | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                           |
-| Remove Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                           |
-| View HODs                 | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Create HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Edit HOD                  | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Remove HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Reset HOD credentials     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| View teachers             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Create Teacher            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Edit Teacher              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Deactivate Teacher        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Reset Teacher credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| View students             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Create Student            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Edit Student              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Deactivate Student        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Reset Student credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                           |
-| Import Teachers           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | Bulk import pipeline (B7) |
-| Import Students           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       | Bulk import pipeline (B7) |
-| Export Users              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Export pipeline (B6/B18)  |
+| Action                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                 |
+| ------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ------------------------ |
+| View moderators           | PLATFORM ⚠️    | SCHOOL       | —         | —          | —        | —       |                          |
+| Create Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                          |
+| Edit Moderator            | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                          |
+| Remove Moderator          | 🔒 BREAK-GLASS | SCHOOL       | —         | —          | —        | —       |                          |
+| View HODs                 | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Create HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Edit HOD                  | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Remove HOD                | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Reset HOD credentials     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| View teachers             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Create Teacher            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Edit Teacher              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Deactivate Teacher        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Reset Teacher credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| View students             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Create Student            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Edit Student              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Deactivate Student        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Reset Student credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Import Teachers           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Import Students           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| Export Users              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Export pipeline (B6/B18) |
 
 <details><summary>Notes</summary>
 

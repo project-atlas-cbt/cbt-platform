@@ -14,6 +14,11 @@ import {
   createOrphanMediaReportWorker,
   scheduleOrphanMediaReport,
 } from './queues/orphan-media-report.queue.js';
+import {
+  IMPORT_EXPIRY_QUEUE_NAME,
+  createImportExpiryWorker,
+  scheduleImportExpirySweep,
+} from './queues/import-expiry.queue.js';
 import { registerWorkerTemplates } from './queues/templates.js';
 
 async function main() {
@@ -56,7 +61,18 @@ async function main() {
   const orphanMediaReportQueue = new Queue(ORPHAN_MEDIA_REPORT_QUEUE_NAME, { connection });
   await scheduleOrphanMediaReport(orphanMediaReportQueue, env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS);
 
-  for (const worker of [probeWorker, subscriptionExpiryWorker, orphanMediaReportWorker]) {
+  // B7: import staging-expiry sweep (A-17) — report/transition only, same
+  // shape as orphan-media reporting above.
+  const importExpiryWorker = createImportExpiryWorker(connection, {});
+  const importExpiryQueue = new Queue(IMPORT_EXPIRY_QUEUE_NAME, { connection });
+  await scheduleImportExpirySweep(importExpiryQueue, env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS);
+
+  for (const worker of [
+    probeWorker,
+    subscriptionExpiryWorker,
+    orphanMediaReportWorker,
+    importExpiryWorker,
+  ]) {
     worker.on('completed', (job) => {
       console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
     });
@@ -66,7 +82,7 @@ async function main() {
   }
 
   console.log(
-    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms)`,
+    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms)`,
   );
 
   const shutdown = async () => {
@@ -75,9 +91,11 @@ async function main() {
       probeWorker.close(),
       subscriptionExpiryWorker.close(),
       orphanMediaReportWorker.close(),
+      importExpiryWorker.close(),
     ]);
     await subscriptionExpiryQueue.close();
     await orphanMediaReportQueue.close();
+    await importExpiryQueue.close();
     redis.disconnect();
     await prisma.$disconnect();
     process.exit(0);

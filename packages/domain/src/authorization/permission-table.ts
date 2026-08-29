@@ -974,7 +974,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Bulk import pipeline (B7)',
   },
   {
     id: 'users.import.students',
@@ -989,7 +988,15 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Bulk import pipeline (B7)',
+    // B7: `users.import.students` also gates every type-agnostic
+    // ImportJob route (GET .../:id, .../errors, POST .../confirm, GET
+    // /v1/imports, GET .../templates/:type) — once a job exists, its own
+    // `type` no longer changes which role may act on it, and this row's
+    // grant shape is identical to `users.import.teachers`' own (same three
+    // roles, same scope) for every role that matters, so either id would
+    // authorize those routes identically. `imports.controller.ts`
+    // documents this same reasoning at each call site rather than
+    // introducing a third, purely-representational permission id.
   },
   {
     id: 'users.export',

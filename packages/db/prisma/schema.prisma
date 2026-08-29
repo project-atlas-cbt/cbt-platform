@@ -641,13 +641,21 @@ model PlatformSession {
 /// 07 §11.3's fixed list — order matters for stable UI select lists, do not
 /// reorder. REPORT is never client-uploadable (system-generated only, B18/
 /// ADR-0030 — unbuilt); the media endpoints reject any client request for
-/// this type outright, before any permission check runs.
+/// this type outright, before any permission check runs. IMPORT_SOURCE (B7)
+/// is likewise never reachable through the generic MediaController — it has
+/// its own dedicated upload-target/complete pair in ImportsController,
+/// gated by `users.import.students`/`users.import.teachers` rather than
+/// `media.upload` (whose grant vocabulary — Teacher/HOD SCHOOL-scope — does
+/// not apply to import files), mirroring SCHOOL_LOGO's own precedent
+/// exactly (see media.module.ts's doc comment for why one route can't
+/// cleanly enforce two different permission rows on request-body content).
 enum MediaAssetType {
   SCHOOL_LOGO
   QUESTION_IMAGE
   QUESTION_DIAGRAM
   REPORT
   OTHER
+  IMPORT_SOURCE
 }
 
 /// The two-step upload lifecycle (request target → client PUTs bytes
@@ -1161,4 +1169,149 @@ model StudentSubjectRegistration {
 enum StudentSubjectRegistrationStatus {
   REGISTERED
   DEREGISTERED
+}
+
+// ---------------------------------------------------------------------------
+// B7 — Bulk Import Pipeline (docs/roadmaps/backend-roadmap.md "B7", A-17).
+// ImportJob/ImportRow — student and teacher import only in this phase;
+// question import waits on B8's Question model (roadmap's own "Sequence
+// student/teacher import first if B8 is not ready"). Writes through
+// UsersModule/AcademicsModule's existing services (createPersonMembership,
+// StudentEnrollmentService.enroll, IdentityService.issueStaffInvitation),
+// never directly to their tables — see ImportModule's own doc comment.
+// ---------------------------------------------------------------------------
+
+enum ImportJobType {
+  STUDENTS
+  TEACHERS
+}
+
+/// PENDING_VALIDATION -> VALIDATING -> VALIDATED -> IMPORTING -> COMPLETED
+/// is the happy path. FAILED is a whole-file rejection (bad template
+/// version, unparsable file, row/size cap exceeded) — no ImportRow exists
+/// for a FAILED job. EXPIRED is set by the staging-expiry sweep (A-17) on a
+/// VALIDATED job nobody confirmed within the window; confirm() also
+/// lazily rejects an expired job even between sweeps.
+enum ImportJobStatus {
+  PENDING_VALIDATION
+  VALIDATING
+  VALIDATED
+  IMPORTING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+/// VALID/INVALID are the validation job's outcome for this row. COMMITTED
+/// means the commit job fully finished this row (person created *and*, for
+/// students, enrolled / for teachers, invited). FAILED (row-level) is the
+/// rare case a row passed validation but hit a genuine unrecoverable error
+/// at commit time. The commit job's resumability query is `WHERE status =
+/// 'VALID'` alone — `resultMembershipId` is a finer-grained progress marker
+/// *within* that: null means "person not created yet," non-null-but-still-
+/// VALID means "person created, enrollment/invitation not yet confirmed
+/// done" (a resumed row picks up from there, calling the idempotent
+/// enroll()/re-sending the invitation rather than re-creating the person —
+/// see ImportCommitService's own doc comment for the full reasoning).
+enum ImportRowStatus {
+  VALID
+  INVALID
+  COMMITTED
+  FAILED
+}
+
+/// One row per uploaded file (D-13-style: never overwritten by a later
+/// upload — a re-upload is always a new ImportJob). `sourceMediaAssetId`
+/// points at the IMPORT_SOURCE MediaAsset holding the raw file — the
+/// pipeline never stores the file's bytes a second time. `targetAcademicSessionId`
+/// is always resolved (from the caller's explicit choice, or the school's
+/// current CURRENT session) before validation runs, never left implicit at
+/// commit time — every row's Class resolution happens against this one
+/// session. Nullable — TEACHERS imports never resolve or need one (the
+/// manual `TeacherService.create` flow takes no session parameter either);
+/// only ever null for that type, always set for STUDENTS.
+/// `templateVersion` records which template version the header
+/// row matched, for audit/debugging, not re-checked after VALIDATED.
+/// `uploaderRole` is captured at creation time (the authenticated actor who
+/// started the import) because the commit job runs in the background, with
+/// no HTTP request/actor context of its own, yet still calls into
+/// StudentEnrollmentService.enroll()/AuditService.record() — both of which
+/// require a real Role for their own audit trail, exactly as if the
+/// uploader had performed each row's creation manually.
+model ImportJob {
+  id                      String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId                String          @map("school_id") @db.Uuid
+  type                    ImportJobType
+  status                  ImportJobStatus @default(PENDING_VALIDATION)
+  sourceMediaAssetId      String          @map("source_media_asset_id") @db.Uuid
+  uploaderUserId          String          @map("uploader_user_id") @db.Uuid
+  uploaderRole            Role            @map("uploader_role")
+  targetAcademicSessionId String?         @map("target_academic_session_id") @db.Uuid
+  templateVersion         Int             @map("template_version")
+
+  totalRows     Int @default(0) @map("total_rows")
+  validRows     Int @default(0) @map("valid_rows")
+  invalidRows   Int @default(0) @map("invalid_rows")
+  committedRows Int @default(0) @map("committed_rows")
+  failedRows    Int @default(0) @map("failed_rows")
+
+  /// Set only when status = FAILED — the whole-file rejection reason (bad
+  /// template version, unparsable file, row-count cap exceeded).
+  failureReason String? @map("failure_reason")
+
+  /// A-17 "staging expiry" — 24h from creation. Only meaningful while
+  /// status = VALIDATED; confirm() checks this before honouring a confirm
+  /// call, and the import-expiry sweep marks stale VALIDATED jobs EXPIRED.
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rows ImportRow[]
+
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@map("import_jobs")
+}
+
+/// One row per parsed data row of the uploaded file (never per header/
+/// comment line). `rawData` is the parsed cell values keyed by the
+/// template's own column names — both the error-CSV download and the
+/// commit job read from this, never re-parsing the original file.
+model ImportRow {
+  id          String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId    String          @map("school_id") @db.Uuid
+  importJobId String          @map("import_job_id") @db.Uuid
+  rowNumber   Int             @map("row_number")
+  rawData     Json            @map("raw_data")
+  status      ImportRowStatus @default(INVALID)
+
+  /// An array of field/message validation-error objects — null once a row
+  /// is VALID/COMMITTED, since there is nothing left to correct. (Curly-
+  /// brace placeholders deliberately avoided in this comment — see
+  /// MediaAsset's own doc comment for why: scripts/lint-schema-tenancy.mjs
+  /// parses model bodies with a brace-matching regex that such a
+  /// placeholder would break.)
+  errors Json?
+
+  /// Set as soon as the commit job creates this row's person — *before*
+  /// status flips to COMMITTED (see ImportRowStatus's own doc comment). The
+  /// SchoolMembership this row produced.
+  resultMembershipId String? @map("result_membership_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  job ImportJob @relation(fields: [schoolId, importJobId], references: [schoolId, id], onDelete: Cascade)
+
+  @@index([schoolId])
+  // The commit job's own resumability query:
+  // WHERE school_id = ? AND import_job_id = ? AND status = 'VALID' — this
+  // composite index is what makes that scan cheap even for a 5,000-row job
+  // re-run after a crash. (resultMembershipId is read per-row, not
+  // filtered on, since a non-null value mid-VALID means "resume from
+  // enrollment/invitation," not "skip" — see ImportRowStatus.)
+  @@index([schoolId, importJobId, status])
+  @@map("import_rows")
 }

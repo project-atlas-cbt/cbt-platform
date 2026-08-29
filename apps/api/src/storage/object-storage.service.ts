@@ -143,6 +143,27 @@ export class ObjectStorageService implements OnModuleInit {
   }
 
   /**
+   * Full-object download — B7's import validation job needs the entire
+   * file to parse (a multi-thousand-row CSV/XLSX), unlike `getObjectPrefix`
+   * above, which is deliberately capped for magic-byte sniffing/dimension
+   * extraction. `CONTENT_LIMITS.IMPORT_SOURCE.maxSizeBytes` (5MB) bounds
+   * what this will ever be asked to buffer in memory — small enough that a
+   * streaming read isn't warranted.
+   */
+  async getObject(storageKey: string): Promise<Buffer> {
+    const result = await this.s3.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }),
+    );
+    const body = result.Body;
+    if (!body) return Buffer.alloc(0);
+    const chunks: Buffer[] = [];
+    for await (const chunk of body as unknown as AsyncIterable<Buffer>) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  /**
    * Presigned GET. TTL is the caller's decision — 15 min for question
    * media via `GET /v1/media/:id/url`, a longer TTL for the logo URL
    * embedded in the public `GET /v1/tenant/resolve` (ADR-0021: "logo may

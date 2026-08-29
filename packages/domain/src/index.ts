@@ -87,3 +87,11 @@ export {
   type TeacherAssignmentStatus,
   type StudentSubjectRegistrationStatus,
 } from './people/constants.js';
+export {
+  IMPORT_JOB_TYPES,
+  IMPORT_JOB_STATUSES,
+  IMPORT_ROW_STATUSES,
+  type ImportJobType,
+  type ImportJobStatus,
+  type ImportRowStatus,
+} from './imports/constants.js';

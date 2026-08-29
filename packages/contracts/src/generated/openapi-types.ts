@@ -1496,6 +1496,159 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/imports/upload-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an upload target for a student/teacher import file. */
+        post: operations["ImportsController_requestUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/upload-target/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalise and validate an uploaded import file by content. */
+        post: operations["ImportsController_completeUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start validating a student import file (05 §10.1). */
+        post: operations["ImportsController_createStudentImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start validating a teacher import file (05 §10.1). */
+        post: operations["ImportsController_createTeacherImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** This school's recent import jobs, newest first. */
+        get: operations["ImportsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/templates/{type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the current, versioned CSV template for this import type. */
+        get: operations["ImportsController_downloadTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status, counts, and a page of row-level validation results. */
+        get: operations["ImportsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/{id}/errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download every invalid/failed row as a correctable, re-uploadable CSV (DoD item 6). */
+        get: operations["ImportsController_downloadErrors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit every VALID row of a validated import (05 §10.2). */
+        post: operations["ImportsController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2302,6 +2455,89 @@ export interface components {
             firstName?: string;
             lastName?: string;
             email?: string;
+        };
+        RequestImportUploadDto: {
+            filename: string;
+            /** @description Client-declared MIME type — never trusted alone; complete() re-derives it by content. */
+            declaredMimeType: string;
+            /** @description Used to pin Content-Length on the presigned PUT. */
+            declaredSizeBytes: number;
+        };
+        RequestImportUploadResponseDto: {
+            mediaAssetId: string;
+            uploadUrl: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        CreateStudentImportDto: {
+            /** @description A completed (READY) IMPORT_SOURCE MediaAsset id. */
+            mediaAssetId: string;
+            /** @description Defaults to the school's current (CURRENT) academic session when omitted — every row's Class resolves against this one session. */
+            academicSessionId?: string;
+        };
+        ImportJobResponseDto: {
+            id: string;
+            /** @enum {string} */
+            type: "STUDENTS" | "TEACHERS";
+            /** @enum {string} */
+            status: "PENDING_VALIDATION" | "VALIDATING" | "VALIDATED" | "IMPORTING" | "COMPLETED" | "FAILED" | "EXPIRED";
+            targetAcademicSessionId: string;
+            templateVersion: number;
+            totalRows: number;
+            validRows: number;
+            invalidRows: number;
+            committedRows: number;
+            failedRows: number;
+            failureReason: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateTeacherImportDto: {
+            /** @description A completed (READY) IMPORT_SOURCE MediaAsset id. */
+            mediaAssetId: string;
+        };
+        ImportJobListResponseDto: {
+            jobs: components["schemas"]["ImportJobResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ImportRowFieldErrorDto: {
+            field: string;
+            message: string;
+        };
+        ImportRowResponseDto: {
+            rowNumber: number;
+            /** @enum {string} */
+            status: "VALID" | "INVALID" | "COMMITTED" | "FAILED";
+            /** @description The parsed row, keyed by template column name. */
+            rawData: Record<string, never>;
+            errors: components["schemas"]["ImportRowFieldErrorDto"][] | null;
+        };
+        ImportJobDetailResponseDto: {
+            id: string;
+            /** @enum {string} */
+            type: "STUDENTS" | "TEACHERS";
+            /** @enum {string} */
+            status: "PENDING_VALIDATION" | "VALIDATING" | "VALIDATED" | "IMPORTING" | "COMPLETED" | "FAILED" | "EXPIRED";
+            targetAcademicSessionId: string;
+            templateVersion: number;
+            totalRows: number;
+            validRows: number;
+            invalidRows: number;
+            committedRows: number;
+            failedRows: number;
+            failureReason: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            rows: components["schemas"]["ImportRowResponseDto"][];
+            rowsTotal: number;
+            rowsPage: number;
+            rowsPageSize: number;
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -4865,6 +5101,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModeratorResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_requestUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestImportUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestImportUploadResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_completeUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetSummaryResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_createStudentImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStudentImportDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_createTeacherImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTeacherImportDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobListResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_downloadTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ImportsController_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                status?: "VALID" | "INVALID" | "COMMITTED" | "FAILED";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobDetailResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_downloadErrors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ImportsController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobResponseDto"];
                 };
             };
         };

@@ -89,6 +89,15 @@ import { TermService } from './term.service.js';
   // fundamentals check, rather than duplicating those queries. Still
   // one-directional — PlatformModule importing AcademicsModule introduces
   // no cycle, since AcademicsModule has no dependency back on it.
-  exports: [HodAssignmentService, AcademicsContextService, ClassGroupService],
+  //
+  // B7: StudentEnrollmentService is exported so ImportsModule's commit job
+  // can call the real .enroll() (ADR-0011 auto-registration included)
+  // rather than reimplementing it — same one-directional shape, no cycle.
+  exports: [
+    HodAssignmentService,
+    AcademicsContextService,
+    ClassGroupService,
+    StudentEnrollmentService,
+  ],
 })
 export class AcademicsModule {}

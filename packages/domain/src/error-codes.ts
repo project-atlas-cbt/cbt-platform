@@ -123,6 +123,29 @@ export const BASE_ERROR_CODES = {
   // completed school cannot re-enter onboarding," not just a frontend
   // redirect.
   ONBOARDING_ALREADY_COMPLETE: { httpStatus: 409, retryable: false },
+
+  // B7 (Bulk Import Pipeline). Whole-file rejections (bad template version,
+  // unparsable file, row-count cap exceeded) are recorded as ImportJob's
+  // own free-text `failureReason`, matching MediaAsset.rejectionReason's
+  // existing convention — not a distinct code each, since nothing calls an
+  // HTTP handler synchronously for them (they happen inside the background
+  // validation job).
+  //
+  // IMPORT_SOURCE_NOT_READY: POST /v1/imports/{students,teachers}'s own
+  // mediaAssetId doesn't resolve to a READY IMPORT_SOURCE asset owned by
+  // this school — a request-shaped validation failure, not found/conflict
+  // (mirrors ACADEMIC_STRUCTURE_SESSION_MISMATCH's own shape).
+  IMPORT_SOURCE_NOT_READY: { httpStatus: 400, retryable: false },
+  // IMPORT_JOB_NOT_VALIDATED: confirm() called on a job that isn't in
+  // VALIDATED status and isn't already IMPORTING/COMPLETED (still
+  // PENDING_VALIDATION/VALIDATING, or FAILED) — there is nothing to
+  // confirm yet, or the file was already rejected outright.
+  IMPORT_JOB_NOT_VALIDATED: { httpStatus: 409, retryable: false },
+  // IMPORT_JOB_EXPIRED: confirm() called on a VALIDATED job past its A-17
+  // staging-expiry window — the caller must re-upload, not retry this
+  // exact job (not retryable in the ADR-0033 sense: the same call will
+  // never succeed against this job again).
+  IMPORT_JOB_EXPIRED: { httpStatus: 409, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

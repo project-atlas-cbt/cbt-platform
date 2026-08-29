@@ -3521,6 +3521,290 @@
         "summary": "Remove a moderator's access (ends their role and deactivates the account).",
         "tags": ["people"]
       }
+    },
+    "/imports/upload-target": {
+      "post": {
+        "operationId": "ImportsController_requestUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestImportUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestImportUploadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request an upload target for a student/teacher import file.",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/upload-target/{id}/complete": {
+      "post": {
+        "operationId": "ImportsController_completeUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaAssetSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalise and validate an uploaded import file by content.",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/students": {
+      "post": {
+        "operationId": "ImportsController_createStudentImport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStudentImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start validating a student import file (05 §10.1).",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/teachers": {
+      "post": {
+        "operationId": "ImportsController_createTeacherImport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeacherImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start validating a teacher import file (05 §10.1).",
+        "tags": ["imports"]
+      }
+    },
+    "/imports": {
+      "get": {
+        "operationId": "ImportsController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "This school's recent import jobs, newest first.",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/templates/{type}": {
+      "get": {
+        "operationId": "ImportsController_downloadTemplate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download the current, versioned CSV template for this import type.",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/{id}": {
+      "get": {
+        "operationId": "ImportsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["VALID", "INVALID", "COMMITTED", "FAILED"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobDetailResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Status, counts, and a page of row-level validation results.",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/{id}/errors": {
+      "get": {
+        "operationId": "ImportsController_downloadErrors",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download every invalid/failed row as a correctable, re-uploadable CSV (DoD item 6).",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/{id}/confirm": {
+      "post": {
+        "operationId": "ImportsController_confirm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Commit every VALID row of a validated import (05 §10.2).",
+        "tags": ["imports"]
+      }
     }
   },
   "info": {
@@ -6010,6 +6294,284 @@
             "maxLength": 320
           }
         }
+      },
+      "RequestImportUploadDto": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "declaredMimeType": {
+            "type": "string",
+            "description": "Client-declared MIME type — never trusted alone; complete() re-derives it by content."
+          },
+          "declaredSizeBytes": {
+            "type": "number",
+            "description": "Used to pin Content-Length on the presigned PUT."
+          }
+        },
+        "required": ["filename", "declaredMimeType", "declaredSizeBytes"]
+      },
+      "RequestImportUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string"
+          },
+          "uploadUrl": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["mediaAssetId", "uploadUrl", "expiresAt"]
+      },
+      "CreateStudentImportDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string",
+            "description": "A completed (READY) IMPORT_SOURCE MediaAsset id."
+          },
+          "academicSessionId": {
+            "type": "string",
+            "description": "Defaults to the school's current (CURRENT) academic session when omitted — every row's Class resolves against this one session."
+          }
+        },
+        "required": ["mediaAssetId"]
+      },
+      "ImportJobResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["STUDENTS", "TEACHERS"]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_VALIDATION",
+              "VALIDATING",
+              "VALIDATED",
+              "IMPORTING",
+              "COMPLETED",
+              "FAILED",
+              "EXPIRED"
+            ]
+          },
+          "targetAcademicSessionId": {
+            "type": "string"
+          },
+          "templateVersion": {
+            "type": "number"
+          },
+          "totalRows": {
+            "type": "number"
+          },
+          "validRows": {
+            "type": "number"
+          },
+          "invalidRows": {
+            "type": "number"
+          },
+          "committedRows": {
+            "type": "number"
+          },
+          "failedRows": {
+            "type": "number"
+          },
+          "failureReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "status",
+          "targetAcademicSessionId",
+          "templateVersion",
+          "totalRows",
+          "validRows",
+          "invalidRows",
+          "committedRows",
+          "failedRows",
+          "failureReason",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "CreateTeacherImportDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string",
+            "description": "A completed (READY) IMPORT_SOURCE MediaAsset id."
+          }
+        },
+        "required": ["mediaAssetId"]
+      },
+      "ImportJobListResponseDto": {
+        "type": "object",
+        "properties": {
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportJobResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": ["jobs", "total", "page", "pageSize"]
+      },
+      "ImportRowFieldErrorDto": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["field", "message"]
+      },
+      "ImportRowResponseDto": {
+        "type": "object",
+        "properties": {
+          "rowNumber": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["VALID", "INVALID", "COMMITTED", "FAILED"]
+          },
+          "rawData": {
+            "type": "object",
+            "description": "The parsed row, keyed by template column name."
+          },
+          "errors": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowFieldErrorDto"
+            }
+          }
+        },
+        "required": ["rowNumber", "status", "rawData", "errors"]
+      },
+      "ImportJobDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["STUDENTS", "TEACHERS"]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_VALIDATION",
+              "VALIDATING",
+              "VALIDATED",
+              "IMPORTING",
+              "COMPLETED",
+              "FAILED",
+              "EXPIRED"
+            ]
+          },
+          "targetAcademicSessionId": {
+            "type": "string"
+          },
+          "templateVersion": {
+            "type": "number"
+          },
+          "totalRows": {
+            "type": "number"
+          },
+          "validRows": {
+            "type": "number"
+          },
+          "invalidRows": {
+            "type": "number"
+          },
+          "committedRows": {
+            "type": "number"
+          },
+          "failedRows": {
+            "type": "number"
+          },
+          "failureReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowResponseDto"
+            }
+          },
+          "rowsTotal": {
+            "type": "number"
+          },
+          "rowsPage": {
+            "type": "number"
+          },
+          "rowsPageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "status",
+          "targetAcademicSessionId",
+          "templateVersion",
+          "totalRows",
+          "validRows",
+          "invalidRows",
+          "committedRows",
+          "failedRows",
+          "failureReason",
+          "expiresAt",
+          "createdAt",
+          "rows",
+          "rowsTotal",
+          "rowsPage",
+          "rowsPageSize"
+        ]
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

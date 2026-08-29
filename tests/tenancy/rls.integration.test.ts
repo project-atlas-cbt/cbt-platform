@@ -563,6 +563,10 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let teacherAssignmentB: { id: string };
     let studentSubjectRegistrationA: { id: string };
     let studentSubjectRegistrationB: { id: string };
+    let importJobA: { id: string };
+    let importJobB: { id: string };
+    let importRowA: { id: string };
+    let importRowB: { id: string };
 
     beforeAll(async () => {
       await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
@@ -861,10 +865,67 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           },
         }),
       );
+
+      // B7's two new tables — same economy as B3/B4/B5/B6's own precedent:
+      // reusing this describe block's single fixture school pair.
+      // sourceMediaAssetId has no enforced FK (a plain scalar column, per
+      // ImportJob's own schema comment) — any UUID is fine here.
+      importJobA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.importJob.create({
+          data: {
+            schoolId: schoolA.id,
+            type: 'TEACHERS',
+            status: 'VALIDATED',
+            sourceMediaAssetId: randomUUID(),
+            uploaderUserId: userA.id,
+            uploaderRole: 'SCHOOL_ADMIN',
+            templateVersion: 1,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          },
+        }),
+      );
+      importJobB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.importJob.create({
+          data: {
+            schoolId: schoolB.id,
+            type: 'TEACHERS',
+            status: 'VALIDATED',
+            sourceMediaAssetId: randomUUID(),
+            uploaderUserId: userB.id,
+            uploaderRole: 'SCHOOL_ADMIN',
+            templateVersion: 1,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          },
+        }),
+      );
+      importRowA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.importRow.create({
+          data: {
+            schoolId: schoolA.id,
+            importJobId: importJobA.id,
+            rowNumber: 1,
+            rawData: { 'Staff ID': 'RLS-A' },
+            status: 'VALID',
+          },
+        }),
+      );
+      importRowB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.importRow.create({
+          data: {
+            schoolId: schoolB.id,
+            importJobId: importJobB.id,
+            rowNumber: 1,
+            rawData: { 'Staff ID': 'RLS-B' },
+            status: 'VALID',
+          },
+        }),
+      );
     });
 
     afterAll(async () => {
       const ids = [schoolA.id, schoolB.id];
+      await owner.importRow.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.importJob.deleteMany({ where: { schoolId: { in: ids } } });
       await owner.studentSubjectRegistration.deleteMany({ where: { schoolId: { in: ids } } });
       await owner.teacherAssignment.deleteMany({ where: { schoolId: { in: ids } } });
       await owner.studentEnrollment.deleteMany({ where: { schoolId: { in: ids } } });
@@ -938,6 +999,19 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'student_subject_registrations',
         idA: () => studentSubjectRegistrationA.id,
         idB: () => studentSubjectRegistrationB.id,
+      },
+      // B7's two new tables — same economy as B3/B4/B5/B6's own precedent.
+      {
+        label: 'import_jobs',
+        table: 'import_jobs',
+        idA: () => importJobA.id,
+        idB: () => importJobB.id,
+      },
+      {
+        label: 'import_rows',
+        table: 'import_rows',
+        idA: () => importRowA.id,
+        idB: () => importRowB.id,
       },
     ];
 

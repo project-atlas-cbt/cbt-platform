@@ -12,11 +12,14 @@ import type {
   SignedMediaUrlResponseDto,
 } from './dto/media.dto.js';
 
-/** Every media type this service can handle, including SCHOOL_LOGO — the
- * DTO-level MediaAssetUploadableType narrows what a *client request* may
- * ask for; internally (the logo upload-target path, called from
- * school-branding.controller.ts) SCHOOL_LOGO is a first-class type too. */
-type AnyMediaType = MediaAssetUploadableType | 'SCHOOL_LOGO';
+/** Every media type this service can handle, including SCHOOL_LOGO and
+ * IMPORT_SOURCE — the DTO-level MediaAssetUploadableType narrows what a
+ * *client request to the generic MediaController* may ask for; internally,
+ * both the logo upload-target path (school-branding.controller.ts) and the
+ * B7 import-file upload-target path (imports.controller.ts) are first-class
+ * types too, each with its own dedicated route pair for the same reason
+ * SCHOOL_LOGO already has one — see media.module.ts's doc comment. */
+type AnyMediaType = MediaAssetUploadableType | 'SCHOOL_LOGO' | 'IMPORT_SOURCE';
 
 const UPLOAD_URL_TTL_SECONDS = 15 * 60;
 const QUESTION_MEDIA_DOWNLOAD_TTL_SECONDS = 15 * 60;
@@ -26,6 +29,7 @@ const STORAGE_FOLDER: Record<AnyMediaType, string> = {
   QUESTION_IMAGE: 'questions',
   QUESTION_DIAGRAM: 'questions',
   OTHER: 'other',
+  IMPORT_SOURCE: 'imports',
 };
 
 /** Strips path separators and anything outside a safe charset — the

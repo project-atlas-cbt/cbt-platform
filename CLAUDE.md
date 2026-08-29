@@ -299,7 +299,15 @@ Admin and Moderator (HOD gets zero F7 screens per ADR-0017), the `TeacherAssignm
 codebase's first matrix/grid component), and three confirmed small backend gap-closures (server-side
 pagination extended to all four directories, a class-level credential-sheet CSV download endpoint,
 and dedicated HOD edit/reset-credentials routes) — proving `B6`'s own contract. Every frontend phase
-through F7 is now complete; see this file's Change Log entry below for the full reasoning.
+through F7 is now complete. **`B7 — Bulk Import Pipeline`** is now complete too: the full
+validate-preview-confirm-import-summary pipeline (`imports.v1`) for student and teacher bulk import —
+CSV and `.xlsx` both supported (confirmed with the project owner), chunked/resumable/idempotent
+commit processing reusing `StudentEnrollmentService.enroll()`/`IdentityService
+.issueStaffInvitation()` directly rather than reimplementing them, and every A-17 decision this
+phase was scoped to settle (formats, 5,000-row/5MB caps, versioned templates, 24h staging expiry).
+Question import stays deferred, waiting on `B8`'s `Question` model. See this file's Change Log entry
+below for the full reasoning, including a genuine architecture deviation on where its background job
+processors run.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -2653,3 +2661,152 @@ path)_ to _Implementation (F7 complete; all frontend phases through F7 closed ou
 **Next: `B7 — Bulk Import Pipeline`** (unblocked, extends the people/enrollment surface `B6`/`F7`
 just shipped, and would let F4's Staff/Students onboarding steps close their one remaining
 honestly-partial DoD item) or `B8 — Question Bank` on the backend critical path.
+
+### 2026-08-29 — `B7` complete: Bulk Import Pipeline
+
+Requested explicitly: start `B7`. Followed the working-rules checklist first: read `01 §7`/`§42`,
+`03 §15`–`§16`, `05 §10`/`§18`, `08 §14`, `02`'s Import rows, the B7 roadmap phase (no gating ADR —
+only audit finding `A-17`, "settle in phase"), and the existing B6/F7 implementation
+(`person.util.ts`, `CredentialSheetService`, `StudentEnrollmentService.enroll`, `MediaService`'s
+upload/validate/sign pipeline, the two `users.import.{teachers,students}` permission rows B2 had
+pre-graded and waiting) — then planned in a dedicated plan-mode pass given the phase's size, per
+this project's own precedent.
+
+**A-17 settled, not left implicit**, per the phase's own Exit criteria: **CSV and `.xlsx` both
+supported** (confirmed with the project owner — the more conservative CSV-only option was offered
+and declined); 5,000-row cap and 5MB file cap (the audit finding's own recommended numbers, adopted
+as the engineering default and documented as such); a leading `# template-version: N` marker line
+checked exactly, whole-file rejection with a "please re-download the current template" message on
+mismatch; a 24-hour staging-expiry window (`ImportJob.expiresAt`), enforced lazily by `confirm()`
+and formally by a new `apps/worker` sweep. **Scope**: student and teacher import only — question
+import stays deferred, waiting on `B8`'s `Question` model, exactly as the roadmap's own "sequence
+student/teacher import first if B8 is not ready" note anticipated.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260829062531_b7_bulk_import_
+pipeline`): `ImportJob`/`ImportRow` + three enums (`ImportJobType`/`ImportJobStatus`/
+`ImportRowStatus`), `MediaAssetType` gained `IMPORT_SOURCE`, RLS bootstrap for both new tables —
+same hand-written-migration convention as B3–B6. `ImportJob.targetAcademicSessionId` is nullable
+(TEACHERS imports never resolve or need one, matching `TeacherService.create`'s own signature —
+caught and fixed _before_ the first migration was even applied, during planning-to-code review).
+`ImportJob.uploaderRole` is captured at creation time specifically because the commit job runs in
+the background with no HTTP request/actor context of its own, yet still calls into services
+(`StudentEnrollmentService.enroll`, `AuditService.record`) that require a real `Role`.
+
+**API** (`apps/api/src/modules/imports/`, new top-level `ImportsModule` — writes through
+`UsersModule`/`AcademicsModule`'s own primitives, never directly to their tables, per the roadmap's
+own "Domains/modules affected" line): a dedicated `IMPORT_SOURCE` upload-target/complete pair
+(`imports.controller.ts`), not the generic `MediaController` — `media.upload`'s own grant includes
+Teacher/HOD at a placeholder `SCHOOL` scope that doesn't apply to import files at all, so mixing the
+two would let those roles request an inert-but-real upload slot; mirrors `SCHOOL_LOGO`'s own
+precedent exactly. `POST /imports/students`/`POST /imports/teachers` (type-specific, matching their
+own distinct permission ids); every other route (`GET /imports`, `GET /imports/:id`,
+`GET /imports/:id/errors`, `POST /imports/:id/confirm`, `GET /imports/templates/:type`) is
+type-agnostic once a job exists and is gated by `users.import.students` — documented inline as a
+deliberate equivalence (identical grant shape to `users.import.teachers`), not an inaccuracy, rather
+than inventing a third, purely representational permission id. `GET /imports` itself is one small,
+reasoned addition beyond the roadmap's literal five-endpoint table — F8 needs an import-history view,
+and every other resource in this codebase already gets a list endpoint.
+
+**Validation** (`ImportValidationService`): downloads the full file (`ObjectStorageService.getObject`,
+a new full-download method alongside the existing prefix-only `getObjectPrefix`), parses via
+`csv-parse` or `exceljs` depending on sniffed content type, checks the template version and required
+columns, enforces the row cap, then resolves every row's references via **batched** lookups (all
+existing `loginIdentifier`s, all `ACTIVE` classes/departments in one query each) — never per-row,
+matching `StudentService.list`'s own established "batched, not N+1" precedent. A whole-file rejection
+(bad version, unparsable, missing columns, row cap) never creates a single `ImportRow` — only a
+`FAILED` `ImportJob` with a `failureReason`, the exact same convention as `MediaAsset
+.rejectionReason`.
+
+**Commit** (`ImportCommitService`) — chunked (100 rows/transaction), resumable, idempotent: selects
+`WHERE status = 'VALID'`, and for each row either creates the person fresh or (on a resumed row whose
+`resultMembershipId` is already set but status is still `VALID` — a genuine two-level progress
+marker, not a single flag) skips straight to enrollment/invitation. `StudentEnrollmentService
+.enroll()` is already idempotent for a repeat call with the same class; a repeat
+`IdentityService.issueStaffInvitation()` call simply re-sends one invitation email — an accepted,
+bounded cost for the rare crash-mid-row case. On completion, `AuditService.record()` with
+`{totalRows, committedRows, failedRows}` (DoD item 10).
+
+**A genuine, documented architecture deviation from "background jobs live in `apps/worker`"**: the
+validation and commit job _processors_ (BullMQ `Worker`s) are constructed only from `apps/api`'s own
+real `main.ts` `bootstrap()`, never via Nest's `OnModuleInit` lifecycle and never inside
+`apps/worker`. Two reasons converged, both found during implementation, not anticipated in the
+original plan: (1) `ImportValidationService`/`ImportCommitService` deliberately reuse real,
+already-tested, Nest-DI-resolved domain services — `apps/worker` has no Nest DI and cannot import
+`apps/api/src` at all (only `packages/*` are shared across apps), so reusing them there is
+structurally impossible without either introducing Nest DI to that process or reimplementing the
+logic (ADR-0011 reconciliation, enumeration-safe invitation dispatch) as free-standing functions,
+risking real behavioural drift from the manual-creation path. (2) Auto-starting a live BullMQ
+consumer via `OnModuleInit` would mean _every_ integration test that boots `AppModule` directly
+(this codebase's established pattern) also starts consuming import jobs against the same long-lived
+local Redis B1's own `rate-limit.integration.test.ts` flakiness note already documents. Resolved by
+splitting queue management (`ImportQueueService`, normal Nest lifecycle, safe in every test — it only
+ever calls `.add()`) from job consumption (`import-worker-bootstrap.ts`'s `startImportWorkers(app)`,
+called once from `main.ts`, pulling the real service instances out via `app.get(...)` — the standard
+technique for reusing a Nest app's DI graph outside the normal request-handling path). The
+staging-expiry _sweep_ has no such reuse tension (a periodic status transition needing only
+`prisma`/`withTenant`, `orphan-media-report.queue.ts`'s own exact shape) and stays in `apps/worker`
+as originally planned — only the two per-request processors moved.
+
+**Two real bugs found only by running the tests, not by inspection**: `exceljs` is a CJS package
+whose named export doesn't resolve under native ESM `node` (only under `tsc`/Vitest's more permissive
+interop) — found only by a real `node dist/main.js` boot, this codebase's now-standing class of
+gotcha (S3_CLIENT, SessionService export, Serwist, every prior phase has hit one). Fixed with the
+default-import-and-destructure pattern Node's own error message suggested. Separately, the template
+route's path param is lowercase in the URL (`.../templates/students`) but was validated directly
+against the uppercase `ImportJobType` vocabulary — every real call 400'd; fixed with a `@Transform`
+normalising the param before `@IsIn` runs. A third, self-caught issue: a schema doc comment on
+`ImportRow.errors` used literal `{field, message}` braces, which broke `scripts/lint-schema-
+tenancy.mjs`'s naive brace-matching regex exactly the way `MediaAsset`'s own doc comment already
+warns against — caught by `pnpm lint` itself, fixed by rewording the comment.
+
+**Class/Department resolution is by name** (`ClassGroup.name`, the school's own freeform label,
+matched case-insensitively) **not by re-deriving `level`+`arm`** — the CSV template's own "Class"
+column example (`SS1A`) is exactly this label. An engineering judgment call, not specified in the
+docs: a _blank_ Department cell is always accepted, even for a class that does carry one (the class
+itself is authoritative); a _non-blank_ Department that doesn't resolve, or disagrees with the row's
+own Class, is a real per-row error.
+
+**Testing**: `import-row-validator.test.ts`/`import-file-parser.test.ts`/`import-templates.test.ts`
+(31 unit tests — every validation rule; real CSV and real `.xlsx` round trips built with `exceljs`
+itself, including a formula-cell-reads-cached-value case; BOM/quoting/encoding edge cases);
+`imports.integration.test.ts` (16 tests — the full pipeline for both types over real HTTP/MinIO,
+whole-file rejections, cross-tenant denial, permission boundaries, the confirm() state machine);
+`import-confirm-concurrency.integration.test.ts` (the DoD concurrency requirement, proven
+deterministically against a single-row Postgres `UPDATE ... WHERE status = 'VALIDATED'` — no
+`pg_sleep` forcing needed, unlike B5's own session-activation precedent, since a single-row UPDATE's
+locking guarantees the outcome regardless of exact timing); `import-commit-resume.integration.test.ts`
+(DoD item 8, directly constructing both partial-progress states and proving one `commit()` call
+resumes/skips each correctly); `import-1500-rows.integration.test.ts` (DoD item 1 — 1,487 valid /
+13 invalid, mirroring `01 §7`'s own worked-example numbers exactly, not an arbitrary split; full
+validate-and-commit completes in ~60s, given generous headroom per this codebase's own established
+practice for a correct-but-heavy test); `apps/worker`'s `import-expiry.integration.test.ts` (the
+staging-expiry sweep, mirroring `orphan-media-report`'s own test shape). `tests/tenancy/rls
+.integration.test.ts` gained both new tables in the existing B5/B6 describe block's `tables` array
+(same economy as B3–B6's own precedent) — 53 tests in that file, up from 47.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build && pnpm test:integration` (apps/api 27 integration files/167 tests, apps/worker 3/12,
+the RLS suite 53/53), plus `pnpm generate` (`imports.v1` published in `apps/api/openapi.json`/
+`packages/contracts`) and `pnpm generate:permission-table-doc` (151 rows, confirmed unchanged — this
+phase built entirely against the two permission ids `B2` had already pre-graded). A real
+`node dist/main.js` boot confirmed `PolicyCoverageService` reports 125 routes checked with zero
+violations. One genuinely destructive step this phase required — `prisma migrate reset --force`
+against the local `atlas_dev` database, to fix the `targetAcademicSessionId` nullability mistake
+caught before any real data depended on it — was run only after explicit user confirmation, per
+Prisma's own AI-agent safety guard and this project's standing default-behaviour rule; the
+post-reset `grantAppRole()` re-assertion (this codebase's own documented `migrate reset` gotcha) was
+re-run immediately after.
+
+`docs/roadmaps/backend-roadmap.md`'s B7 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus deferred-with-reason, a full "Implementation notes" subsection, and an
+expanded Deferred items list. `docs/roadmaps/roadmap-index.md`'s version, Current State, and
+Immediate Next Actions all updated to record `B7` complete — `B8` next on the critical path proper,
+unaffected by `B7`'s own always-parallelisable position in `§5`'s table.
+
+Project state moves from _Implementation (F7 complete; all frontend phases through F7 closed out)_
+to _Implementation (B7 complete)_.
+**Next: `B8 — Question Bank`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2 → B3 →
+B5 → B6 → B8 → B9 → …`) — the natural next step now that both `B7` (people/enrollment bulk import)
+and every frontend phase through `F7` are closed out. A future `F8` (Bulk Import UI) remains open
+whenever the frontend/backend phase-pairing default is next prioritized, and would close `F4`'s own
+last honestly-partial DoD item (manual-only staff/student creation) along the way.

@@ -8,6 +8,7 @@ import type { Env } from '@atlas/config';
 import { AppModule } from './app.module.js';
 import { API_VERSION_PREFIX } from './openapi/version.js';
 import { isAllowedOrigin } from './security/cors.js';
+import { startImportWorkers } from './modules/imports/import-worker-bootstrap.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
@@ -76,6 +77,22 @@ async function bootstrap() {
   const host = config.get('API_HOST', { infer: true });
   await app.listen(port, host);
   console.log(`[api] listening on http://${host}:${port}${API_VERSION_PREFIX}`);
+
+  // B7: the two import BullMQ Worker consumers, started only here — never
+  // via Nest's module lifecycle — so no integration test that boots
+  // AppModule directly (this codebase's established pattern) ever gets a
+  // live consumer running against the shared local Redis. See
+  // ImportQueueService's own doc comment for the full reasoning.
+  const importWorkers = startImportWorkers(app);
+  app.enableShutdownHooks();
+  const shutdown = () => {
+    void importWorkers
+      .close()
+      .catch((err: unknown) => console.error('[api] error closing import workers:', err))
+      .finally(() => process.exit(0));
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 bootstrap().catch((err) => {

@@ -1,0 +1,81 @@
+import { Injectable, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Queue, type ConnectionOptions } from 'bullmq';
+import type { Env } from '@atlas/config';
+
+export const IMPORT_VALIDATION_QUEUE_NAME = 'atlas-import-validation';
+export const IMPORT_COMMIT_QUEUE_NAME = 'atlas-import-commit';
+
+export interface ImportJobPayload {
+  schoolId: string;
+  importJobId: string;
+}
+
+export function importRedisConnectionOptions(redisUrl: string): ConnectionOptions {
+  const url = new URL(redisUrl);
+  return { host: url.hostname, port: Number(url.port) || 6379 };
+}
+
+/**
+ * Owns only the two `Queue` handles (enqueue side) — deliberately **not**
+ * the `Worker` consumers (processing side). Queues are harmless to have
+ * open in every process that boots `AppModule`, including every
+ * integration test (the same shape as `RedisModule`'s own always-open
+ * connection) — a test can assert a real `.add()` call happened without
+ * anything ever consuming it. A live `Worker`, by contrast, actively pulls
+ * jobs off Redis the moment it exists; auto-starting one via Nest's
+ * `OnModuleInit` would mean *every* integration test that boots `AppModule`
+ * directly (this codebase's established pattern) also starts consuming
+ * import jobs against the same long-lived local Redis B1's own
+ * `rate-limit.integration.test.ts` flakiness note already documents — a
+ * real risk of cross-test interference, not a hypothetical one. So the
+ * `Worker`s are constructed imperatively, only from `main.ts`'s real
+ * `bootstrap()` (see `import-worker-bootstrap.ts`) — mirroring, in the
+ * opposite direction, exactly why `HttpExceptionFilter`/`ValidationPipe`
+ * had to move *out* of `bootstrap()` and into `AppModule` itself: some
+ * things must run for every test that boots the module graph, and some —
+ * like this — must run for *none* of them, only the real server. Import
+ * integration tests call `ImportValidationService.validate()`/
+ * `ImportCommitService.commit()` directly instead of waiting on a live
+ * consumer, matching this codebase's established pattern for background
+ * jobs elsewhere (B3's subscription-expiry sweep test calls
+ * `runSubscriptionExpirySweep()` directly, not "start the queue and poll").
+ */
+@Injectable()
+export class ImportQueueService implements OnModuleInit, OnApplicationShutdown {
+  private validationQueue?: Queue<ImportJobPayload>;
+  private commitQueue?: Queue<ImportJobPayload>;
+
+  constructor(private readonly config: ConfigService<Env, true>) {}
+
+  onModuleInit(): void {
+    const connection = importRedisConnectionOptions(this.config.get('REDIS_URL', { infer: true }));
+    this.validationQueue = new Queue<ImportJobPayload>(IMPORT_VALIDATION_QUEUE_NAME, {
+      connection,
+    });
+    this.commitQueue = new Queue<ImportJobPayload>(IMPORT_COMMIT_QUEUE_NAME, { connection });
+  }
+
+  async onApplicationShutdown(): Promise<void> {
+    await Promise.all([this.validationQueue?.close(), this.commitQueue?.close()]);
+  }
+
+  /** `jobId: importJobId` — BullMQ's own dedup by jobId is the queue-layer
+   * half of the concurrency DoD; the API-layer half is the conditional
+   * `VALIDATED -> IMPORTING` update in `imports.service.ts`'s `confirm()`. */
+  async enqueueValidation(schoolId: string, importJobId: string): Promise<void> {
+    await this.validationQueue?.add(
+      'validate',
+      { schoolId, importJobId },
+      { jobId: importJobId, removeOnComplete: true, removeOnFail: 10 },
+    );
+  }
+
+  async enqueueCommit(schoolId: string, importJobId: string): Promise<void> {
+    await this.commitQueue?.add(
+      'commit',
+      { schoolId, importJobId },
+      { jobId: importJobId, removeOnComplete: true, removeOnFail: 10 },
+    );
+  }
+}

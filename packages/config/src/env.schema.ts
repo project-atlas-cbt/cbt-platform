@@ -102,6 +102,18 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(24 * 60 * 60 * 1000),
+
+  // B7: apps/worker's import staging-expiry sweep interval (A-17). More
+  // frequent than the other sweeps above — a stale VALIDATED import
+  // blocking a legitimate re-upload attempt should resolve reasonably
+  // promptly, even though POST /v1/imports/:id/confirm already lazily
+  // rejects an expired job on its own regardless of sweep cadence.
+  // Default: 1 hour.
+  IMPORT_EXPIRY_SWEEP_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60 * 1000),
 });
 
 export type Env = z.infer<typeof envSchema>;
