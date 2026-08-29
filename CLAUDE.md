@@ -2810,3 +2810,51 @@ B5 → B6 → B8 → B9 → …`) — the natural next step now that both `B7` (
 and every frontend phase through `F7` are closed out. A future `F8` (Bulk Import UI) remains open
 whenever the frontend/backend phase-pairing default is next prioritized, and would close `F4`'s own
 last honestly-partial DoD item (manual-only staff/student creation) along the way.
+
+### 2026-08-29 — `B7` gap closure: thorough implementation review, six fixes
+
+Requested explicitly, same day as `B7` itself: a thorough review of the just-shipped implementation
+looking for bugs, not new scope. Read every B7 file end to end (module, controller, services, file
+parser, row validator, templates, DTOs, the RLS migration) rather than sampling. Six real, fixable
+issues surfaced — no product/architecture decision needed for any of them; full detail (failure
+scenarios, the fix for each, and file references) is in `docs/roadmaps/backend-roadmap.md`'s B7
+section, "Post-completion gap closure" note, not duplicated here:
+
+1. Missing `'error'` listener on the BullMQ `Worker`/`Queue` instances B7 introduced inside
+   `apps/api` itself — the first in-process BullMQ consumers this codebase has ever run; an
+   unhandled `'error'` event would have crashed the whole API process on a transient Redis blip.
+   Fixed there and, since it was trivial once found, for every pre-existing worker/queue in
+   `apps/worker/src/main.ts` too.
+2. `ImportJobResponseDto.targetAcademicSessionId` was typed non-nullable but coerced a real `null`
+   (every `TEACHERS` job) to `''` — a contract lie. Now genuinely `string | null`.
+3. `createStudentImport()` never validated a caller-supplied `academicSessionId` up front — a bad id
+   silently produced a job whose every row failed with a confusing "Class not found." Now rejected
+   immediately with a message naming the real problem.
+4. `ImportQueueService`'s enqueue methods silently no-op'd (`?.`) if called before `onModuleInit` —
+   unreachable today, but a landmine. Now throws.
+5. `ImportCommitService.commit()` had no guard against two overlapping executions of the same job
+   (a BullMQ stalled-lock redelivery scenario) both processing the same rows. Fixed with
+   `ImportJob.processingClaimedAt` — a new nullable column (migration
+   `20260829085732_b7_import_job_processing_claim`), an atomically-claimed, per-chunk-refreshed,
+   self-healing lease mirroring `confirm()`'s own conditional-update idiom. Proven by a new
+   dedicated integration test.
+6. `ImportValidationService.validate()`'s reads and writes lived in two separate transactions,
+   leaving a crash window that could strand a job in `VALIDATING` forever. Fixed by merging them
+   into one — nothing between them did any I/O of its own, so this cost nothing.
+
+No permission-table change (151 rows, confirmed unchanged), no product-behaviour change. Full
+pipeline reconfirmed green after every fix: `pnpm lint && pnpm typecheck && pnpm test && pnpm build
+&& pnpm test:integration` (monorepo-wide, 9/9 turbo tasks — apps/api's integration suite at 28
+files/169 tests, including the new concurrency test), plus `pnpm generate` and
+`pnpm generate:permission-table-doc`. One real build-tooling gotcha hit and worked around while
+applying the fixes, not a product bug: `turbo`'s cached `build` task for `@atlas/db` (whose
+`outputs` include the gitignored `generated/` Prisma client directory) restored a stale cached
+snapshot of the generated client over a freshly-`prisma generate`d one on a plain `pnpm typecheck`
+run, twice — worked around with `--force`; not fixed at the `turbo.json` level, since diagnosing
+and correcting the input-hashing gap itself is out of scope for a bug-fix pass and is left as a
+known rough edge for whoever next edits `packages/db/prisma/schema.prisma` and runs a plain
+(non-forced) `pnpm typecheck` immediately after.
+
+Project state remains _Implementation (B7 complete)_ — this was a same-phase gap closure, not a new
+phase. `docs/roadmaps/backend-roadmap.md`'s B7 section gained the "Post-completion gap closure"
+note referenced above. **Next: `B8 — Question Bank`**, unchanged.

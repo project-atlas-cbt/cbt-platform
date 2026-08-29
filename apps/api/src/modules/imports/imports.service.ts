@@ -49,7 +49,7 @@ function toJobResponseDto(job: {
     id: job.id,
     type: job.type as ImportJobResponseDto['type'],
     status: job.status as ImportJobResponseDto['status'],
-    targetAcademicSessionId: job.targetAcademicSessionId ?? '',
+    targetAcademicSessionId: job.targetAcademicSessionId,
     templateVersion: job.templateVersion,
     totalRows: job.totalRows,
     validRows: job.validRows,
@@ -132,6 +132,28 @@ export class ImportsService {
         });
       }
       academicSessionId = context.session.id;
+    } else {
+      // A caller-supplied session id was previously trusted unchecked: a
+      // typo'd/stale/wrong-school id would silently create a job whose
+      // *every* row then fails validation with "Class not found," which
+      // looks indistinguishable from a genuinely bad file. Reject it
+      // up front instead, with a message that actually names the problem.
+      //
+      // Captured into a plain const, not read as `academicSessionId`
+      // directly inside the closure below — a `let`'s narrowing to `string`
+      // doesn't survive being read from inside a nested `withTenant(...)`
+      // closure (same rationale as `import-validation.service.ts`'s
+      // `templateVersion` capture).
+      const requestedSessionId = academicSessionId;
+      const session = await withTenant(prisma, schoolId, (tx) =>
+        tx.academicSession.findUnique({ where: { id: requestedSessionId } }),
+      );
+      if (!session || session.schoolId !== schoolId) {
+        throw new AppHttpException({
+          code: 'NOT_FOUND',
+          message: 'The specified academic session does not exist.',
+        });
+      }
     }
 
     const job = await this.createJob(schoolId, 'STUDENTS', asset.id, academicSessionId, actor);

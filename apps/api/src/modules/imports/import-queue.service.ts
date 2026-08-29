@@ -1,4 +1,4 @@
-import { Injectable, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, type ConnectionOptions } from 'bullmq';
 import type { Env } from '@atlas/config';
@@ -43,6 +43,7 @@ export function importRedisConnectionOptions(redisUrl: string): ConnectionOption
  */
 @Injectable()
 export class ImportQueueService implements OnModuleInit, OnApplicationShutdown {
+  private readonly logger = new Logger(ImportQueueService.name);
   private validationQueue?: Queue<ImportJobPayload>;
   private commitQueue?: Queue<ImportJobPayload>;
 
@@ -54,6 +55,17 @@ export class ImportQueueService implements OnModuleInit, OnApplicationShutdown {
       connection,
     });
     this.commitQueue = new Queue<ImportJobPayload>(IMPORT_COMMIT_QUEUE_NAME, { connection });
+
+    // Queue (unlike Worker) doesn't actively pull jobs, but it still holds a
+    // live Redis connection and still emits 'error' for connection-level
+    // failures — an unhandled 'error' event on a Node EventEmitter throws
+    // and crashes the process. Log-and-continue, matching
+    // `import-worker-bootstrap.ts`'s own handler for the same reason.
+    for (const queue of [this.validationQueue, this.commitQueue]) {
+      queue.on('error', (err) => {
+        this.logger.error(`Queue "${queue.name}" connection error: ${err.message}`, err.stack);
+      });
+    }
   }
 
   async onApplicationShutdown(): Promise<void> {
@@ -62,9 +74,15 @@ export class ImportQueueService implements OnModuleInit, OnApplicationShutdown {
 
   /** `jobId: importJobId` — BullMQ's own dedup by jobId is the queue-layer
    * half of the concurrency DoD; the API-layer half is the conditional
-   * `VALIDATED -> IMPORTING` update in `imports.service.ts`'s `confirm()`. */
+   * `VALIDATED -> IMPORTING` update in `imports.service.ts`'s `confirm()`.
+   *
+   * Throws (rather than the previous silent `?.` no-op) if called before
+   * `onModuleInit` has run — Nest always calls it before any provider can
+   * receive a request, so this should be unreachable in practice; it exists
+   * so a future lifecycle change fails loudly instead of leaving a job
+   * stuck in PENDING_VALIDATION/VALIDATED forever with no error anywhere. */
   async enqueueValidation(schoolId: string, importJobId: string): Promise<void> {
-    await this.validationQueue?.add(
+    await this.requireQueue(this.validationQueue, 'validationQueue').add(
       'validate',
       { schoolId, importJobId },
       { jobId: importJobId, removeOnComplete: true, removeOnFail: 10 },
@@ -72,10 +90,20 @@ export class ImportQueueService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async enqueueCommit(schoolId: string, importJobId: string): Promise<void> {
-    await this.commitQueue?.add(
+    await this.requireQueue(this.commitQueue, 'commitQueue').add(
       'commit',
       { schoolId, importJobId },
       { jobId: importJobId, removeOnComplete: true, removeOnFail: 10 },
     );
+  }
+
+  private requireQueue(
+    queue: Queue<ImportJobPayload> | undefined,
+    name: string,
+  ): Queue<ImportJobPayload> {
+    if (!queue) {
+      throw new Error(`ImportQueueService.${name} used before onModuleInit ran.`);
+    }
+    return queue;
   }
 }

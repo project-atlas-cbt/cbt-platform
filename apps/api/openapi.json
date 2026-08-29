@@ -6366,7 +6366,9 @@
             ]
           },
           "targetAcademicSessionId": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null for TEACHERS jobs, which have no target session."
           },
           "templateVersion": {
             "type": "number"
@@ -6505,7 +6507,9 @@
             ]
           },
           "targetAcademicSessionId": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Null for TEACHERS jobs, which have no target session."
           },
           "templateVersion": {
             "type": "number"

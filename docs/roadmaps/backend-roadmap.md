@@ -1581,6 +1581,59 @@ published) and `pnpm generate:permission-table-doc` (151 rows, confirmed unchang
 entirely against the two permission ids already pre-graded by `B2`). A real `node dist/main.js` boot
 confirmed `PolicyCoverageService` reports 125 routes checked with zero violations.
 
+### Post-completion gap closure (2026-08-29, same day — thorough implementation review)
+
+A dedicated review pass (not implementation, a fresh read of every B7 file with the goal of finding
+defects) surfaced six real issues, all fixed the same day, none requiring a product/architecture
+decision:
+
+1. **No `'error'` listener on the BullMQ `Worker`/`Queue` instances `ImportQueueService`/
+   `import-worker-bootstrap.ts` introduced** — the first in-process (`apps/api`) BullMQ consumers
+   this codebase has ever run; every prior consumer lives in the isolated `apps/worker` process. An
+   unhandled `'error'` event on a Node `EventEmitter` throws and would have crashed the whole API
+   process on a transient Redis blip, not just import processing. Fixed with log-and-continue
+   handlers on both `Worker`s and both `Queue`s; the same gap (never fixed, pre-existing since B3)
+   was closed for every worker/queue in `apps/worker/src/main.ts`'s own shared loop at the same time,
+   since it was trivial to do once found.
+2. **`ImportJobResponseDto.targetAcademicSessionId` was typed as a required, non-nullable `string`**
+   but the service coerced the real `null` (every `TEACHERS` job has no session) to `''` to satisfy
+   it — a contract lie. Fixed: the DTO is now `string | null` (`nullable: true`), and the service
+   passes the real value through unchanged.
+3. **`createStudentImport()` never validated a caller-supplied `academicSessionId`** before creating
+   the job — a typo'd/stale/wrong-school id silently produced a job whose every row then failed
+   validation with "Class not found," indistinguishable from a genuinely bad file. Fixed with an
+   upfront existence/ownership check, `NOT_FOUND` with a message that names the actual problem.
+4. **`ImportQueueService.enqueueValidation`/`enqueueCommit` used optional chaining** on queues only
+   assigned in `onModuleInit`, silently no-op-ing rather than failing loudly if ever called before
+   initialization (unreachable under Nest's real lifecycle today, but a landmine for later). Fixed
+   with a `requireQueue()` guard that throws instead.
+5. **No single-runner guard on `ImportCommitService.commit()`'s chunk loop** — two overlapping
+   executions of the same job (e.g. a BullMQ stalled-lock redelivery landing on a second worker
+   while the first is still genuinely alive) could both fetch and process the same batch of `VALID`
+   rows; the `loginIdentifier` unique constraint would prevent an actual duplicate account but the
+   losing side would show a spurious `FAILED` row for one that in fact committed successfully on the
+   other run. Fixed with `ImportJob.processingClaimedAt` (new nullable column, migration
+   `20260829085732_b7_import_job_processing_claim`) — an atomically-claimed, per-chunk-refreshed
+   lease released in a `finally` on every exit, self-healing after 10 minutes if the holder crashed
+   without releasing it; mirrors `confirm()`'s own conditional-`updateMany` idiom for its
+   `VALIDATED -> IMPORTING` transition. Proven directly by a new
+   `import-commit-concurrency.integration.test.ts` (a fresh claim blocks a second `commit()` call
+   outright; a stale one is honoured and the job completes normally).
+6. **`ImportValidationService.validate()`'s reads and writes lived in two separate `withTenant()`
+   transactions** — a crash between "outcomes computed" and "rows written + job marked `VALIDATED`"
+   stranded the job in `VALIDATING` forever, with nothing to detect or recover it. Nothing between
+   the two did any I/O of its own (pure in-memory row validation), so the fix was simply merging them
+   into one transaction — either the whole validation run lands, or none of it does.
+
+None of these required a schema decision beyond item 5's single additive nullable column, no
+permission-table change (151 rows, confirmed unchanged), and no product-behaviour change — all six
+are implementation-correctness fixes. Full pipeline reconfirmed green after every fix:
+`pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration` (monorepo-wide,
+9/9 turbo tasks, including the full `apps/api` integration suite at 28 files/169 tests and the new
+concurrency test), plus `pnpm generate` (the DTO nullability change is reflected in
+`apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (151 rows,
+unchanged, confirming no permission-table drift).
+
 ## Deferred items
 
 - Question import — needs `B8`'s `Question` model, which doesn't exist yet; the roadmap's own

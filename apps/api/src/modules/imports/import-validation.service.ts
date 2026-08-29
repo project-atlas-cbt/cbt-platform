@@ -6,6 +6,7 @@ import { IMPORT_TEMPLATES, IMPORT_TEMPLATE_VERSION } from './import-templates.js
 import {
   validateStudentRow,
   validateTeacherRow,
+  type FieldError,
   type StudentValidationContext,
   type TeacherValidationContext,
 } from './import-row-validator.js';
@@ -127,13 +128,27 @@ export class ImportValidationService {
       const idsInFile = parsed.rows.map((row) => row[idColumn] ?? '');
       const idCountsInFile = countOccurrences(idsInFile);
 
-      const outcomes = await withTenant(prisma, schoolId, async (tx) => {
+      // One transaction for the whole read-then-write sequence, not two
+      // separate withTenant() calls: the original split left a real window
+      // where a crash between "outcomes computed" and "rows written +
+      // job marked VALIDATED" would strand the job in VALIDATING forever,
+      // with nothing to detect or recover it. Nothing between the reads and
+      // the writes below does any I/O of its own (pure in-memory row
+      // validation), so merging them costs nothing and closes that window
+      // outright — either the whole validation run lands, or none of it
+      // does.
+      await withTenant(prisma, schoolId, async (tx) => {
         const existingMemberships = await tx.schoolMembership.findMany({
           where: { schoolId, loginIdentifier: { in: idsInFile.filter(Boolean) } },
           select: { loginIdentifier: true },
         });
         const existingIds = new Set(existingMemberships.map((m) => m.loginIdentifier));
 
+        let outcomes: {
+          rowNumber: number;
+          rawData: Record<string, string>;
+          errors: FieldError[];
+        }[];
         if (job.type === 'STUDENTS') {
           // createStudentImport always resolves a real session before
           // creating a STUDENTS-type job (or throws) — null here would be a
@@ -164,25 +179,23 @@ export class ImportValidationService {
               departments.map((d) => [d.name.toLowerCase(), { id: d.id }]),
             ),
           };
-          return parsed.rows.map((row, i) => ({
+          outcomes = parsed.rows.map((row, i) => ({
             rowNumber: i + 1,
             rawData: row,
             errors: validateStudentRow(row, ctx),
           }));
+        } else {
+          const ctx: TeacherValidationContext = { existingStaffIds: existingIds, idCountsInFile };
+          outcomes = parsed.rows.map((row, i) => ({
+            rowNumber: i + 1,
+            rawData: row,
+            errors: validateTeacherRow(row, ctx),
+          }));
         }
 
-        const ctx: TeacherValidationContext = { existingStaffIds: existingIds, idCountsInFile };
-        return parsed.rows.map((row, i) => ({
-          rowNumber: i + 1,
-          rawData: row,
-          errors: validateTeacherRow(row, ctx),
-        }));
-      });
+        const validRows = outcomes.filter((o) => o.errors.length === 0).length;
+        const invalidRows = outcomes.length - validRows;
 
-      const validRows = outcomes.filter((o) => o.errors.length === 0).length;
-      const invalidRows = outcomes.length - validRows;
-
-      await withTenant(prisma, schoolId, async (tx) => {
         if (outcomes.length > 0) {
           await tx.importRow.createMany({
             data: outcomes.map((o) => ({

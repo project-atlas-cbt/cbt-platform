@@ -2481,7 +2481,8 @@ export interface components {
             type: "STUDENTS" | "TEACHERS";
             /** @enum {string} */
             status: "PENDING_VALIDATION" | "VALIDATING" | "VALIDATED" | "IMPORTING" | "COMPLETED" | "FAILED" | "EXPIRED";
-            targetAcademicSessionId: string;
+            /** @description Null for TEACHERS jobs, which have no target session. */
+            targetAcademicSessionId: string | null;
             templateVersion: number;
             totalRows: number;
             validRows: number;
@@ -2522,7 +2523,8 @@ export interface components {
             type: "STUDENTS" | "TEACHERS";
             /** @enum {string} */
             status: "PENDING_VALIDATION" | "VALIDATING" | "VALIDATED" | "IMPORTING" | "COMPLETED" | "FAILED" | "EXPIRED";
-            targetAcademicSessionId: string;
+            /** @description Null for TEACHERS jobs, which have no target session. */
+            targetAcademicSessionId: string | null;
             templateVersion: number;
             totalRows: number;
             validRows: number;

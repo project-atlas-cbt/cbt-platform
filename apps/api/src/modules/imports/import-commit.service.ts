@@ -9,6 +9,14 @@ import { createPersonMembership } from '../users/person.util.js';
 
 const CHUNK_SIZE = 100;
 
+/** How long a claim is honoured before it's treated as abandoned (the
+ * process that held it crashed without clearing it) and a new run may
+ * re-claim the job. Generous relative to a single chunk's real processing
+ * time — this only ever needs to fire in the crash case, not the happy
+ * path, since a live run keeps refreshing nothing and simply clears its
+ * claim in the `finally` below on every exit. */
+const CLAIM_STALE_MS = 10 * 60 * 1000;
+
 /**
  * The commit half of B7's pipeline — writes through `StudentEnrollment
  * Service.enroll()`/`IdentityService.issueStaffInvitation()` exactly as the
@@ -30,6 +38,18 @@ const CHUNK_SIZE = 100;
  * own doc comment); a repeat `issueStaffInvitation` call simply re-sends
  * one invitation email, an accepted, bounded, documented cost for the rare
  * crash-mid-row case, not a data-integrity issue.
+ *
+ * Single-runner guard: `ImportJob.processingClaimedAt` (see that field's own
+ * schema doc comment) is claimed atomically before any row is touched and
+ * released in a `finally` on every exit, refreshed once per chunk so a
+ * long-running commit never goes stale mid-flight. This is a *lease*, not a
+ * transaction boundary — it doesn't change the chunked-transaction shape
+ * above, it only stops two overlapping executions of the same job (e.g. a
+ * BullMQ stalled-lock redelivery landing on a second worker while the first
+ * is still genuinely alive) from both processing the same batch of rows,
+ * which would otherwise surface as a spurious FAILED row (a unique-
+ * constraint loss to the other, faster runner) on a row that actually did
+ * commit successfully.
  */
 @Injectable()
 export class ImportCommitService {
@@ -52,85 +72,136 @@ export class ImportCommitService {
     if (job.status === 'COMPLETED') return; // already finished — idempotent no-op
     if (job.status !== 'IMPORTING') return; // not confirmed, or already failed/expired
 
+    // Atomically claim the job before touching any row — see
+    // ImportJob.processingClaimedAt's own schema doc comment. Same
+    // conditional-updateMany idiom as confirm()'s VALIDATED -> IMPORTING
+    // transition in imports.service.ts: only the caller whose UPDATE
+    // actually matches a row goes on to process it. A previously-abandoned
+    // (crashed) claim older than CLAIM_STALE_MS is treated as available.
+    const staleBefore = new Date(Date.now() - CLAIM_STALE_MS);
+    const claim = await withTenant(prisma, schoolId, (tx) =>
+      tx.importJob.updateMany({
+        where: {
+          id: importJobId,
+          schoolId,
+          status: 'IMPORTING',
+          OR: [{ processingClaimedAt: null }, { processingClaimedAt: { lt: staleBefore } }],
+        },
+        data: { processingClaimedAt: new Date() },
+      }),
+    );
+    if (claim.count === 0) {
+      this.logger.warn(
+        `commit(): ImportJob ${importJobId} is already being processed by another run; skipping.`,
+      );
+      return;
+    }
+
     const actor = { actorUserId: job.uploaderUserId, actorRole: job.uploaderRole };
 
-    // Chunked loop; exits via `break` once no VALID rows remain.
-    while (true) {
-      const rows = await withTenant(prisma, schoolId, (tx) =>
-        tx.importRow.findMany({
-          where: { schoolId, importJobId, status: 'VALID' },
-          orderBy: { rowNumber: 'asc' },
-          take: CHUNK_SIZE,
-        }),
-      );
-      if (rows.length === 0) break;
+    try {
+      // Chunked loop; exits via `break` once no VALID rows remain.
+      while (true) {
+        const rows = await withTenant(prisma, schoolId, (tx) =>
+          tx.importRow.findMany({
+            where: { schoolId, importJobId, status: 'VALID' },
+            orderBy: { rowNumber: 'asc' },
+            take: CHUNK_SIZE,
+          }),
+        );
+        if (rows.length === 0) break;
 
-      let committedInChunk = 0;
-      let failedInChunk = 0;
+        let committedInChunk = 0;
+        let failedInChunk = 0;
 
-      for (const row of rows) {
-        try {
-          const person = await this.ensurePerson(schoolId, job.type, row);
-          if (job.type === 'STUDENTS') {
-            await this.enrollStudent(schoolId, person, row, job, actor);
-          } else {
-            await this.identity.issueStaffInvitation(schoolId, person.userId);
+        for (const row of rows) {
+          try {
+            const person = await this.ensurePerson(schoolId, job.type, row);
+            if (job.type === 'STUDENTS') {
+              await this.enrollStudent(schoolId, person, row, job, actor);
+            } else {
+              await this.identity.issueStaffInvitation(schoolId, person.userId);
+            }
+            await withTenant(prisma, schoolId, (tx) =>
+              tx.importRow.update({ where: { id: row.id }, data: { status: 'COMMITTED' } }),
+            );
+            committedInChunk += 1;
+          } catch (error) {
+            this.logger.warn(
+              `commit(): row ${row.rowNumber} of ImportJob ${importJobId} failed: ` +
+                `${(error as Error).message}`,
+            );
+            await withTenant(prisma, schoolId, (tx) =>
+              tx.importRow.update({
+                where: { id: row.id },
+                data: {
+                  status: 'FAILED',
+                  errors: [
+                    { field: '_row', message: (error as Error).message },
+                  ] as Prisma.InputJsonValue,
+                },
+              }),
+            );
+            failedInChunk += 1;
           }
-          await withTenant(prisma, schoolId, (tx) =>
-            tx.importRow.update({ where: { id: row.id }, data: { status: 'COMMITTED' } }),
-          );
-          committedInChunk += 1;
-        } catch (error) {
-          this.logger.warn(
-            `commit(): row ${row.rowNumber} of ImportJob ${importJobId} failed: ` +
-              `${(error as Error).message}`,
-          );
-          await withTenant(prisma, schoolId, (tx) =>
-            tx.importRow.update({
-              where: { id: row.id },
-              data: {
-                status: 'FAILED',
-                errors: [
-                  { field: '_row', message: (error as Error).message },
-                ] as Prisma.InputJsonValue,
-              },
-            }),
-          );
-          failedInChunk += 1;
         }
+
+        await withTenant(prisma, schoolId, (tx) =>
+          tx.importJob.update({
+            where: { id: importJobId },
+            data: {
+              committedRows: { increment: committedInChunk },
+              failedRows: { increment: failedInChunk },
+              // Refreshed every chunk so a long-running commit (many
+              // chunks) never has its own claim go stale mid-flight —
+              // CLAIM_STALE_MS only ever needs to fire for a run that
+              // actually died, not a slow-but-alive one.
+              processingClaimedAt: new Date(),
+            },
+          }),
+        );
       }
 
       await withTenant(prisma, schoolId, (tx) =>
-        tx.importJob.update({
-          where: { id: importJobId },
-          data: {
-            committedRows: { increment: committedInChunk },
-            failedRows: { increment: failedInChunk },
-          },
-        }),
+        tx.importJob.update({ where: { id: importJobId }, data: { status: 'COMPLETED' } }),
       );
+
+      const finalJob = await withTenant(prisma, schoolId, (tx) =>
+        tx.importJob.findUniqueOrThrow({ where: { id: importJobId } }),
+      );
+      await this.audit.record({
+        schoolId,
+        actorUserId: actor.actorUserId,
+        actorRole: actor.actorRole,
+        action: job.type === 'STUDENTS' ? 'STUDENT_IMPORT_COMPLETED' : 'TEACHER_IMPORT_COMPLETED',
+        entityType: 'ImportJob',
+        entityId: importJobId,
+        metadata: {
+          totalRows: finalJob.totalRows,
+          committedRows: finalJob.committedRows,
+          failedRows: finalJob.failedRows,
+        },
+      });
+    } finally {
+      // Always release the claim on the way out, success or failure —
+      // a bare post-loop clear wouldn't run on an exception thrown outside
+      // any per-row try/catch (e.g. the row-fetch query itself), which
+      // would otherwise leave a legitimate retry blocked for up to
+      // CLAIM_STALE_MS. The release's own failure is logged and swallowed,
+      // not rethrown — a `finally` that throws would replace whatever
+      // error the try block was already propagating.
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.importJob.updateMany({
+          where: { id: importJobId, schoolId, processingClaimedAt: { not: null } },
+          data: { processingClaimedAt: null },
+        }),
+      ).catch((err: unknown) => {
+        this.logger.error(
+          `commit(): failed to release processing claim for ImportJob ${importJobId}: ` +
+            `${(err as Error).message}`,
+        );
+      });
     }
-
-    await withTenant(prisma, schoolId, (tx) =>
-      tx.importJob.update({ where: { id: importJobId }, data: { status: 'COMPLETED' } }),
-    );
-
-    const finalJob = await withTenant(prisma, schoolId, (tx) =>
-      tx.importJob.findUniqueOrThrow({ where: { id: importJobId } }),
-    );
-    await this.audit.record({
-      schoolId,
-      actorUserId: actor.actorUserId,
-      actorRole: actor.actorRole,
-      action: job.type === 'STUDENTS' ? 'STUDENT_IMPORT_COMPLETED' : 'TEACHER_IMPORT_COMPLETED',
-      entityType: 'ImportJob',
-      entityId: importJobId,
-      metadata: {
-        totalRows: finalJob.totalRows,
-        committedRows: finalJob.committedRows,
-        failedRows: finalJob.failedRows,
-      },
-    });
   }
 
   /** Creates the row's person on first pass, or resolves the already-

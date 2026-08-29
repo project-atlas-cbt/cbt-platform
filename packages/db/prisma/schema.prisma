@@ -1264,6 +1264,20 @@ model ImportJob {
   /// call, and the import-expiry sweep marks stale VALIDATED jobs EXPIRED.
   expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
 
+  /// A lease, not a status: ImportCommitService.commit() atomically claims
+  /// a job (conditional UPDATE ... WHERE status = 'IMPORTING' AND
+  /// (processing_claimed_at IS NULL OR stale), mirroring confirm()'s own
+  /// VALIDATED -> IMPORTING conditional-update idiom) before processing it,
+  /// and clears this back to null when it finishes. Guards against two
+  /// overlapping commit() executions on the same job (e.g. a BullMQ
+  /// stalled-lock redelivery landing on a second worker while the first is
+  /// still genuinely alive and running) both fetching and processing the
+  /// same batch of VALID rows concurrently. A stale claim (older than the
+  /// commit loop could plausibly still be running) is self-healing — no
+  /// separate sweep needed, since the only way a claim outlives that window
+  /// is the process that held it having died.
+  processingClaimedAt DateTime? @map("processing_claimed_at") @db.Timestamptz(6)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

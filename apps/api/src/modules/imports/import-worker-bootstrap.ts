@@ -49,6 +49,15 @@ export function startImportWorkers(app: INestApplicationContext): ImportWorkers 
     worker.on('failed', (job, err) => {
       console.error(`[api] import job ${job?.id} on queue "${worker.name}" failed:`, err.message);
     });
+    // These are this codebase's first BullMQ Worker instances living inside
+    // apps/api itself (every prior worker lives in the separate apps/worker
+    // process). Worker extends EventEmitter and emits 'error' for
+    // connection-level failures (e.g. a dropped/failed Redis connection) —
+    // an unhandled 'error' event throws synchronously and would crash the
+    // whole API process, not just import processing. Log-and-continue.
+    worker.on('error', (err) => {
+      console.error(`[api] import worker "${worker.name}" connection error:`, err.message);
+    });
   }
 
   return {

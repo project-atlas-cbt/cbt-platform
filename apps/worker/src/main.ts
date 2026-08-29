@@ -67,6 +67,14 @@ async function main() {
   const importExpiryQueue = new Queue(IMPORT_EXPIRY_QUEUE_NAME, { connection });
   await scheduleImportExpirySweep(importExpiryQueue, env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS);
 
+  // Same 'error'-event risk as the Workers below, for the Queue (enqueue)
+  // side of each connection.
+  for (const queue of [subscriptionExpiryQueue, orphanMediaReportQueue, importExpiryQueue]) {
+    queue.on('error', (err) => {
+      console.error(`[worker] queue "${queue.name}" connection error:`, err.message);
+    });
+  }
+
   for (const worker of [
     probeWorker,
     subscriptionExpiryWorker,
@@ -78,6 +86,14 @@ async function main() {
     });
     worker.on('failed', (job, err) => {
       console.error(`[worker] job ${job?.id} on queue "${worker.name}" failed:`, err.message);
+    });
+    // Worker extends EventEmitter and emits 'error' for connection-level
+    // failures (e.g. a dropped/failed Redis connection) — an unhandled
+    // 'error' event throws synchronously and crashes this process. Found
+    // during B7's review of its own new import-expiry worker; applied to
+    // every worker in this shared loop since none of them had one either.
+    worker.on('error', (err) => {
+      console.error(`[worker] worker "${worker.name}" connection error:`, err.message);
     });
   }
 

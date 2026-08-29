@@ -82,8 +82,12 @@ export class ImportJobResponseDto {
   @ApiProperty({ type: String, enum: IMPORT_JOB_STATUSES })
   status!: ImportJobStatusDto;
 
-  @ApiProperty({ type: String })
-  targetAcademicSessionId!: string;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Null for TEACHERS jobs, which have no target session.',
+  })
+  targetAcademicSessionId!: string | null;
 
   @ApiProperty({ type: Number })
   templateVersion!: number;
