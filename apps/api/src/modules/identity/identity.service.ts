@@ -69,9 +69,20 @@ export class IdentityService {
       return { kind: 'LOCKED_OUT' };
     }
 
+    // Case-insensitive by design: the `@@unique([schoolId, loginIdentifier])`
+    // constraint itself stays case-sensitive at the DB level (unchanged —
+    // that's a storage/uniqueness concern, not a login one), but the login
+    // comparison shouldn't force a caller to reproduce the exact case an
+    // identifier happened to be created with. findFirst (not findUnique):
+    // a composite-unique lookup can't carry a `mode: 'insensitive'` filter,
+    // and existing data could in principle hold two differently-cased rows
+    // for the "same" identifier at one school — an edge case this resolves
+    // in an unspecified but deterministic-enough direction rather than
+    // rejecting outright, since case sensitivity was never an intentional
+    // uniqueness dimension in the first place.
     const membership = await withTenant(prisma, schoolId, (tx) =>
-      tx.schoolMembership.findUnique({
-        where: { schoolId_loginIdentifier: { schoolId, loginIdentifier: identifier } },
+      tx.schoolMembership.findFirst({
+        where: { schoolId, loginIdentifier: { equals: identifier, mode: 'insensitive' } },
       }),
     );
 
@@ -243,9 +254,12 @@ export class IdentityService {
    * confirm or deny an account's existence.
    */
   async requestPasswordReset(schoolId: string, identifier: string): Promise<void> {
+    // See evaluateLogin's own comment on why this is findFirst + `mode:
+    // 'insensitive'` rather than the composite-unique findUnique this used
+    // to be.
     const membership = await withTenant(prisma, schoolId, (tx) =>
-      tx.schoolMembership.findUnique({
-        where: { schoolId_loginIdentifier: { schoolId, loginIdentifier: identifier } },
+      tx.schoolMembership.findFirst({
+        where: { schoolId, loginIdentifier: { equals: identifier, mode: 'insensitive' } },
       }),
     );
     if (!membership || membership.status !== 'ACTIVE') return;

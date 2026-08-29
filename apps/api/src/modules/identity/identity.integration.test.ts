@@ -530,3 +530,40 @@ describe('Cross-tenant identifier collision (DoD 5)', () => {
     expect(okBRes.statusCode).toBe(200);
   });
 });
+
+describe('Login identifier is case-insensitive and trimmed (gap closure)', () => {
+  let schoolId: string;
+  let host: string;
+
+  beforeAll(async () => {
+    const school = await createSchool();
+    schoolId = school.id;
+    host = `${school.subdomain}.${ROOT_DOMAIN}`;
+    createdSchoolIds.push(schoolId);
+    const { user } = await seedUser({
+      schoolId,
+      loginIdentifier: 'ST0001',
+      password: 'a-real-password-123',
+      role: 'STUDENT',
+    });
+    createdUserIds.push(user.id);
+  });
+
+  it('a differently-cased identifier still authenticates', async () => {
+    const ctx = await freshCtx(host, `10.${RUN}.7.1`);
+    const res = await login(ctx, 'st0001', 'a-real-password-123');
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('a leading/trailing-whitespace identifier still authenticates', async () => {
+    const ctx = await freshCtx(host, `10.${RUN}.7.2`);
+    const res = await login(ctx, '  ST0001  ', 'a-real-password-123');
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('the password itself is never trimmed or case-folded', async () => {
+    const ctx = await freshCtx(host, `10.${RUN}.7.3`);
+    const res = await login(ctx, 'ST0001', 'A-REAL-PASSWORD-123');
+    expect(res.statusCode).toBe(401);
+  });
+});

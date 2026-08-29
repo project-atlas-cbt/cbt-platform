@@ -320,8 +320,14 @@ file's Change Log entry below for the full reasoning. **`F8 — Bulk Import UI`*
 one shared `<BulkImportFlow>` state machine consuming `imports.v1` across six routes (Student/Teacher
 import for School Admin and Moderator, Question import for Teacher) and a new manual/import mode
 toggle inside the onboarding wizard's Staff/Students steps — closing `F4`'s own last honestly-partial
-DoD item. Every currently-open frontend phase through `F8` is now closed out; `B9` is next on the
-backend critical path.
+DoD item. **`F9 — Question Bank Workspace`** is now complete too: the teacher's question authoring
+workspace at `/teacher/question-bank` (corrected from the roadmap's own literal `/teacher/questions`
+against the already-shipped nav item and F8's own stub), proving `B8`'s `questions.v1` contract end
+to end for the first time, including this codebase's first rich-text editor (Tiptap) and first
+`dompurify`-sanitized render of stored user content. Honestly partial on the one DoD item gated on
+`B9` (the HOD's rejection reason — no such field exists anywhere in `B8`'s schema yet); everything
+else `B8` supports is built and proven. Every currently-open frontend phase through `F9` is now
+closed out; `B9` is next on the backend critical path.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -3183,3 +3189,129 @@ No schema change, no permission-table change, no product-behaviour change, no ro
 changed. Project state remains _Implementation (F8 complete; all frontend phases through F8 closed
 out)_ — this was a same-phase gap closure, not a new phase. **Next: `B9 — Question Review &
 Governance`**, unchanged.
+
+### 2026-08-29 — `F9` complete: Question Bank Workspace
+
+Requested explicitly: start `F9`. Followed the working-rules checklist first: three parallel
+research agents (F9's own roadmap/spec/audit coverage; the full `B8` `questions.v1` API surface —
+routes, DTOs, permission grants, error codes; existing frontend conventions to reuse), then a Plan
+agent, then direct verification reads (the real `DTO` field shapes, the permission table, the nav
+model, F8's own stub page) before writing any code — per this project's own precedent for a phase of
+this size. No gating ADR is unresolved; `B8` (F9's backend pair) is complete.
+
+**Two decisions confirmed with the project owner before implementation:**
+
+1. **Add a real rich-text editor now** (Tiptap 3.30 — `@tiptap/react`/`@tiptap/pm`/
+   `@tiptap/starter-kit`, this codebase's first WYSIWYG dependency) rather than reuse the plain
+   `Textarea` primitive, to satisfy `04 §39`/`05 §15.2`'s "rich editor" wording directly instead of
+   deferring it further. `dompurify` (v3, ships its own types) sanitizes every read-only render of
+   stored content — the first place this codebase renders arbitrary stored HTML back to a browser.
+2. **Build `F9` now, honestly partial on the `B9` gap** — `B9` (Question Review & Governance, the
+   HOD approve/reject/comment workflow) is not built, and no endpoint anywhere can ever produce a
+   `REJECTED` revision yet. Everything `B8`'s contract supports is built fully; the Rejected-
+   questions view is real and wired (`GET /questions?status=REJECTED`, genuinely filtered/paginated)
+   but shows an honest "not yet available (B9)" state when empty, matching this project's
+   established pattern (F1–F5) for a DoD item gated on a missing backend dependency — never silently
+   claimed complete.
+
+**A real routing correction, resolved directly against unambiguous evidence, not asked about**
+(mirrors F1's own `/reset-password` precedent exactly): F9's roadmap text literally says
+`/teacher/questions/*`, but the already-shipped nav entry (`nav-model.ts`'s TEACHER
+`question-bank` item) and F8's own stub page (`/teacher/question-bank/page.tsx`, whose own doc
+comment explicitly anticipated "F9's real screen supersedes this file") both already point at
+`/teacher/question-bank`. Built there instead, superseding F8's stub as designed.
+
+**Delivered** (`apps/web/components/questions/*`, `apps/web/lib/questions/*`): `QuestionBankScreen`
+(bank home, `04 §38`/`QB-01` — status tabs including a deliberately-added "Under Review" tab beyond
+`05 §15.1`'s literal 5-tab mockup, since `QuestionCountsResponseDto` genuinely returns that count and
+hiding it would contradict DoD item 1; Subject/Level/Difficulty/Status filters in the URL, no
+free-text search since `ListQuestionsQueryDto` has none), `QuestionEditorScreen` (`QuestionEditor`,
+`QB-02` — the create-then-patch autosave design below), `MetadataPanel`, `OptionBuilder` (a
+`RadioGroup`, never a checkbox, for the correct-answer selector — "exactly one correct" is
+structurally unrepresentable as multi-select), `MediaUploader` + `MediaPreview` (presigned
+upload-target → PUT → complete → attach, and `GET /media/:id/url` for read-back), `TopicCombobox`
+(hand-rolled type-to-filter/create-on-the-fly — no new `cmdk`/Radix Combobox dependency),
+`RichTextEditor` + `QuestionContentField`, `RevisionHistory`, `QuestionDetailScreen`, and
+`RejectedQuestionsScreen` — routed at `/teacher/question-bank{,/new,/:id,/:id/edit,/rejected}`.
+`ReviewFeedback` (the sixth named roadmap component) was deliberately **not built** — no live data
+source exists yet.
+
+**The autosave / create-then-patch design**, the real engineering core of this phase:
+`POST /questions` requires every field at once (confirmed by reading `CreateQuestionDto` directly —
+there is no partial-create path, and it runs the full validation catalogue immediately). Before a
+real draft exists, the editor buffers purely client-side — react-hook-form state plus a debounced
+`localStorage` snapshot as a resilience net against a closed tab — and only calls `POST /questions`
+once a minimum-viable-fields gate passes (`lib/questions/validation.ts`'s `computeCreateGate`,
+mirroring the DTO's exact required shape). On success, the returned `revisionId` is cached locally
+immediately (before `router.replace`'s own re-render completes) so the very next autosave tick
+already targets `PATCH .../revisions/:id`, not a duplicate `POST` — `PATCH` never re-runs the full
+validation catalogue server-side, which is the actual reason this two-phase split is necessary at
+all, not just a UX nicety. A `QUESTION_REVISION_NOT_DRAFT` response (someone else submitted/archived
+it from under the tab) freezes further autosaves with a blocking banner rather than retrying against
+a rejecting endpoint.
+
+**The Subject/Level picker is unconstrained, not scope-filtered** — investigated directly (`auth
+.guard.ts`, the permission table, every `/teachers*` route) and confirmed no self-service "my own
+assignments" endpoint exists today: the only assignment-list route needs a `teacherProfileId` path
+param the client has no way to obtain, and `users.teacher.view` is `denied()` for TEACHER. A teacher
+who picks outside their real `ASSIGNED` scope gets the server's own `QUESTION_OUT_OF_SCOPE` message
+surfaced inline, reusing the server's real reasoning rather than duplicating it client-side
+incorrectly. Recorded as a Candidate/Deferred backend gap-closure (a narrow `GET /me/teacher-
+assignments`-style route), not built in this frontend-only phase. The same investigation surfaced a
+real scope nuance worth recording: `questionBank.view` is graded `ASSIGNED` for TEACHER — confirmed
+by reading `QuestionService.buildScopeFilter` directly — meaning a teacher's bank list can include
+colleagues' questions within a shared assigned subject/level (ADR-0001's "reusable question bank"
+premise), not only their own; `04 §38`'s "My Questions" heading is a product-copy simplification of
+this broader real scope, not a literal filter. `authorName` is shown per row so this is never
+ambiguous to the viewer.
+
+**Two real bugs found only by the test suite, not by inspection:**
+
+1. `TopicCombobox`'s `Label`/`Input` pair had no `htmlFor`/`id` association at all — every other
+   form field in this codebase gets this for free from `FormLabel`/`FormControl`'s automatic id
+   injection, but `TopicCombobox` is a hand-rolled field outside that pattern, and nothing had
+   wired the association manually. `getByLabelText` failed outright in the first test run. Fixed
+   with `useId()`.
+2. Two genuine jsdom/ProseMirror gaps, found only once a test actually typed into the editor (the
+   earlier static-render smoke test didn't exercise this): `document.elementFromPoint` and
+   `Range.prototype.getClientRects`/`getBoundingClientRect` don't exist in jsdom's layout-less DOM
+   at all, and ProseMirror's real event handlers call them on every keystroke. Polyfilled as inert
+   stubs in `vitest.setup.ts`, alongside that file's existing Radix/ResizeObserver polyfills —
+   sufficient for ProseMirror's code paths to run without throwing; no test in this suite needs
+   genuine pixel-coordinate geometry, only the resulting form/autosave payload.
+
+**Testing**: 16 new test files / 75 tests — one `.test.tsx`/`.test.ts` per component/screen
+(`RichTextEditor`, `QuestionContentField`, `OptionBuilder`, `TopicCombobox`, `MetadataPanel`,
+`MediaUploader`, `use-question-media-upload`, `QuestionBankScreen`, `QuestionStatusTabs`,
+`QuestionStatusBadge`, `QuestionDetailScreen`, `RevisionHistory` — including its honest real-vs-
+placeholder rendering for a REJECTED revision — `RejectedQuestionsScreen` — both the honest empty
+state and a genuinely-REJECTED-row case — `sanitize-html`, `validation`), plus one integration test
+(`question-editor-flow.integration.test.tsx`: create → autosave `POST` → autosave `PATCH` → submit,
+mocking `apiClient` at the HTTP boundary per this codebase's established RTL convention, matching
+`bulk-import-flow.questions.integration.test.tsx`'s own precedent) — given an explicit extended
+per-test timeout (three real `Select` interactions, character-by-character typing into a live
+ProseMirror editor, and two genuine 800ms autosave debounce windows in sequence is genuinely heavier
+than Vitest's 5000ms default, the same reasoning `structure-creation.integration.test.tsx`'s own
+multi-step walk already established).
+
+Full pipeline green: `pnpm --filter @atlas/web lint && pnpm --filter @atlas/web typecheck && pnpm
+--filter @atlas/web build`, plus every F9 test file run in isolation (16 files / 75 tests, 0
+failures, confirmed twice). The monorepo-wide full-suite run hit this environment's already-
+documented worker-pool-startup/resource-contention flakiness unrelated to these changes (pre-
+existing, unrelated test files also failed under that same full-suite load) — consistent with this
+project's established practice for that class of environment flake, not a signal about F9's own
+code; every F9-specific file was independently confirmed green.
+
+`docs/roadmaps/frontend-roadmap.md`'s F9 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-partial-with-reason (items 8/9, gated on `B9`), a full
+"Implementation notes" subsection, and an expanded Deferred items list. `docs/roadmaps/
+roadmap-index.md`'s version, Current State, and Immediate Next Actions all updated to record `F9`
+complete — every currently-open frontend phase is now closed out.
+
+Project state moves from _Implementation (F8 complete; all frontend phases through F8 closed out)_
+to _Implementation (F9 complete; all frontend phases through F9 closed out)_.
+**Next: `B9 — Question Review & Governance`** on the backend critical path
+(`Gate 1 ADRs → B0 → B1 → B2 → B3 → B5 → B6 → B8 → B9 → B11 → …`) — building it would also let `F9`
+close its one remaining honestly-partial DoD item (the HOD's real rejection reason) and the full
+review-cycle E2E its own Exit criteria still records as outstanding. A future `F10` (Question Review
+Workspace) remains open whenever the frontend/backend phase-pairing default is next prioritized.

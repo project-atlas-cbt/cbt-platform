@@ -28,7 +28,11 @@ function currentOrigin(): string {
  * only ever attaches `X-CSRF-Token` to a mutating request, so no CSRF header
  * is needed here (mirrors `apiClient`'s own GET/HEAD exemption).
  */
-async function downloadCsv(url: string, filename: string, fallbackMessage: string): Promise<void> {
+export async function downloadCsv(
+  url: string,
+  filename: string,
+  fallbackMessage: string,
+): Promise<void> {
   const res = await fetch(url, { credentials: 'include' });
 
   if (!res.ok) {

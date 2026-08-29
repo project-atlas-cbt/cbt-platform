@@ -54,8 +54,17 @@ export class PlatformAuthService {
       return { kind: 'LOCKED_OUT' };
     }
 
+    // Case-insensitive, matching evaluateLogin's own reasoning
+    // (apps/api/src/modules/identity/identity.service.ts) — email local
+    // parts are conventionally treated case-insensitively by virtually
+    // every real mail system, and there's no reason a Software Admin's
+    // login should be stricter about it than a school-scoped one is about
+    // its own identifier.
     const user = await prisma.user.findFirst({
-      where: { email, platformRoleAssignments: { some: { status: 'ACTIVE' } } },
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        platformRoleAssignments: { some: { status: 'ACTIVE' } },
+      },
     });
 
     if (!user) {

@@ -206,6 +206,26 @@ describe('Platform auth (B3)', () => {
     const res = await get(schoolCtx, '/school/profile');
     expect(res.statusCode).toBe(401);
   });
+
+  it('email is case-insensitive and trimmed (gap closure — mirrors IdentityService.evaluateLogin)', async () => {
+    const platformAdmin = await seedPlatformAdmin();
+
+    const upperCtx = await freshCtx(ADMIN_HOST, `10.${RUN}.9.5`);
+    const upperRes = await loginPlatform(
+      upperCtx,
+      platformAdmin.email.toUpperCase(),
+      platformAdmin.password,
+    );
+    expect(upperRes.statusCode).toBe(200);
+
+    const paddedCtx = await freshCtx(ADMIN_HOST, `10.${RUN}.9.6`);
+    const paddedRes = await loginPlatform(
+      paddedCtx,
+      `  ${platformAdmin.email}  `,
+      platformAdmin.password,
+    );
+    expect(paddedRes.statusCode).toBe(200);
+  });
 });
 
 /**
