@@ -6,21 +6,27 @@ import type { ScopeResolverFn } from '../authorization/scope-resolvers.js';
  * `scope-resolvers.ts`'s own doc comment names this as B5's job). Checks
  * the actor holds an active `HODAssignment` for the resource's department.
  *
- * Proves DoD item 6 ("Subject.department_id resolves an HOD's subject
- * scope, proven by the query B9 will use") at the resolver level — no B9
- * controller exists yet to exercise this through HTTP, which is expected
- * for this phase: `PermissionGuard` never constructs a `ResourceContext`
- * today (its only call site always omits `resource`), so this resolver
- * only becomes reachable once a later phase's controller (B9's HOD review
- * queue) explicitly calls `AuthorizationService.evaluate(actor, id,
- * { departmentId })` itself — the same extension point
- * `ScopeResolverRegistry`'s own doc comment anticipates.
+ * B8 gap-closure: when `resource` is undefined — `PermissionGuard`'s own
+ * bare `@Authorized(id)` check, which never constructs a `ResourceContext`
+ * — this now resolves `true` (optimistic pass), mirroring `OWNED`/`SELF`'s
+ * own established convention in `scope-resolvers.ts` exactly ("no target
+ * yet to check against — the service filters/verifies precisely"). Found
+ * only once B8 tried to route a real HTTP request through a DEPARTMENT-
+ * graded permission for the first time: the original "deny when resource is
+ * undefined" behaviour meant `@Authorized('questionBank.view')` (HOD:
+ * DEPARTMENT) would 403 an HOD's `GET /v1/questions` at the guard itself,
+ * before the handler/service ever got a chance to filter the list to their
+ * own department — the exact same shape of gap `OWNED` already avoids for
+ * `questionBank.editOwnDraft`/`.deleteOwnDraft`. A resource-specific check
+ * (e.g. a single question's real department) still resolves precisely, as
+ * before — only the "no resource given at all" case changed.
  */
 export function createDepartmentScopeResolver(): ScopeResolverFn {
   return async (actor, resource) => {
     if (actor.kind !== 'SCHOOL') return false;
     if (!actor.roles.includes('HOD')) return false;
-    const departmentId = resource?.departmentId;
+    if (!resource) return true;
+    const departmentId = resource.departmentId;
     if (departmentId === undefined) return false;
 
     const activeAssignment = await withTenant(prisma, actor.schoolId, (tx) =>

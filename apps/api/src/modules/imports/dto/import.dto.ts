@@ -72,6 +72,15 @@ export class CreateTeacherImportDto {
   mediaAssetId!: string;
 }
 
+/** B8 — question import never resolves/needs an academic session (a
+ * `Question.level` outlives any one session, unlike a `StudentEnrollment`)
+ * — mirrors `CreateTeacherImportDto`'s exact shape. */
+export class CreateQuestionImportDto {
+  @ApiProperty({ type: String, description: 'A completed (READY) IMPORT_SOURCE MediaAsset id.' })
+  @IsUUID()
+  mediaAssetId!: string;
+}
+
 export class ImportJobResponseDto {
   @ApiProperty({ type: String })
   id!: string;

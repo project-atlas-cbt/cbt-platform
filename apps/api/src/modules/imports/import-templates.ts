@@ -33,6 +33,10 @@ export interface ImportTemplateDef {
   requiredColumns: readonly string[];
 }
 
+// B8 — 05 §18.1's own literal column list: Question, Option A-D, Correct
+// answer, Subject, Class, Topic, Difficulty, Marks. "Class" resolves to a
+// Question.level exactly like STUDENTS' own "Class" column resolves to a
+// ClassGroup — see import-row-validator.ts's validateQuestionRow.
 export const IMPORT_TEMPLATES: Record<ImportJobType, ImportTemplateDef> = {
   STUDENTS: {
     columns: ['Student ID', 'First Name', 'Last Name', 'Class', 'Department'],
@@ -41,6 +45,31 @@ export const IMPORT_TEMPLATES: Record<ImportJobType, ImportTemplateDef> = {
   TEACHERS: {
     columns: ['Staff ID', 'First Name', 'Last Name', 'Email'],
     requiredColumns: ['Staff ID', 'First Name', 'Last Name', 'Email'],
+  },
+  QUESTIONS: {
+    columns: [
+      'Question',
+      'Option A',
+      'Option B',
+      'Option C',
+      'Option D',
+      'Correct Answer',
+      'Subject',
+      'Class',
+      'Topic',
+      'Difficulty',
+      'Marks',
+    ],
+    requiredColumns: [
+      'Question',
+      'Option A',
+      'Option B',
+      'Correct Answer',
+      'Subject',
+      'Class',
+      'Difficulty',
+      'Marks',
+    ],
   },
 };
 
@@ -51,6 +80,21 @@ const SAMPLE_ROWS: Record<ImportJobType, readonly (readonly string[])[]> = {
     ['ST002', 'David', 'John', 'SS1A', 'Science'],
   ],
   TEACHERS: [['STF001', 'Ngozi', 'Okafor', 'ngozi.okafor@example.com']],
+  QUESTIONS: [
+    [
+      'What is the capital of Nigeria?',
+      'Lagos',
+      'Abuja',
+      'Kano',
+      'Ibadan',
+      'B',
+      'Geography',
+      'SS1A',
+      'Nigerian States',
+      'EASY',
+      '2',
+    ],
+  ],
 };
 
 function toCsvLine(cells: readonly string[]): string {

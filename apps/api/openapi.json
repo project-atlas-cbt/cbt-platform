@@ -3641,6 +3641,95 @@
         "tags": ["imports"]
       }
     },
+    "/imports/questions/upload-target": {
+      "post": {
+        "operationId": "ImportsController_requestQuestionUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestImportUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestImportUploadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request an upload target for a question import file.",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/questions/upload-target/{id}/complete": {
+      "post": {
+        "operationId": "ImportsController_completeQuestionUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaAssetSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalise and validate an uploaded question import file by content.",
+        "tags": ["imports"]
+      }
+    },
+    "/imports/questions": {
+      "post": {
+        "operationId": "ImportsController_createQuestionImport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuestionImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportJobResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start validating a question import file (05 §18).",
+        "tags": ["imports"]
+      }
+    },
     "/imports": {
       "get": {
         "operationId": "ImportsController_list",
@@ -3804,6 +3893,666 @@
         },
         "summary": "Commit every VALID row of a validated import (05 §10.2).",
         "tags": ["imports"]
+      }
+    },
+    "/questions": {
+      "post": {
+        "operationId": "QuestionController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuestionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a question + its initial draft revision (DoD items 1/2/8).",
+        "tags": ["questions"]
+      },
+      "get": {
+        "operationId": "QuestionController_list",
+        "parameters": [
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            }
+          },
+          {
+            "name": "topicId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "difficulty",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["EASY", "MEDIUM", "HARD"]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "SUBMITTED",
+                "UNDER_REVIEW",
+                "APPROVED",
+                "REJECTED",
+                "ARCHIVED",
+                "ARCHIVED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List questions within the caller's scope, filtered.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/counts": {
+      "get": {
+        "operationId": "QuestionController_counts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionCountsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Status counts for the bank home (05 §15.1), within the caller's scope.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/export": {
+      "get": {
+        "operationId": "QuestionController_export",
+        "parameters": [
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            }
+          },
+          {
+            "name": "topicId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "difficulty",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["EASY", "MEDIUM", "HARD"]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "SUBMITTED",
+                "UNDER_REVIEW",
+                "APPROVED",
+                "REJECTED",
+                "ARCHIVED",
+                "ARCHIVED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Download the bank (within scope) as a re-importable CSV.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/{id}": {
+      "get": {
+        "operationId": "QuestionController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A question with its full revision history.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/{id}/archive": {
+      "post": {
+        "operationId": "QuestionController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archive a question — always allowed, never touches any revision row.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/{questionId}/revisions/{revisionId}": {
+      "patch": {
+        "operationId": "QuestionRevisionController_update",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateQuestionRevisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionRevisionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Edit a draft revision in place — freely editable while DRAFT.",
+        "tags": ["questions"]
+      },
+      "delete": {
+        "operationId": "QuestionRevisionController_remove",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a draft revision — refused for a question's only revision.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/{questionId}/revisions": {
+      "post": {
+        "operationId": "QuestionRevisionController_createRevision",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRevisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionRevisionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start a new revision cloned from the current one (must be APPROVED or REJECTED).",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/{questionId}/revisions/{revisionId}/submit": {
+      "post": {
+        "operationId": "QuestionRevisionController_submit",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionRevisionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "DRAFT -> SUBMITTED, running the full validation catalogue (DoD item 8).",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/media/upload-target": {
+      "post": {
+        "operationId": "QuestionMediaController_requestUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestQuestionMediaUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestMediaUploadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request an upload target for a question image/diagram, scope-checked.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/media/upload-target/{id}/complete": {
+      "post": {
+        "operationId": "QuestionMediaController_completeUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaAssetSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Finalise and validate an uploaded question image/diagram.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/{questionId}/revisions/{revisionId}/media": {
+      "post": {
+        "operationId": "QuestionMediaController_attach",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachQuestionMediaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionMediaItemResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Attach an already-uploaded, READY asset to a draft revision.",
+        "tags": ["questions"]
+      }
+    },
+    "/questions/{questionId}/revisions/{revisionId}/media/{mediaId}": {
+      "delete": {
+        "operationId": "QuestionMediaController_detach",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "revisionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mediaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Remove media from a draft revision.",
+        "tags": ["questions"]
+      }
+    },
+    "/topics": {
+      "get": {
+        "operationId": "TopicController_list",
+        "parameters": [
+          {
+            "name": "subjectId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parentTopicId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List topics for a subject, optionally filtered to one parent (subtopics).",
+        "tags": ["questions"]
+      },
+      "post": {
+        "operationId": "TopicController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTopicDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopicResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create or resolve (case-insensitively) a topic (DoD item 9).",
+        "tags": ["questions"]
       }
     }
   },
@@ -6351,7 +7100,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["STUDENTS", "TEACHERS"]
+            "enum": ["STUDENTS", "TEACHERS", "QUESTIONS"]
           },
           "status": {
             "type": "string",
@@ -6427,6 +7176,16 @@
         },
         "required": ["mediaAssetId"]
       },
+      "CreateQuestionImportDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string",
+            "description": "A completed (READY) IMPORT_SOURCE MediaAsset id."
+          }
+        },
+        "required": ["mediaAssetId"]
+      },
       "ImportJobListResponseDto": {
         "type": "object",
         "properties": {
@@ -6492,7 +7251,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["STUDENTS", "TEACHERS"]
+            "enum": ["STUDENTS", "TEACHERS", "QUESTIONS"]
           },
           "status": {
             "type": "string",
@@ -6576,6 +7335,613 @@
           "rowsPage",
           "rowsPageSize"
         ]
+      },
+      "QuestionOptionInputDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Omit for a new option; include to reference an existing one of this revision."
+          },
+          "content": {
+            "type": "string"
+          },
+          "correctFlag": {
+            "type": "boolean"
+          }
+        },
+        "required": ["content", "correctFlag"]
+      },
+      "CreateQuestionDto": {
+        "type": "object",
+        "properties": {
+          "subjectId": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          "questionType": {
+            "type": "string",
+            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "topicId": {
+            "type": "string",
+            "description": "A pre-resolved Topic id."
+          },
+          "topicName": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Free-text topic name, resolved case-insensitively and auto-created on first use (ADR-0001 §3 / DoD item 9) — ignored if topicId is also given."
+          },
+          "subtopicId": {
+            "type": "string"
+          },
+          "subtopicName": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["EASY", "MEDIUM", "HARD"]
+          },
+          "marks": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "options": {
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOptionInputDto"
+            }
+          }
+        },
+        "required": [
+          "subjectId",
+          "level",
+          "questionType",
+          "content",
+          "difficulty",
+          "marks",
+          "options"
+        ]
+      },
+      "QuestionOptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "originalOrder": {
+            "type": "number"
+          },
+          "correctFlag": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "content", "originalOrder", "correctFlag"]
+      },
+      "QuestionMediaItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "mediaAssetId": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string",
+            "description": "The joined MediaAsset's own type."
+          },
+          "displayOrder": {
+            "type": "number"
+          }
+        },
+        "required": ["id", "mediaAssetId", "mediaType", "displayOrder"]
+      },
+      "QuestionRevisionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revisionNumber": {
+            "type": "number"
+          },
+          "questionType": {
+            "type": "string",
+            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "topicId": {
+            "type": "string",
+            "nullable": true
+          },
+          "topicName": {
+            "type": "string",
+            "nullable": true
+          },
+          "subtopicId": {
+            "type": "string",
+            "nullable": true
+          },
+          "subtopicName": {
+            "type": "string",
+            "nullable": true
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["EASY", "MEDIUM", "HARD"]
+          },
+          "marks": {
+            "type": "number"
+          },
+          "explanation": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdByMembershipId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOptionResponseDto"
+            }
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionMediaItemResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "revisionNumber",
+          "questionType",
+          "content",
+          "topicId",
+          "topicName",
+          "subtopicId",
+          "subtopicName",
+          "difficulty",
+          "marks",
+          "explanation",
+          "createdByMembershipId",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "options",
+          "media"
+        ]
+      },
+      "QuestionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          "topicId": {
+            "type": "string",
+            "nullable": true
+          },
+          "topicName": {
+            "type": "string",
+            "nullable": true
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["EASY", "MEDIUM", "HARD"]
+          },
+          "marks": {
+            "type": "number"
+          },
+          "questionType": {
+            "type": "string",
+            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+          },
+          "currentStatus": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "UNDER_REVIEW",
+              "APPROVED",
+              "REJECTED",
+              "ARCHIVED",
+              "ARCHIVED"
+            ]
+          },
+          "authorTeacherProfileId": {
+            "type": "string"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "archivedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "revisions": {
+            "description": "Full revision history, oldest first — never mutated once APPROVED.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionRevisionResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "subjectId",
+          "subjectName",
+          "level",
+          "topicId",
+          "topicName",
+          "difficulty",
+          "marks",
+          "questionType",
+          "currentStatus",
+          "authorTeacherProfileId",
+          "authorName",
+          "createdAt",
+          "updatedAt",
+          "archivedAt",
+          "revisions"
+        ]
+      },
+      "QuestionCountsResponseDto": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "type": "number"
+          },
+          "submitted": {
+            "type": "number"
+          },
+          "underReview": {
+            "type": "number"
+          },
+          "approved": {
+            "type": "number"
+          },
+          "rejected": {
+            "type": "number"
+          },
+          "archived": {
+            "type": "number"
+          }
+        },
+        "required": ["draft", "submitted", "underReview", "approved", "rejected", "archived"]
+      },
+      "QuestionListItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          "topicId": {
+            "type": "string",
+            "nullable": true
+          },
+          "topicName": {
+            "type": "string",
+            "nullable": true
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["EASY", "MEDIUM", "HARD"]
+          },
+          "marks": {
+            "type": "number"
+          },
+          "questionType": {
+            "type": "string",
+            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+          },
+          "currentStatus": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "UNDER_REVIEW",
+              "APPROVED",
+              "REJECTED",
+              "ARCHIVED",
+              "ARCHIVED"
+            ]
+          },
+          "authorTeacherProfileId": {
+            "type": "string"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "subjectId",
+          "subjectName",
+          "level",
+          "topicId",
+          "topicName",
+          "difficulty",
+          "marks",
+          "questionType",
+          "currentStatus",
+          "authorTeacherProfileId",
+          "authorName",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "QuestionListResponseDto": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionListItemResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": ["questions", "total", "page", "pageSize"]
+      },
+      "UpdateQuestionRevisionDto": {
+        "type": "object",
+        "properties": {
+          "questionType": {
+            "type": "string",
+            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "topicId": {
+            "type": "string"
+          },
+          "topicName": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "subtopicId": {
+            "type": "string"
+          },
+          "subtopicName": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["EASY", "MEDIUM", "HARD"]
+          },
+          "marks": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "options": {
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOptionInputDto"
+            }
+          }
+        }
+      },
+      "CreateRevisionDto": {
+        "type": "object",
+        "properties": {
+          "questionType": {
+            "type": "string",
+            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+          },
+          "content": {
+            "type": "string"
+          },
+          "topicId": {
+            "type": "string"
+          },
+          "topicName": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "subtopicId": {
+            "type": "string"
+          },
+          "subtopicName": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["EASY", "MEDIUM", "HARD"]
+          },
+          "marks": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "options": {
+            "maxItems": 4,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOptionInputDto"
+            }
+          }
+        }
+      },
+      "RequestQuestionMediaUploadDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["QUESTION_IMAGE", "QUESTION_DIAGRAM"]
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "declaredMimeType": {
+            "type": "string"
+          },
+          "declaredSizeBytes": {
+            "type": "number"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          }
+        },
+        "required": [
+          "type",
+          "filename",
+          "declaredMimeType",
+          "declaredSizeBytes",
+          "subjectId",
+          "level"
+        ]
+      },
+      "AttachQuestionMediaDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string",
+            "description": "A completed (READY) QUESTION_IMAGE/DIAGRAM asset id."
+          },
+          "displayOrder": {
+            "type": "number"
+          }
+        },
+        "required": ["mediaAssetId", "displayOrder"]
+      },
+      "TopicResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "parentTopicId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "subjectId", "parentTopicId", "name"]
+      },
+      "TopicListResponseDto": {
+        "type": "object",
+        "properties": {
+          "topics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopicResponseDto"
+            }
+          }
+        },
+        "required": ["topics"]
+      },
+      "CreateTopicDto": {
+        "type": "object",
+        "properties": {
+          "subjectId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "parentTopicId": {
+            "type": "string"
+          }
+        },
+        "required": ["subjectId", "name"]
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

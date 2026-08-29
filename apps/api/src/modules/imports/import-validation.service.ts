@@ -6,9 +6,12 @@ import { IMPORT_TEMPLATES, IMPORT_TEMPLATE_VERSION } from './import-templates.js
 import {
   validateStudentRow,
   validateTeacherRow,
+  validateQuestionRow,
+  questionAssignedPairKey,
   type FieldError,
   type StudentValidationContext,
   type TeacherValidationContext,
+  type QuestionValidationContext,
 } from './import-row-validator.js';
 
 /** A-17's own recommended number, adopted as the engineering default —
@@ -19,6 +22,16 @@ const ID_COLUMN: Record<'STUDENTS' | 'TEACHERS', string> = {
   STUDENTS: 'Student ID',
   TEACHERS: 'Staff ID',
 };
+
+/** QUESTIONS rows have no natural duplicate-detection identifier (05 §18's
+ * template carries none — see `QuestionValidationContext`'s own doc
+ * comment) — this type guard keeps the STUDENTS/TEACHERS-only
+ * id-in-file/existing-id computation from running for that type at all. */
+function isPersonImportType(
+  type: 'STUDENTS' | 'TEACHERS' | 'QUESTIONS',
+): type is 'STUDENTS' | 'TEACHERS' {
+  return type === 'STUDENTS' || type === 'TEACHERS';
+}
 
 function countOccurrences(values: string[]): Map<string, number> {
   const counts = new Map<string, number>();
@@ -124,8 +137,8 @@ export class ImportValidationService {
         return;
       }
 
-      const idColumn = ID_COLUMN[job.type];
-      const idsInFile = parsed.rows.map((row) => row[idColumn] ?? '');
+      const idColumn = isPersonImportType(job.type) ? ID_COLUMN[job.type] : null;
+      const idsInFile = idColumn ? parsed.rows.map((row) => row[idColumn] ?? '') : [];
       const idCountsInFile = countOccurrences(idsInFile);
 
       // One transaction for the whole read-then-write sequence, not two
@@ -138,10 +151,12 @@ export class ImportValidationService {
       // outright — either the whole validation run lands, or none of it
       // does.
       await withTenant(prisma, schoolId, async (tx) => {
-        const existingMemberships = await tx.schoolMembership.findMany({
-          where: { schoolId, loginIdentifier: { in: idsInFile.filter(Boolean) } },
-          select: { loginIdentifier: true },
-        });
+        const existingMemberships = idColumn
+          ? await tx.schoolMembership.findMany({
+              where: { schoolId, loginIdentifier: { in: idsInFile.filter(Boolean) } },
+              select: { loginIdentifier: true },
+            })
+          : [];
         const existingIds = new Set(existingMemberships.map((m) => m.loginIdentifier));
 
         let outcomes: {
@@ -149,7 +164,71 @@ export class ImportValidationService {
           rawData: Record<string, string>;
           errors: FieldError[];
         }[];
-        if (job.type === 'STUDENTS') {
+        if (job.type === 'QUESTIONS') {
+          // B8 — every imported question is authored as the uploader
+          // (QuestionService.createFromImportRow's own doc comment), so
+          // scope is resolved against *their* active TeacherAssignments,
+          // the same ADR-0001 join interactive creation uses.
+          const uploaderMembership = await tx.schoolMembership.findFirst({
+            where: { schoolId, userId: job.uploaderUserId },
+            select: { id: true },
+          });
+          const teacherProfile = uploaderMembership
+            ? await tx.teacherProfile.findUnique({
+                where: { schoolId_membershipId: { schoolId, membershipId: uploaderMembership.id } },
+                select: { id: true },
+              })
+            : null;
+          const assignments = teacherProfile
+            ? await tx.teacherAssignment.findMany({
+                where: { schoolId, teacherProfileId: teacherProfile.id, status: 'ACTIVE' },
+                select: {
+                  classSubject: {
+                    select: { subjectId: true, classGroupSession: { select: { level: true } } },
+                  },
+                },
+              })
+            : [];
+          const assignedPairs = new Set(
+            assignments.map((a) =>
+              questionAssignedPairKey(
+                a.classSubject.subjectId,
+                a.classSubject.classGroupSession.level,
+              ),
+            ),
+          );
+
+          const [subjects, classes] = await Promise.all([
+            tx.subject.findMany({
+              where: { schoolId, status: 'ACTIVE' },
+              select: { id: true, name: true, departmentId: true },
+            }),
+            // Deliberately school-wide, not session-scoped: a Question's
+            // `level` outlives any one session, and a class name's level
+            // is structurally consistent across the sessions it recurs in
+            // (e.g. "SS2A" is always level SS2), so the last session's row
+            // to populate this name in the map is equally correct.
+            tx.classGroup.findMany({
+              where: { schoolId, status: 'ACTIVE' },
+              select: { name: true, level: true },
+            }),
+          ]);
+          const ctx: QuestionValidationContext = {
+            subjectsByName: new Map(
+              subjects.map((s) => [
+                s.name.toLowerCase(),
+                { id: s.id, departmentId: s.departmentId },
+              ]),
+            ),
+            classLevelsByName: new Map(classes.map((c) => [c.name.toLowerCase(), c.level])),
+            assignedPairs,
+          };
+          outcomes = parsed.rows.map((row, i) => ({
+            rowNumber: i + 1,
+            rawData: row,
+            errors: validateQuestionRow(row, ctx),
+          }));
+        } else if (job.type === 'STUDENTS') {
           // createStudentImport always resolves a real session before
           // creating a STUDENTS-type job (or throws) — null here would be a
           // real bug elsewhere, so this is asserted, not silently coerced.

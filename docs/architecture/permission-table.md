@@ -91,17 +91,16 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Media
 
-| Action                                                  | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER   | STUDENT | Awaiting                                                                                           |
-| ------------------------------------------------------- | -------------- | ------------ | --------- | ------ | --------- | ------- | -------------------------------------------------------------------------------------------------- |
-| View branding (logo + primary colour + derived palette) | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL | SCHOOL    | —       |                                                                                                    |
-| Upload media asset (question image/diagram/other)       | —              | SCHOOL       | SCHOOL    | SCHOOL | SCHOOL ⚠️ | —       | Question (B8) for real ASSIGNED-scoped Teacher upload — SCHOOL is a temporary widening until then. |
-| Get signed access URL for a non-logo media asset        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | SCHOOL | SCHOOL    | —       |                                                                                                    |
+| Action                                                  | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER  | STUDENT | Awaiting |
+| ------------------------------------------------------- | -------------- | ------------ | --------- | ------ | -------- | ------- | -------- |
+| View branding (logo + primary colour + derived palette) | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL | SCHOOL   | —       |          |
+| Upload media asset (question image/diagram/other)       | —              | SCHOOL       | SCHOOL    | SCHOOL | ASSIGNED | —       |          |
+| Get signed access URL for a non-logo media asset        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | SCHOOL | SCHOOL   | —       |          |
 
 <details><summary>Notes</summary>
 
 - **View branding (logo + primary colour + derived palette) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Upload media asset (question image/diagram/other) / SOFTWARE_ADMIN:** ADR-0012: content authoring denied to Software Admin.
-- **Upload media asset (question image/diagram/other) / TEACHER:** Placeholder scope: real per-subject/class (ASSIGNED) Teacher scoping is B8's job once Question/Subject/ClassGroup exist — mirrors the ASSIGNED/DEPARTMENT placeholder precedent already used elsewhere in this table. SCHOOL is a temporary widening.
 - **Get signed access URL for a non-logo media asset / SOFTWARE_ADMIN:** Matches the established "Software Admin: read + audited break-glass" default for school content elsewhere in this table.
 - **Get signed access URL for a non-logo media asset / STUDENT:** Students receive media via the attempt package (ADR-0021, B13), never this endpoint.
 
@@ -189,22 +188,22 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Question Bank
 
-| Action                                      | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                                 |
-| ------------------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ---------------------------------------- |
-| View question bank                          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Question (B8)                            |
-| Create question                             | —              | —            | —         | —          | ASSIGNED | —       | Question (B8)                            |
-| Edit own draft question                     | —              | —            | —         | —          | OWNED    | —       | Question (B8)                            |
-| Delete own draft question                   | —              | —            | —         | —          | OWNED    | —       | Question (B8)                            |
-| Submit question for review                  | —              | —            | —         | —          | OWNED    | —       | Question (B8/B9)                         |
-| Review submitted questions                  | —              | SCHOOL       | —         | DEPARTMENT | —        | —       | Question review workflow (B9)            |
-| Comment on question (derived split: view)   | —              | SCHOOL       | —         | DEPARTMENT | OWNED ⚠️ | —       | Question review workflow (B9)            |
-| Comment on question (derived split: create) | —              | —            | —         | DEPARTMENT | OWNED ⚠️ | —       | Question review workflow (B9)            |
-| Approve question                            | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9)            |
-| Reject question                             | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9)            |
-| Request changes                             | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9)            |
-| Archive question                            | 🔒 BREAK-GLASS | SCHOOL ⚠️    | SCHOOL ⚠️ | DEPARTMENT | OWNED ⚠️ | —       | Question (B8)                            |
-| Import questions                            | 🔒 BREAK-GLASS | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Bulk import pipeline (B7), Question (B8) |
-| Export questions                            | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Question (B8)                            |
+| Action                                      | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                      |
+| ------------------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ----------------------------- |
+| View question bank                          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       |                               |
+| Create question                             | —              | —            | —         | —          | ASSIGNED | —       |                               |
+| Edit own draft question                     | —              | —            | —         | —          | OWNED    | —       |                               |
+| Delete own draft question                   | —              | —            | —         | —          | OWNED    | —       |                               |
+| Submit question for review                  | —              | —            | —         | —          | OWNED    | —       | Question (B8/B9)              |
+| Review submitted questions                  | —              | SCHOOL       | —         | DEPARTMENT | —        | —       | Question review workflow (B9) |
+| Comment on question (derived split: view)   | —              | SCHOOL       | —         | DEPARTMENT | OWNED ⚠️ | —       | Question review workflow (B9) |
+| Comment on question (derived split: create) | —              | —            | —         | DEPARTMENT | OWNED ⚠️ | —       | Question review workflow (B9) |
+| Approve question                            | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9) |
+| Reject question                             | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9) |
+| Request changes                             | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9) |
+| Archive question                            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED ⚠️ | —       |                               |
+| Import questions                            | 🔒 BREAK-GLASS | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       |                               |
+| Export questions                            | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       |                               |
 
 <details><summary>Notes</summary>
 
@@ -212,9 +211,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Comment on question (derived split: view) / TEACHER:** Comments on their own submitted question.
 - **Comment on question (derived split: create) / TEACHER:** "Respond to feedback" — replies on their own question's review thread, not an initiating review comment.
 - **Archive question / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
-- **Archive question / SCHOOL_ADMIN:** LIMITED (read-only placeholder): Exact archivable-by-School-Admin boundary finalized in B8/B9.
-- **Archive question / MODERATOR:** LIMITED (read-only placeholder): B8/B9.
-- **Archive question / TEACHER:** "Own/assigned" — exact boundary finalized in B8/B9.
+- **Archive question / TEACHER:** "Own/assigned" — an author may archive their own question.
 - **Import questions / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Import questions / SCHOOL_ADMIN:** LIMITED (read-only placeholder): B7/B8 — School Admin's import boundary is not yet finalized (this is a CREATE-shaped row; "Limited" is recorded here as a placeholder pending that phase, not a working read-only grant).
 - **Export questions / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
@@ -226,13 +223,13 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 | Action                                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting         |
 | ----------------------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | ---------------- |
-| Create Draft                              | —              | —            | —         | —          | ASSIGNED ⚠️ | —       | Question (B8)    |
+| Create Draft                              | —              | —            | —         | —          | ASSIGNED ⚠️ | —       |                  |
 | Submit                                    | —              | —            | —         | —          | OWNED ⚠️    | —       | Question (B8/B9) |
 | Under Review (view)                       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
 | Approved (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
 | Rejected (derived split: view)            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
 | Rejected (derived split: edit & resubmit) | —              | —            | —         | —          | OWNED ⚠️    | —       | Question (B8/B9) |
-| Archived (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8)    |
+| Archived (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       |                  |
 
 <details><summary>Notes</summary>
 

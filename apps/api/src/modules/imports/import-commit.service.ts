@@ -6,6 +6,8 @@ import { StudentEnrollmentService } from '../academics/student-enrollment.servic
 import { AuditService } from '../operations/audit-event.service.js';
 import { IdentityService } from '../identity/identity.service.js';
 import { createPersonMembership } from '../users/person.util.js';
+import { QuestionService } from '../questions/question.service.js';
+import { TopicService } from '../questions/topic.service.js';
 
 const CHUNK_SIZE = 100;
 
@@ -59,6 +61,8 @@ export class ImportCommitService {
     private readonly audit: AuditService,
     private readonly identity: IdentityService,
     private readonly enrollments: StudentEnrollmentService,
+    private readonly questions: QuestionService,
+    private readonly topics: TopicService,
   ) {}
 
   async commit(schoolId: string, importJobId: string): Promise<void> {
@@ -116,11 +120,15 @@ export class ImportCommitService {
 
         for (const row of rows) {
           try {
-            const person = await this.ensurePerson(schoolId, job.type, row);
-            if (job.type === 'STUDENTS') {
-              await this.enrollStudent(schoolId, person, row, job, actor);
+            if (job.type === 'QUESTIONS') {
+              await this.commitQuestionRow(schoolId, row, actor);
             } else {
-              await this.identity.issueStaffInvitation(schoolId, person.userId);
+              const person = await this.ensurePerson(schoolId, job.type, row);
+              if (job.type === 'STUDENTS') {
+                await this.enrollStudent(schoolId, person, row, job, actor);
+              } else {
+                await this.identity.issueStaffInvitation(schoolId, person.userId);
+              }
             }
             await withTenant(prisma, schoolId, (tx) =>
               tx.importRow.update({ where: { id: row.id }, data: { status: 'COMMITTED' } }),
@@ -173,7 +181,12 @@ export class ImportCommitService {
         schoolId,
         actorUserId: actor.actorUserId,
         actorRole: actor.actorRole,
-        action: job.type === 'STUDENTS' ? 'STUDENT_IMPORT_COMPLETED' : 'TEACHER_IMPORT_COMPLETED',
+        action:
+          job.type === 'STUDENTS'
+            ? 'STUDENT_IMPORT_COMPLETED'
+            : job.type === 'TEACHERS'
+              ? 'TEACHER_IMPORT_COMPLETED'
+              : 'QUESTION_IMPORT_COMPLETED',
         entityType: 'ImportJob',
         entityId: importJobId,
         metadata: {
@@ -289,6 +302,93 @@ export class ImportCommitService {
       });
       return { membershipId: person.membershipId, userId: person.userId, studentProfileId: null };
     });
+  }
+
+  /** B8 — question creation is one atomic transaction (unlike the
+   * student/teacher person-then-enroll/invite split), so resumability here
+   * is simply "already has a resultQuestionId, or doesn't" — no finer-
+   * grained progress marker is needed the way `resultMembershipId` needs
+   * one for STUDENTS/TEACHERS. Resolves the row's Subject/Class/Topic
+   * fresh at commit time (never trusting a validation-time id — mirrors
+   * `enrollStudent`'s own "may have changed since validation, staging can
+   * last 24h" reasoning), and always creates the row's author as the
+   * uploader's own `TeacherProfile` (`QuestionService.createFromImportRow`
+   * re-verifies the assignment is still active). */
+  private async commitQuestionRow(
+    schoolId: string,
+    row: { id: string; resultQuestionId: string | null; rawData: unknown },
+    actor: { actorUserId: string; actorRole: Role },
+  ): Promise<void> {
+    if (row.resultQuestionId) return; // already created on a prior pass
+
+    const rawData = row.rawData as Record<string, string>;
+    const uploaderMembership = await withTenant(prisma, schoolId, (tx) =>
+      tx.schoolMembership.findFirst({ where: { schoolId, userId: actor.actorUserId } }),
+    );
+    if (!uploaderMembership) throw new Error('Uploader has no membership at this school.');
+    const teacherProfile = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherProfile.findUnique({
+        where: { schoolId_membershipId: { schoolId, membershipId: uploaderMembership.id } },
+      }),
+    );
+    if (!teacherProfile) throw new Error('Uploader has no active teacher profile at this school.');
+
+    const subject = await withTenant(prisma, schoolId, (tx) =>
+      tx.subject.findFirst({
+        where: {
+          schoolId,
+          status: 'ACTIVE',
+          name: { equals: rawData['Subject'] ?? '', mode: 'insensitive' },
+        },
+      }),
+    );
+    if (!subject) throw new Error(`Subject "${rawData['Subject']}" could not be resolved.`);
+    const classGroup = await withTenant(prisma, schoolId, (tx) =>
+      tx.classGroup.findFirst({
+        where: {
+          schoolId,
+          status: 'ACTIVE',
+          name: { equals: rawData['Class'] ?? '', mode: 'insensitive' },
+        },
+      }),
+    );
+    if (!classGroup) throw new Error(`Class "${rawData['Class']}" could not be resolved.`);
+
+    const topicName = (rawData['Topic'] ?? '').trim();
+    const topic = topicName
+      ? await this.topics.findOrCreate(schoolId, subject.id, { name: topicName })
+      : null;
+
+    const optionColumns = ['Option A', 'Option B', 'Option C', 'Option D'];
+    const optionLetters = ['A', 'B', 'C', 'D'];
+    const correctLetter = (rawData['Correct Answer'] ?? '').trim().toUpperCase();
+    const options = optionColumns
+      .map((col, index) => ({
+        content: (rawData[col] ?? '').trim(),
+        correctFlag: optionLetters[index] === correctLetter,
+      }))
+      .filter((option) => option.content.length > 0);
+
+    const created = await this.questions.createFromImportRow(schoolId, {
+      teacherProfileId: teacherProfile.id,
+      createdByMembershipId: uploaderMembership.id,
+      subjectId: subject.id,
+      level: classGroup.level,
+      // 05 §18.1's template carries no Question Type column — SINGLE_CHOICE
+      // covers True/False structurally too (two options whose text happens
+      // to be "True"/"False"), so no fragile option-count heuristic is
+      // needed to guess a distinct TRUE_FALSE type from row shape alone.
+      questionType: 'SINGLE_CHOICE',
+      content: rawData['Question'] ?? '',
+      options,
+      topicId: topic?.id ?? null,
+      difficulty: (rawData['Difficulty'] ?? '').trim().toUpperCase(),
+      marks: Number(rawData['Marks']),
+    });
+
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.importRow.update({ where: { id: row.id }, data: { resultQuestionId: created.id } }),
+    );
   }
 
   /** Re-resolves the row's Class by name against the job's target session

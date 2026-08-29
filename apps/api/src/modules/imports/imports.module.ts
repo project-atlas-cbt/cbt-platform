@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module.js';
 import { MediaModule } from '../media/media.module.js';
 import { AcademicsModule } from '../academics/academics.module.js';
+import { QuestionsModule } from '../questions/questions.module.js';
 import { OperationsModule } from '../operations/operations.module.js';
 import { ImportsController } from './imports.controller.js';
 import { ImportsService } from './imports.service.js';
@@ -25,14 +26,16 @@ import { ImportCommitService } from './import-commit.service.js';
  * why import files get their own dedicated route pair rather than the
  * generic `MediaController`), `AcademicsModule` for
  * `AcademicsContextService` (current-session resolution, already exported)
- * and `StudentEnrollmentService` (newly exported below), `OperationsModule`
+ * and `StudentEnrollmentService` (newly exported below), `QuestionsModule`
+ * (B8) for `QuestionService.createFromImportRow()`/`TopicService` (both
+ * exported there — see that module's own doc comment), `OperationsModule`
  * for `AuditService`, and `IdentityModule` both for `@Authorized(...)`'s
  * underlying `AuthGuard` (this module's own routes are school-scoped, per
  * every other `@Authorized`-using module's established precedent) and for
  * `IdentityService.issueStaffInvitation()`.
  */
 @Module({
-  imports: [IdentityModule, MediaModule, AcademicsModule, OperationsModule],
+  imports: [IdentityModule, MediaModule, AcademicsModule, QuestionsModule, OperationsModule],
   controllers: [ImportsController],
   providers: [ImportsService, ImportQueueService, ImportValidationService, ImportCommitService],
   // ImportValidationService/ImportCommitService are exported so

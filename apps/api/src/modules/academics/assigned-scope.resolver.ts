@@ -8,19 +8,22 @@ import type { ScopeResolverFn } from '../authorization/scope-resolvers.js';
  * `classSubjectId` — the exact mechanism DoD item 4 describes: "assigning
  * Mathematics/SS2A grants exactly that scope and nothing adjacent."
  *
- * Mirrors `department-scope.resolver.ts`'s exact shape. Same caveat that
- * resolver already recorded: `PermissionGuard` never constructs a
- * `ResourceContext` today (no call site passes one), so this resolver only
- * becomes reachable over HTTP once a later phase's controller (B8/B9's
- * question/exam endpoints) explicitly calls
- * `AuthorizationService.evaluate(actor, id, { classSubjectId })` itself —
- * proven directly here by a resolver-level integration test instead.
+ * Mirrors `department-scope.resolver.ts`'s exact shape, including its B8
+ * gap-closure: when `resource` is undefined (`PermissionGuard`'s own bare
+ * `@Authorized(id)` check), this now resolves `true` (optimistic pass),
+ * mirroring `OWNED`/`SELF`'s established convention — the handler/service
+ * is responsible for real per-resource filtering/verification from there
+ * (e.g. `QuestionService.create()`'s own explicit `evaluate(actor, id,
+ * { classSubjectId })` re-check once the real subject+level join resolves
+ * one; `GET /v1/questions`'s own scoped WHERE clause for the list case). A
+ * resource-specific check still resolves precisely, as before.
  */
 export function createAssignedScopeResolver(): ScopeResolverFn {
   return async (actor, resource) => {
     if (actor.kind !== 'SCHOOL') return false;
     if (!actor.roles.includes('TEACHER')) return false;
-    const classSubjectId = resource?.classSubjectId;
+    if (!resource) return true;
+    const classSubjectId = resource.classSubjectId;
     if (classSubjectId === undefined) return false;
 
     return withTenant(prisma, actor.schoolId, async (tx) => {

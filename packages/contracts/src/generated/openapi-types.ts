@@ -1564,6 +1564,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/imports/questions/upload-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an upload target for a question import file. */
+        post: operations["ImportsController_requestQuestionUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/questions/upload-target/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalise and validate an uploaded question import file by content. */
+        post: operations["ImportsController_completeQuestionUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start validating a question import file (05 §18). */
+        post: operations["ImportsController_createQuestionImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/imports": {
         parameters: {
             query?: never;
@@ -1643,6 +1694,230 @@ export interface paths {
         put?: never;
         /** Commit every VALID row of a validated import (05 §10.2). */
         post: operations["ImportsController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List questions within the caller's scope, filtered. */
+        get: operations["QuestionController_list"];
+        put?: never;
+        /** Create a question + its initial draft revision (DoD items 1/2/8). */
+        post: operations["QuestionController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status counts for the bank home (05 §15.1), within the caller's scope. */
+        get: operations["QuestionController_counts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the bank (within scope) as a re-importable CSV. */
+        get: operations["QuestionController_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A question with its full revision history. */
+        get: operations["QuestionController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a question — always allowed, never touches any revision row. */
+        post: operations["QuestionController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/{questionId}/revisions/{revisionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a draft revision — refused for a question's only revision. */
+        delete: operations["QuestionRevisionController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a draft revision in place — freely editable while DRAFT. */
+        patch: operations["QuestionRevisionController_update"];
+        trace?: never;
+    };
+    "/questions/{questionId}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a new revision cloned from the current one (must be APPROVED or REJECTED). */
+        post: operations["QuestionRevisionController_createRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/{questionId}/revisions/{revisionId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** DRAFT -> SUBMITTED, running the full validation catalogue (DoD item 8). */
+        post: operations["QuestionRevisionController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/media/upload-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request an upload target for a question image/diagram, scope-checked. */
+        post: operations["QuestionMediaController_requestUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/media/upload-target/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalise and validate an uploaded question image/diagram. */
+        post: operations["QuestionMediaController_completeUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/{questionId}/revisions/{revisionId}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attach an already-uploaded, READY asset to a draft revision. */
+        post: operations["QuestionMediaController_attach"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/questions/{questionId}/revisions/{revisionId}/media/{mediaId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove media from a draft revision. */
+        delete: operations["QuestionMediaController_detach"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List topics for a subject, optionally filtered to one parent (subtopics). */
+        get: operations["TopicController_list"];
+        put?: never;
+        /** Create or resolve (case-insensitively) a topic (DoD item 9). */
+        post: operations["TopicController_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2478,7 +2753,7 @@ export interface components {
         ImportJobResponseDto: {
             id: string;
             /** @enum {string} */
-            type: "STUDENTS" | "TEACHERS";
+            type: "STUDENTS" | "TEACHERS" | "QUESTIONS";
             /** @enum {string} */
             status: "PENDING_VALIDATION" | "VALIDATING" | "VALIDATED" | "IMPORTING" | "COMPLETED" | "FAILED" | "EXPIRED";
             /** @description Null for TEACHERS jobs, which have no target session. */
@@ -2496,6 +2771,10 @@ export interface components {
             createdAt: string;
         };
         CreateTeacherImportDto: {
+            /** @description A completed (READY) IMPORT_SOURCE MediaAsset id. */
+            mediaAssetId: string;
+        };
+        CreateQuestionImportDto: {
             /** @description A completed (READY) IMPORT_SOURCE MediaAsset id. */
             mediaAssetId: string;
         };
@@ -2520,7 +2799,7 @@ export interface components {
         ImportJobDetailResponseDto: {
             id: string;
             /** @enum {string} */
-            type: "STUDENTS" | "TEACHERS";
+            type: "STUDENTS" | "TEACHERS" | "QUESTIONS";
             /** @enum {string} */
             status: "PENDING_VALIDATION" | "VALIDATING" | "VALIDATED" | "IMPORTING" | "COMPLETED" | "FAILED" | "EXPIRED";
             /** @description Null for TEACHERS jobs, which have no target session. */
@@ -2540,6 +2819,186 @@ export interface components {
             rowsTotal: number;
             rowsPage: number;
             rowsPageSize: number;
+        };
+        QuestionOptionInputDto: {
+            /** @description Omit for a new option; include to reference an existing one of this revision. */
+            id?: string;
+            content: string;
+            correctFlag: boolean;
+        };
+        CreateQuestionDto: {
+            subjectId: string;
+            /** @enum {string} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+            /** @enum {string} */
+            questionType: "SINGLE_CHOICE" | "TRUE_FALSE";
+            content: string;
+            /** @description A pre-resolved Topic id. */
+            topicId?: string;
+            /** @description Free-text topic name, resolved case-insensitively and auto-created on first use (ADR-0001 §3 / DoD item 9) — ignored if topicId is also given. */
+            topicName?: string;
+            subtopicId?: string;
+            subtopicName?: string;
+            /** @enum {string} */
+            difficulty: "EASY" | "MEDIUM" | "HARD";
+            marks: number;
+            explanation?: string;
+            options: components["schemas"]["QuestionOptionInputDto"][];
+        };
+        QuestionOptionResponseDto: {
+            id: string;
+            content: string;
+            originalOrder: number;
+            correctFlag: boolean;
+        };
+        QuestionMediaItemResponseDto: {
+            id: string;
+            mediaAssetId: string;
+            /** @description The joined MediaAsset's own type. */
+            mediaType: string;
+            displayOrder: number;
+        };
+        QuestionRevisionResponseDto: {
+            id: string;
+            revisionNumber: number;
+            /** @enum {string} */
+            questionType: "SINGLE_CHOICE" | "TRUE_FALSE";
+            content: string;
+            topicId: string | null;
+            topicName: string | null;
+            subtopicId: string | null;
+            subtopicName: string | null;
+            /** @enum {string} */
+            difficulty: "EASY" | "MEDIUM" | "HARD";
+            marks: number;
+            explanation: string | null;
+            createdByMembershipId: string;
+            /** @enum {string} */
+            status: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            options: components["schemas"]["QuestionOptionResponseDto"][];
+            media: components["schemas"]["QuestionMediaItemResponseDto"][];
+        };
+        QuestionResponseDto: {
+            id: string;
+            subjectId: string;
+            subjectName: string;
+            /** @enum {string} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+            topicId: string | null;
+            topicName: string | null;
+            /** @enum {string} */
+            difficulty: "EASY" | "MEDIUM" | "HARD";
+            marks: number;
+            /** @enum {string} */
+            questionType: "SINGLE_CHOICE" | "TRUE_FALSE";
+            /** @enum {string} */
+            currentStatus: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED" | "ARCHIVED";
+            authorTeacherProfileId: string;
+            authorName: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            archivedAt: string | null;
+            /** @description Full revision history, oldest first — never mutated once APPROVED. */
+            revisions: components["schemas"]["QuestionRevisionResponseDto"][];
+        };
+        QuestionCountsResponseDto: {
+            draft: number;
+            submitted: number;
+            underReview: number;
+            approved: number;
+            rejected: number;
+            archived: number;
+        };
+        QuestionListItemResponseDto: {
+            id: string;
+            subjectId: string;
+            subjectName: string;
+            /** @enum {string} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+            topicId: string | null;
+            topicName: string | null;
+            /** @enum {string} */
+            difficulty: "EASY" | "MEDIUM" | "HARD";
+            marks: number;
+            /** @enum {string} */
+            questionType: "SINGLE_CHOICE" | "TRUE_FALSE";
+            /** @enum {string} */
+            currentStatus: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED" | "ARCHIVED";
+            authorTeacherProfileId: string;
+            authorName: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        QuestionListResponseDto: {
+            questions: components["schemas"]["QuestionListItemResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        UpdateQuestionRevisionDto: {
+            /** @enum {string} */
+            questionType?: "SINGLE_CHOICE" | "TRUE_FALSE";
+            content?: string;
+            topicId?: string;
+            topicName?: string;
+            subtopicId?: string;
+            subtopicName?: string;
+            /** @enum {string} */
+            difficulty?: "EASY" | "MEDIUM" | "HARD";
+            marks?: number;
+            explanation?: string;
+            options?: components["schemas"]["QuestionOptionInputDto"][];
+        };
+        CreateRevisionDto: {
+            /** @enum {string} */
+            questionType?: "SINGLE_CHOICE" | "TRUE_FALSE";
+            content?: string;
+            topicId?: string;
+            topicName?: string;
+            subtopicId?: string;
+            subtopicName?: string;
+            /** @enum {string} */
+            difficulty?: "EASY" | "MEDIUM" | "HARD";
+            marks?: number;
+            explanation?: string;
+            options?: components["schemas"]["QuestionOptionInputDto"][];
+        };
+        RequestQuestionMediaUploadDto: {
+            /** @enum {string} */
+            type: "QUESTION_IMAGE" | "QUESTION_DIAGRAM";
+            filename: string;
+            declaredMimeType: string;
+            declaredSizeBytes: number;
+            subjectId: string;
+            /** @enum {string} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+        };
+        AttachQuestionMediaDto: {
+            /** @description A completed (READY) QUESTION_IMAGE/DIAGRAM asset id. */
+            mediaAssetId: string;
+            displayOrder: number;
+        };
+        TopicResponseDto: {
+            id: string;
+            subjectId: string;
+            parentTopicId: string | null;
+            name: string;
+        };
+        TopicListResponseDto: {
+            topics: components["schemas"]["TopicResponseDto"][];
+        };
+        CreateTopicDto: {
+            subjectId: string;
+            name: string;
+            parentTopicId?: string;
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -5197,6 +5656,73 @@ export interface operations {
             };
         };
     };
+    ImportsController_requestQuestionUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestImportUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestImportUploadResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_completeQuestionUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetSummaryResponseDto"];
+                };
+            };
+        };
+    };
+    ImportsController_createQuestionImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuestionImportDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJobResponseDto"];
+                };
+            };
+        };
+    };
     ImportsController_list: {
         parameters: {
             query?: {
@@ -5297,6 +5823,375 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportJobResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionController_list: {
+        parameters: {
+            query?: {
+                subjectId?: string;
+                level?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+                topicId?: string;
+                difficulty?: "EASY" | "MEDIUM" | "HARD";
+                status?: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED" | "ARCHIVED";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionListResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuestionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionController_counts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionCountsResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionController_export: {
+        parameters: {
+            query?: {
+                subjectId?: string;
+                level?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+                topicId?: string;
+                difficulty?: "EASY" | "MEDIUM" | "HARD";
+                status?: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED" | "ARCHIVED";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    QuestionController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionRevisionController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionRevisionController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateQuestionRevisionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionRevisionResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionRevisionController_createRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRevisionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionRevisionResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionRevisionController_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionRevisionResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionMediaController_requestUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestQuestionMediaUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestMediaUploadResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionMediaController_completeUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetSummaryResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionMediaController_attach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+                revisionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachQuestionMediaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionMediaItemResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionMediaController_detach: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+                revisionId: string;
+                mediaId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    TopicController_list: {
+        parameters: {
+            query: {
+                subjectId: string;
+                parentTopicId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicListResponseDto"];
+                };
+            };
+        };
+    };
+    TopicController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTopicDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicResponseDto"];
                 };
             };
         };

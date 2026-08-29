@@ -1639,6 +1639,10 @@ unchanged, confirming no permission-table drift).
 - Question import — needs `B8`'s `Question` model, which doesn't exist yet; the roadmap's own
   "sequence student/teacher import first if B8 is not ready" note is exactly what this phase did.
   `questionBank.import`/`questionBank.export`'s own `awaitingResource` flags stay in place.
+  **Delivered in `B8`** (2026-08-29), extending this same `ImportsModule`/pipeline rather than
+  building a second one — see `B8`'s own Implementation notes for the full detail, including two
+  further gap-closures `B8` found (the shared upload-target/status/confirm routes were gated by
+  `users.import.students`, which Teacher/HOD — the real creators of a `QUESTIONS` job — don't hold).
 - Export pipeline — a separate phase's scope (`users.export`'s own permission-table row is flagged
   `awaitingResource: 'Export pipeline (B6/B18)'`, not B7).
 - Direct Excel formula evaluation — parse cached/literal cell values only (`exceljs`'s own default
@@ -1654,7 +1658,7 @@ unchanged, confirming no permission-table drift).
 
 # B8 — Question Bank
 
-**Status:** NOT STARTED · **Decided ADRs:** 0001 (question level / subject-department)
+**Status:** COMPLETE (2026-08-29) · **Decided ADRs:** 0001 (question level / subject-department)
 
 ## Objective
 
@@ -1689,17 +1693,21 @@ Deliver the question bank with immutable revisions, options, media, and taxonomy
 
 **Contract: `questions.v1`.**
 
-| Endpoint                                       | Purpose                                                                        |
-| ---------------------------------------------- | ------------------------------------------------------------------------------ |
-| `GET /v1/questions`                            | Scoped bank with filters: subject, level, topic, difficulty, status (`04 §38`) |
-| `POST /v1/questions`                           | Create question + initial draft revision                                       |
-| `GET /v1/questions/:id`                        | Question with revision history                                                 |
-| `PATCH /v1/questions/:id/revisions/:rev`       | Edit a draft revision only                                                     |
-| `POST /v1/questions/:id/revisions`             | New revision from an approved one                                              |
-| `POST /v1/questions/:id/revisions/:rev/submit` | Submit for review                                                              |
-| `POST /v1/questions/:id/archive`               | Archive                                                                        |
-| `GET /v1/questions/counts`                     | Status counts for the bank home (`05 §15.1`)                                   |
-| `GET/POST /v1/topics`                          | Topic management                                                               |
+| Endpoint                                                                      | Purpose                                                                                                                                             |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/questions`                                                           | Scoped bank with filters: subject, level, topic, difficulty, status (`04 §38`)                                                                      |
+| `POST /v1/questions`                                                          | Create question + initial draft revision                                                                                                            |
+| `GET /v1/questions/:id`                                                       | Question with revision history                                                                                                                      |
+| `PATCH /v1/questions/:id/revisions/:rev`                                      | Edit a draft revision only                                                                                                                          |
+| `POST /v1/questions/:id/revisions`                                            | New revision from an approved one                                                                                                                   |
+| `POST /v1/questions/:id/revisions/:rev/submit`                                | Submit for review                                                                                                                                   |
+| `POST /v1/questions/:id/archive`                                              | Archive                                                                                                                                             |
+| `GET /v1/questions/counts`                                                    | Status counts for the bank home (`05 §15.1`)                                                                                                        |
+| `GET/POST /v1/topics`                                                         | Topic management                                                                                                                                    |
+| `POST /v1/questions/:id/revisions/:rev/media` (+ `DELETE .../media/:mediaId`) | Attach/detach question media to a draft revision                                                                                                    |
+| `POST /v1/questions/media/upload-target` (+ `.../:id/complete`)               | Dedicated, ASSIGNED-scope-checked upload pair for question images/diagrams — closes `media.upload`'s TEACHER placeholder (see Implementation notes) |
+| `GET /v1/questions/export`                                                    | CSV export of the bank within scope, template-shaped for reimport                                                                                   |
+| `POST /v1/imports/questions` (+ its own `.../upload-target` pair)             | Question bulk import — extends B7's pipeline (see Implementation notes)                                                                             |
 
 ## Database work
 
@@ -1741,29 +1749,52 @@ B11's exam builder consumes approved revisions. B13's snapshot reads revision co
 
 ## Definition of Done
 
-1. A teacher creates an MCQ with at least two options, exactly one correct, within their assigned scope.
-2. Creating outside assigned subject or level is refused.
-3. Draft revisions are freely editable and deletable by their author.
-4. Submission transitions to `SUBMITTED` and locks editing.
-5. A rejected revision can be revised, producing a new revision with the history retained.
-6. An approved revision is immutable — a direct database update is rejected by constraint.
-7. Editing an approved question produces a new revision; the approved one is unchanged and still bound to any exam using it.
-8. Validation refuses: empty text, fewer than two options, missing correct answer, correct answer referencing a non-existent option, invalid marks, out-of-scope subject or class.
-9. Topics resolve case-insensitively and auto-create on first use.
-10. Media attaches to a revision and is retrievable only through authorized signed URLs.
-11. Status counts match a hand-computed fixture.
-12. Cross-tenant access denied.
+1. ✅ A teacher creates an MCQ with at least two options, exactly one correct, within their assigned scope. Proven over real HTTP (`question-lifecycle.integration.test.ts`).
+2. ✅ Creating outside assigned subject or level is refused (`QUESTION_OUT_OF_SCOPE`).
+3. ✅ Draft revisions are freely editable and deletable by their author — including the edge case of deleting a question's _only_ revision (cascades the Question itself, since a bare Question has no content of its own independent of a revision) and deleting a non-only revision (repoints `currentRevisionId` back at the prior one rather than leaving it null).
+4. ✅ Submission transitions to `SUBMITTED` and locks editing.
+5. ✅ A rejected revision can be revised, producing a new revision with the history retained.
+6. ✅ An approved revision is immutable — proven with a real `tx.$executeRaw` UPDATE/DELETE against an `APPROVED` row, bypassing Prisma's query builder entirely (the DoD's own literal wording), for both `question_revisions` and `question_options`.
+7. ✅ Editing an approved question produces a new revision; the approved one is unchanged (deep-equality-asserted) — exam-binding itself is only structurally provable until `B11`'s `Exam`/`ExamQuestion` exist (same honest-partial pattern B4 used for its own forward references).
+8. ✅ Validation refuses: empty text, fewer than two options, missing correct answer, invalid marks — proven both over HTTP and as a direct unit test of the pure validation function (several DTO-level `@IsInt()/@Min()/@Max()/@ArrayMinSize()` decorators already catch the same malformed input before the domain layer runs for any _explicitly supplied_ value, so the domain function's own logic is unit-tested directly rather than solely through HTTP). "Correct answer referencing a non-existent option" has no literal equivalent in this schema (`correctFlag` is per-option, not a separate pointer field, per `06 §27`) — the closest faithful check is `QUESTION_OPTION_NOT_FOUND` for a body-supplied option id that doesn't belong to the revision.
+9. ✅ Topics resolve case-insensitively and auto-create on first use, including a concurrent-create race resolved via the migration's own functional unique index.
+10. ✅ Media attaches to a revision and is retrievable only through authorized signed URLs.
+11. ✅ Status counts match a hand-computed fixture.
+12. ✅ Cross-tenant access denied (RLS-backed).
 
 ## Exit criteria
 
-- ADR-0001 decided and reflected in the schema.
-- Immutability constraint verified at the database level.
-- F9 confirms the contract.
+- ✅ ADR-0001 decided and reflected in the schema.
+- ✅ Immutability constraint verified at the database level (three triggers — revisions, options, and media, the last one beyond the DoD's literal wording but necessary for D-13's "never silently added/removed from an approved revision" to hold against every mutation path).
+- ⏳ F9 confirms the contract — F9 not built this session; `questions.v1` is frozen and published (`apps/api/openapi.json`/`packages/contracts`) for it to consume when it starts.
 
 ## Deferred items
 
 - Multiple-select, fill-in-the-blank, short answer, essay, matching, ordering (`05 §15.2` — model supports future addition; not enabled).
 - Mathematical notation rendering beyond rich text — confirm the editor capability in F9 and record any gap.
+- `QuestionRevisionStatus.ARCHIVED` — kept in the enum for `07 §7.2` fidelity, never written by any B8 code path (all archiving is `Question`-level, via `archivedAt`). Candidate for B9 to decide whether an individual stale revision ever needs it.
+- Question export stays CSV-only (import accepts CSV + `.xlsx`, per B7's own confirmed decision) — a deliberate, low-risk scope-down matching `class-credential-sheet.controller.ts`'s own CSV-only precedent for this class of admin export.
+- `GET /imports` (list) itself was not widened to a Teacher/HOD-reachable ownership model — only the single-job routes (`GET :id`, `GET :id/errors`, `POST :id/confirm`) were, since nothing in B8's own scope needs a Teacher to browse _all_ import jobs, only their own by id.
+
+## Implementation notes
+
+**D-12 resolution**: `Question.currentRevisionId` is a pointer, not a stored status column — set once per revision-creation transaction, never touched by a status transition (submit/approve/reject all mutate the _same_ row the pointer already references). `current_status` is always derived live: `archivedAt !== null ? 'ARCHIVED' : currentRevision.status`. This satisfies the audit's "if materialised, maintain it in the same transaction... with a test asserting the two never disagree" recommendation by construction, not a synced duplicate column.
+
+**Genuinely new infrastructure, both firsts for this codebase**: the parent+versioned-child `Question`→`QuestionRevision` pattern, and real Postgres trigger-enforced immutability (`enforce_question_revision_immutability`/`enforce_question_option_immutability`/`enforce_question_media_immutability`, hand-written SQL in the migration). No trigger existed anywhere in this schema before this phase.
+
+**A real Prisma gotcha found only by running the integration tests, not by inspection**: `QuestionOption`'s FK to `QuestionRevision` is composite (`[schoolId, questionRevisionId]`) — Prisma's generated nested-create input type for a composite-FK relation (`revision.create({ data: { ..., options: { create: [...] } } })`) _excludes_ `schoolId` from the nested rows, since it infers both halves of the composite key from the parent. Passing it explicitly (the first-written version of every option-creating method) failed at runtime with "Unknown argument `schoolId`" — invisible to `tsc`, only caught by a real Prisma client call. Fixed by switching every option-creating path (`QuestionService.create`/`.createFromImportRow`, `QuestionRevisionService.createRevision`) to a plain `questionOption.createMany({ data: [...] })` instead of a nested relation create — the same shape `replaceOptions` already used correctly.
+
+**A genuine architectural gap found and closed, not merely worked around**: `ScopeResolverRegistry`'s `ASSIGNED`/`DEPARTMENT` resolvers (built in B6/B5) denied outright when `PermissionGuard`'s bare `@Authorized(id)` check called them with no `ResourceContext` — unlike `OWNED`/`SELF`/`SCHOOL`, which all treat "no resource yet" as an optimistic pass (the service filters/verifies precisely afterward). This meant `GET /v1/questions` (list) would 403 a Teacher or HOD at the guard itself, before the handler ever ran, for any permission graded `ASSIGNED`/`DEPARTMENT` — the first phase to actually route real HTTP traffic through either predicate. Fixed at the source: `createAssignedScopeResolver()`/`createDepartmentScopeResolver()` (`apps/api/src/modules/academics/`) now return `true` for an undefined resource, mirroring `OWNED`'s own established convention exactly; the existing `department-scope.resolver.integration.test.ts` case asserting the old `false` behaviour was updated to assert the new one, with the two resource-specific assertions in the same test still proving real per-resource enforcement is unchanged.
+
+**Closing `media.upload`'s TEACHER placeholder** (flagged by B4 as "B8's job"): verified `SCHOOL_ADMIN`/`MODERATOR`/`HOD` were already genuinely `granted('SCHOOL')` (final, not placeholders); only `TEACHER` carried the "temporary widening" text. Closed via a dedicated `POST /v1/questions/media/upload-target(/:id/complete)` pair (mirroring the school-branding-logo/import-source precedent for "a domain needing its own attach semantics gets its own route") that resolves real `ASSIGNED` scope from a `subjectId`+`level` pair using the identical ADR-0001 join question creation itself uses, before any `Question`/`QuestionRevision` exists yet — the real UX order (an image is attached to the editor before the question is necessarily saved). `TEACHER`'s `media.upload` grant is now plain `granted('ASSIGNED')`, no placeholder text. Documented, accepted side effect: the _generic_ `POST /v1/media/uploads` route (which never constructs a `ResourceContext`) is now unreachable for Teachers for every type, including `OTHER` — fail-closed, matching every other `ASSIGNED`/`DEPARTMENT` predicate's behaviour absent real scope; no current caller relies on Teacher `OTHER`-type uploads.
+
+**`questionBank.archive`'s School Admin/Moderator grant finalized**, not left as a placeholder: verified `limitedReadOnly()` is functionally `GRANTED` (the "read-only placeholder" wording is a note, not a distinct engine behaviour) — confirmed the real, final boundary is unqualified `SCHOOL`-wide write access, the same broad-oversight shape these two roles already hold for nearly every other `.manage`-style row in this table, and low-risk since archiving is soft/reversible, never a hard delete. Permission table updated from `limitedReadOnly(...)` to plain `granted('SCHOOL')` for both roles.
+
+**Question bulk import** (extends B7's `ImportsModule`, not a new pipeline) — `ImportJobType` gained `QUESTIONS`; `ImportRow` gained `resultQuestionId` (a simpler one-shot progress marker than `resultMembershipId`'s two-step one, since question creation is a single atomic transaction with no separate enroll/invite step). Every imported question is authored as the uploader's own `TeacherProfile` — `questionBank.import`'s grant is wider than Teacher (Moderator/HOD/School Admin can all call the endpoint), but `Question.authorTeacherProfileId` is a required FK, so a non-teacher uploader gets a clean `QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE` (400) at job-creation time rather than every row failing individually — mirroring B7's own "reject a bad `academicSessionId` immediately, naming the real problem" precedent.
+
+**Two further real gaps found only by testing the actual pipeline end to end for a Teacher, not by inspection**: (1) the generic `POST /imports/upload-target` route is gated by `users.import.students`, which Teacher/HOD don't hold (`questionBank.import`'s grant set is genuinely wider) — closed with a dedicated `POST /imports/questions/upload-target(/:id/complete)` pair, gated by `questionBank.import`, delegating to the same already-type-agnostic `ImportsService` methods. (2) `GET /imports/:id`, `GET /imports/:id/errors`, and `POST /imports/:id/confirm` were _also_ gated by `users.import.students` — meaning a Teacher who successfully created a `QUESTIONS` job still couldn't view its own status or confirm it. Closed by switching these three routes' guard-level check to `questionBank.import` (wide enough to admit every creator of every import type) plus a new service-level `ImportsService.assertCanAccessJob()` — School Admin/Moderator keep unchanged full oversight; a Teacher/HOD may only reach a job they themselves uploaded, and only if it's `QUESTIONS`-typed, never someone else's or a `STUDENTS`/`TEACHERS`-type job merely because the coarser guard-level id happens to admit them. `GET /imports/templates/:type` was widened the same way since it carries no per-job data at all (a static file) — costs nothing. B7's own existing STUDENTS/TEACHERS integration tests (21 tests across the module) re-run green, confirming no regression to the original people-import security boundary.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration` (monorepo-wide), plus `pnpm generate` (`questions.v1` — 17 new routes — appears in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (151 rows, confirmed unchanged — every id B8 needed already existed, pre-graded by B2). A real `node dist/main.js` boot confirmed `PolicyCoverageService` reports 142 routes checked with zero violations (up from 125) — the exact expected `+17`, and caught one real route-declaration bug (a doubled `questions/questions/...` path prefix on three `QuestionMediaController` routes, fixed before it ever reached a test). `tests/tenancy/rls.integration.test.ts` gained the five new tables in the existing B5–B7 describe block's `tables` array (same economy as every prior phase) — 68 tests in that file, 65 passed/3 skipped in the full run, with the one failure (an unrelated `audit_events` block's `beforeAll` hook timing out under the file's now-longer cumulative runtime) confirmed, by immediate re-run in isolation, to be pre-existing environment flakiness unrelated to this phase's changes, matching this project's established practice for this class of flake.
 
 ---
 

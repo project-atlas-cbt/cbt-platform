@@ -567,6 +567,18 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let importJobB: { id: string };
     let importRowA: { id: string };
     let importRowB: { id: string };
+    let topicA: { id: string };
+    let topicB: { id: string };
+    let questionA: { id: string };
+    let questionB: { id: string };
+    let questionRevisionA: { id: string };
+    let questionRevisionB: { id: string };
+    let questionOptionA: { id: string };
+    let questionOptionB: { id: string };
+    let questionMediaAssetA: { id: string };
+    let questionMediaAssetB: { id: string };
+    let questionMediaA: { id: string };
+    let questionMediaB: { id: string };
 
     beforeAll(async () => {
       await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
@@ -920,10 +932,172 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           },
         }),
       );
+
+      // B8's five new tables — same economy as B3-B7's own precedent,
+      // reusing subjectA/B and teacherProfileA/B rather than a new
+      // fixture school pair. Kept at DRAFT status throughout — RLS
+      // isolation is what's under test here, not the immutability
+      // trigger (proven separately in question-lifecycle.integration
+      // .test.ts), and an APPROVED row would make afterAll's cleanup
+      // fight that trigger for no reason.
+      topicA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.topic.create({
+          data: { schoolId: schoolA.id, subjectId: subjectA.id, name: 'RLS Topic A' },
+        }),
+      );
+      topicB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.topic.create({
+          data: { schoolId: schoolB.id, subjectId: subjectB.id, name: 'RLS Topic B' },
+        }),
+      );
+      questionA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.question.create({
+          data: {
+            schoolId: schoolA.id,
+            subjectId: subjectA.id,
+            level: 'SS2',
+            authorTeacherProfileId: teacherProfileA.id,
+          },
+        }),
+      );
+      questionB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.question.create({
+          data: {
+            schoolId: schoolB.id,
+            subjectId: subjectB.id,
+            level: 'SS2',
+            authorTeacherProfileId: teacherProfileB.id,
+          },
+        }),
+      );
+      questionRevisionA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.questionRevision.create({
+          data: {
+            schoolId: schoolA.id,
+            questionId: questionA.id,
+            revisionNumber: 1,
+            questionType: 'SINGLE_CHOICE',
+            content: 'RLS question A',
+            topicId: topicA.id,
+            difficulty: 'EASY',
+            marks: 1,
+            createdByMembershipId: membershipA.id,
+            status: 'DRAFT',
+          },
+        }),
+      );
+      questionRevisionB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.questionRevision.create({
+          data: {
+            schoolId: schoolB.id,
+            questionId: questionB.id,
+            revisionNumber: 1,
+            questionType: 'SINGLE_CHOICE',
+            content: 'RLS question B',
+            topicId: topicB.id,
+            difficulty: 'EASY',
+            marks: 1,
+            createdByMembershipId: membershipB.id,
+            status: 'DRAFT',
+          },
+        }),
+      );
+      await withTenant(owner, schoolA.id, (tx) =>
+        tx.question.update({
+          where: { id: questionA.id },
+          data: { currentRevisionId: questionRevisionA.id },
+        }),
+      );
+      await withTenant(owner, schoolB.id, (tx) =>
+        tx.question.update({
+          where: { id: questionB.id },
+          data: { currentRevisionId: questionRevisionB.id },
+        }),
+      );
+      questionOptionA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.questionOption.create({
+          data: {
+            schoolId: schoolA.id,
+            questionRevisionId: questionRevisionA.id,
+            content: 'A',
+            originalOrder: 0,
+            correctFlag: true,
+          },
+        }),
+      );
+      questionOptionB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.questionOption.create({
+          data: {
+            schoolId: schoolB.id,
+            questionRevisionId: questionRevisionB.id,
+            content: 'B',
+            originalOrder: 0,
+            correctFlag: true,
+          },
+        }),
+      );
+      questionMediaAssetA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.mediaAsset.create({
+          data: {
+            id: randomUUID(),
+            schoolId: schoolA.id,
+            type: 'QUESTION_IMAGE',
+            storageKey: `schools/${schoolA.id}/questions/${randomUUID()}/rls-a.png`,
+            originalFilename: 'rls-a.png',
+            declaredMimeType: 'image/png',
+            declaredSizeBytes: 1024,
+            uploaderUserId: userA.id,
+            uploadUrlExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          },
+        }),
+      );
+      questionMediaAssetB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.mediaAsset.create({
+          data: {
+            id: randomUUID(),
+            schoolId: schoolB.id,
+            type: 'QUESTION_IMAGE',
+            storageKey: `schools/${schoolB.id}/questions/${randomUUID()}/rls-b.png`,
+            originalFilename: 'rls-b.png',
+            declaredMimeType: 'image/png',
+            declaredSizeBytes: 1024,
+            uploaderUserId: userB.id,
+            uploadUrlExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          },
+        }),
+      );
+      questionMediaA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.questionMedia.create({
+          data: {
+            schoolId: schoolA.id,
+            questionRevisionId: questionRevisionA.id,
+            mediaAssetId: questionMediaAssetA.id,
+            displayOrder: 0,
+          },
+        }),
+      );
+      questionMediaB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.questionMedia.create({
+          data: {
+            schoolId: schoolB.id,
+            questionRevisionId: questionRevisionB.id,
+            mediaAssetId: questionMediaAssetB.id,
+            displayOrder: 0,
+          },
+        }),
+      );
     });
 
     afterAll(async () => {
       const ids = [schoolA.id, schoolB.id];
+      // B8: Question cascades to its revisions/options/media on delete —
+      // must go before subject/teacherProfile (Restrict) and topics
+      // (Restrict) below.
+      await owner.question.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.topic.deleteMany({ where: { schoolId: { in: ids } } });
+      await owner.mediaAsset.deleteMany({
+        where: { id: { in: [questionMediaAssetA.id, questionMediaAssetB.id] } },
+      });
       await owner.importRow.deleteMany({ where: { schoolId: { in: ids } } });
       await owner.importJob.deleteMany({ where: { schoolId: { in: ids } } });
       await owner.studentSubjectRegistration.deleteMany({ where: { schoolId: { in: ids } } });
@@ -1012,6 +1186,27 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'import_rows',
         idA: () => importRowA.id,
         idB: () => importRowB.id,
+      },
+      // B8's five new tables — same economy as B3-B7's own precedent.
+      { label: 'topics', table: 'topics', idA: () => topicA.id, idB: () => topicB.id },
+      { label: 'questions', table: 'questions', idA: () => questionA.id, idB: () => questionB.id },
+      {
+        label: 'question_revisions',
+        table: 'question_revisions',
+        idA: () => questionRevisionA.id,
+        idB: () => questionRevisionB.id,
+      },
+      {
+        label: 'question_options',
+        table: 'question_options',
+        idA: () => questionOptionA.id,
+        idB: () => questionOptionB.id,
+      },
+      {
+        label: 'question_media',
+        table: 'question_media',
+        idA: () => questionMediaA.id,
+        idB: () => questionMediaB.id,
       },
     ];
 

@@ -649,16 +649,21 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('SCHOOL'),
-      TEACHER: granted(
-        'SCHOOL',
-        "Placeholder scope: real per-subject/class (ASSIGNED) Teacher scoping is B8's job once " +
-          'Question/Subject/ClassGroup exist — mirrors the ASSIGNED/DEPARTMENT placeholder ' +
-          'precedent already used elsewhere in this table. SCHOOL is a temporary widening.',
-      ),
+      // B8 closure: real per-subject/class (ASSIGNED) scoping, evaluated
+      // by QuestionsModule's own dedicated media-upload-target route
+      // (POST /v1/questions/media/upload-target) against a subjectId+level
+      // pair resolved through the same ADR-0001 TeacherAssignment join
+      // question creation itself uses — never through the generic
+      // POST /v1/media/uploads, which never constructs a ResourceContext
+      // and so now correctly denies a Teacher calling it directly (the
+      // same fail-closed behaviour every other ASSIGNED/DEPARTMENT
+      // resolver already exhibits absent real scope). Teacher-authored
+      // OTHER-type uploads are consequently unreachable until a future
+      // phase defines real scope for that type — no current caller relies
+      // on it.
+      TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource:
-      'Question (B8) for real ASSIGNED-scoped Teacher upload — SCHOOL is a temporary widening until then.',
   },
   {
     id: 'media.view',
@@ -1121,7 +1126,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8)',
   },
   {
     id: 'questionBank.create',
@@ -1136,7 +1140,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8)',
   },
   {
     id: 'questionBank.editOwnDraft',
@@ -1151,7 +1154,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8)',
   },
   {
     id: 'questionBank.deleteOwnDraft',
@@ -1166,7 +1168,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8)',
   },
   {
     id: 'questionBank.submitForReview',
@@ -1283,16 +1284,18 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'DELETE',
     grants: {
       SOFTWARE_ADMIN: breakGlass('R4: named explicitly in ADR-0012 as a break-glass example.'),
-      SCHOOL_ADMIN: limitedReadOnly(
-        'SCHOOL',
-        'Exact archivable-by-School-Admin boundary finalized in B8/B9.',
-      ),
-      MODERATOR: limitedReadOnly('SCHOOL', 'B8/B9.'),
+      // B8 finalization: real, unqualified SCHOOL-wide write access — the
+      // same broad-oversight shape every other .manage-style row already
+      // grants these two roles throughout this table, not merely a read
+      // placeholder. Archiving is soft/reversible (never a hard delete),
+      // so this is a low-risk, defensible finalization of "Limited" (02's
+      // own matrix legend) rather than a guess.
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
-      TEACHER: granted('OWNED', '"Own/assigned" — exact boundary finalized in B8/B9.'),
+      TEACHER: granted('OWNED', '"Own/assigned" — an author may archive their own question.'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8)',
   },
   {
     id: 'questionBank.import',
@@ -1310,7 +1313,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Bulk import pipeline (B7), Question (B8)',
   },
   {
     id: 'questionBank.export',
@@ -1325,7 +1327,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8)',
   },
 
   // ------------------------------------------------------------------
@@ -1349,7 +1350,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       ),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8)',
   },
   {
     id: 'questionLifecycle.submit',
@@ -1442,7 +1442,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8)',
   },
 
   // ------------------------------------------------------------------

@@ -95,3 +95,11 @@ export {
   type ImportJobStatus,
   type ImportRowStatus,
 } from './imports/constants.js';
+export {
+  QUESTION_TYPES,
+  QUESTION_DIFFICULTIES,
+  QUESTION_REVISION_STATUSES,
+  type QuestionType,
+  type QuestionDifficulty,
+  type QuestionRevisionStatus,
+} from './questions/constants.js';

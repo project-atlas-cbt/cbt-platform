@@ -4,7 +4,7 @@
 /// package already uses (academics/constants.ts, people/constants.ts) so
 /// DTOs never redefine or drift from the schema's own vocabulary.
 
-export const IMPORT_JOB_TYPES = ['STUDENTS', 'TEACHERS'] as const;
+export const IMPORT_JOB_TYPES = ['STUDENTS', 'TEACHERS', 'QUESTIONS'] as const;
 export type ImportJobType = (typeof IMPORT_JOB_TYPES)[number];
 
 export const IMPORT_JOB_STATUSES = [

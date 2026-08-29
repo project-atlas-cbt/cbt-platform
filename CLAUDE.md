@@ -307,7 +307,16 @@ commit processing reusing `StudentEnrollmentService.enroll()`/`IdentityService
 phase was scoped to settle (formats, 5,000-row/5MB caps, versioned templates, 24h staging expiry).
 Question import stays deferred, waiting on `B8`'s `Question` model. See this file's Change Log entry
 below for the full reasoning, including a genuine architecture deviation on where its background job
-processors run.
+processors run. **`B8 — Question Bank`** is now complete too: `Question`/`QuestionRevision`/
+`QuestionOption`/`QuestionMedia`/`Topic` (`questions.v1`), immutable approved revisions enforced by
+three real Postgres triggers (this codebase's first trigger-enforced constraint and first
+parent+versioned-child pattern), the `Question.currentRevisionId` pointer design resolving D-12 by
+construction, and question bulk import/export extending `B7`'s pipeline in this same pass rather
+than deferred. Closed two genuine pre-existing gaps found only by routing real HTTP traffic through
+them for the first time: the `ASSIGNED`/`DEPARTMENT` scope resolvers' missing "no resource yet"
+optimistic-pass case, and three `ImportsModule` routes gated by a permission id Teacher/HOD don't
+hold. `QuestionReview` (B9's approve/reject/comment workflow) is explicitly not built. See this
+file's Change Log entry below for the full reasoning.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -2858,3 +2867,166 @@ known rough edge for whoever next edits `packages/db/prisma/schema.prisma` and r
 Project state remains _Implementation (B7 complete)_ — this was a same-phase gap closure, not a new
 phase. `docs/roadmaps/backend-roadmap.md`'s B7 section gained the "Post-completion gap closure"
 note referenced above. **Next: `B8 — Question Bank`**, unchanged.
+
+### 2026-08-29 — `B8` complete: Question Bank
+
+Requested explicitly: start `B8`. Followed the working-rules checklist first: three parallel
+research agents (roadmap/ADR/audit-finding coverage; the full product specification for
+`Question`/`QuestionRevision`/`QuestionOption`/`QuestionMedia`/`Topic` and the review state machine;
+existing backend module/permission-table/media conventions), then a dedicated Plan agent, per this
+project's own precedent for a phase of this size — followed by direct verification reads of the
+permission table, `AuthorizationService.evaluate()`, the scope resolvers, and a recent migration's
+RLS boilerplate before writing any code. No gating ADR is unresolved (ADR-0001 alone, Accepted,
+B5's own half already shipped).
+
+**Scope, confirmed during planning, not silently expanded**: question bulk import and export were
+folded into this same pass at explicit instruction, rather than left as the roadmap's own originally
+unscoped items — both extend `B7`'s existing `ImportsModule`, not a second pipeline.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260829110627_b8_question_bank`,
+plus a same-day additive one for `ImportRow.resultQuestionId`): `Question` (school_id, subject_id,
+`level: ClassLevel` reusing B5's enum verbatim per ADR-0001, `authorTeacherProfileId`,
+`currentRevisionId`, `archivedAt`), `QuestionRevision` (revision_number monotonic per question,
+question_type, content, topic/subtopic, difficulty, marks, `createdByMembershipId`, status),
+`QuestionOption` (arbitrary-length array, never four hardcoded columns per `06 §27`),
+`QuestionMedia` (joins to the existing `MediaAsset`), `Topic` (ADR-0001 §3, case-insensitive
+resolution). RLS bootstrap for all five tables, hand-written per this codebase's own established
+convention.
+
+**D-12 resolution**: `Question.currentRevisionId` is a pointer, not a stored status column — set
+once per revision-creation transaction, untouched by status transitions (submit/approve/reject all
+mutate the _same_ row the pointer already references). `current_status` is always derived live:
+`archivedAt !== null ? 'ARCHIVED' : currentRevision.status` — never a separately-stored field that
+could drift, satisfying the audit's own recommendation by construction.
+
+**Genuinely new infrastructure, two firsts for this codebase**: the parent+versioned-child
+`Question`→`QuestionRevision` pattern, and real Postgres trigger-enforced immutability (three
+triggers — revisions, options, and media, the last one beyond the roadmap's literal wording but
+necessary for D-13's "never silently added/removed from an approved revision" to hold against every
+mutation path). No trigger existed anywhere in this schema before this phase. Proven with a real
+`tx.$executeRaw` UPDATE/DELETE against an `APPROVED` row, bypassing Prisma's query builder entirely
+— the DoD's own literal "a direct database update is rejected by constraint" wording.
+
+**API** (`apps/api/src/modules/questions/`, filling in the empty B0-era stub): `questions.v1` — the
+full roadmap endpoint table (create/list/get/counts/archive/export, draft PATCH/delete, new-revision,
+submit, media attach/detach, topics) plus a dedicated `POST /v1/questions/media/upload-target` pair
+(see below). `QuestionReview` (B9's approve/reject/comment workflow) is explicitly not built —
+`questionBank.review`/`.approve`/`.reject`/`.requestChanges` remain `awaitingResource: 'Question
+review workflow (B9)'`. B8's own endpoints only ever move a revision `DRAFT → SUBMITTED`; tests that
+need `APPROVED`/`REJECTED`/`UNDER_REVIEW` construct it via direct Prisma writes, mirroring
+`import-commit-resume.integration.test.ts`'s and `session-activation-concurrency.integration
+.test.ts`'s own established precedent for this, never a hidden endpoint.
+
+**A real, fully-worked engineering design decision**: `POST /v1/questions/:id/revisions/:rev` (draft
+delete) must handle deleting a question's _only_ revision — DoD item 3 says drafts are "freely...
+deletable," with no carve-out. Resolved by cascading to delete the `Question` itself when it's the
+only revision (a bare `Question` has no content independent of a revision), and by repointing
+`currentRevisionId` back at the prior revision (never leaving it null) when a non-only draft
+(started via `POST .../revisions` from an approved/rejected source) is deleted instead.
+
+**Two genuine, pre-existing architectural gaps found and closed, not merely worked around — both
+only discoverable by routing real HTTP traffic through a code path for the first time**:
+
+1. `ScopeResolverRegistry`'s `ASSIGNED`/`DEPARTMENT` resolvers (built in B6/B5) denied outright when
+   `PermissionGuard`'s bare `@Authorized(id)` check called them with no `ResourceContext` — unlike
+   `OWNED`/`SELF`/`SCHOOL`, which all treat "no resource yet" as an optimistic pass (the service
+   filters/verifies precisely afterward). This meant `GET /v1/questions` would 403 a Teacher or HOD
+   at the guard itself, before the handler ever ran — B8 is the first phase to actually route real
+   HTTP traffic through either predicate. Fixed at the source in `apps/api/src/modules/academics/
+assigned-scope.resolver.ts`/`department-scope.resolver.ts`, mirroring `OWNED`'s own established
+   convention exactly; the existing `department-scope.resolver.integration.test.ts` case was updated
+   to match, with its two resource-specific assertions unchanged (real per-resource enforcement
+   still proven).
+2. Three of `ImportsModule`'s shared routes (`GET :id`, `GET :id/errors`, `POST :id/confirm`, plus
+   `GET templates/:type`) were gated by `users.import.students` — a permission id Teacher/HOD (the
+   real creators of a `QUESTIONS`-type job) don't hold, meaning a Teacher who successfully created a
+   question-import job still couldn't view its own status or confirm it. Closed by switching these
+   routes' guard-level check to `questionBank.import` (wide enough to admit every import type's
+   creator) plus a new service-level `ImportsService.assertCanAccessJob()` — School Admin/Moderator
+   keep unchanged full oversight; a Teacher/HOD may only reach a job they themselves uploaded, and
+   only if it's `QUESTIONS`-typed. `B7`'s own existing STUDENTS/TEACHERS integration tests (21 tests
+   across the module) re-run green, confirming no regression to the original people-import boundary.
+   A separate, genuinely new problem of the same shape: the _upload-target_ route itself
+   (`POST /imports/upload-target`) carried the identical gate — closed with a dedicated
+   `POST /imports/questions/upload-target(/:id/complete)` pair, mirroring the `SCHOOL_LOGO`/
+   `IMPORT_SOURCE` "a domain needing its own attach semantics gets its own route" precedent exactly.
+
+**Closing `media.upload`'s TEACHER placeholder** (flagged by `B4` as "B8's job"): verified
+`SCHOOL_ADMIN`/`MODERATOR`/`HOD` were already genuinely `granted('SCHOOL')` — final, not
+placeholders; only `TEACHER` carried the "temporary widening" text. Closed via a dedicated
+`POST /v1/questions/media/upload-target(/:id/complete)` pair resolving real `ASSIGNED` scope from a
+`subjectId`+`level` pair using the identical ADR-0001 join question creation itself uses, before any
+`Question`/`QuestionRevision` exists yet (matching the real authoring UX — an image is attached to
+the editor before the question is necessarily saved). `TEACHER`'s `media.upload` grant is now plain
+`granted('ASSIGNED')`. Documented, accepted side effect: the generic `POST /v1/media/uploads` route
+is now unreachable for Teachers for every type including `OTHER` (fail-closed, matching every other
+`ASSIGNED`/`DEPARTMENT` predicate absent real scope; no current caller relies on it).
+
+**`questionBank.archive`'s School Admin/Moderator grant finalized**, not left as a placeholder:
+`limitedReadOnly()` is functionally `GRANTED` (the "read-only placeholder" wording is a note, not a
+distinct engine behaviour) — confirmed the real, final boundary is unqualified `SCHOOL`-wide write
+access, the same broad-oversight shape these two roles already hold for nearly every other
+`.manage`-style row in this table, low-risk since archiving is soft/reversible. Permission table
+updated from `limitedReadOnly(...)` to plain `granted('SCHOOL')` for both roles.
+
+**A real Prisma gotcha found only by running the integration tests, not by inspection**:
+`QuestionOption`'s FK to `QuestionRevision` is composite — Prisma's generated nested-create input
+type for a composite-FK relation (`revision.create({ data: { options: { create: [...] } } })`)
+excludes `schoolId` from the nested rows (it infers both halves from the parent), rejecting an
+explicit one with "Unknown argument `schoolId`" at runtime — invisible to `tsc`. Fixed by switching
+every option-creating path to a plain `questionOption.createMany({ data: [...] })` instead, the same
+shape `replaceOptions` already used correctly.
+
+**Question bulk import** (extends `B7`'s `ImportsModule`): `ImportJobType` gained `QUESTIONS`;
+`ImportRow` gained `resultQuestionId` (a simpler one-shot marker than `resultMembershipId`'s
+two-step one, since question creation is one atomic transaction). Every imported question is
+authored as the uploader's own `TeacherProfile` — `questionBank.import`'s grant is wider than
+Teacher, but `Question.authorTeacherProfileId` is a required FK, so a non-teacher uploader gets a
+clean `QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE` (400) at job-creation time, mirroring `B7`'s own
+"reject a bad `academicSessionId` immediately" precedent. Export (`GET /v1/questions/export`) is
+CSV-only (import stays CSV+`.xlsx`, per `B7`'s own confirmed decision) — a deliberate, low-risk
+scope-down matching `class-credential-sheet.controller.ts`'s own CSV-only precedent, with columns
+mirroring the import template one-for-one for a re-importable round trip (one honest, documented
+asymmetry: `Question.level` is coarser than a specific `ClassGroup` name, so the exported "Class"
+cell is the bare level code, not guaranteed to match a real class name on reimport).
+
+**Testing**: `question-lifecycle.integration.test.ts` (14 tests covering every DoD item 1–12 plus
+the security row, over real HTTP against a real running `AppModule` and real Postgres — including
+the raw-SQL immutability proof and a real HOD department-scoped view proving the `ASSIGNED`/
+`DEPARTMENT` gap-closure end to end), `question-validation.util.test.ts` (7 unit tests for the
+catalogue's own pure function — several rules are unreachable via HTTP at all once class-validator's
+DTO-level `@IsInt()/@Min()/@Max()/@ArrayMinSize()` decorators already catch the same malformed input
+for any explicitly-supplied value, so this is where those specific rules are actually proven),
+`question-import-export.integration.test.ts` (3 tests — the full validate→confirm→commit pipeline
+creating real DRAFT questions with correct option/correctFlag mapping, topic auto-create, the
+structural teacher-profile requirement, and the export CSV's shape). `tests/tenancy/rls
+.integration.test.ts` gained the five new tables in the existing B5–B7 describe block's `tables`
+array (same economy as every prior phase) — 68 tests in that file; 65 passed/3 skipped in the full
+run, with the one failure (an unrelated `audit_events` block's `beforeAll` hook timing out under the
+file's now-longer cumulative runtime) confirmed, by immediate re-run in isolation, to be pre-existing
+environment flakiness unrelated to this phase, matching this project's established practice for this
+class of flake.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test &&
+pnpm build && pnpm test:integration` (monorepo-wide — `apps/api`'s full suite including every `B7`
+import test re-confirmed with zero regression), plus `pnpm generate` (`questions.v1` — 17 new routes
+— published in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc`
+(151 rows, confirmed unchanged — every id B8 needed already existed, pre-graded by B2). A real
+`node dist/main.js` boot confirmed `PolicyCoverageService` reports 142 routes checked with zero
+violations (up from 125 — the exact expected `+17`), and caught one real route-declaration bug (a
+doubled `questions/questions/...` path prefix on three `QuestionMediaController` routes) before it
+ever reached a test.
+
+`docs/roadmaps/backend-roadmap.md`'s B8 section gained status `COMPLETE`, every DoD item checked
+with detail, a full "Implementation notes" subsection covering every gap closure above, and an
+expanded Deferred items list. B7's own Deferred items entry for question import was updated to point
+forward at this delivery. `docs/roadmaps/roadmap-index.md`'s version, Current State, and Immediate
+Next Actions all updated to record `B8` complete and `B9` next on the critical path.
+
+Project state moves from _Implementation (B7 complete)_ to _Implementation (B8 complete)_.
+**Next: `B9 — Question Review & Governance`** on the backend critical path (`Gate 1 ADRs → B0 → B1
+→ B2 → B3 → B5 → B6 → B8 → B9 → B11 → …`) — the review workflow (`QuestionReview`, approve/reject/
+comment, the HOD review queue via ADR-0001's two-hop `Subject.departmentId` join) this phase
+deliberately left out. A future `F9` (Question Bank Workspace) remains open whenever the
+frontend/backend phase-pairing default is next prioritized, and would prove `B8`'s own `questions.v1`
+contract end to end for the first time.

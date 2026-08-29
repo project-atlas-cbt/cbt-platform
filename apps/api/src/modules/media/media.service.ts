@@ -234,6 +234,29 @@ export class MediaService {
     return { id: asset.id };
   }
 
+  /**
+   * B8: the `QUESTION_IMAGE`/`QUESTION_DIAGRAM` mirror of
+   * `getReadyLogoAsset` — validated (type, status, tenant) before
+   * `QuestionMediaService.attach()` writes the `QuestionMedia` join row,
+   * not a second permission check.
+   */
+  async getReadyQuestionMediaAsset(
+    schoolId: string,
+    mediaAssetId: string,
+  ): Promise<{ id: string } | null> {
+    const asset = await withTenant(prisma, schoolId, (tx) =>
+      tx.mediaAsset.findUnique({ where: { id: mediaAssetId } }),
+    );
+    if (!asset || asset.schoolId !== schoolId) return null;
+    if (
+      (asset.type !== 'QUESTION_IMAGE' && asset.type !== 'QUESTION_DIAGRAM') ||
+      asset.status !== 'READY'
+    ) {
+      return null;
+    }
+    return { id: asset.id };
+  }
+
   /** Used by `GET /v1/school/branding` (the public `GET /v1/tenant/resolve`
    * calls the shared `resolveLogoSignedUrl` directly instead, specifically
    * so IdentityModule never needs to import MediaModule — see that

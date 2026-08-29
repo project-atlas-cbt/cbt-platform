@@ -146,6 +146,47 @@ export const BASE_ERROR_CODES = {
   // exact job (not retryable in the ADR-0033 sense: the same call will
   // never succeed against this job again).
   IMPORT_JOB_EXPIRED: { httpStatus: 409, retryable: false },
+
+  // B8 (Question Bank). DoD item 8's validation catalogue, plus the
+  // resource-state guards a revision's lifecycle requires (mirrors
+  // SessionService's own editable-set-check precedent).
+  //
+  // QUESTION_TEXT_EMPTY / QUESTION_INSUFFICIENT_OPTIONS /
+  // QUESTION_OPTION_TEXT_EMPTY / QUESTION_CORRECT_ANSWER_MISSING /
+  // QUESTION_MARKS_INVALID: the validation catalogue itself, run at submit
+  // (and per-row at import) — all request-shaped, not found/conflict.
+  QUESTION_TEXT_EMPTY: { httpStatus: 400, retryable: false },
+  QUESTION_INSUFFICIENT_OPTIONS: { httpStatus: 400, retryable: false },
+  QUESTION_OPTION_TEXT_EMPTY: { httpStatus: 400, retryable: false },
+  QUESTION_CORRECT_ANSWER_MISSING: { httpStatus: 400, retryable: false },
+  // QUESTION_OPTION_NOT_FOUND: a body-supplied option id doesn't belong to
+  // this revision — this schema stores correctFlag per-option (06 §27),
+  // not a separate correct-answer pointer field, so this is the closest
+  // faithful equivalent of "correct answer references a non-existent
+  // option."
+  QUESTION_OPTION_NOT_FOUND: { httpStatus: 400, retryable: false },
+  QUESTION_MARKS_INVALID: { httpStatus: 400, retryable: false },
+  // QUESTION_OUT_OF_SCOPE: the actor holds no active TeacherAssignment
+  // covering this question's (subjectId, level) pair (ADR-0001 §2) — a
+  // domain-rule failure distinct from the authorization engine's own
+  // FORBIDDEN (that's "you can never do this"; this is "your assignment
+  // doesn't cover this specific subject/level combination").
+  QUESTION_OUT_OF_SCOPE: { httpStatus: 400, retryable: false },
+  // QUESTION_REVISION_NOT_DRAFT: PATCH / submit / media-attach attempted on
+  // a revision that isn't DRAFT.
+  QUESTION_REVISION_NOT_DRAFT: { httpStatus: 409, retryable: false },
+  // QUESTION_REVISION_NOT_REVISABLE: POST .../revisions attempted from a
+  // source revision that is neither APPROVED nor REJECTED.
+  QUESTION_REVISION_NOT_REVISABLE: { httpStatus: 409, retryable: false },
+  // QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE: questionBank.import's grant
+  // is wider than Teacher (Moderator/HOD/School Admin can all call the
+  // endpoint), but Question.authorTeacherProfileId is a required FK — an
+  // uploader with no TeacherProfile in this school structurally cannot
+  // author the questions their own import would create. Rejected at
+  // job-creation time, mirroring B7's own "reject a bad
+  // academicSessionId immediately, naming the real problem" precedent,
+  // rather than letting every row fail individually.
+  QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE: { httpStatus: 400, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

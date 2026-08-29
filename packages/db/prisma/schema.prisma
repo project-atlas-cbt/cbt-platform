@@ -371,8 +371,11 @@ model TeacherProfile {
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  membership  SchoolMembership    @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
-  assignments TeacherAssignment[]
+  membership        SchoolMembership    @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  assignments       TeacherAssignment[]
+  // B8: a Question's author is always a TeacherProfile — see
+  // Question.authorTeacherProfileId's own doc comment.
+  authoredQuestions Question[]
 
   @@unique([schoolId, membershipId])
   @@unique([schoolId, staffId])
@@ -724,9 +727,13 @@ model MediaAsset {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  school             School   @relation("SchoolMediaAssets", fields: [schoolId], references: [id], onDelete: Cascade)
-  uploader           User     @relation(fields: [uploaderUserId], references: [id], onDelete: Restrict)
-  schoolsUsingAsLogo School[] @relation("SchoolLogo")
+  school             School          @relation("SchoolMediaAssets", fields: [schoolId], references: [id], onDelete: Cascade)
+  uploader           User            @relation(fields: [uploaderUserId], references: [id], onDelete: Restrict)
+  schoolsUsingAsLogo School[]        @relation("SchoolLogo")
+  // B8: QuestionMedia join rows pointing at this asset (an asset may be
+  // referenced by more than one revision's QuestionMedia row — see
+  // QuestionMedia's own doc comment on why that's still D-13-safe).
+  questionMedia      QuestionMedia[]
 
   // Composite-FK target, matching every other school-owned table's
   // (schoolId, id) convention, for a future composite reference (e.g. B8's
@@ -956,6 +963,9 @@ model Subject {
   /// Restrict, not SetNull — same reasoning as ClassGroup.department.
   department    Department?    @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
   classSubjects ClassSubject[]
+  // B8: Question/Topic back-relations.
+  questions     Question[]
+  topics        Topic[]
 
   // Composite-FK target for ClassSubject.
   @@unique([schoolId, id])
@@ -1173,17 +1183,24 @@ enum StudentSubjectRegistrationStatus {
 
 // ---------------------------------------------------------------------------
 // B7 — Bulk Import Pipeline (docs/roadmaps/backend-roadmap.md "B7", A-17).
-// ImportJob/ImportRow — student and teacher import only in this phase;
-// question import waits on B8's Question model (roadmap's own "Sequence
-// student/teacher import first if B8 is not ready"). Writes through
-// UsersModule/AcademicsModule's existing services (createPersonMembership,
-// StudentEnrollmentService.enroll, IdentityService.issueStaffInvitation),
+// ImportJob/ImportRow — student and teacher import shipped in B7; question
+// import (QUESTIONS below) was added in B8 once the Question model existed
+// (roadmap's own "Sequence student/teacher import first if B8 is not
+// ready"). Writes through UsersModule/AcademicsModule/QuestionsModule's
+// existing services (createPersonMembership, StudentEnrollmentService.enroll,
+// IdentityService.issueStaffInvitation, QuestionService.createFromImportRow),
 // never directly to their tables — see ImportModule's own doc comment.
 // ---------------------------------------------------------------------------
 
 enum ImportJobType {
   STUDENTS
   TEACHERS
+  /// B8 — Question Bank. Always creates DRAFT questions (05 §18: "never
+  /// auto-approved"); author is the uploader's own TeacherProfile — see
+  /// QuestionService.createFromImportRow's own doc comment for why a
+  /// non-teacher uploader (permitted by questionBank.import's grant, e.g.
+  /// Moderator) still fails structurally without one.
+  QUESTIONS
 }
 
 /// PENDING_VALIDATION -> VALIDATING -> VALIDATED -> IMPORTING -> COMPLETED
@@ -1311,8 +1328,17 @@ model ImportRow {
 
   /// Set as soon as the commit job creates this row's person — *before*
   /// status flips to COMMITTED (see ImportRowStatus's own doc comment). The
-  /// SchoolMembership this row produced.
+  /// SchoolMembership this row produced. STUDENTS/TEACHERS only — a
+  /// QUESTIONS row uses resultQuestionId below instead (a person and a
+  /// question are not the same kind of "result," and this codebase avoids
+  /// overloading one column across unrelated meanings).
   resultMembershipId String? @map("result_membership_id") @db.Uuid
+  /// B8 — the Question this row produced. Unlike resultMembershipId's two-
+  /// step progress marker (person created, then enrolled/invited), question
+  /// creation is one atomic transaction (Question + initial revision +
+  /// options) — so for a QUESTIONS row this field is simply null-until-done,
+  /// set in the same transaction that flips status to COMMITTED.
+  resultQuestionId   String? @map("result_question_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -1328,4 +1354,278 @@ model ImportRow {
   // enrollment/invitation," not "skip" — see ImportRowStatus.)
   @@index([schoolId, importJobId, status])
   @@map("import_rows")
+}
+
+// ---------------------------------------------------------------------------
+// B8 — Question Bank (docs/roadmaps/backend-roadmap.md "B8", ADR-0001,
+// audit findings C-04/D-12/A-16/D-13).
+//
+// Question/QuestionRevision/QuestionOption/QuestionMedia/Topic. Immutable
+// approved revisions (DoD item 6) are enforced by real Postgres triggers in
+// this migration's hand-written SQL — the first trigger-enforced constraint
+// anywhere in this schema. QuestionReview (07 §7.5 — HOD approve/reject/
+// comment) is explicitly NOT built here; it is B9's "Question review
+// workflow" (see packages/domain's permission-table.ts, questionBank.review/
+// .approve/.reject/.requestChanges/.comment.* rows). B8's own endpoints only
+// ever move a revision DRAFT -> SUBMITTED; SUBMITTED -> UNDER_REVIEW ->
+// APPROVED/REJECTED has no B8 route — B8's own tests construct those states
+// directly via Prisma, mirroring import-commit-resume.integration.test.ts's
+// and session-activation-concurrency.integration.test.ts's own precedent for
+// this, never a hidden endpoint.
+// ---------------------------------------------------------------------------
+
+/// 05 §15.2's core-scope types only — the model allows future types (e.g.
+/// multiple-select, short answer, essay) without redesign (07 §7.3's
+/// "never four hardcoded option columns" already anticipates this), but only
+/// these two are enabled in B8. Deferred types are Candidate/Deferred, not
+/// silently built ahead of spec.
+enum QuestionType {
+  SINGLE_CHOICE
+  TRUE_FALSE
+}
+
+/// No spec document gives a controlled vocabulary for this axis verbatim —
+/// this three-value set is an engineering default (low-stakes: not
+/// load-bearing for authorization or immutability, unlike ClassLevel/
+/// Question.level, and trivially extensible later without a migration
+/// touching any FK).
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+/// 07 §7.2's lifecycle. ARCHIVED is kept for spec fidelity but never written
+/// by any B8 code path — archiving happens at the Question level only (see
+/// Question.archivedAt's own doc comment), so the immutability trigger below
+/// never needs an ARCHIVED-transition carve-out. Recorded as Candidate for
+/// B9 to decide whether an individual stale (non-current) revision ever
+/// needs this value in its own right.
+enum QuestionRevisionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+/// The reusable question identity (07 §7.1) — never the exact text/options a
+/// student sees (that's QuestionRevision, the unit of approval and
+/// immutability). `level` (ADR-0001 §2) reuses ClassLevel verbatim: a
+/// question belongs to a level ("SS2"), reusable across every arm of that
+/// level, not scoped to one class/arm — scoping to arm would defeat the
+/// reusable-bank premise 06 §25 describes.
+///
+/// current_status (D-12) is deliberately NOT a stored column. It is always
+/// derived: `archivedAt !== null ? 'ARCHIVED' : currentRevision.status`.
+/// currentRevisionId is a pointer set once per revision-creation transaction
+/// and never touched by a status transition (submit/approve/reject all
+/// mutate the *same* row this pointer already references) — so the derived
+/// value can never disagree with the real one, satisfying the audit's "if
+/// materialised, maintain it in the same transaction... with a test
+/// asserting the two never disagree" recommendation by construction rather
+/// than a synced duplicate column.
+model Question {
+  id                     String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId               String     @map("school_id") @db.Uuid
+  subjectId              String     @map("subject_id") @db.Uuid
+  level                  ClassLevel
+  /// A Question's author must hold a real TeacherProfile — only Teachers
+  /// author questions (questionBank.create's grant: TEACHER ASSIGNED only,
+  /// every other role denied). See QuestionService.createFromImportRow's
+  /// own doc comment for how the bulk-import path enforces the same rule
+  /// against a non-teacher uploader.
+  authorTeacherProfileId String     @map("author_teacher_profile_id") @db.Uuid
+  /// D-12 pointer — see this model's own doc comment above. Nullable only
+  /// for the instant between the Question insert and its initial revision
+  /// insert within the same create() transaction; no committed row is ever
+  /// observed with this null in practice. Plain (non-composite) FK below,
+  /// like School.logoMediaId's own precedent — QuestionRevision.id is
+  /// already globally unique (UUIDv7), and this pointer is always set in
+  /// the same transaction as creating a revision already scoped to this
+  /// same school, so cross-tenant mismatch is prevented by construction
+  /// rather than needing schoolId in the FK itself (which would also make
+  /// SetNull invalid here, since Question.schoolId is required).
+  currentRevisionId      String?    @unique @map("current_revision_id") @db.Uuid
+  /// 07 §7.1 places archival on Question, not the revision — archiving
+  /// never mutates any QuestionRevision row (mirrors ClassGroup/Subject's
+  /// own "deactivation is always allowed, never touches historical rows"
+  /// precedent). DoD item 7's "still bound to any exam using it" — an
+  /// archived Question's APPROVED revision is untouched by this field.
+  archivedAt             DateTime?  @map("archived_at") @db.Timestamptz(6)
+  createdAt              DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subject         Subject            @relation(fields: [schoolId, subjectId], references: [schoolId, id], onDelete: Restrict)
+  authorProfile   TeacherProfile     @relation(fields: [schoolId, authorTeacherProfileId], references: [schoolId, id], onDelete: Restrict)
+  /// SetNull: a same-aggregate self-referencing pointer, not a cross-
+  /// aggregate FK — structurally cannot legitimately dangle (a revision is
+  /// never deleted once submitted, and the trigger below blocks deleting an
+  /// APPROVED one outright), but SetNull is still the correct defensive
+  /// default over Restrict/Cascade here.
+  currentRevision QuestionRevision?  @relation("QuestionCurrentRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  revisions       QuestionRevision[] @relation("QuestionRevisions")
+
+  // Composite-FK target for QuestionRevision/QuestionOption/QuestionMedia.
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  // Roadmap's own literal bank index — split from its "...status" suffix
+  // since status is derived (lives on QuestionRevision), not a Question
+  // column; Postgres narrows by this index first, then joins to
+  // currentRevision by primary key.
+  @@index([schoolId, subjectId, level])
+  @@index([schoolId, authorTeacherProfileId])
+  @@map("questions")
+}
+
+/// 07 §7.2 — the unit of approval and immutability. Every post-submission
+/// edit cycle creates a brand-new row (05 §17's worked example: Revision
+/// 1 -> Rejected, Revision 2 -> Approved, Revision 3 -> Rejected, Revision
+/// 4 -> Approved) — only a still-DRAFT (never yet submitted) revision is
+/// edited in place. Once APPROVED, this row is immutable at the database
+/// level (this migration's hand-written trigger), not only in application
+/// code — DoD item 6.
+model QuestionRevision {
+  id                    String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId              String                 @map("school_id") @db.Uuid
+  questionId            String                 @map("question_id") @db.Uuid
+  /// Monotonic per question (DB work spec item 1) — enforced by the
+  /// @@unique below, never reused even across DRAFT/REJECTED history.
+  revisionNumber        Int                    @map("revision_number")
+  questionType          QuestionType           @map("question_type")
+  content               String
+  topicId               String?                @map("topic_id") @db.Uuid
+  subtopicId            String?                @map("subtopic_id") @db.Uuid
+  difficulty            QuestionDifficulty
+  /// Int, not Decimal — no spec text calls for fractional marks, and this
+  /// would be the first Decimal-typed column anywhere in this schema;
+  /// kept consistent with the rest of the codebase's whole-number
+  /// conventions rather than introducing a new numeric pattern
+  /// unnecessarily.
+  marks                 Int
+  explanation           String?
+  /// Who authored *this* revision specifically (07 §7.2's own attribute,
+  /// independent of Question.authorTeacherProfileId) — in practice always
+  /// the question's own author today (only OWNED-scoped Teacher writes
+  /// exist), but kept as its own field for audit fidelity rather than
+  /// implicitly assumed equal to the parent Question's author.
+  createdByMembershipId String                 @map("created_by_membership_id") @db.Uuid
+  status                QuestionRevisionStatus @default(DRAFT)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  question   Question  @relation("QuestionRevisions", fields: [schoolId, questionId], references: [schoolId, id], onDelete: Cascade)
+  currentFor Question? @relation("QuestionCurrentRevision")
+  /// Restrict: a Topic referenced by any revision (draft or historical)
+  /// must never be hard-deletable out from under it.
+  topic      Topic?    @relation("RevisionTopic", fields: [schoolId, topicId], references: [schoolId, id], onDelete: Restrict)
+  subtopic   Topic?    @relation("RevisionSubtopic", fields: [schoolId, subtopicId], references: [schoolId, id], onDelete: Restrict)
+
+  options QuestionOption[]
+  media   QuestionMedia[]
+
+  @@unique([schoolId, questionId, revisionNumber])
+  // Composite-FK target for QuestionOption/QuestionMedia, and the target of
+  // Question.currentRevisionId above.
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, questionId])
+  // Roadmap's own literal counts index — also directly reusable by B9's
+  // HOD review queue (all SUBMITTED/UNDER_REVIEW revisions school-wide),
+  // mirroring department-scope.resolver.ts's own forward-looking precedent
+  // of shaping an index for a consumer one phase ahead.
+  @@index([schoolId, status])
+  @@map("question_revisions")
+}
+
+/// 07 §7.3. Never four hardcoded A/B/C/D columns (06 §27) — arbitrary
+/// option count per revision, `originalOrder` preserves authoring order
+/// independent of any later attempt-time shuffle (a B13 concern, not
+/// stored here). Immutable once the parent revision is APPROVED — this
+/// migration's second trigger, since these rows carry no status of their
+/// own to check directly.
+model QuestionOption {
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId           String   @map("school_id") @db.Uuid
+  questionRevisionId String   @map("question_revision_id") @db.Uuid
+  content            String
+  originalOrder      Int      @map("original_order")
+  correctFlag        Boolean  @default(false) @map("correct_flag")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  revision QuestionRevision @relation(fields: [schoolId, questionRevisionId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, questionRevisionId, originalOrder])
+  @@index([schoolId])
+  @@index([schoolId, questionRevisionId])
+  @@map("question_options")
+}
+
+/// 07 §7.4. `mediaType` is deliberately not re-declared here — read off the
+/// joined MediaAsset.type (QUESTION_IMAGE/QUESTION_DIAGRAM) instead of
+/// duplicating that vocabulary. D-13: a new revision created from an
+/// APPROVED/REJECTED source (POST .../revisions) always gets fresh
+/// QuestionMedia rows, even when pointing at the same still-valid
+/// MediaAsset — the underlying asset is genuinely reusable, but the join
+/// row is revision-specific, so the old revision's own QuestionMedia rows
+/// are never reassigned. Immutable once the parent revision is APPROVED —
+/// this migration's third trigger (an extension slightly beyond the
+/// roadmap's literal "content, options, correct answer, marks" wording, but
+/// necessary for D-13's "never silently added/removed from an approved
+/// revision" to hold against every mutation path, not just column edits).
+model QuestionMedia {
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId           String   @map("school_id") @db.Uuid
+  questionRevisionId String   @map("question_revision_id") @db.Uuid
+  mediaAssetId       String   @map("media_asset_id") @db.Uuid
+  displayOrder       Int      @map("display_order")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  revision   QuestionRevision @relation(fields: [schoolId, questionRevisionId], references: [schoolId, id], onDelete: Cascade)
+  /// Restrict: there is no MediaAsset delete path anywhere in this codebase
+  /// today (D-13), but Restrict is the correct backstop regardless.
+  mediaAsset MediaAsset       @relation(fields: [schoolId, mediaAssetId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, questionRevisionId, mediaAssetId])
+  @@index([schoolId])
+  @@index([schoolId, questionRevisionId])
+  @@map("question_media")
+}
+
+/// ADR-0001 §3 — first-class, scoped to (school, subject); resolves audit
+/// finding A-16 (06 §31 had explicitly deferred this). `subtopic` is a
+/// nullable self-reference (a subtopic is just a Topic whose parentTopicId
+/// points at another Topic). Case-insensitive uniqueness within
+/// (school, subject, parent) is a hand-written functional unique index in
+/// this migration's raw SQL (Prisma's DSL can't express lower()/COALESCE
+/// expressions) — not citext (no extension precedent anywhere in this
+/// codebase) and not application-layer-only (a bare findOrCreate without a
+/// DB constraint races under concurrent rows resolving the same brand-new
+/// topic name simultaneously, e.g. two import rows in the same batch).
+model Topic {
+  id            String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId      String   @map("school_id") @db.Uuid
+  subjectId     String   @map("subject_id") @db.Uuid
+  parentTopicId String?  @map("parent_topic_id") @db.Uuid
+  name          String   @db.VarChar(128)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subject     Subject @relation(fields: [schoolId, subjectId], references: [schoolId, id], onDelete: Restrict)
+  parentTopic Topic?  @relation("TopicHierarchy", fields: [schoolId, parentTopicId], references: [schoolId, id], onDelete: Restrict)
+  subtopics   Topic[] @relation("TopicHierarchy")
+
+  revisionsAsTopic    QuestionRevision[] @relation("RevisionTopic")
+  revisionsAsSubtopic QuestionRevision[] @relation("RevisionSubtopic")
+
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, subjectId])
+  @@index([schoolId, parentTopicId])
+  // Case-insensitive uniqueness is the hand-written functional index in
+  // this migration's raw SQL below — deliberately no @@unique on `name`
+  // here, which would be case-SENSITIVE and would contradict it.
+  @@map("topics")
 }

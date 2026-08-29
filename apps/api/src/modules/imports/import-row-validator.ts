@@ -145,3 +145,121 @@ export function validateTeacherRow(
 
   return errors;
 }
+
+const OPTION_COLUMNS = ['Option A', 'Option B', 'Option C', 'Option D'] as const;
+const OPTION_LETTERS = ['A', 'B', 'C', 'D'] as const;
+
+/** B8 — a question row has no natural duplicate-detection identifier the
+ * way Student ID/Staff ID do (05 §18's template carries none), so there is
+ * no `idCountsInFile`-shaped context here; every row is validated
+ * independently against the school's real academic structure. */
+export interface QuestionValidationContext {
+  /** Keyed by lower-cased subject name (Subject is not session-scoped —
+   * unlike STUDENTS' class lookup, no target-session filter applies). */
+  subjectsByName: Map<string, { id: string; departmentId: string | null }>;
+  /** Keyed by lower-cased class name, resolved school-wide (not scoped to
+   * one session — a question's `level` outlives any one session, unlike a
+   * StudentEnrollment). */
+  classLevelsByName: Map<string, string>;
+  /** The uploader's own active TeacherAssignment (subjectId, level) pairs
+   * — ADR-0001 §2's scope join, resolved once per file rather than once
+   * per row (batched, matching this file's own established convention). */
+  assignedPairs: Set<string>;
+}
+
+function assignedPairKey(subjectId: string, level: string): string {
+  return `${subjectId}::${level}`;
+}
+export { assignedPairKey as questionAssignedPairKey };
+
+/**
+ * 05 §15.4's validation catalogue, resolved for the CSV shape: required
+ * fields, at least two non-blank options, exactly one correct-answer
+ * letter matching a non-blank option, valid marks, and the same ADR-0001
+ * subject+level scope check `question-validation.util.ts` enforces for
+ * interactive submission — extended here to the *uploader's* own
+ * assignments, since every imported question is authored as that person
+ * (see `QuestionService.createFromImportRow`'s own doc comment).
+ */
+export function validateQuestionRow(
+  row: Record<string, string>,
+  ctx: QuestionValidationContext,
+): FieldError[] {
+  const errors: FieldError[] = [];
+  const content = row['Question'] ?? '';
+  const subjectName = row['Subject'] ?? '';
+  const className = row['Class'] ?? '';
+  const correctAnswer = (row['Correct Answer'] ?? '').trim().toUpperCase();
+  const difficulty = (row['Difficulty'] ?? '').trim().toUpperCase();
+  const marksRaw = row['Marks'] ?? '';
+
+  if (!content.trim()) errors.push({ field: 'Question', message: 'Question text is required.' });
+
+  const options = OPTION_COLUMNS.map((col) => (row[col] ?? '').trim());
+  const nonBlankCount = options.filter((value) => value.length > 0).length;
+  if (nonBlankCount < 2) {
+    errors.push({ field: 'Option A', message: 'At least two options are required.' });
+  }
+
+  if (!correctAnswer) {
+    errors.push({ field: 'Correct Answer', message: 'Correct Answer is required.' });
+  } else if (!(OPTION_LETTERS as readonly string[]).includes(correctAnswer)) {
+    errors.push({
+      field: 'Correct Answer',
+      message: `Correct Answer must be one of ${OPTION_LETTERS.join(', ')}.`,
+    });
+  } else {
+    const index = OPTION_LETTERS.indexOf(correctAnswer as (typeof OPTION_LETTERS)[number]);
+    if (!options[index]) {
+      errors.push({
+        field: 'Correct Answer',
+        message: `Correct Answer "${correctAnswer}" refers to an empty option.`,
+      });
+    }
+  }
+
+  if (!['EASY', 'MEDIUM', 'HARD'].includes(difficulty)) {
+    errors.push({
+      field: 'Difficulty',
+      message: 'Difficulty must be one of EASY, MEDIUM, HARD.',
+    });
+  }
+
+  const marks = Number(marksRaw);
+  if (!marksRaw || !Number.isInteger(marks) || marks < 1 || marks > 100) {
+    errors.push({ field: 'Marks', message: 'Marks must be a whole number between 1 and 100.' });
+  }
+
+  let resolvedSubject: { id: string; departmentId: string | null } | undefined;
+  if (!subjectName) {
+    errors.push({ field: 'Subject', message: 'Subject is required.' });
+  } else {
+    resolvedSubject = ctx.subjectsByName.get(subjectName.toLowerCase());
+    if (!resolvedSubject) {
+      errors.push({ field: 'Subject', message: `Subject "${subjectName}" was not found.` });
+    }
+  }
+
+  let resolvedLevel: string | undefined;
+  if (!className) {
+    errors.push({ field: 'Class', message: 'Class is required.' });
+  } else {
+    resolvedLevel = ctx.classLevelsByName.get(className.toLowerCase());
+    if (!resolvedLevel) {
+      errors.push({ field: 'Class', message: `Class "${className}" was not found.` });
+    }
+  }
+
+  if (resolvedSubject && resolvedLevel) {
+    if (!ctx.assignedPairs.has(assignedPairKey(resolvedSubject.id, resolvedLevel))) {
+      errors.push({
+        field: 'Subject',
+        message:
+          'You have no active assignment covering this subject and level — questions may only be ' +
+          'imported within your assigned scope.',
+      });
+    }
+  }
+
+  return errors;
+}

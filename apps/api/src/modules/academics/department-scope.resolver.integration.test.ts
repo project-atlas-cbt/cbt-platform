@@ -161,6 +161,11 @@ describe('DEPARTMENT scope resolver (DoD item 6)', () => {
     await expect(
       resolver(teacherActor, { schoolId: school.id, departmentId: ownSubject.departmentId }),
     ).resolves.toBe(false);
-    await expect(resolver(hodActor, undefined)).resolves.toBe(false);
+    // B8 gap-closure: undefined resource (PermissionGuard's own bare
+    // @Authorized(id) check, before any handler runs) now resolves
+    // optimistically true, mirroring OWNED/SELF's convention — see this
+    // resolver's own updated doc comment. Real per-resource enforcement is
+    // what the two assertions above already prove.
+    await expect(resolver(hodActor, undefined)).resolves.toBe(true);
   });
 });
