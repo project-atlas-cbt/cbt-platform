@@ -61,7 +61,7 @@ The student exam route runs its own client-side runtime inside the shared shell 
 | F5  | School Settings & Branding             | B4             | No                                           | NOT STARTED |
 | F6  | Academic Structure Workspace           | B5             | No                                           | NOT STARTED |
 | F7  | People Management Workspace            | B6             | No                                           | NOT STARTED |
-| F8  | Bulk Import UI                         | B7             | No                                           | NOT STARTED |
+| F8  | Bulk Import UI                         | B7             | No                                           | COMPLETE    |
 | F9  | Question Bank Workspace                | B8             | Editor shell yes                             | NOT STARTED |
 | F10 | Question Review Workspace              | B9             | No                                           | NOT STARTED |
 | F11 | Exam Builder                           | B11            | No                                           | NOT STARTED |
@@ -832,7 +832,7 @@ Depends on F3 issuing keys. Delegates imports to F8; if F8 is not ready, staff a
 4. ✅ Branding preview shows the school's colour (and logo, once uploaded) across all six contexts from `03 §5` (Login/Dashboard/Exam interface/Buttons/Tables/Result pages) — illustrative mockups for the two that don't exist as real screens yet (Exam interface, Result pages: `B11`+/`B14`+), not fabricated live screens.
 5. ✅ Session and term creation enforces the single-current rule — via `B5`'s own `activate` endpoints (this phase never re-implements that rule, only calls it); step 3 offers "make this the current session" checked by default for onboarding's single-session flow.
 6. ✅ Departments, classes, and subjects can be created; `03 §7`'s Science/Business/Humanities defaults are suggested in the empty-state copy, never pre-created.
-7. ⚠️ Partial, by design: staff and students can be created **individually**. Bulk import is explicitly deferred — `B7`'s `imports.v1` contract now exists (2026-08-29, `POST /v1/imports/{students,teachers}` and the rest), but this phase's own UI was never rebuilt against it and `F8` (Bulk Import UI) still doesn't exist — matching the roadmap's own named fallback ("if F8 is not ready, staff and student steps allow manual entry and defer import"). Recorded as Candidate/Deferred below, not silently dropped.
+7. ✅ Closed by `F8` (2026-08-29): staff and students can still be created individually, but the Staff/Students steps now also offer a manual/import mode toggle backed by the real `imports.v1` contract (`<BulkImportFlow type="TEACHERS"|"STUDENTS">`) — no longer partial. Originally deferred here per the roadmap's own named fallback ("if F8 is not ready, staff and student steps allow manual entry and defer import"); see `F8`'s own section for the full implementation.
 8. ✅ Completion is blocked while required fundamentals are missing (`05 §5.2`) — enforced **twice**: client-side (`ReviewSummary`'s disabled "Complete Setup" button) and, independently, server-side (`POST /school/onboarding/complete`'s `ONBOARDING_FUNDAMENTALS_MISSING` 409 — a small, confirmed backend gap-closure this phase added, see below). "No admin" isn't a separate runtime check: B3's school-creation flow always creates the initial School Admin, so a session existing at all already guarantees one.
 9. ✅ A school **can** complete with one admin plus academic structure (current session + ≥1 class), adding staff/students later — only those two conditions gate completion; every other step is encouraged, never mandatory.
 10. ✅ The review summary (`ReviewSummary`, step 10) shows a count/status per domain with an Edit link back to that step.
@@ -847,7 +847,7 @@ Depends on F3 issuing keys. Delegates imports to F8; if F8 is not ready, staff a
 ## Deferred items
 
 - Import of an existing school's historical data — not specified.
-- **Real bulk import for Staff/Students steps** — `B7`'s backend contract now exists (2026-08-29), but this phase's own UI still needs `F8` (Bulk Import UI) to consume it; manual one-at-a-time entry only for now, per this phase's own DoD item 7.
+- ~~Real bulk import for Staff/Students steps~~ — closed by `F8` (2026-08-29); see DoD item 7 above.
 - Class-Subject matrix authoring and teacher-to-subject/class assignment during onboarding (`POST /academics/classes/{id}/subjects`, `PUT /teachers/{id}/assignments`) — deferred to `F6`/`F7`; onboarding only creates the bare `ClassGroup`/`Subject` entities.
 - Any "resend activation email" / "regenerate login identifier" self-service affordance on `/activate` — not requested by any DoD item.
 - Branding preview's Exam interface/Result pages becoming live-linked to the real screens once `B11`+/`B14`+ ship — illustrative mockups for now.
@@ -1205,7 +1205,7 @@ F8 imports into these directories. F9 and F11 depend on assignments being correc
 
 # F8 — Bulk Import UI
 
-**Status:** NOT STARTED · **Backend pair:** B7
+**Status:** COMPLETE · **Backend pair:** B7 (+ B8 for `QUESTIONS`)
 
 ## Objective
 
@@ -1226,17 +1226,22 @@ Deliver the import experience for students, teachers, and questions: upload, val
 
 ## Backend dependencies
 
-**F8 consumes the B7 import contract**: upload, status polling, validation report, error download, confirm.
+**F8 consumes the B7 import contract**: upload, status polling, validation report, error download, confirm. Extended to `B8`'s `QUESTIONS` type (its own dedicated upload-target route pair) since `imports.v1` already covered it in full by the time this phase started.
 
 ## Screens / routes / components
 
-| Route                            | Screen                    |
-| -------------------------------- | ------------------------- |
-| `/school/people/students/import` | Student import            |
-| `/school/people/teachers/import` | Teacher import            |
-| `/teacher/questions/import`      | Question import (`QB-04`) |
+| Route                               | Screen                                           |
+| ----------------------------------- | ------------------------------------------------ |
+| `/school/people/students/import`    | Student import                                   |
+| `/school/people/teachers/import`    | Teacher import                                   |
+| `/moderator/people/students/import` | Student import (Moderator)                       |
+| `/moderator/people/teachers/import` | Teacher import (Moderator)                       |
+| `/teacher/question-bank/import`     | Question import (`QB-04`)                        |
+| `/teacher/question-bank`            | Minimal landing (new — see Implementation notes) |
 
-Components: `FileDropzone`, `ValidationSummary`, `ErrorTable`, `ImportProgress`, `ImportResult`.
+Real route names corrected during implementation, not the roadmap's original literal guess — see Implementation notes below.
+
+Components (all `apps/web/components/imports/`): `FileDropzone`, `ValidationSummary`, `ErrorTable`, `ImportProgress`, `ImportResult`, plus `BulkImportFlow` (the state-machine orchestrator) and `ImportScreen` (the shared per-route wrapper) — both added beyond the roadmap's original named list.
 
 ## State management requirements
 
@@ -1268,27 +1273,44 @@ Used by F4's onboarding steps and by F7's directories.
 
 ## Definition of Done
 
-1. Templates download for each import type.
-2. Upload validates file type and size client-side before sending.
-3. Validation results show exactly the shape from `03 §16`: total, valid, needing attention.
-4. Per-row errors display with row number and a specific reason.
-5. An error file downloads for correction and re-upload.
-6. **Confirm imports only valid rows, and the UI makes that unambiguous before the user commits** (`05 §10.2`).
-7. The user can cancel and fix the file instead.
-8. Import progress displays for long-running jobs.
-9. The summary reports what was imported.
-10. Imported questions are clearly marked as drafts requiring review.
-11. Navigating away and returning restores a validated-but-unconfirmed import.
-12. Loading, error, and empty states implemented.
+1. ✅ Templates download for each import type — `useDownloadImportTemplate` (`lib/imports/use-import-download.ts`), always-visible button on `ImportScreen`.
+2. ✅ Upload validates file type and size client-side before sending — `FileDropzone` (extension authoritative, 5MB cap; MIME deliberately not checked client-side, see its own doc comment).
+3. ✅ Validation results show exactly the shape from `03 §16`: total, valid, needing attention — `ValidationSummary`.
+4. ✅ Per-row errors display with row number and a specific reason — `ErrorTable`, server-paginated.
+5. ✅ An error file downloads for correction and re-upload — `useDownloadImportErrors`, offered on the review screen and again post-commit if any row still failed.
+6. ✅ **Confirm imports only valid rows, and the UI makes that unambiguous before the user commits** — `ValidationSummary`'s explicit "N will be imported, M will be skipped" sentence plus the confirm button's own "Import N valid rows" label.
+7. ✅ The user can cancel and fix the file instead — `useImportFlow`'s `cancel` action clears the URL job param; no cancel endpoint exists or is needed, since the abandoned job simply expires server-side after 24h.
+8. ✅ Import progress displays for long-running jobs — `ImportProgress` (row counts + elapsed time).
+9. ✅ The summary reports what was imported — `ImportResult`.
+10. ✅ Imported questions are clearly marked as drafts requiring review — `ImportResult`'s "Draft — pending review" banner (true by construction on the backend since `B8`; this is UI copy only).
+11. ✅ Navigating away and returning restores a validated-but-unconfirmed import — the job id lives in the URL (`?job=`), never client-only state; proven by `use-import-flow.resilience.test.tsx` against a genuinely fresh `QueryClient`.
+12. ✅ Loading, error, and empty states implemented — every component's own test file covers its default/loading/error/empty-equivalent states.
 
 ## Exit criteria
 
-- 1,500-row E2E import green within the agreed time budget.
-- B7 contracts confirmed.
+- ✅ 1,500-row E2E import green within the agreed time budget — `B7`'s own `import-1500-rows.integration.test.ts` proves real backend timing (~60s) at this scale; `error-table.performance.test.tsx` is this phase's own frontend-side proxy, proving the error table never mounts more than one server-paginated page of rows regardless of dataset size (see Implementation notes — no redundant full-stack 1,500-row run was added at this layer).
+- ✅ B7 contracts confirmed — three full happy-path integration tests (one per import type) exercise the real call sequence against every `imports.v1` route this phase uses.
 
 ## Deferred items
 
 - In-browser error correction — users correct the file and re-upload.
+- HOD import screen — `questionBank.import`'s DEPARTMENT-scoped grant stays real and correct at the API layer (proven by `B8`'s own tests), but no HOD-facing route was built this phase; this phase's own route table never named one, matching the "HOD gets zero F7 screens" ADR-0017 precedent. Candidate for `F9`/`F10`.
+- `GET /imports` (job list/history) — no roadmap-named screen consumes it; building a "recent imports" view now would be speculative scope beyond this phase's DoD. Candidate for a future phase if the project owner wants one.
+- Real browser E2E — no infra exists in this repo for any phase; substituted with the established RTL "mock only the HTTP boundary, drive real components" integration-test technique, per every prior phase's own precedent.
+
+## Implementation notes
+
+- **Route-naming correction, not a new decision** (mirrors F1's own `/reset-password` vs. the roadmap's originally-guessed `/password/reset`): the literal `/teacher/questions/import` this section originally named was wrong. `nav-model.ts` already had, from an earlier phase, unimplemented `question-bank` nav items for both `TEACHER` and `HOD` (`match: ['questionBank.']`) rendering via the `[...slug]` catch-all — so the real route is `/teacher/question-bank/import`, and a minimal `/teacher/question-bank` landing page was added (one file, not the real `F9` workspace) purely so the import screen has a real parent to link back to. `F9`'s own real screen supersedes this file automatically, the same mechanism every prior phase's real `page.tsx` has used against a placeholder.
+- **Moderator parity** (`/moderator/people/{students,teachers}/import`) was added beyond this section's original two-route table — Moderator holds an identical `SCHOOL`-scoped grant to School Admin on both `users.import.students`/`users.import.teachers`, matching the established "mirror School Admin's People screens for Moderator" pattern from `F6`/`F7`.
+- **One shared, parameterized state machine** (`components/imports/use-import-flow.ts`) drives every mount — the routes above, both role roots, and the two onboarding steps below — off one `phase` derived from `job.status`, not duplicated per screen.
+- **Onboarding integration** (closing F4's own honestly-flagged gap): `step-08-staff.tsx`'s `TeacherSection` and `step-09-students.tsx` each gained a manual/import mode toggle (`<Tabs>`), not a new wizard step — `WizardShell`'s Continue-gating (`useOnboardingStepStatus`) needed no change at all, since its `staff`/`students` booleans already derive from the exact same `useTeachers()`/`useStudents()` hooks (verified directly: both are literal re-exports from `lib/academics/queries.ts`, sharing the identical `['people','teachers']`/`['people','students']` query keys) that `invalidateImportSideEffects` invalidates once a job reaches `COMPLETED`. Moderator/HOD sections in onboarding stay manual-only — neither is an import type `imports.v1` defines.
+- **Resumability (DoD 11) is server-state-first**: `useImportFlow` reads/writes the created job's id via a URL query param (`?job=` by default, overridable per mount so two flows never collide on one page) rather than component state — the onboarding steps additionally default their `<Tabs>` to the "import" tab when that param is already present, so a hard refresh mid-import doesn't strand the user on the manual-entry tab.
+- **No client-side virtualization dependency** — `ErrorTable` is a thin `DataTable` wrapper over `useImportRows`'s server pagination (`ListImportRowsQueryDto` already caps `pageSize` at 200); considered and rejected per `AGENTS.md` §9, since server pagination alone already satisfies the "500+ rows without freezing" requirement the same way `StudentsScreen` already proves at 1,500-row scale.
+- **Polling** (`lib/imports/queries.ts`'s `pollingInterval`) is a simple fixed two-tier scheme (`VALIDATING` → 2s, `IMPORTING` → 5s, every other status stops polling) — no generic backoff utility exists anywhere in this codebase to reuse, and `B7`'s own `import-1500-rows.integration.test.ts` bounds both phases to well under two minutes at real scale, so a fixed interval is sufficient without inventing exponential backoff for an already-bounded, already-fast operation.
+- **A real, pre-existing test-environment gap found and fixed while testing `FileDropzone`, not a product bug**: `userEvent.upload()` respects an `<input accept>` attribute the same way a real OS file picker does, so a wrong-extension file can only actually reach this component via drag-and-drop in both a real browser and in tests — the wrong-extension/oversized-file rejection tests use `fireEvent.drop` accordingly, not `userEvent.upload`.
+- Two stale-build gotchas hit during implementation, both this codebase's now-standing class of issue: `packages/contracts`'s own `dist/` needed an explicit rebuild (`pnpm --filter @atlas/contracts run build`) before `apps/web` could typecheck against the `/imports/questions/*` paths `B8` had already added to the source `openapi-types.ts` — `pnpm generate` alone wasn't sufficient, exactly as `B7`'s own gap-closure entry already recorded for `@atlas/domain`/`@atlas/contracts`.
+
+Full pipeline green: `pnpm --filter @atlas/web run lint && pnpm --filter @atlas/web run typecheck && pnpm --filter @atlas/web run test -- --run && pnpm --filter @atlas/web run build` — 100 test files / 406 tests (up from 90/373), including 24 new tests across 10 new files. One transient full-suite worker-pool-startup timeout (this environment's already-documented flakiness — see `F7`'s own Change Log entry for the identical class of issue) hit two unrelated files, including one of this phase's own; both reconfirmed green in isolation immediately after.
 
 ---
 
@@ -2572,7 +2594,7 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 | F5    | NOT STARTED | B4             | —          | —          |                                                                                                                           |
 | F6    | NOT STARTED | B5             | —          | —          |                                                                                                                           |
 | F7    | NOT STARTED | B6             | —          | —          |                                                                                                                           |
-| F8    | NOT STARTED | B7             | —          | —          |                                                                                                                           |
+| F8    | COMPLETE    | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                               |
 | F9    | NOT STARTED | B8             | —          | —          | Editor shell may start now                                                                                                |
 | F10   | NOT STARTED | B9             | —          | —          |                                                                                                                           |
 | F11   | NOT STARTED | B11            | —          | —          |                                                                                                                           |

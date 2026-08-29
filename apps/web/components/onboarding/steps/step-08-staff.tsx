@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,6 +23,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BulkImportFlow } from '@/components/imports/bulk-import-flow';
 import { ApiError } from '@/lib/api';
 import {
   useAcademicsContext,
@@ -58,8 +61,10 @@ type HodValues = z.infer<typeof hodSchema>;
 /** ON-08 (`05 §5.1`) — Moderators/Teachers/HODs in one step, all visible at
  * once (not tabs — an admin likely wants to see progress on all three
  * during onboarding). Not a hard blocker for completion (`05 §5.2`: "add
- * staff later"). Real bulk import is F8/B7, not built anywhere yet —
- * Candidate/Deferred; manual entry only. */
+ * staff later"). F8 — the Teachers section gains a manual/import mode
+ * toggle (`imports.v1` covers `TEACHERS`, not moderators or HODs — a
+ * moderator/HOD bulk-create path isn't an import type B7/B8 ever defined),
+ * closing F4's own honestly-flagged gap for teachers specifically. */
 export function Step08Staff() {
   return (
     <div className="space-y-8">
@@ -74,6 +79,10 @@ function TeacherSection() {
   const teachers = useTeachers();
   const createTeacher = useCreateTeacher();
   const [error, setError] = useState<string | null>(null);
+  // DoD item 11 (resumability): if a validated-but-unconfirmed import is
+  // already staged (e.g. after a hard refresh), open straight into that
+  // tab instead of defaulting back to manual entry.
+  const defaultTab = useSearchParams()?.get('teachersImportJob') ? 'import' : 'manual';
   const form = useForm<TeacherValues>({
     resolver: zodResolver(teacherSchema),
     defaultValues: { firstName: '', lastName: '', email: '', staffId: '' },
@@ -96,78 +105,89 @@ function TeacherSection() {
         <Skeleton className="h-32 w-full" />
       ) : (
         <>
-          <Form {...form}>
-            <form
-              onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
-              className="space-y-3"
-              noValidate
-            >
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First name</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last name</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="staffId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Staff ID</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              {error ? (
-                <p role="alert" className="text-sm font-medium text-danger">
-                  {error}
-                </p>
-              ) : null}
-              <Button type="submit" size="sm" loading={form.formState.isSubmitting}>
-                Add teacher
-              </Button>
-            </form>
-          </Form>
+          <Tabs defaultValue={defaultTab}>
+            <TabsList>
+              <TabsTrigger value="manual">Add one at a time</TabsTrigger>
+              <TabsTrigger value="import">Import from a file</TabsTrigger>
+            </TabsList>
+            <TabsContent value="manual">
+              <Form {...form}>
+                <form
+                  onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
+                  className="space-y-3"
+                  noValidate
+                >
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="staffId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Staff ID</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  {error ? (
+                    <p role="alert" className="text-sm font-medium text-danger">
+                      {error}
+                    </p>
+                  ) : null}
+                  <Button type="submit" size="sm" loading={form.formState.isSubmitting}>
+                    Add teacher
+                  </Button>
+                </form>
+              </Form>
+            </TabsContent>
+            <TabsContent value="import">
+              <BulkImportFlow type="TEACHERS" paramName="teachersImportJob" />
+            </TabsContent>
+          </Tabs>
           <StepList
             items={teachers.data?.teachers ?? []}
             keyFor={(t) => t.membershipId}

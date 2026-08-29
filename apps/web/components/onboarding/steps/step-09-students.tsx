@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,6 +24,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BulkImportFlow } from '@/components/imports/bulk-import-flow';
 import { ApiError } from '@/lib/api';
 import { useAcademicsContext, useClasses, useStudents } from '@/lib/onboarding/queries';
 import { useCreateStudent } from '@/lib/onboarding/mutations';
@@ -37,9 +40,11 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
-/** ON-09 (`05 §5.1`). One-at-a-time only — real bulk import is F8/B7, not
- * built anywhere in the API yet (Candidate/Deferred, per the roadmap's own
- * explicit fallback). Not a hard blocker for completion (`05 §5.2`). */
+/** ON-09 (`05 §5.1`). F8 — real bulk import now sits alongside manual
+ * one-at-a-time entry behind a mode toggle, closing F4's own honestly-
+ * flagged gap; `<BulkImportFlow>` shares the exact `imports.v1` data layer
+ * and `use-import-flow.ts` state machine the People-workspace import
+ * screens use. Not a hard blocker for completion (`05 §5.2`). */
 export function Step09Students() {
   const context = useAcademicsContext();
   const sessionId = context.data?.session?.id;
@@ -47,6 +52,10 @@ export function Step09Students() {
   const students = useStudents();
   const createStudent = useCreateStudent();
   const [error, setError] = useState<string | null>(null);
+  // DoD item 11 (resumability): if a validated-but-unconfirmed import is
+  // already staged (e.g. after a hard refresh), open straight into that
+  // tab instead of defaulting back to manual entry.
+  const defaultTab = useSearchParams()?.get('studentsImportJob') ? 'import' : 'manual';
 
   const classList = (classes.data?.classes ?? []).filter((c) => c.status !== 'ARCHIVED');
 
@@ -94,102 +103,113 @@ export function Step09Students() {
 
   return (
     <div className="space-y-6">
-      <Form {...form}>
-        <form
-          onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
-          className="space-y-4"
-          noValidate
-        >
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="firstName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>First name</FormLabel>
-                  <FormControl>
-                    <Input autoFocus {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="lastName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Last name</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="studentId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Student ID</FormLabel>
-                  <FormControl>
-                    <Input placeholder="ST001" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="admissionNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Admission number (optional)</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          <FormField
-            control={form.control}
-            name="classId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Class</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a class" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {classList.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          {error ? (
-            <p role="alert" className="text-sm font-medium text-danger">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" loading={form.formState.isSubmitting}>
-            Add student
-          </Button>
-        </form>
-      </Form>
+      <Tabs defaultValue={defaultTab}>
+        <TabsList>
+          <TabsTrigger value="manual">Add one at a time</TabsTrigger>
+          <TabsTrigger value="import">Import from a file</TabsTrigger>
+        </TabsList>
+        <TabsContent value="manual">
+          <Form {...form}>
+            <form
+              onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
+              className="space-y-4"
+              noValidate
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First name</FormLabel>
+                      <FormControl>
+                        <Input autoFocus {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last name</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="studentId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Student ID</FormLabel>
+                      <FormControl>
+                        <Input placeholder="ST001" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="admissionNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Admission number (optional)</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="classId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Class</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a class" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {classList.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {error ? (
+                <p role="alert" className="text-sm font-medium text-danger">
+                  {error}
+                </p>
+              ) : null}
+              <Button type="submit" loading={form.formState.isSubmitting}>
+                Add student
+              </Button>
+            </form>
+          </Form>
+        </TabsContent>
+        <TabsContent value="import">
+          <BulkImportFlow type="STUDENTS" paramName="studentsImportJob" />
+        </TabsContent>
+      </Tabs>
 
       <StepList
         items={students.data?.students ?? []}

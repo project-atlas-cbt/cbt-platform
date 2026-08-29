@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Users2 } from 'lucide-react';
+import { Plus, Upload, Users2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +48,9 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
   const [formOpen, setFormOpen] = useState(false);
 
   const canManage = useHasPermission('users.teacher.create');
+  // F8 — a distinct grant from `users.teacher.create`, even though today's
+  // permission table happens to grant both to the same actors.
+  const canImport = useHasPermission('users.import.teachers');
 
   function updateParams(next: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -108,11 +111,20 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-text-primary">Teachers</h2>
-        {canManage ? (
-          <Button onClick={() => setFormOpen(true)}>
-            <Plus aria-hidden /> Add teacher
-          </Button>
-        ) : null}
+        <div className="flex gap-2">
+          {canImport ? (
+            <Button variant="secondary" asChild>
+              <Link href={`${basePath}/teachers/import`}>
+                <Upload aria-hidden /> Import
+              </Link>
+            </Button>
+          ) : null}
+          {canManage ? (
+            <Button onClick={() => setFormOpen(true)}>
+              <Plus aria-hidden /> Add teacher
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div>

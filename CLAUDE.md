@@ -316,7 +316,12 @@ than deferred. Closed two genuine pre-existing gaps found only by routing real H
 them for the first time: the `ASSIGNED`/`DEPARTMENT` scope resolvers' missing "no resource yet"
 optimistic-pass case, and three `ImportsModule` routes gated by a permission id Teacher/HOD don't
 hold. `QuestionReview` (B9's approve/reject/comment workflow) is explicitly not built. See this
-file's Change Log entry below for the full reasoning.
+file's Change Log entry below for the full reasoning. **`F8 — Bulk Import UI`** is now complete too:
+one shared `<BulkImportFlow>` state machine consuming `imports.v1` across six routes (Student/Teacher
+import for School Admin and Moderator, Question import for Teacher) and a new manual/import mode
+toggle inside the onboarding wizard's Staff/Students steps — closing `F4`'s own last honestly-partial
+DoD item. Every currently-open frontend phase through `F8` is now closed out; `B9` is next on the
+backend critical path.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -3030,3 +3035,116 @@ comment, the HOD review queue via ADR-0001's two-hop `Subject.departmentId` join
 deliberately left out. A future `F9` (Question Bank Workspace) remains open whenever the
 frontend/backend phase-pairing default is next prioritized, and would prove `B8`'s own `questions.v1`
 contract end to end for the first time.
+
+### 2026-08-29 — `F8` complete: Bulk Import UI
+
+Requested explicitly: start `F8`. Followed the working-rules checklist first: three parallel Explore
+agents (F8's own roadmap/spec text; the full `imports.v1` backend contract as B7/B8 actually shipped
+it, not just as originally planned; existing frontend conventions to reuse — the logo-upload
+sequence, CSV-download pattern, paginated-list URL-state pattern, permission-gating hooks), then a
+Plan agent, then direct verification reads of the critical files (`use-logo-upload.ts`,
+`use-class-credential-sheet` in `lib/people/mutations.ts`, `data-table.tsx`, the imports DTOs/
+controller, `nav-model.ts`) before writing any code — per this project's own established precedent
+for a phase of this shape. No gating ADR blocks F8; the only relevant audit finding (A-17) was
+already settled in `B7`.
+
+**One real, load-bearing finding from direct verification, not from the roadmap text — corrected
+before any route was built, mirroring F1's own `/reset-password` precedent exactly**: the roadmap's
+literal `/teacher/questions/import` route doesn't match this codebase's actual nav infrastructure.
+`nav-model.ts` already carries, from an earlier phase, an unimplemented `question-bank` nav item for
+both `TEACHER` and `HOD` (`match: ['questionBank.']`, currently rendering through the `[...slug]`
+catch-all) — so the real route is `/teacher/question-bank/import`. A minimal `/teacher/question-bank`
+landing page (one file, not `F9`'s real workspace) was added alongside it purely so the import screen
+has a real parent to link back to — a low-risk, explicitly reversible call made directly rather than
+asked, per the plan's own reasoning, and consistent with the established "nav item ships ahead of its
+screen, a later phase's real `page.tsx` supersedes the catch-all automatically" pattern (`F2`/`F3`/`F6`
+precedent).
+
+**Delivered**: one shared, parameterized state machine (`components/imports/use-import-flow.ts`,
+`idle → uploading → creating-job → validating → validated → confirming → importing →
+completed|failed|expired`) driving the roadmap's own named sub-components (`FileDropzone`,
+`ValidationSummary`, `ErrorTable`, `ImportProgress`, `ImportResult`) via one orchestrator
+(`BulkImportFlow`) and one shared per-route wrapper (`ImportScreen`) — mounted from six routes
+(`/school` and `/moderator` People workspaces for Students/Teachers import, `/teacher/question-bank/
+import` for questions) and, closing `F4`'s own last honestly-partial DoD item, from a new manual/
+import mode toggle inside the onboarding wizard's Staff and Students steps. The upload sequence
+(`lib/imports/use-import-upload.ts`) is a structural copy of B4/F4/F5's own `useLogoUpload` pattern
+(`upload-target` → raw `PUT` → `complete`); template/error CSV downloads
+(`lib/imports/use-import-download.ts`) are a structural copy of F7's `useClassCredentialSheet` manual-
+fetch pattern, since `apiClient` is JSON-only and can't carry a `text/csv` response. Polling
+(`lib/imports/queries.ts`) is a simple two-tier `refetchInterval` (2s while `VALIDATING`, 5s while
+`IMPORTING`) — no generic backoff utility exists anywhere in this codebase, and B7's own
+`import-1500-rows.integration.test.ts` already bounds both phases well under two minutes at real
+scale, so a fixed interval is enough without inventing exponential backoff for an already-bounded,
+already-fast operation.
+
+**DoD item 11 (resumability) is server-state-first, not client-memory-first**: the created job's id
+lives in a URL query param (`?job=` by default, overridable per mount so two flows never collide on
+one page), matching this codebase's established "URL/server is the source of truth for resumable
+state" convention (F4's onboarding resumability, F3/F7's URL-driven lists). The onboarding steps'
+mode toggle additionally defaults to the "import" tab when that param is already present, so a hard
+refresh mid-import doesn't strand the user on the manual-entry tab hiding their own in-progress job.
+
+**No client-side virtualization dependency was introduced for `ErrorTable`'s "500+ rows without
+freezing" requirement** — `ListImportRowsQueryDto` already caps server-side pagination at 200 rows;
+`ErrorTable` is a thin `DataTable` wrapper fetching one page (100 rows) at a time, the identical
+mechanism `StudentsScreen` already proves at 1,500-student scale. A virtualization library was
+considered and rejected per `AGENTS.md` §9 — server pagination alone already satisfies the
+requirement.
+
+**Confirmed scope decisions, made directly rather than asked, each with clear precedent**: Moderator
+gets student/teacher import parity with School Admin (identical `SCHOOL`-scoped grant, matching
+F6/F7's established directory-mirroring pattern); HOD gets no import screen this phase (this section's
+own route table never named one, and ADR-0017's "HOD gets zero F7 screens" precedent applies
+identically here — HOD's `questionBank.import` DEPARTMENT-scoped grant stays real and correct at the
+API layer, unreached by any UI until `F9`/`F10`); `GET /imports` (job list/history) stays unbuilt — no
+roadmap-named screen consumes it, and adding one now would be speculative scope beyond the DoD.
+
+**Two real, if minor, test-writing findings, not product bugs**: `userEvent.upload()` respects an
+`<input accept>` attribute the same way a real OS file picker does, so `FileDropzone`'s wrong-
+extension/oversized-file rejection logic — genuinely reachable in production only via drag-and-drop,
+which carries no such restriction — needed `fireEvent.drop`-based tests, not `userEvent.upload`, to
+actually exercise it. And `packages/contracts`' own `dist/` needed an explicit rebuild
+(`pnpm --filter @atlas/contracts run build`) before `apps/web` could typecheck against the
+`/imports/questions/*` paths `B8` had already added to the generated source — `pnpm generate` alone
+wasn't sufficient, the exact same class of stale-build gotcha `B7`'s own gap-closure entry already
+recorded for `@atlas/domain`.
+
+**Testing**: 10 new test files / 24 new tests — one component test per named sub-component
+(`FileDropzone`, `ValidationSummary`, `ErrorTable`, `ImportProgress`, `ImportResult`), an
+`error-table.performance.test.tsx` (the frontend-side proxy for the roadmap's 1,500-row requirement —
+B7's own backend integration test already proves real timing at that scale, so this proves instead
+that the error table never mounts more than one server-paginated page of DOM rows regardless of
+dataset size), a `use-import-flow.resilience.test.tsx` (DoD item 11, mounted with `?job=` pre-set
+against a genuinely fresh `QueryClient`, mirroring `resumability.integration.test.tsx`'s own "discard
+the cache between renders" technique), and one full happy-path integration test per import type
+(students/teachers/questions), each asserting the real call sequence — upload-target → raw `PUT` →
+complete → create → a simulated poll transition (`VALIDATING`→`VALIDATED`, driven by directly asking
+the `QueryClient` to refetch rather than advancing `refetchInterval`'s real timer, since
+`refetchInterval` itself is TanStack Query's own already-tested scheduling mechanism) → confirm →
+completed summary — matching this codebase's established RTL "mock only the HTTP boundary, drive real
+components" technique (`structure-creation.integration.test.tsx`/`resumability.integration.test.tsx`
+precedent).
+
+Full pipeline green, run in full after every fix: `pnpm --filter @atlas/web run lint && pnpm
+--filter @atlas/web run typecheck && pnpm --filter @atlas/web run test -- --run && pnpm
+--filter @atlas/web run build` — 100 test files / 406 tests (up from 90/373). One transient
+full-suite worker-pool-startup timeout hit two unrelated files (this environment's already-documented
+class of flakiness, per F7's own Change Log entry for the identical issue), including one of this
+phase's own new files; both reconfirmed green individually immediately after. `next build --webpack`
+confirmed all six new routes render as static pages, correctly superseding their prior `[...slug]`
+catch-all placeholders.
+
+`docs/roadmaps/frontend-roadmap.md`'s F8 section gained status `COMPLETE`, every DoD item checked
+with file references, a full "Implementation notes" subsection covering the route-naming correction
+and every scope decision above, and an expanded Deferred items list (HOD import screen, job-list/
+history view). Its own F4 section's DoD item 7 and Deferred-items entry were updated to record this
+closure. `docs/roadmaps/roadmap-index.md`'s version, Current State, and Immediate Next Actions all
+updated to record `F8` complete — every currently-open frontend phase is now closed out.
+
+Project state moves from _Implementation (B8 complete; F8 open)_ to _Implementation (F8 complete;
+all frontend phases through F8 closed out)_.
+**Next: `B9 — Question Review & Governance`** on the backend critical path (`Gate 1 ADRs → B0 → B1
+→ B2 → B3 → B5 → B6 → B8 → B9 → B11 → …`) — unaffected by `F8`'s own always-parallelisable position.
+A future `F9` (Question Bank Workspace) remains open whenever the frontend/backend phase-pairing
+default is next prioritized.
