@@ -1924,6 +1924,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reviews/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pending questions within the actor's scope, grouped by subject (DoD item 1). */
+        get: operations["QuestionReviewController_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reviews/questions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The full review workspace: content, options, metadata, and review history. */
+        get: operations["QuestionReviewController_workspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reviews/questions/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve — an optional HOD note (DoD item 2). */
+        post: operations["QuestionReviewController_approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reviews/questions/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject — reason mandatory (DoD item 3). */
+        post: operations["QuestionReviewController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reviews/questions/{id}/request-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request changes — reason mandatory, behaves like reject (DoD item 4). */
+        post: operations["QuestionReviewController_requestChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reviews/history/{questionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Full immutable review history across every revision of the question (DoD item 5). */
+        get: operations["QuestionReviewController_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2999,6 +3101,66 @@ export interface components {
             subjectId: string;
             name: string;
             parentTopicId?: string;
+        };
+        QuestionReviewQueueItemDto: {
+            questionId: string;
+            subjectId: string;
+            subjectName: string;
+            /** @enum {string} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+            authorTeacherProfileId: string;
+            authorName: string;
+            /**
+             * Format: date-time
+             * @description Proxy for submission time — the revision's own updatedAt while pending, since nothing else mutates it between submission and a decision.
+             */
+            submittedAt: string;
+            revision: components["schemas"]["QuestionRevisionResponseDto"];
+        };
+        QuestionReviewQueueSubjectGroupDto: {
+            subjectId: string;
+            subjectName: string;
+            pendingCount: number;
+            items: components["schemas"]["QuestionReviewQueueItemDto"][];
+        };
+        QuestionReviewQueueResponseDto: {
+            subjects: components["schemas"]["QuestionReviewQueueSubjectGroupDto"][];
+        };
+        QuestionReviewHistoryItemDto: {
+            id: string;
+            revisionNumber: number;
+            /** @enum {string} */
+            decision: "APPROVED" | "REJECTED" | "REQUEST_CHANGES";
+            comment: string | null;
+            reviewerName: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        QuestionReviewWorkspaceResponseDto: {
+            questionId: string;
+            subjectId: string;
+            subjectName: string;
+            /** @enum {string} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+            authorTeacherProfileId: string;
+            authorName: string;
+            currentRevision: components["schemas"]["QuestionRevisionResponseDto"];
+            history: components["schemas"]["QuestionReviewHistoryItemDto"][];
+        };
+        ApproveQuestionReviewDto: {
+            /** @description An optional HOD note. */
+            note?: string;
+        };
+        RejectQuestionReviewDto: {
+            /** @description Mandatory — shown to the teacher. */
+            reason: string;
+        };
+        RequestChangesQuestionReviewDto: {
+            /** @description Mandatory — shown to the teacher. */
+            reason: string;
+        };
+        QuestionReviewHistoryResponseDto: {
+            history: components["schemas"]["QuestionReviewHistoryItemDto"][];
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -6192,6 +6354,142 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TopicResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionReviewController_queue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionReviewQueueResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionReviewController_workspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionReviewWorkspaceResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionReviewController_approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveQuestionReviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionReviewWorkspaceResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionReviewController_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectQuestionReviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionReviewWorkspaceResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionReviewController_requestChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestChangesQuestionReviewDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionReviewWorkspaceResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionReviewController_history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionReviewHistoryResponseDto"];
                 };
             };
         };

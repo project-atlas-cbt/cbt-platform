@@ -304,6 +304,8 @@ model SchoolMembership {
   studentProfile  StudentProfile?
   teacherProfile  TeacherProfile?
   hodAssignments  HODAssignment[]
+  // B9: reviews this membership has personally decided, as reviewer.
+  questionReviews QuestionReview[]
 
   // Composite-FK target for RoleAssignment/StudentProfile/TeacherProfile,
   // matching TenancyProbe's proven (schoolId, id) pattern.
@@ -1524,6 +1526,8 @@ model QuestionRevision {
 
   options QuestionOption[]
   media   QuestionMedia[]
+  // B9: this revision's own review history (07 §7.5) — 1:N, append-only.
+  reviews QuestionReview[]
 
   @@unique([schoolId, questionId, revisionNumber])
   // Composite-FK target for QuestionOption/QuestionMedia, and the target of
@@ -1628,4 +1632,65 @@ model Topic {
   // this migration's raw SQL below — deliberately no @@unique on `name`
   // here, which would be case-SENSITIVE and would contradict it.
   @@map("topics")
+}
+
+// ---------------------------------------------------------------------------
+// B9 — Question Review & Governance (docs/roadmaps/backend-roadmap.md "B9",
+// ADR-0001, ADR-0017). The HOD approve/reject/request-changes workflow B8
+// deliberately left unbuilt (see Question's own doc comment).
+// ---------------------------------------------------------------------------
+
+/// 07 §7.5's three decisions. REQUEST_CHANGES and REJECTED both write the
+/// *same* `QuestionRevisionStatus.REJECTED` value onto the revision (that
+/// enum has no fourth value, and B9's roadmap DoD item 4 says
+/// request-changes "behaves equivalently [to reject]") — only this field
+/// keeps the two distinguishable, for history/audit/notification-copy
+/// purposes. QuestionRevisionService.createRevision's existing "may only
+/// revise from APPROVED or REJECTED" gate (B8) needs no change: both
+/// decisions already leave the revision exactly where that gate expects.
+enum QuestionReviewDecision {
+  APPROVED
+  REJECTED
+  REQUEST_CHANGES
+}
+
+/// An immutable academic decision (07 §7.5) — one QuestionRevision may
+/// accumulate multiple rows over its lifetime (an HOD's decision, and, after
+/// a resubmission cycle, another). Never updated or deleted once written —
+/// this migration's 4th trigger, unconditional (unlike the 3 B8 triggers,
+/// which only guard an APPROVED parent: a QuestionReview row is never
+/// legitimately mutated at all, regardless of its parent revision's later
+/// status). `createdAt` satisfies the ERD's `reviewed_at` attribute — this
+/// row is created at the exact moment of decision, the same convention
+/// AuditEvent already uses for its own event timestamp.
+model QuestionReview {
+  id                   String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId             String                 @map("school_id") @db.Uuid
+  questionRevisionId   String                 @map("question_revision_id") @db.Uuid
+  /// A snapshot of who decided, at decision time — never re-resolved later.
+  /// DoD item 8: changing the HOD leaves prior decisions attributed to the
+  /// previous one; this field is what makes that true by construction,
+  /// mirroring QuestionRevision.createdByMembershipId's own precedent.
+  reviewerMembershipId String                 @map("reviewer_membership_id") @db.Uuid
+  decision             QuestionReviewDecision
+  /// Mandatory for REJECTED/REQUEST_CHANGES (05 §16.2), optional for
+  /// APPROVED (an HOD note) — enforced at the DTO/service layer, matching
+  /// this codebase's existing preference for conditional-required
+  /// validation there over a conditional SQL CHECK.
+  comment              String?
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  /// Restrict: a revision with review history attached must never be
+  /// hard-deletable out from under it. In practice this never fires —
+  /// QuestionRevisionService.deleteDraft only ever deletes a DRAFT
+  /// revision, which (by definition) has never been reviewed yet.
+  revision QuestionRevision @relation(fields: [schoolId, questionRevisionId], references: [schoolId, id], onDelete: Restrict)
+  /// Restrict: same reasoning as TeacherProfile.authoredQuestions — a
+  /// membership with review history attached must remain attributable to
+  /// it even after its HODAssignment ends (DoD item 8).
+  reviewer SchoolMembership @relation(fields: [schoolId, reviewerMembershipId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([schoolId, questionRevisionId])
+  @@map("question_reviews")
 }

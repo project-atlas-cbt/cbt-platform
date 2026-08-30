@@ -579,6 +579,8 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let questionMediaAssetB: { id: string };
     let questionMediaA: { id: string };
     let questionMediaB: { id: string };
+    let questionReviewA: { id: string };
+    let questionReviewB: { id: string };
 
     beforeAll(async () => {
       await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
@@ -1086,36 +1088,101 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           },
         }),
       );
+      // B9's new table — reuses this describe block's own membershipA/B
+      // (already RLS-scoped, and each already holds an HOD RoleAssignment
+      // from this same fixture set) as the reviewer, same economy as B6/B7.
+      questionReviewA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.questionReview.create({
+          data: {
+            schoolId: schoolA.id,
+            questionRevisionId: questionRevisionA.id,
+            reviewerMembershipId: membershipA.id,
+            decision: 'REJECTED',
+            comment: 'RLS review A',
+          },
+        }),
+      );
+      questionReviewB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.questionReview.create({
+          data: {
+            schoolId: schoolB.id,
+            questionRevisionId: questionRevisionB.id,
+            reviewerMembershipId: membershipB.id,
+            decision: 'REJECTED',
+            comment: 'RLS review B',
+          },
+        }),
+      );
     });
 
     afterAll(async () => {
       const ids = [schoolA.id, schoolB.id];
-      // B8: Question cascades to its revisions/options/media on delete —
-      // must go before subject/teacherProfile (Restrict) and topics
-      // (Restrict) below.
-      await owner.question.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.topic.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.mediaAsset.deleteMany({
-        where: { id: { in: [questionMediaAssetA.id, questionMediaAssetB.id] } },
-      });
-      await owner.importRow.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.importJob.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.studentSubjectRegistration.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.teacherAssignment.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.studentEnrollment.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.studentProfile.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.teacherProfile.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.hODAssignment.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.classSubject.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.classGroup.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.subject.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.department.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.academicTerm.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.academicSession.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.roleAssignment.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.schoolMembership.deleteMany({ where: { schoolId: { in: ids } } });
-      await owner.user.deleteMany({ where: { id: { in: [userA.id, userB.id] } } });
-      await owner.school.deleteMany({ where: { id: { in: ids } } });
+      // B9: question_reviews is unconditionally append-only (this
+      // migration's trigger blocks every UPDATE/DELETE, not merely once a
+      // parent is APPROVED like B8's own three triggers) — questionReviewA/B
+      // are therefore genuinely, permanently undeletable, and so, by the
+      // Restrict FK from question_reviews to question_revisions, is
+      // everything from Question downward that this test's own cascade
+      // chain would otherwise need to pass through. Same reasoning as
+      // question-lifecycle.integration.test.ts's own afterAll for its
+      // APPROVED-revision case: cleanup can't fight the guarantee it exists
+      // to prove, so every step below is best-effort — the leftover test
+      // data is harmless (RLS-scoped, uniquely UUID-named, never reachable
+      // outside this deleted school's own context).
+      await owner.questionReview
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.question.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.topic.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.mediaAsset
+        .deleteMany({ where: { id: { in: [questionMediaAssetA.id, questionMediaAssetB.id] } } })
+        .catch(() => undefined);
+      await owner.importRow.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.importJob.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.studentSubjectRegistration
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.teacherAssignment
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.studentEnrollment
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.studentProfile
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.teacherProfile
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.hODAssignment
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.classSubject
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.classGroup
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.subject.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.department
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.academicTerm
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.academicSession
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.roleAssignment
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.schoolMembership
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.user
+        .deleteMany({ where: { id: { in: [userA.id, userB.id] } } })
+        .catch(() => undefined);
+      await owner.school.deleteMany({ where: { id: { in: ids } } }).catch(() => undefined);
       await owner.$disconnect();
       await app.$disconnect();
     });
@@ -1207,6 +1274,13 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'question_media',
         idA: () => questionMediaA.id,
         idB: () => questionMediaB.id,
+      },
+      // B9's new table — same economy as B3-B8's own precedent.
+      {
+        label: 'question_reviews',
+        table: 'question_reviews',
+        idA: () => questionReviewA.id,
+        idB: () => questionReviewB.id,
       },
     ];
 

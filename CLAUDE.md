@@ -327,7 +327,19 @@ to end for the first time, including this codebase's first rich-text editor (Tip
 `dompurify`-sanitized render of stored user content. Honestly partial on the one DoD item gated on
 `B9` (the HOD's rejection reason — no such field exists anywhere in `B8`'s schema yet); everything
 else `B8` supports is built and proven. Every currently-open frontend phase through `F9` is now
-closed out; `B9` is next on the backend critical path.
+closed out. **`B9 — Question Review & Governance`** is now complete too: `question-review.v1` — the
+HOD review queue, review workspace, approve/reject/request-changes decisions with mandatory reasons,
+and a complete immutable review history — reusing `B8`'s own two-hop department-scope join pattern
+and requiring zero changes to `B8`'s existing resubmission gate (`REQUEST_CHANGES` writes the same
+`REJECTED` revision status `REJECTED` itself does, distinguished only by the new `QuestionReview
+.decision` field). Self-review prevention blocks a Teacher-who-is-also-HOD from approving their own
+question; HOD reassignment needed no new mechanism, since the queue always re-resolves live
+`HODAssignment` rows against B6's already-shipped removal/reassignment endpoints. Notifications reuse
+the existing B0 `NotificationChannel` synchronously rather than waiting on the still-unbuilt `B10`,
+matching B1/B3/B6's own precedent. Honestly open: `F10` (Question Review Workspace) wasn't built in
+this pass, so the roadmap's own "F10 confirms the contract" exit criterion stays open, matching every
+prior backend-only phase's identical gap. `B11 — Exam Builder & Readiness` is next on the backend
+critical path.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -3374,3 +3386,142 @@ backend-roadmap.md`'s `B1` section gained its first "Post-completion gap closure
 Project state remains _Implementation (F9 complete; all frontend phases through F9 closed out)_ —
 these were gap closures on already-complete phases, not a new phase.
 **Next: `B9 — Question Review & Governance`**, unchanged.
+
+### 2026-08-30 — `B9` complete: Question Review & Governance
+
+Requested explicitly: start `B9`. Followed the working-rules checklist first: three parallel research
+passes (the full B9 roadmap section/gating ADRs/audit findings; the product specification for
+`QuestionReview`/the review state machine across `05`/`06`/`07`/`02`/`04`; the existing `B8`
+implementation — schema, permission-table rows, scope resolvers, mappers, test-harness conventions)
+followed by direct reads of the live source (schema, `question.service.ts`, `question-revision
+.service.ts`, `question-scope.util.ts`, `question-mappers.ts`, `permission-table.ts`,
+`audit-event.service.ts`, `imports.module.ts`, the notifications wiring) before writing any code — no
+gating ADR is unresolved (ADR-0001, ADR-0017 both Accepted; ADR-0012 additionally confirmed relevant
+though not gating).
+
+**Two design decisions the roadmap's own text already resolved, not guessed:**
+
+1. **`REQUEST_CHANGES` and `REJECTED` write the same frozen `QuestionRevisionStatus.REJECTED` value.**
+   That enum (shipped, frozen since `B8`) has no fourth "request changes" state, and the roadmap's own
+   DoD item 4 says request-changes "behaves equivalently [to reject]." The two stay distinguishable
+   only via the new `QuestionReview.decision` field (APPROVED/REJECTED/REQUEST_CHANGES, `07 §7.5`) —
+   meaning `QuestionRevisionService.createRevision()`'s existing "may only revise from APPROVED or
+   REJECTED" gate (`B8`) needed **zero changes**.
+2. **No side-effecting GET; `UNDER_REVIEW` stays unset.** The roadmap's 6-endpoint contract names no
+   "claim"/"start review" action, and no DoD item requires one. Approve/reject/request-changes accept
+   a revision in either `SUBMITTED` or `UNDER_REVIEW` (future-proofing only) — `UNDER_REVIEW` and
+   `QuestionCountsResponseDto.underReview` remain permanently unset/zero, exactly as `B8`'s own schema
+   doc comment had already flagged as an open question for this phase.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260830092015_b9_question_review_
+governance`): `QuestionReview` + a new `QuestionReviewDecision` enum, RLS-protected the same way every
+school-owned table has been since `B0`'s bootstrap migration, plus a **4th** hand-written trigger —
+unlike `B8`'s three (which only fire once their parent `question_revisions` row is `APPROVED`), this
+one blocks every `UPDATE`/`DELETE` on `question_reviews` unconditionally from the moment a row is
+created, since a review decision is never legitimately mutated at all regardless of its revision's
+later status.
+
+**Module structure**: a new top-level `QuestionReviewModule` (`apps/api/src/modules/question-review/`),
+not folded into `QuestionsModule` — mirrors `ImportsModule`'s own `B7` precedent exactly: a
+bounded-context module writing through another domain's primitives via plain function imports
+(`questions/question-mappers.ts`'s `QUESTION_REVISION_INCLUDE`/`toRevisionResponseDto`), not DI, so no
+dependency on `QuestionsModule` itself was needed. The two-hop department-scope join
+(`HODAssignment.departmentId → Subject.departmentId → Question.subjectId`, ADR-0001) reuses the exact
+pattern `QuestionService.resolveResourceContext()`/`buildScopeFilter()` already established in `B8` —
+this phase's own caller resolves `Subject.departmentId` and constructs the `ResourceContext` itself,
+exactly as `authorization.types.ts`'s own doc comment on that field had already anticipated.
+
+**Self-review prevention** (DoD item 7) is a distinct service-layer check the `DEPARTMENT` scope
+resolver alone can't express (it only checks `HODAssignment.departmentId` against the resource, never
+authorship): compares `question.authorProfile.membership.id` against the acting HOD's own
+`membershipId`; on match, a new `QUESTION_SELF_REVIEW_FORBIDDEN` (400) — mirrors `QUESTION_OUT_OF
+_SCOPE`'s own "domain-rule failure distinct from the authorization engine's own FORBIDDEN" reasoning.
+Proven against a real Teacher+HOD dual-role person (`07 §5.3` explicitly permits the combination).
+
+**"Queue reassignment on HOD change" (DoD item 8) needed zero new code.** The queue query always
+re-resolves the actor's current `ACTIVE` `HODAssignment` rows live, so `B6`'s own already-shipped
+`POST /hods/:id/remove`/`PUT /hods/:id/department` are sufficient — proven directly in this phase's
+own test using those real B6 endpoints. `QuestionReview.reviewerMembershipId` is a decision-time
+snapshot (mirrors `QuestionRevision.createdByMembershipId`'s own precedent), which is what keeps a
+prior decision attributed to the HOD who actually made it regardless of who holds the department
+later.
+
+**Notifications reuse the existing B0/ADR-0019 `NotificationChannel`/`TemplateRegistry`, not `B10`.**
+`B10` (the full in-app notification center) doesn't exist yet. Following `B1`/`B3`/`B6`'s own
+established precedent of not waiting for `B10` to send a real transactional message, `QuestionReview
+Module` registers three templates (`question-review-approved`/`-rejected`/`-changes-requested`)
+against the shared registry and dispatches synchronously right after each decision's transaction
+commits, wrapped in try/catch so a transient send failure never fails the decision itself.
+
+**Permission table**: cleared the `awaitingResource: 'Question review workflow (B9)'` tag from all six
+pre-graded rows (`questionBank.review`/`.comment.view`/`.comment.create`/`.approve`/`.reject`/
+`.requestChanges`) and the four `'Question (B8/B9)'`-tagged `questionLifecycle.*` rows describing the
+same state machine — **no grant shape changed**, confirmed by three independent research passes
+before implementation. One small, additive gap-closure found and fixed alongside this:
+`questionBank.submitForReview`/`questionLifecycle.submit`'s own `awaitingResource` tags were stale
+leftovers that should have been cleared when `B8` shipped `POST .../revisions/:rev/submit` — never
+touched since, caught only because this phase was already editing the surrounding rows.
+
+**A real, if minor, test-infrastructure consequence found only by running the tests, not by
+inspection**: the new unconditional trigger means every `question_reviews` row a test creates becomes
+genuinely, permanently undeletable — by the `Restrict` FK from `question_reviews` to
+`question_revisions`, so is everything from `Question` downward that a test's own teardown cascade
+would otherwise need to pass through. `tests/tenancy/rls.integration.test.ts`'s shared B5–B8
+fixture-school `afterAll` (previously unguarded, since nothing it created before `B9` was ever
+unconditionally immutable) needed the same `.catch(() => undefined)` best-effort treatment
+`question-lifecycle.integration.test.ts`'s own afterAll already established for its own
+APPROVED-revision case, extended down through every subsequent step in that describe block's teardown
+chain — the leftover test data is harmless (RLS-scoped, uniquely UUID-named, never reachable outside
+its own deleted school's context), the same reasoning `B8`'s own precedent already accepted.
+
+**Testing**: `apps/api/src/modules/question-review/question-review.integration.test.ts` (9 tests, real
+HTTP via `app.inject()` against real Postgres, mirroring `question-lifecycle.integration.test.ts`'s
+own harness) — the full submit→queue→request-changes→revise→resubmit→approve cycle with ordered
+history and a real notification-dispatch assertion (spying directly on the injected
+`NOTIFICATION_CHANNEL` singleton's own `send` method, not `console.log` — `ConsoleNotificationChannel`
+'s `sink` closes over `console.log`'s reference at app-boot time, before any test's `vi.spyOn` could
+apply); mandatory-reason enforcement; approving an already-decided revision refused; cross-department
+denial (queue exclusion, workspace 404, decision 403); self-review-forbidden; Moderator denied
+outright; a static assertion that `SOFTWARE_ADMIN`'s `questionBank.approve` grant is `DENIED`, not
+`BREAK_GLASS` (ADR-0012 — no live HTTP path exists for a platform actor to reach a school-scoped route
+at all, so this is proven directly against the permission table); the HOD-reassignment scenario using
+`B6`'s real removal/reassignment endpoints; and cross-tenant `NOT_FOUND`. `tests/tenancy/rls
+.integration.test.ts` gained `question_reviews` in the existing B5–B8 describe block's `tables` array
+(same economy as every prior phase).
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` at the monorepo root
+(16/16 turbo tasks), the full `apps/api` integration suite (one unrelated, pre-existing
+environment-timing flake in `import-1500-rows.integration.test.ts` — reconfirmed failing the same way
+in isolation, unrelated to any `B9` change), plus `pnpm generate` (`question-review.v1` — 6 new
+routes — published in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission
+-table-doc` (151 rows, confirmed unchanged). A real `node dist/main.js` boot confirmed
+`PolicyCoverageService` reports 150 routes checked with zero violations, and `QuestionReviewModule`'s
+dependencies resolved cleanly — no cross-module DI error, the class of bug every prior phase has hit
+at least once.
+
+**Honestly open**: `F10` (Question Review Workspace) wasn't built in this pass — the roadmap's own
+"F10 confirms the contract" exit criterion stays open, matching every prior backend-only phase's
+identical gap. Deferred, per the roadmap's own text: multi-reviewer/quorum approval; review SLAs and
+escalation; the optional queue-age background reporting job (marked "optional," no DoD item needs it);
+a standalone "reply comment" endpoint for `questionBank.comment.create`'s TEACHER grant (no such route
+exists in the roadmap's own 6-endpoint contract — a teacher's real response to feedback is
+resubmission via `B8`'s existing flow).
+
+While updating `backend-roadmap.md`'s own Phase Completion Tracking table for `B9`, found and fixed
+the same table's accumulated staleness for `B0`–`B8` — every one of those rows had been left at its
+original NOT STARTED placeholder despite each phase's own section (and this file's own Change Log)
+recording it complete long ago. Corrected as a pure documentation-accuracy fix — no code, schema, or
+status claim beyond what each phase's own section already independently records.
+
+`docs/roadmaps/backend-roadmap.md`'s B9 section gained status `COMPLETE`, every DoD item checked with
+detail, a full "Implementation notes" subsection, and an expanded Deferred items list.
+`docs/roadmaps/roadmap-index.md`'s version, Current State, and Immediate Next Actions all updated to
+record `B9` complete and `B11` next on the critical path.
+
+Project state moves from _Implementation (F9 complete; all frontend phases through F9 closed out)_ to
+_Implementation (B9 complete)_.
+**Next: `B11 — Exam Builder & Readiness`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2
+→ B3 → B5 → B6 → B8 → B9 → B11 → B12 → …`) — every backend phase up to the exam engine itself is now
+complete. A future `F10` (Question Review Workspace) remains open whenever the frontend/backend
+phase-pairing default is next prioritized, and would close the one exit criterion this pass left
+honestly open.

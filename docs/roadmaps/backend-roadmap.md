@@ -1839,7 +1839,7 @@ Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck &
 
 # B9 — Question Review & Governance
 
-**Status:** NOT STARTED · **Decided ADRs:** 0001, 0017
+**Status:** COMPLETE · **Decided ADRs:** 0001, 0017, 0012 (Software Admin denied outright — no break-glass)
 
 ## Objective
 
@@ -1852,7 +1852,7 @@ Deliver the HOD academic governance workflow — the review queue, approval and 
 - Decisions `APPROVED`, `REJECTED`, `REQUEST_CHANGES` with mandatory reason on the latter two (`05 §16.2`).
 - Review history visible to teacher and HOD (`03 §23`, `04 §31`).
 - Reassignment of a pending queue when an HOD changes (`03 §69`, `05 §13`).
-- Notifications to teachers on decisions (via B10).
+- Notifications to teachers on decisions — delivered via the existing B0/ADR-0019 `NotificationChannel`, not `B10` (which doesn't exist yet); see Implementation notes.
 
 ## Specification references
 
@@ -1890,8 +1890,11 @@ The queue endpoint must support the "Approve → Reject → Comment → Next" fl
 
 ## Background jobs
 
-- Notification dispatch on decisions.
-- Optional queue-age reporting for the HOD dashboard.
+- Notification dispatch on decisions — implemented as a synchronous dispatch right after each
+  decision's transaction commits (not a queued job), matching B1/B3/B6's own precedent for a
+  single-event notification; see Implementation notes.
+- Optional queue-age reporting for the HOD dashboard — not built (roadmap's own "optional"; no DoD
+  item requires it — see Deferred items).
 
 ## Security / authorization work
 
@@ -1916,31 +1919,62 @@ The queue endpoint must support the "Approve → Reject → Comment → Next" fl
 
 ## Integration dependencies
 
-B11 depends on approval status being reliable. B10 delivers the notifications this phase emits.
+B11 depends on approval status being reliable. Notifications this phase emits are delivered via the
+existing B0/ADR-0019 `NotificationChannel` (not `B10`, which doesn't exist yet) — see Implementation
+notes.
 
 ## Definition of Done
 
-1. The queue returns only questions in the HOD's assigned department, grouped by subject with counts matching `04 §29`'s shape.
-2. Approving transitions the revision to `APPROVED` and records an immutable review.
-3. Rejecting requires a reason; rejection without one is refused.
-4. Request-changes behaves equivalently and returns the revision to the teacher.
-5. Review history is complete, ordered, and never overwritten across multiple cycles.
-6. An HOD cannot decide outside their department scope.
-7. A user holding both Teacher and HOD roles cannot approve a question they authored.
-8. Changing the HOD leaves prior approvals attributed to the previous HOD; the pending queue can be reassigned.
-9. Decisions emit audit events and notifications.
-10. Approved revisions immediately become selectable in the exam builder; rejected ones do not.
+1. ✅ The queue returns only questions in the HOD's assigned department, grouped by subject with counts matching `04 §29`'s shape — `QuestionReviewService.getQueue()`, proven for HOD/SCHOOL_ADMIN/cross-department scoping.
+2. ✅ Approving transitions the revision to `APPROVED` and records an immutable review.
+3. ✅ Rejecting requires a reason; rejection without one is refused (DTO-level `@IsNotEmpty()` → `VALIDATION_ERROR`).
+4. ✅ Request-changes behaves equivalently and returns the revision to the teacher — both write `QuestionRevisionStatus.REJECTED`, distinguished only by the new `QuestionReview.decision` field (see Implementation notes).
+5. ✅ Review history is complete, ordered, and never overwritten across multiple cycles — `GET /v1/reviews/history/:questionId`, proven across two decisions on two revisions, plus a raw-SQL immutability proof against the new trigger.
+6. ✅ An HOD cannot decide outside their department scope.
+7. ✅ A user holding both Teacher and HOD roles cannot approve a question they authored — `QUESTION_SELF_REVIEW_FORBIDDEN`.
+8. ✅ Changing the HOD leaves prior approvals attributed to the previous HOD; the pending queue can be reassigned — proven using B6's own real `POST /hods/:id/remove` mechanism; B9 adds no reassignment logic of its own (see Implementation notes).
+9. ✅ Decisions emit audit events and a real teacher notification (via the existing B0/ADR-0019 `NotificationChannel`, not B10 — see Implementation notes for why).
+10. ✅ Structurally satisfied: `Question.currentRevision.status` is exactly what B11 will query on; no B11 code exists yet to prove the "selectable in the exam builder" half end to end.
 
 ## Exit criteria
 
-- ADR-0001 decided (the queue query depends on it).
-- Self-approval prevention tested and green.
-- F10 confirms the contract.
+- ✅ ADR-0001 decided (the queue query depends on it).
+- ✅ Self-approval prevention tested and green.
+- ⬜ **F10 confirms the contract** — honestly open. F10 (Question Review Workspace) was not built in this pass; this is the same gap every prior backend-only phase (B1–B8) has recorded and closed once its frontend pair was built.
 
 ## Deferred items
 
-- Multi-reviewer or quorum approval — not specified.
-- Review SLAs and escalation — not specified; record as a candidate.
+- Multi-reviewer or quorum approval — not specified (roadmap's own deferral).
+- Review SLAs and escalation — not specified (roadmap's own deferral).
+- Optional queue-age background reporting job — the roadmap itself marks this "optional"; no DoD item requires it, and the queue response's own `submittedAt` field already gives a frontend everything it needs to compute age client-side.
+- A standalone "reply comment" endpoint for `questionBank.comment.create`'s TEACHER grant ("respond to feedback") — the roadmap's own 6-endpoint contract has no such route; a comment is always bundled with an HOD decision (04 §30: "Commenting is integrated into the review"), and a teacher's real response to feedback is resubmission via B8's existing `createRevision()`+`submit()`. This row's grants remain accurate policy but aren't wired to a dedicated endpoint this phase.
+
+## Implementation notes
+
+Followed the working-rules checklist: read `07 §7.5`/`§18`, `05 §16`–`§17`, `06 §29`–`§30`, `02`'s Review rows, `04 §29`–`§31`/`§70`, this phase's own roadmap text, ADR-0001/ADR-0017 in full, and the existing B5/B6/B8 implementation (`department-scope.resolver.ts`, `QuestionService.resolveResourceContext()`/`buildScopeFilter()`, `question-mappers.ts`, `HodAssignmentService`) before writing any code.
+
+**Two design decisions confirmed by the roadmap's own text, not guessed:**
+
+1. **`REQUEST_CHANGES` and `REJECTED` write the same `QuestionRevisionStatus.REJECTED` value.** The frozen B8 enum has no fourth "request changes" state, and DoD item 4 itself says request-changes "behaves equivalently [to reject]." The two remain distinguishable via the new `QuestionReview.decision` field (APPROVED/REJECTED/REQUEST_CHANGES, per `07 §7.5`) for history/audit/notification-copy purposes only. This means `QuestionRevisionService.createRevision()`'s existing "may only revise from APPROVED or REJECTED" gate (B8) needed **zero changes** — resubmission already works identically for both decisions.
+2. **No side-effecting GET; `UNDER_REVIEW` stays unset.** The roadmap's 6-endpoint contract names no "claim"/"start review" action, and building one (e.g. a GET that flips `SUBMITTED → UNDER_REVIEW`) would be the only side-effecting GET anywhere in this codebase, for a capability no DoD item requires. Approve/reject/request-changes instead accept a revision in either `SUBMITTED` or `UNDER_REVIEW` (future-proofing only) — `UNDER_REVIEW` and `QuestionCountsResponseDto.underReview` remain permanently unset/zero, exactly as B8's own schema doc comment already flagged as an open question for this phase to decide.
+
+**Module structure**: a new top-level `QuestionReviewModule` (`apps/api/src/modules/question-review/`), not folded into `QuestionsModule` — mirrors `ImportsModule`'s own B7 precedent exactly: a bounded-context module writing through another domain's primitives via plain function imports (`questions/question-mappers.ts`'s `QUESTION_REVISION_INCLUDE`/`toRevisionResponseDto`), not DI, so no dependency on `QuestionsModule` itself was needed. The two-hop department-scope resolution (`HODAssignment.departmentId → Subject.departmentId → Question.subjectId`, ADR-0001) reuses the exact pattern `QuestionService.resolveResourceContext()`/`buildScopeFilter()` already established in B8 — this phase's caller resolves `Subject.departmentId` and constructs the `ResourceContext` itself, exactly as `authorization.types.ts`'s own doc comment on that field anticipated ("e.g. B9's Question -> Subject.departmentId").
+
+**Self-review prevention** (DoD item 7) is a distinct service-layer check — the `DEPARTMENT` scope resolver alone can't express it (it only checks `HODAssignment.departmentId` against the resource, never authorship). Compares `question.authorProfile.membership.id` (the same field B8's own `resolveResourceContext()` already resolves as `ownerMembershipId`) against the acting HOD's own `membershipId`; on match, a new `QUESTION_SELF_REVIEW_FORBIDDEN` (400) — mirrors `QUESTION_OUT_OF_SCOPE`'s own "domain-rule failure distinct from the authorization engine's own FORBIDDEN" reasoning.
+
+**"Queue reassignment on HOD change" (DoD item 8) needed zero new code.** The queue query always re-resolves the actor's current `ACTIVE` `HODAssignment` rows live — reassignment is a property of B6's own already-shipped HOD-management mechanism (`POST /hods/:id/remove`, `PUT /hods/:id/department`), not something this phase builds. `QuestionReview.reviewerMembershipId` is a decision-time snapshot (mirrors `QuestionRevision.createdByMembershipId`'s own precedent), which is what keeps a prior decision attributed to the HOD who actually made it regardless of who holds the department later.
+
+**Notifications reuse the existing B0/ADR-0019 `NotificationChannel`/`TemplateRegistry`, not B10.** B10 (the full in-app notification center, `GET /v1/notifications`) doesn't exist yet. Following B1/B3/B6's own established precedent of not waiting for B10 to send a real transactional message, `QuestionReviewModule` registers three templates (`question-review-approved`/`-rejected`/`-changes-requested`) against the shared registry and dispatches synchronously right after each decision's transaction commits, wrapped in try/catch so a transient send failure never fails the decision itself (the `QuestionReview` row and audit event are the durable record regardless). A pre-built `comment`/note is passed as one pre-formatted `detailLine` template variable rather than templated conditional logic, since `TemplateRegistry` deliberately supports plain `{{token}}` substitution only.
+
+**Schema**: one migration (`20260830092015_b9_question_review_governance`) — `QuestionReview` + `QuestionReviewDecision` enum, RLS-protected the same way every school-owned table has been since B0's bootstrap migration, plus a **4th** trigger (this migration's own addition beyond Prisma's DSL) making `question_reviews` unconditionally append-only — unlike B8's three triggers, which only fire once their parent `question_revisions` row is `APPROVED`, a `question_reviews` row is never legitimately mutated at all, regardless of its parent revision's later status, so this trigger blocks every `UPDATE`/`DELETE` unconditionally from the moment a row is created.
+
+**A real, if minor, test-infrastructure consequence found only by running the tests, not by inspection**: the unconditional trigger means every `question_reviews` row this phase's own tests (and the extended RLS suite) create becomes genuinely, permanently undeletable — by the `Restrict` FK from `question_reviews` to `question_revisions`, so is everything from `Question` downward that a test's own teardown cascade would otherwise need to pass through. `tests/tenancy/rls.integration.test.ts`'s shared B5–B8 fixture-school `afterAll` (previously unguarded, since nothing it created before B9 was ever unconditionally immutable) needed the same `.catch(() => undefined)` best-effort treatment `question-lifecycle.integration.test.ts`'s own afterAll already established for its APPROVED-revision case, extended down through every subsequent step in that describe block's teardown chain. The leftover test data is harmless — RLS-scoped, uniquely UUID-named, never reachable outside its own deleted school's context — exactly the same reasoning B8's own precedent already accepted.
+
+**Permission table**: cleared the `awaitingResource: 'Question review workflow (B9)'` tag from all six pre-graded rows (`questionBank.review`/`.comment.view`/`.comment.create`/`.approve`/`.reject`/`.requestChanges`) and the four `'Question (B8/B9)'`-tagged `questionLifecycle.*` rows describing the same state machine — **no grant shape changed**, confirmed by three independent research passes before implementation. One small, additive gap closure found and fixed alongside this: `questionBank.submitForReview` and `questionLifecycle.submit`'s own `awaitingResource` tags were stale leftovers that should have been cleared when B8 shipped `POST .../revisions/:rev/submit` — never touched since, caught only because this phase was already editing the surrounding rows.
+
+**Testing**: `apps/api/src/modules/question-review/question-review.integration.test.ts` (9 tests, real HTTP via `app.inject()` against real Postgres, mirroring `question-lifecycle.integration.test.ts`'s own harness) — the full submit→queue→request-changes→revise→resubmit→approve cycle with ordered history and a real notification-dispatch assertion (spying directly on the injected `NOTIFICATION_CHANNEL` singleton's own `send` method, not `console.log`, since `ConsoleNotificationChannel`'s `sink` closes over `console.log`'s reference at app-boot time, before any test's `vi.spyOn` could apply); mandatory-reason enforcement; approving an already-decided revision refused; cross-department denial (queue exclusion, workspace 404, decision 403); self-review-forbidden for a real Teacher+HOD dual-role person; Moderator denied outright; a static assertion that `SOFTWARE_ADMIN`'s `questionBank.approve` grant is `DENIED`, not `BREAK_GLASS` (ADR-0012 — no live HTTP path exists for a platform actor to reach a school-scoped route at all, so this is proven directly against the permission table rather than over an impossible request); the HOD-reassignment scenario (DoD item 8) using B6's real `POST /hods/:id/remove`; and cross-tenant `NOT_FOUND`. `tests/tenancy/rls.integration.test.ts` gained `question_reviews` in the existing B5–B8 describe block's `tables` array (same economy as every prior phase).
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` at the monorepo root (16/16 turbo tasks), the full `apps/api` integration suite (one unrelated, pre-existing environment-timing flake in `import-1500-rows.integration.test.ts` — reconfirmed failing the same way in isolation, unrelated to any B9 change), plus `pnpm generate` (`question-review.v1` — 6 new routes — published in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (151 rows, confirmed unchanged). A real `node dist/main.js` boot confirmed `PolicyCoverageService` reports 150 routes checked with zero violations, and `QuestionReviewModule`'s dependencies resolved cleanly (no cross-module DI error — the class of bug every prior phase has hit at least once).
 
 ---
 
@@ -3483,18 +3517,20 @@ These apply to **every** phase and are part of every Definition of Done.
 
 ## Phase Completion Tracking
 
+Rows B0–B9 were left at their original NOT STARTED placeholder since this table was first written — never updated as each phase's own section above (and `CLAUDE.md`'s change log) was marked complete. Corrected here (2026-08-30, while updating B9's own row) as a pure documentation-accuracy fix — no code, schema, or status claim beyond what each phase's own section already independently records.
+
 | Phase | Status      | Started    | Completed  | Notes                                                                                                                                                                                                                                                                            |
 | ----- | ----------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | B0    | COMPLETE    | 2026-08-25 | 2026-08-25 | Decided: ADR-0005, 0022, 0023, 0027, 0031, 0033                                                                                                                                                                                                                                  |
-| B1    | NOT STARTED | —          | —          | Decided: ADR-0005, 0019, 0022                                                                                                                                                                                                                                                    |
-| B2    | NOT STARTED | —          | —          | Decided: ADR-0012, 0023                                                                                                                                                                                                                                                          |
-| B3    | NOT STARTED | —          | —          | Decided: ADR-0015, 0016, 0019, 0012. ADR-0010 also names "B5/B3: school-level defaults and the lock flag" as required — closed 2026-08-28 via F5's fourth gap-closure (see this file's B3 section), corrected here since this table previously listed ADR-0010 only against B15. |
-| B4    | NOT STARTED | —          | —          | Decided: ADR-0021                                                                                                                                                                                                                                                                |
-| B5    | NOT STARTED | —          | —          | Decided: ADR-0001, 0011, 0013                                                                                                                                                                                                                                                    |
-| B6    | NOT STARTED | —          | —          | Decided: ADR-0011, 0017                                                                                                                                                                                                                                                          |
-| B7    | NOT STARTED | —          | —          | Settle A-17 in phase                                                                                                                                                                                                                                                             |
-| B8    | NOT STARTED | —          | —          | Decided: ADR-0001                                                                                                                                                                                                                                                                |
-| B9    | NOT STARTED | —          | —          | Decided: ADR-0001, 0017                                                                                                                                                                                                                                                          |
+| B1    | COMPLETE    | 2026-08-25 | 2026-08-25 | Decided: ADR-0005, 0019, 0022                                                                                                                                                                                                                                                    |
+| B2    | COMPLETE    | 2026-08-26 | 2026-08-26 | Decided: ADR-0012, 0023                                                                                                                                                                                                                                                          |
+| B3    | COMPLETE    | 2026-08-26 | 2026-08-27 | Decided: ADR-0015, 0016, 0019, 0012. ADR-0010 also names "B5/B3: school-level defaults and the lock flag" as required — closed 2026-08-28 via F5's fourth gap-closure (see this file's B3 section), corrected here since this table previously listed ADR-0010 only against B15. |
+| B4    | COMPLETE    | 2026-08-27 | 2026-08-27 | Decided: ADR-0021                                                                                                                                                                                                                                                                |
+| B5    | COMPLETE    | 2026-08-28 | 2026-08-28 | Decided: ADR-0001, 0011, 0013                                                                                                                                                                                                                                                    |
+| B6    | COMPLETE    | 2026-08-28 | 2026-08-28 | Decided: ADR-0011, 0017                                                                                                                                                                                                                                                          |
+| B7    | COMPLETE    | 2026-08-29 | 2026-08-29 | Settle A-17 in phase                                                                                                                                                                                                                                                             |
+| B8    | COMPLETE    | 2026-08-29 | 2026-08-29 | Decided: ADR-0001                                                                                                                                                                                                                                                                |
+| B9    | COMPLETE    | 2026-08-30 | 2026-08-30 | Decided: ADR-0001, 0017, 0012                                                                                                                                                                                                                                                    |
 | B10   | NOT STARTED | —          | —          | Decided: ADR-0019                                                                                                                                                                                                                                                                |
 | B11   | NOT STARTED | —          | —          | Decided: ADR-0002, 0013, 0029                                                                                                                                                                                                                                                    |
 | B12   | NOT STARTED | —          | —          | Decided: ADR-0006, 0009, 0020                                                                                                                                                                                                                                                    |

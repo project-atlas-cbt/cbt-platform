@@ -187,6 +187,24 @@ export const BASE_ERROR_CODES = {
   // academicSessionId immediately, naming the real problem" precedent,
   // rather than letting every row fail individually.
   QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE: { httpStatus: 400, retryable: false },
+
+  // B9 (Question Review & Governance). Mandatory-reason enforcement for
+  // reject/request-changes is a DTO-level @IsNotEmpty() check (generic
+  // VALIDATION_ERROR), mirroring QUESTION_CORRECT_ANSWER_MISSING's own
+  // precedent of preferring a decorator over a bespoke code when one
+  // already covers the rule — these two codes are for the rules a decorator
+  // can't express.
+  //
+  // QUESTION_REVISION_NOT_SUBMITTED: approve/reject/request-changes
+  // attempted on a revision that isn't SUBMITTED or UNDER_REVIEW — the
+  // resource-state guard mirroring QUESTION_REVISION_NOT_DRAFT's own shape.
+  QUESTION_REVISION_NOT_SUBMITTED: { httpStatus: 409, retryable: false },
+  // QUESTION_SELF_REVIEW_FORBIDDEN: the deciding HOD is also this
+  // question's own author (07 §5.3 permits holding both roles; B9's
+  // roadmap Security work requires blocking it as a distinct rule) — a
+  // domain-rule failure distinct from the authorization engine's own
+  // FORBIDDEN, mirroring QUESTION_OUT_OF_SCOPE's exact reasoning.
+  QUESTION_SELF_REVIEW_FORBIDDEN: { httpStatus: 400, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

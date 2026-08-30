@@ -4554,6 +4554,201 @@
         "summary": "Create or resolve (case-insensitively) a topic (DoD item 9).",
         "tags": ["questions"]
       }
+    },
+    "/reviews/queue": {
+      "get": {
+        "operationId": "QuestionReviewController_queue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionReviewQueueResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pending questions within the actor's scope, grouped by subject (DoD item 1).",
+        "tags": ["question-review"]
+      }
+    },
+    "/reviews/questions/{id}": {
+      "get": {
+        "operationId": "QuestionReviewController_workspace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionReviewWorkspaceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The full review workspace: content, options, metadata, and review history.",
+        "tags": ["question-review"]
+      }
+    },
+    "/reviews/questions/{id}/approve": {
+      "post": {
+        "operationId": "QuestionReviewController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveQuestionReviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionReviewWorkspaceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Approve — an optional HOD note (DoD item 2).",
+        "tags": ["question-review"]
+      }
+    },
+    "/reviews/questions/{id}/reject": {
+      "post": {
+        "operationId": "QuestionReviewController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectQuestionReviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionReviewWorkspaceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reject — reason mandatory (DoD item 3).",
+        "tags": ["question-review"]
+      }
+    },
+    "/reviews/questions/{id}/request-changes": {
+      "post": {
+        "operationId": "QuestionReviewController_requestChanges",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestChangesQuestionReviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionReviewWorkspaceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request changes — reason mandatory, behaves like reject (DoD item 4).",
+        "tags": ["question-review"]
+      }
+    },
+    "/reviews/history/{questionId}": {
+      "get": {
+        "operationId": "QuestionReviewController_history",
+        "parameters": [
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionReviewHistoryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Full immutable review history across every revision of the question (DoD item 5).",
+        "tags": ["question-review"]
+      }
     }
   },
   "info": {
@@ -7942,6 +8137,192 @@
           }
         },
         "required": ["subjectId", "name"]
+      },
+      "QuestionReviewQueueItemDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          "authorTeacherProfileId": {
+            "type": "string"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Proxy for submission time — the revision's own updatedAt while pending, since nothing else mutates it between submission and a decision."
+          },
+          "revision": {
+            "$ref": "#/components/schemas/QuestionRevisionResponseDto"
+          }
+        },
+        "required": [
+          "questionId",
+          "subjectId",
+          "subjectName",
+          "level",
+          "authorTeacherProfileId",
+          "authorName",
+          "submittedAt",
+          "revision"
+        ]
+      },
+      "QuestionReviewQueueSubjectGroupDto": {
+        "type": "object",
+        "properties": {
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "pendingCount": {
+            "type": "number"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionReviewQueueItemDto"
+            }
+          }
+        },
+        "required": ["subjectId", "subjectName", "pendingCount", "items"]
+      },
+      "QuestionReviewQueueResponseDto": {
+        "type": "object",
+        "properties": {
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionReviewQueueSubjectGroupDto"
+            }
+          }
+        },
+        "required": ["subjects"]
+      },
+      "QuestionReviewHistoryItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revisionNumber": {
+            "type": "number"
+          },
+          "decision": {
+            "type": "string",
+            "enum": ["APPROVED", "REJECTED", "REQUEST_CHANGES"]
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewerName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "revisionNumber", "decision", "comment", "reviewerName", "createdAt"]
+      },
+      "QuestionReviewWorkspaceResponseDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+          },
+          "authorTeacherProfileId": {
+            "type": "string"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "currentRevision": {
+            "$ref": "#/components/schemas/QuestionRevisionResponseDto"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionReviewHistoryItemDto"
+            }
+          }
+        },
+        "required": [
+          "questionId",
+          "subjectId",
+          "subjectName",
+          "level",
+          "authorTeacherProfileId",
+          "authorName",
+          "currentRevision",
+          "history"
+        ]
+      },
+      "ApproveQuestionReviewDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "An optional HOD note."
+          }
+        }
+      },
+      "RejectQuestionReviewDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Mandatory — shown to the teacher."
+          }
+        },
+        "required": ["reason"]
+      },
+      "RequestChangesQuestionReviewDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Mandatory — shown to the teacher."
+          }
+        },
+        "required": ["reason"]
+      },
+      "QuestionReviewHistoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionReviewHistoryItemDto"
+            }
+          }
+        },
+        "required": ["history"]
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

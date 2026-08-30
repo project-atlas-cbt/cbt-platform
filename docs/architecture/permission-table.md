@@ -188,22 +188,22 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Question Bank
 
-| Action                                      | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                      |
-| ------------------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | ----------------------------- |
-| View question bank                          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       |                               |
-| Create question                             | —              | —            | —         | —          | ASSIGNED | —       |                               |
-| Edit own draft question                     | —              | —            | —         | —          | OWNED    | —       |                               |
-| Delete own draft question                   | —              | —            | —         | —          | OWNED    | —       |                               |
-| Submit question for review                  | —              | —            | —         | —          | OWNED    | —       | Question (B8/B9)              |
-| Review submitted questions                  | —              | SCHOOL       | —         | DEPARTMENT | —        | —       | Question review workflow (B9) |
-| Comment on question (derived split: view)   | —              | SCHOOL       | —         | DEPARTMENT | OWNED ⚠️ | —       | Question review workflow (B9) |
-| Comment on question (derived split: create) | —              | —            | —         | DEPARTMENT | OWNED ⚠️ | —       | Question review workflow (B9) |
-| Approve question                            | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9) |
-| Reject question                             | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9) |
-| Request changes                             | —              | —            | —         | DEPARTMENT | —        | —       | Question review workflow (B9) |
-| Archive question                            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED ⚠️ | —       |                               |
-| Import questions                            | 🔒 BREAK-GLASS | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       |                               |
-| Export questions                            | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       |                               |
+| Action                                      | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting |
+| ------------------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | -------- |
+| View question bank                          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       |          |
+| Create question                             | —              | —            | —         | —          | ASSIGNED | —       |          |
+| Edit own draft question                     | —              | —            | —         | —          | OWNED    | —       |          |
+| Delete own draft question                   | —              | —            | —         | —          | OWNED    | —       |          |
+| Submit question for review                  | —              | —            | —         | —          | OWNED    | —       |          |
+| Review submitted questions                  | —              | SCHOOL       | —         | DEPARTMENT | —        | —       |          |
+| Comment on question (derived split: view)   | —              | SCHOOL       | —         | DEPARTMENT | OWNED ⚠️ | —       |          |
+| Comment on question (derived split: create) | —              | —            | —         | DEPARTMENT | OWNED ⚠️ | —       |          |
+| Approve question                            | —              | —            | —         | DEPARTMENT | —        | —       |          |
+| Reject question                             | —              | —            | —         | DEPARTMENT | —        | —       |          |
+| Request changes                             | —              | —            | —         | DEPARTMENT | —        | —       |          |
+| Archive question                            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED ⚠️ | —       |          |
+| Import questions                            | 🔒 BREAK-GLASS | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       |          |
+| Export questions                            | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       |          |
 
 <details><summary>Notes</summary>
 
@@ -221,15 +221,15 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Question Lifecycle
 
-| Action                                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting         |
-| ----------------------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | ---------------- |
-| Create Draft                              | —              | —            | —         | —          | ASSIGNED ⚠️ | —       |                  |
-| Submit                                    | —              | —            | —         | —          | OWNED ⚠️    | —       | Question (B8/B9) |
-| Under Review (view)                       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
-| Approved (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
-| Rejected (derived split: view)            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Question (B8/B9) |
-| Rejected (derived split: edit & resubmit) | —              | —            | —         | —          | OWNED ⚠️    | —       | Question (B8/B9) |
-| Archived (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       |                  |
+| Action                                    | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting |
+| ----------------------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | -------- |
+| Create Draft                              | —              | —            | —         | —          | ASSIGNED ⚠️ | —       |          |
+| Submit                                    | —              | —            | —         | —          | OWNED ⚠️    | —       |          |
+| Under Review (view)                       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       |          |
+| Approved (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       |          |
+| Rejected (derived split: view)            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       |          |
+| Rejected (derived split: edit & resubmit) | —              | —            | —         | —          | OWNED ⚠️    | —       |          |
+| Archived (view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       |          |
 
 <details><summary>Notes</summary>
 
@@ -238,7 +238,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Under Review (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Approved (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 - **Rejected (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Rejected (derived split: edit & resubmit) / TEACHER:** Only while question.status = REJECTED — resource-state gate enforced once B8/B9 build the real state machine.
+- **Rejected (derived split: edit & resubmit) / TEACHER:** Only while question.status = REJECTED — resource-state gate enforced by QuestionRevisionService.createRevision() (B8), reachable for real once B9's review endpoints actually produce a REJECTED revision.
 - **Archived (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
 
 </details>

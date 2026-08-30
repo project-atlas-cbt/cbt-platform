@@ -27,3 +27,10 @@ export const QUESTION_REVISION_STATUSES = [
   'ARCHIVED',
 ] as const;
 export type QuestionRevisionStatus = (typeof QUESTION_REVISION_STATUSES)[number];
+
+/// B9 (Question Review & Governance) — 07 §7.5's three decisions.
+/// REQUEST_CHANGES writes the same QuestionRevisionStatus.REJECTED value as
+/// REJECTED does (see QuestionReview's own schema doc comment); this
+/// vocabulary is what keeps the two distinguishable in review history.
+export const QUESTION_REVIEW_DECISIONS = ['APPROVED', 'REJECTED', 'REQUEST_CHANGES'] as const;
+export type QuestionReviewDecision = (typeof QUESTION_REVIEW_DECISIONS)[number];

@@ -1182,7 +1182,10 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8/B9)',
+    // B9 finalization: POST /v1/questions/:id/revisions/:rev/submit has
+    // existed since B8 — this tag was stale (never cleared when that route
+    // shipped), caught while touching the rest of this state machine's own
+    // tags below.
   },
   {
     id: 'questionBank.review',
@@ -1197,7 +1200,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question review workflow (B9)',
+    // B9: GET /v1/reviews/queue and GET /v1/reviews/questions/:id.
   },
   {
     id: 'questionBank.comment.view',
@@ -1212,7 +1215,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED', 'Comments on their own submitted question.'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question review workflow (B9)',
+    // B9: GET /v1/reviews/history/:questionId.
   },
   {
     id: 'questionBank.comment.create',
@@ -1230,7 +1233,14 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       ),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question review workflow (B9)',
+    // B9: the roadmap's own 6-endpoint question-review.v1 contract has no
+    // standalone "add a comment" route — HOD's comment is always bundled
+    // with a decision (POST .../approve|reject|request-changes' own
+    // note/reason field), and a teacher's real "respond to feedback" is
+    // resubmission via the existing createRevision()+submit() flow, not a
+    // textual reply. This row's grants remain accurate policy, but neither
+    // side is wired to a dedicated endpoint this phase — a standalone
+    // reply-comment endpoint is recorded as Candidate/Deferred.
   },
   {
     id: 'questionBank.approve',
@@ -1245,7 +1255,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question review workflow (B9)',
+    // B9: POST /v1/reviews/questions/:id/approve. SOFTWARE_ADMIN is denied
+    // outright, not breakGlass — ADR-0012 names question approval as one of
+    // the few school-academic actions with no break-glass override at all.
   },
   {
     id: 'questionBank.reject',
@@ -1260,7 +1272,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question review workflow (B9)',
+    // B9: POST /v1/reviews/questions/:id/reject.
   },
   {
     id: 'questionBank.requestChanges',
@@ -1275,7 +1287,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question review workflow (B9)',
+    // B9: POST /v1/reviews/questions/:id/request-changes.
   },
   {
     id: 'questionBank.archive',
@@ -1364,7 +1376,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED', 'Duplicate of "Submit question for review".'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8/B9)',
+    // B9 finalization: see questionBank.submitForReview's own note above —
+    // the underlying route exists since B8; this duplicate row's tag was
+    // equally stale.
   },
   {
     id: 'questionLifecycle.underReview',
@@ -1379,7 +1393,11 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8/B9)',
+    // B9: the state machine is real, though no code path currently writes
+    // UNDER_REVIEW itself (see QuestionRevisionStatus's own schema doc
+    // comment) — a revision this view would show is presently always seen
+    // as SUBMITTED instead. Reachable and correct the moment a future
+    // change ever sets that status.
   },
   {
     id: 'questionLifecycle.approved',
@@ -1394,7 +1412,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8/B9)',
+    // B9: POST /v1/reviews/questions/:id/approve reaches this state for real.
   },
   {
     id: 'questionLifecycle.rejected.view',
@@ -1409,7 +1427,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8/B9)',
+    // B9: reachable for real once a REJECTED revision exists.
   },
   {
     id: 'questionLifecycle.rejected.editResubmit',
@@ -1423,11 +1441,15 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       HOD: denied(),
       TEACHER: granted(
         'OWNED',
-        'Only while question.status = REJECTED — resource-state gate enforced once B8/B9 build the real state machine.',
+        'Only while question.status = REJECTED — resource-state gate enforced by ' +
+          "QuestionRevisionService.createRevision() (B8), reachable for real once B9's " +
+          'review endpoints actually produce a REJECTED revision.',
       ),
       STUDENT: denied(),
     },
-    awaitingResource: 'Question (B8/B9)',
+    // B9: the real state machine now produces REJECTED revisions (both
+    // REJECTED and REQUEST_CHANGES decisions — see QuestionReview's own
+    // schema doc comment).
   },
   {
     id: 'questionLifecycle.archived',

@@ -99,7 +99,9 @@ export {
   QUESTION_TYPES,
   QUESTION_DIFFICULTIES,
   QUESTION_REVISION_STATUSES,
+  QUESTION_REVIEW_DECISIONS,
   type QuestionType,
   type QuestionDifficulty,
   type QuestionRevisionStatus,
+  type QuestionReviewDecision,
 } from './questions/constants.js';
