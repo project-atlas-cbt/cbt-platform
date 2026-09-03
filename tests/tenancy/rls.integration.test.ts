@@ -581,6 +581,11 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let questionMediaB: { id: string };
     let questionReviewA: { id: string };
     let questionReviewB: { id: string };
+    // B10's new table — no immutability trigger (status/readAt are
+    // legitimately mutable), so it needs no special afterAll accommodation
+    // beyond this block's existing .catch(() => undefined) convention.
+    let notificationA: { id: string };
+    let notificationB: { id: string };
 
     beforeAll(async () => {
       await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
@@ -1113,6 +1118,30 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           },
         }),
       );
+      // B10's new table — reuses this block's own userA/B as recipient,
+      // same economy as every other table added here since B6.
+      notificationA = await withTenant(owner, schoolA.id, (tx) =>
+        tx.notification.create({
+          data: {
+            schoolId: schoolA.id,
+            recipientUserId: userA.id,
+            type: 'SUBSCRIPTION_EXPIRING',
+            title: 'RLS notification A',
+            content: 'RLS notification A',
+          },
+        }),
+      );
+      notificationB = await withTenant(owner, schoolB.id, (tx) =>
+        tx.notification.create({
+          data: {
+            schoolId: schoolB.id,
+            recipientUserId: userB.id,
+            type: 'SUBSCRIPTION_EXPIRING',
+            title: 'RLS notification B',
+            content: 'RLS notification B',
+          },
+        }),
+      );
     });
 
     afterAll(async () => {
@@ -1129,6 +1158,12 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       // to prove, so every step below is best-effort — the leftover test
       // data is harmless (RLS-scoped, uniquely UUID-named, never reachable
       // outside this deleted school's own context).
+      // B10: notification has no immutability trigger (status/readAt are
+      // legitimately mutable) — deleted explicitly here anyway, matching
+      // this block's existing explicit-per-table convention.
+      await owner.notification
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
       await owner.questionReview
         .deleteMany({ where: { schoolId: { in: ids } } })
         .catch(() => undefined);
@@ -1281,6 +1316,13 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'question_reviews',
         idA: () => questionReviewA.id,
         idB: () => questionReviewB.id,
+      },
+      // B10's new table — same economy as B3-B9's own precedent.
+      {
+        label: 'notifications',
+        table: 'notifications',
+        idA: () => notificationA.id,
+        idB: () => notificationB.id,
       },
     ];
 
@@ -1640,5 +1682,159 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         expect(rows).toHaveLength(0);
       },
     );
+  },
+);
+
+/**
+ * B10's `audit_events` — a deliberately SEPARATE describe block, not
+ * appended to the shared B5-B9 block above, mirroring B11's own precedent
+ * but for a more severe reason than that block's parent-status one:
+ * `audit_events` gained an *unconditional* append-only trigger this phase
+ * (see the B10 migration's own comment) — every row, not just ones whose
+ * parent reached some particular status, is permanently undeletable the
+ * instant it's written. `School.auditEvents` cascades on delete, so this
+ * fixture's own school-delete would otherwise throw. The shared B5-B9
+ * block's own `notifications`/`question_reviews` entries already prove
+ * `.catch(() => undefined)` alone is sufficient for a table like that —
+ * but `audit_events` additionally participates in the *cascade chain* of
+ * nearly every other integration test file in this codebase (~55 action-
+ * emitting call sites across academics/users/exams/platform/imports/
+ * question-review), which is why this table specifically gets its own
+ * dedicated fixture pair here rather than risk ever mixing it into a
+ * block whose other rows might reasonably expect a clean cascade delete.
+ */
+describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
+  'Row-Level Security tenant isolation — audit_events (B10, ADR-0023, 07 §42 invariant 15)',
+  () => {
+    let owner: PrismaClient;
+    let app: PrismaClient;
+    let schoolA: { id: string };
+    let schoolB: { id: string };
+    let userA: { id: string };
+    let userB: { id: string };
+    let eventA: { id: string };
+    let eventB: { id: string };
+
+    async function buildFixture(label: string) {
+      const school = await owner.school.create({
+        data: {
+          name: `Audit RLS School ${label} ${randomUUID()}`,
+          subdomain: `audit-rls-${label.toLowerCase()}-${Date.now()}`,
+        },
+      });
+      const user = await owner.user.create({
+        data: { firstName: 'Admin', lastName: label, displayName: `Admin ${label}` },
+      });
+      const event = await withTenant(owner, school.id, (tx) =>
+        tx.auditEvent.create({
+          data: {
+            schoolId: school.id,
+            actorUserId: user.id,
+            actorRole: 'SCHOOL_ADMIN',
+            action: 'CLASS_GROUP_CREATED',
+          },
+        }),
+      );
+      return { school, user, event };
+    }
+
+    beforeAll(async () => {
+      await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
+      owner = createPrismaClient(ownerDatabaseUrl);
+      app = createPrismaClient(appDatabaseUrl);
+
+      const a = await buildFixture('A');
+      const b = await buildFixture('B');
+      schoolA = a.school;
+      schoolB = b.school;
+      userA = a.user;
+      userB = b.user;
+      eventA = a.event;
+      eventB = b.event;
+    });
+
+    afterAll(async () => {
+      // Every audit_events row this fixture wrote is genuinely, permanently
+      // undeletable (the unconditional trigger this phase introduces) —
+      // best-effort throughout, harmless (RLS-scoped, uniquely UUID-named,
+      // never reachable outside this deleted school pair).
+      await owner.school
+        .deleteMany({ where: { id: { in: [schoolA.id, schoolB.id] } } })
+        .catch(() => undefined);
+      await owner.user
+        .deleteMany({ where: { id: { in: [userA.id, userB.id] } } })
+        .catch(() => undefined);
+      await owner.$disconnect();
+      await app.$disconnect();
+    });
+
+    it('with no tenant context set, RLS blocks all rows (fails closed)', async () => {
+      const rows = await app.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM audit_events WHERE id IN ($1::uuid, $2::uuid)`,
+        eventA.id,
+        eventB.id,
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it("scoped to school A, only school A's row is visible", async () => {
+      const rows = await withTenant(app, schoolA.id, (tx) =>
+        tx.$queryRawUnsafe<Array<{ school_id: string }>>(
+          `SELECT school_id FROM audit_events WHERE id IN ($1::uuid, $2::uuid)`,
+          eventA.id,
+          eventB.id,
+        ),
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.school_id).toBe(schoolA.id);
+    });
+
+    it('an explicit cross-tenant read by id returns nothing, even by primary key', async () => {
+      const rows = await withTenant(app, schoolA.id, (tx) =>
+        tx.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM audit_events WHERE id = $1::uuid`,
+          eventB.id,
+        ),
+      );
+      expect(rows).toHaveLength(0);
+    });
+
+    it("the atlas_audit_reader role sees both schools' rows in one query, with no tenant context ever set", async () => {
+      const auditReaderUrl =
+        process.env.DATABASE_AUDIT_READER_URL_TEST ?? process.env.DATABASE_AUDIT_READER_URL;
+      if (!auditReaderUrl) return; // env not configured in this run — the dedicated operations-module test covers this path too.
+      const reader = createPrismaClient(auditReaderUrl);
+      try {
+        const rows = await reader.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM audit_events WHERE id IN ($1::uuid, $2::uuid)`,
+          eventA.id,
+          eventB.id,
+        );
+        expect(rows).toHaveLength(2);
+      } finally {
+        await reader.$disconnect();
+      }
+    });
+
+    it('the atlas_audit_reader role cannot write to audit_events, and cannot read any other table', async () => {
+      const auditReaderUrl =
+        process.env.DATABASE_AUDIT_READER_URL_TEST ?? process.env.DATABASE_AUDIT_READER_URL;
+      if (!auditReaderUrl) return;
+      const reader = createPrismaClient(auditReaderUrl);
+      try {
+        await expect(
+          reader.$executeRawUnsafe(
+            `INSERT INTO audit_events (school_id, actor_user_id, actor_role, action) VALUES ($1::uuid, $2::uuid, 'SCHOOL_ADMIN', 'X')`,
+            schoolA.id,
+            userA.id,
+          ),
+        ).rejects.toThrow(/permission denied/i);
+        await expect(
+          reader.$queryRawUnsafe(`SELECT id FROM schools WHERE id = $1::uuid`, schoolA.id),
+        ).rejects.toThrow(/permission denied/i);
+      } finally {
+        await reader.$disconnect();
+      }
+    });
   },
 );

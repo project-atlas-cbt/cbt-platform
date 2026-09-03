@@ -11,6 +11,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/questions/queries', () => ({
   useQuestionsPaginated: vi.fn(),
   useQuestionCounts: vi.fn(),
+  useAssignedSubjects: vi.fn(() => ({ data: { subjects: [] } })),
 }));
 vi.mock('@/lib/questions/use-export-questions', () => ({
   useExportQuestions: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),

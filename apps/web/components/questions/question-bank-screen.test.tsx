@@ -2,7 +2,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QuestionBankScreen } from './question-bank-screen';
-import { useQuestionCounts, useQuestionsPaginated } from '@/lib/questions/queries';
+import {
+  useAssignedSubjects,
+  useQuestionCounts,
+  useQuestionsPaginated,
+} from '@/lib/questions/queries';
 import { useExportQuestions } from '@/lib/questions/use-export-questions';
 import { useSubjects } from '@/lib/academics/queries';
 import { useHasPermission } from '@/lib/nav';
@@ -16,6 +20,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/questions/queries', () => ({
   useQuestionCounts: vi.fn(),
   useQuestionsPaginated: vi.fn(),
+  useAssignedSubjects: vi.fn(),
 }));
 vi.mock('@/lib/questions/use-export-questions', () => ({ useExportQuestions: vi.fn() }));
 vi.mock('@/lib/academics/queries', () => ({ useSubjects: vi.fn() }));
@@ -25,6 +30,7 @@ const mockUseQuestionCounts = vi.mocked(useQuestionCounts);
 const mockUseQuestionsPaginated = vi.mocked(useQuestionsPaginated);
 const mockUseExportQuestions = vi.mocked(useExportQuestions);
 const mockUseSubjects = vi.mocked(useSubjects);
+const mockUseAssignedSubjects = vi.mocked(useAssignedSubjects);
 const mockUseHasPermission = vi.mocked(useHasPermission);
 
 const QUESTIONS = [
@@ -45,6 +51,7 @@ describe('QuestionBankScreen', () => {
     params = new URLSearchParams();
     replace.mockReset();
     mockUseSubjects.mockReturnValue({ data: { subjects: [] } } as never);
+    mockUseAssignedSubjects.mockReturnValue({ data: { subjects: [] } } as never);
     mockUseQuestionCounts.mockReturnValue({
       data: { draft: 1, submitted: 0, underReview: 0, approved: 0, rejected: 0, archived: 0 },
     } as never);
@@ -164,5 +171,35 @@ describe('QuestionBankScreen', () => {
     } as never);
     render(<QuestionBankScreen basePath="/hod/question-bank" hideImport />);
     expect(screen.queryByRole('link', { name: /^import$/i })).not.toBeInTheDocument();
+  });
+
+  // Gap-closure (found via live testing): the Subject filter shared TEACHER's
+  // Question Editor bug — it called `useSubjects()`, denied to TEACHER,
+  // degrading to an empty filter. `assignedSubjectsOnly` switches the source
+  // without ever firing the denied query.
+  it('assignedSubjectsOnly sources the filter from useAssignedSubjects, not the denied useSubjects', () => {
+    mockUseQuestionsPaginated.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { questions: [], total: 0, page: 1, pageSize: 25 },
+    } as never);
+
+    render(<QuestionBankScreen basePath="/teacher/question-bank" assignedSubjectsOnly />);
+
+    expect(mockUseAssignedSubjects).toHaveBeenCalledWith({ enabled: true });
+    expect(mockUseSubjects).toHaveBeenCalledWith({ enabled: false });
+  });
+
+  it('the default (assignedSubjectsOnly unset) sources the filter from useSubjects', () => {
+    mockUseQuestionsPaginated.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { questions: [], total: 0, page: 1, pageSize: 25 },
+    } as never);
+
+    render(<QuestionBankScreen basePath="/hod/question-bank" />);
+
+    expect(mockUseSubjects).toHaveBeenCalledWith({ enabled: true });
+    expect(mockUseAssignedSubjects).toHaveBeenCalledWith({ enabled: false });
   });
 });

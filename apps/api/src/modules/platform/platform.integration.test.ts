@@ -16,6 +16,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { parseCookie } from 'cookie';
 import { prisma, withTenant } from '@atlas/db';
+import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
 
@@ -145,7 +146,7 @@ afterAll(async () => {
     where: { userId: { in: createdPlatformUserIds } },
   });
   await prisma.user.deleteMany({ where: { id: { in: createdPlatformUserIds } } });
-  await prisma.school.deleteMany({ where: { id: { in: createdSchoolIds } } });
+  await safeDeleteSchools(prisma, createdSchoolIds);
 });
 
 async function seedPlatformAdmin(): Promise<{ userId: string; email: string; password: string }> {
@@ -500,6 +501,113 @@ describe('Full activation lifecycle (B3 DoD items 1-4, 6)', () => {
     // only guard on this route, and a school session carries no platform
     // session cookie at all.
     expect(res.statusCode).toBe(401);
+  });
+});
+
+/**
+ * Gap closure (found via live testing, not by inspection): `DEACTIVATED` is
+ * a deliberate, spec-backed terminal state (`03 §3`, `07 §3.3`) with no
+ * reactivate path — but neither `issueSubscription()`/`issueActivationGrant()`
+ * nor `ActivationService.findRedeemableGrant()` ever checked it. A Software
+ * Admin could issue a fresh key against a permanently deactivated school and
+ * have it redeem *successfully* (the activation-history table would even
+ * show `ACTIVATED`), while every login attempt kept failing with
+ * `SCHOOL_ACCESS_DEACTIVATED` regardless, with no error anywhere in the
+ * issuance/redemption flow to explain why.
+ */
+describe('Deactivation is a real terminal state (gap closure)', () => {
+  let platformCtx: RequestCtx;
+  let schoolId: string;
+  let schoolHost: string;
+
+  beforeAll(async () => {
+    const platformAdmin = await seedPlatformAdmin();
+    platformCtx = await freshCtx(ADMIN_HOST, `10.${RUN}.11.1`);
+    await loginPlatform(platformCtx, platformAdmin.email, platformAdmin.password);
+
+    const res = await post(platformCtx, '/platform/schools', {
+      name: `Deactivation Test School ${randomUUID()}`,
+      adminFirstName: 'Dee',
+      adminLastName: 'Active',
+      adminEmail: `deactivation-${randomUUID().slice(0, 8)}@example.com`,
+      adminLoginIdentifier: `deactivation-${randomUUID().slice(0, 8)}`,
+      plan: 'STANDARD',
+      initialPeriodDays: 30,
+    });
+    const body = res.json<{ id: string; subdomain: string }>();
+    schoolId = body.id;
+    schoolHost = `${body.subdomain}.${ROOT_DOMAIN}`;
+    createdSchoolIds.push(schoolId);
+  });
+
+  it('redemption is rejected once the school is deactivated, even for a grant issued beforehand', async () => {
+    consoleLogSpy.mockClear();
+    const issueRes = await post(platformCtx, `/platform/schools/${schoolId}/activation-grants`, {});
+    expect(issueRes.statusCode, issueRes.body).toBe(200);
+    const logged = consoleLogSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    const match = /key=([A-Z0-9-]+)/.exec(logged);
+    expect(match, `expected an activation URL in console output, got:\n${logged}`).not.toBeNull();
+    const activationKey = match![1]!;
+
+    const deactivate = await post(platformCtx, `/platform/schools/${schoolId}/deactivate`, {
+      reason: 'Integration test deactivate',
+    });
+    expect(deactivate.statusCode, deactivate.body).toBe(200);
+
+    const schoolCtx = await freshCtx(schoolHost, `10.${RUN}.11.2`);
+
+    // `SCHOOL_ACCESS_DEACTIVATED` maps to 403 (`packages/domain/src/
+    // error-codes.ts`), same status `AuthGuard`'s own identically-named
+    // check already uses for a blocked login attempt.
+    const verify = await post(schoolCtx, '/activation/verify', { key: activationKey });
+    expect(verify.statusCode).toBe(403);
+    expect(verify.json<{ error: { code: string } }>().error.code).toBe('SCHOOL_ACCESS_DEACTIVATED');
+
+    const redeem = await post(schoolCtx, '/activation/redeem', {
+      key: activationKey,
+      newPassword: 'should-never-be-set-123',
+    });
+    expect(redeem.statusCode).toBe(403);
+    expect(redeem.json<{ error: { code: string } }>().error.code).toBe('SCHOOL_ACCESS_DEACTIVATED');
+  });
+
+  it('issuing a fresh subscription or activation key against a deactivated school is refused', async () => {
+    const subscriptionRes = await post(platformCtx, `/platform/schools/${schoolId}/subscriptions`, {
+      plan: 'STANDARD',
+      periodDays: 30,
+    });
+    expect(subscriptionRes.statusCode).toBe(409);
+    expect(subscriptionRes.json<{ error: { code: string } }>().error.code).toBe('CONFLICT');
+
+    const grantRes = await post(platformCtx, `/platform/schools/${schoolId}/activation-grants`, {});
+    expect(grantRes.statusCode).toBe(409);
+    expect(grantRes.json<{ error: { code: string } }>().error.code).toBe('CONFLICT');
+  });
+
+  it('SUSPENDED (unlike DEACTIVATED) still allows issuing a fresh subscription — the check is deliberately narrower', async () => {
+    const res = await post(platformCtx, '/platform/schools', {
+      name: `Suspension Test School ${randomUUID()}`,
+      adminFirstName: 'Sam',
+      adminLastName: 'Suspended',
+      adminEmail: `suspension-${randomUUID().slice(0, 8)}@example.com`,
+      adminLoginIdentifier: `suspension-${randomUUID().slice(0, 8)}`,
+      plan: 'STANDARD',
+      initialPeriodDays: 30,
+    });
+    const suspendedSchoolId = res.json<{ id: string }>().id;
+    createdSchoolIds.push(suspendedSchoolId);
+
+    const suspend = await post(platformCtx, `/platform/schools/${suspendedSchoolId}/suspend`, {
+      reason: 'Integration test suspend (not deactivate)',
+    });
+    expect(suspend.statusCode).toBe(200);
+
+    const subscriptionRes = await post(
+      platformCtx,
+      `/platform/schools/${suspendedSchoolId}/subscriptions`,
+      { plan: 'STANDARD', periodDays: 30 },
+    );
+    expect(subscriptionRes.statusCode, subscriptionRes.body).toBe(200);
   });
 });
 

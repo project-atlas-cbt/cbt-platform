@@ -350,8 +350,18 @@ result policy/instructions), and the itemised (never boolean) readiness checklis
 Postgres triggers, each proven independently of the service layer by a direct-Prisma-bypass test.
 ADR-0013's multi-class targeting is enforced at the service layer (mirroring `HODAssignment`'s own
 precedent for this class of cross-table check) rather than a novel schema scheme, leaving every
-already-shipped table untouched. `B12 — Exam Activation & Control` is next on the backend critical
-path; a future `F11` remains open once the frontend/backend phase-pairing default reaches it.
+already-shipped table untouched. **`B10 — Audit & Notifications`** is now complete too (2026-09-03,
+built after `B11` — no gating dependency between the two): real, per-role-scoped audit retrieval
+(`GET /v1/audit` school-scoped; `GET /v1/platform/audit` Software-Admin-only and genuinely
+cross-school via a new privileged Postgres role, `atlas_audit_reader`, rather than a per-school
+query loop), a canonical action vocabulary enforced at the application layer without mass-renaming
+the ~55 already-shipped action strings, real database-level append-only enforcement, and a genuine
+in-app `Notification` system built from nothing (persisted rows with read state, a real BullMQ
+retry queue for out-of-band dispatch, and a new unassigned-students digest job for Moderator).
+Frontend wiring was included in the same pass — F2's `NotificationPanel` and F3's three audit
+screens now consume real data. See this file's Change Log entry below for full detail. `B12 — Exam
+Activation & Control` is next on the backend critical path; a future `F11` remains open once the
+frontend/backend phase-pairing default reaches it.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -3860,3 +3870,342 @@ out)_ to _Implementation (B11 complete)_.
 B2 → B3 → B5 → B6 → B8 → B9 → B11 → B12 → B13 → …`) — the next phase in the highest-risk segment of
 the roadmap (`B13`/`B14` carry the most risk of the whole plan). A future `F11` (Exam Builder &
 Readiness UI) remains open whenever the frontend/backend phase-pairing default is next prioritized.
+
+### 2026-09-03 — Three live-testing gap closures: deactivation dead-end, empty Subject picker, no student password
+
+Requested explicitly: three real bugs the project owner hit while manually testing already-shipped
+phases (`B3`/Platform Admin, `B8`/`F9` Question Bank, `B6`/`F7` People). All three are gap closures
+on already-complete phases, not a new phase — no roadmap status changed.
+
+**1. Deactivation dead-end (`B3`).** `School.platformOverride = 'DEACTIVATED'` is a deliberate,
+spec-backed terminal state (`03 §3` "for a permanently terminated account"; `07 §3.3` "never
+normally deleted... becomes DEACTIVATED"; `backend-roadmap.md`'s own B3 notes: "no reactivate path
+out of it") — confirmed against source docs before touching anything, not assumed. That part of the
+design was correct and untouched. The real bug: neither `SchoolsAdminService.issueSubscription()`/
+`.issueActivationGrant()` nor `ActivationService`'s redemption path ever checked it, so a Software
+Admin could issue a fresh key against a permanently deactivated school and have it **redeem
+successfully** — the activation-history table showed `ACTIVATED` — while every login attempt kept
+failing with `SCHOOL_ACCESS_DEACTIVATED` regardless, with no error anywhere in the issuance/
+redemption flow to explain why. Fixed at both ends: `ActivationService.findRedeemableGrant()` (the
+one choke point both `verify()` and `redeem()` already funnel through) now rejects a deactivated
+school's key immediately, before a password is ever set; `SchoolsAdminService` gained a shared
+`assertNotDeactivated()` guard called from both issuance methods. `SUSPENDED` is deliberately left
+unaffected by both checks — it's reversible via `reactivate()`, and the subscription clock is
+independent of the platform override, so renewing/re-keying while suspended stays allowed. Frontend:
+the Subscription tab now disables both "Issue / renew subscription" and "Issue new activation key"
+for a deactivated school with an explanatory banner (mirroring the Overview tab's own already-
+disabled Deactivate button), and both actions now surface the real server error message instead of
+one fixed generic string; `/activate`'s `verifyErrorMessage()` gained a specific case for
+`SCHOOL_ACCESS_DEACTIVATED`. New tests: `activate-form.test.tsx`, `subscription/page.test.tsx` (two
+new cases each).
+
+**2. Empty, unselectable Subject picker in question creation (`B8`/`F9`).** Root cause: F9's
+`MetadataPanel` populated the Subject dropdown from `GET /academics/subjects`
+(`schoolConfig.subject.view`) — `denied()` for TEACHER per `02`'s own "Manage subjects" row, a
+deliberate decision confirmed again at F6 ("Teacher gets no schoolConfig.* access"). That denial is
+correct for the Academic Structure workspace; it also happened to be the _only_ endpoint the picker
+called, making it 403 and render empty for the one role that actually authors questions
+(`questionBank.create`: TEACHER ASSIGNED) — question creation was completely blocked, not merely
+degraded. Verified directly against `docs/02-roles-permissions.md`'s literal matrix before deciding
+this was a wiring gap rather than a business-rule conflict requiring a product decision. Fixed by
+adding `GET /v1/questions/assigned-subjects` (`QuestionController`/`QuestionService
+.myAssignedSubjects`), gated by the already-correctly-scoped `questionBank.create` permission
+instead of widening the denied `schoolConfig.subject.view` grant — derives the list from the
+caller's real `TeacherAssignment` rows (the identical ADR-0001 join `requireTeacherAssignedScope`
+already checks at save time), so the picker now only ever offers subjects the teacher can actually
+save against. This also closes F9's own previously-recorded "no client-side teacher-assignment data
+is reachable" Candidate/Deferred note, improving on F9's originally-planned "unconstrained" picker
+design. `Level` stays unconstrained (`outOfScopeError` already handles a bad subject+level
+combination). The read-only Department label now shows presence only ("Assigned to a department"),
+not the resolved name, since `schoolConfig.department.view` is denied to TEACHER too and fetching a
+second denied endpoint just for a label wasn't worth it. New test: `metadata-panel.test.tsx` updated
+to mock the new hook.
+
+**2b. The related Question Bank Subject filter, closed same day, requested explicitly after the
+above.** `QuestionBankScreen`'s Subject _filter_ dropdown (`/teacher/question-bank`, shared with
+`/hod/question-bank`) had the identical root cause via the same denied `useSubjects()` call —
+initially recorded as Candidate/Deferred, then closed at the project owner's request. Couldn't reuse
+2's fix directly: `QuestionBankScreen` is shared by both TEACHER and HOD routes, and the new
+`/questions/assigned-subjects` endpoint is gated by `questionBank.create` — HOD doesn't hold it, so
+unconditionally switching the shared component to the new hook would have traded one role's 403 for
+the other's. Considered inferring the split from `useHasPermission('questionBank.create')` inside
+the component and rejected it: that hook returns `false` until `/me/permissions` resolves, so gating
+on it would still fire one doomed `useSubjects()` request (retried per the app's default `retry: 2`)
+for every Teacher on first render. Fixed with an explicit `assignedSubjectsOnly` prop instead —
+mirrors `hideImport`'s own existing precedent of "each route states its own role context statically,
+before first render" — threaded through `QuestionBankScreen` (which now calls both `useSubjects`/
+`useAssignedSubjects` unconditionally, exactly one `enabled`) and `RejectedQuestionsScreen`, set at
+all four leaf routes (`/teacher/question-bank{,/rejected}` pass it; the two `/hod/...` routes don't,
+defaulting to the unaffected full list). Both `useSubjects`/`useAssignedSubjects` gained an optional
+`{enabled}` param for this. New tests in `question-bank-screen.test.tsx` (asserting the correct hook
+is called with the correct `enabled` value for each mode) and `rejected-questions-screen.test.tsx`'s
+existing mock extended to cover the new hook call.
+
+**A real runtime crash found by the project owner while manually testing fix 3 below, fixed in the
+same pass**: `CredentialsRevealPanel`'s Copy button called `navigator.clipboard.writeText(...)`
+unguarded — the Clipboard API is only defined in a "secure context" (HTTPS, or exactly `localhost`),
+and this project's own local-dev convention serves every school over plain HTTP on a
+`*.localtest.me` subdomain, which is neither, so the call threw `Cannot read properties of undefined
+(reading 'writeText')`. Pre-existing in the original `RevealCredentialsDialog` markup before this
+session's fix 3 extracted it into a shared component — surfaced far more often once `StudentForm`'s
+auto-reveal-on-create started showing this panel after every single student creation, not just an
+explicit "Reset credentials" click, which is what actually triggered the report. Fixed with a
+`copyToClipboard()` helper that checks for the API's existence first and falls back to
+`document.execCommand('copy')` (deprecated but broadly supported, and exactly the case this exists
+for), showing an inline "copy manually" hint if both paths fail rather than leaving a dead button
+with no feedback. New regression test: `reveal-credentials-dialog.test.tsx` (new file — none existed
+before), covering both the available-API and unavailable-API paths and asserting the click handler
+never throws.
+
+**3. No way to discover a newly-created student's password (`B6`/`F7`).** Root cause:
+`StudentService.create()` (`POST /students`) never issued a password — the only way to get one was
+the _separate_ "Reset credentials" action in the student directory (`RevealCredentialsDialog`), a
+required extra step nothing in the create flow ever mentioned or linked to, leaving an admin with a
+login ID and no way to discover a password (exactly what was reported). The identical gap existed in
+the onboarding wizard's manual student-creation step (`Step09Students`) — both call the same shared
+`useCreateStudent()` (`lib/onboarding/mutations.ts`). Fixed once, at the shared mutation: it now
+also calls `POST /students/:id/reset-credentials` (the existing one-time-reveal primitive —
+issuing "the first" password this way is behaviourally identical to issuing a replacement one;
+there is no separate "initial issuance" endpoint) immediately after creation+enrollment, returning
+the plaintext under an additive `credentials` field. No backend change was needed — this is a pure
+orchestration fix reusing an already-shipped, already-tested endpoint. `RevealCredentialsDialog`'s
+inline markup was extracted into a shared `CredentialsRevealPanel` (used by three call sites now,
+not duplicated). `StudentForm`'s create flow shows the panel and blocks `onSaved()` (which closes
+the dialog) until the admin explicitly clicks "Done" — the one-time reveal can't be missed by an
+auto-closing dialog; `students-screen.tsx`'s dialog now remounts `StudentForm` by `key` on every
+open, so a stale credentials panel can never leak into the next "Add student" session.
+`Step09Students` (onboarding, which supports adding several students in a row) shows the same panel
+as a dismissible, non-blocking callout instead, overwritten by the next student's credentials or
+dismissed explicitly. New tests: `student-form.test.tsx` (new file — none existed before),
+`step-09-students.test.tsx` (new case).
+
+**Verification (completed in a follow-up pass, once the repository's shared state allowed it).**
+By the time this pass ran, `B10` had landed and the previously-blocking concurrent work was no
+longer an obstacle: `apps/api`'s full `tsc --noEmit` (whole package, not just the touched files) is
+clean, and `pnpm generate` was no longer needed as a blocker since the new
+`GET /questions/assigned-subjects` route's types resolved correctly once the tree stabilized.
+`eslint --no-cache` is clean (0 errors, 0 warnings) across every file this pass touched, both
+`apps/web` and `apps/api` — one real, if minor, issue this caught and fixed along the way:
+`copyToClipboard()`'s `catch { copied = false; }` was a genuine no-op (`copied` is already `false`
+in that branch, since `execCommand`'s assignment never completes before throwing) — flagged by
+`no-useless-assignment`, fixed by replacing the reassignment with an explanatory comment.
+
+`apps/web`: all 10 touched/new test files green (46/46) — `metadata-panel`, `question-bank-screen`,
+`rejected-questions-screen`, `question-editor-flow.integration` (see below),
+`reveal-credentials-dialog`, `student-form`, `students-screen`, `step-09-students`, `activate-form`,
+and the Subscription page. One real regression caught and fixed in this same pass, not by a
+separate review: `question-editor-flow.integration.test.tsx` still mocked the _old_
+`GET /academics/subjects` endpoint — `MetadataPanel`'s own fix (above) had already moved the
+Subject picker to `useAssignedSubjects`/`GET /questions/assigned-subjects`, so the test's mock never
+matched the real call and the whole screen failed to render (`<body><div /></body>`, no accessible
+`Mathematics` option). Missed in the original pass because that integration test wasn't in the
+file list checked at the time; caught here by actually running the suite rather than assuming the
+earlier line-by-line review was exhaustive. Fixed by updating the mock to the new endpoint.
+
+`apps/api`: full backend regression coverage was added for both server-side fixes, neither of which
+had any test before this pass (a real gap left by the original review-only pass, closed here) —
+`question-lifecycle.integration.test.ts` gained a case for `GET /questions/assigned-subjects`
+(the caller's real assignments only; an empty list, not the whole-school subject list, for an
+unassigned teacher; 403 for a role without `questionBank.create`), and `platform.integration
+.test.ts` gained a new `describe` block (3 cases) for the deactivation fix: redemption rejected
+with `SCHOOL_ACCESS_DEACTIVATED` (403 — not 409; confirmed against `error-codes.ts` rather than
+assumed) even for a grant issued _before_ deactivation; issuing a fresh subscription or activation
+key against a deactivated school refused with `CONFLICT` (409); and, proving the check is
+deliberately narrower than a full access-gate check, `SUSPENDED` (unlike `DEACTIVATED`) still
+allows issuing a fresh subscription. Both files' full run: 2 files, 38 tests, all green, against
+real Postgres/Redis/MinIO.
+
+No schema change, no ADR involved, no roadmap phase status changed. Project state remains
+_Implementation (B11 complete)_ — these are gap closures on already-complete phases (`B3`/`B6`/`B7`/
+`B8`/`F7`/`F9`), not a new phase. **Next: `B12 — Exam Activation & Control`**, unchanged.
+
+### 2026-09-03 — `B10` complete: Audit & Notifications, including frontend wiring
+
+Requested explicitly: start `B10`. Followed the working-rules checklist: read `07 §11.1`–`§11.2`,
+`03 §57`, `05 §56`–`57`, `06 §63`–`64`, ADR-0012 and ADR-0019 in full, and the B10 roadmap phase —
+then planned in a dedicated plan-mode pass (three parallel research agents covering the roadmap/
+spec, the real existing notification/audit infrastructure, and this codebase's own established
+module/migration/testing conventions) before writing any code, per this project's own precedent for
+a phase of this size. No gating ADR is unresolved. Built after `B11` (no gating dependency between
+the two — `B10` was simply deferred behind it earlier in this session).
+
+**Two decisions confirmed with the project owner before implementation, both load-bearing on the
+final design:**
+
+1. **`GET /v1/platform/audit`'s cross-school query is served by a new, narrowly-scoped privileged
+   Postgres role (`atlas_audit_reader`)** — not by iterating every school's RLS-scoped connection
+   one at a time (the mechanism B3's worker sweep and `PlatformMetricsService` already use for other
+   cross-school jobs, which doesn't compose with real filtering/pagination for a query like this
+   one).
+2. **Frontend wiring was included in this same pass** — F2's `NotificationPanel` and F3's three
+   audit placeholder screens get wired to the new real endpoints, even though `B10` has no dedicated
+   future frontend phase in the roadmap (F2/F3 are both already complete, and no later phase is
+   named as their consumer — `roadmap-index.md` §1's own note on this is now updated).
+
+**Canonical action vocabulary** (`packages/domain/src/audit/vocabulary.ts`): the ~55 already-
+shipped, correctly-named `AuditEvent.action` strings across academics/users/exams/platform/imports/
+question-review were deliberately **not** mass-renamed to force a superficial match against `07
+§11.1`'s own illustrative (explicitly non-exhaustive) example list — that would have been an
+unrelated broad refactor across a dozen already-tested files (`AGENTS.md` §15). Two small, scoped
+exceptions, both real near-misses of a canonical name for the _identical_ event, not a cosmetic
+rename of a distinct one: `question-review.service.ts`'s `QUESTION_REVIEW_APPROVED`/
+`QUESTION_REVIEW_REJECTED` renamed to `QUESTION_APPROVED`/`QUESTION_REJECTED`; `student-enrollment
+.service.ts`'s `enroll()` now distinguishes a fresh enrollment (`STUDENT_ENROLLED`) from a class move
+(`CLASS_CHANGED`), previously always the former regardless. Every other near-miss
+(`STUDENT_DEACTIVATED`/`TEACHER_DEACTIVATED`/`MODERATOR_REMOVED` vs. `USER_DEACTIVATED`;
+`TEACHER_ASSIGNMENTS_REPLACED` vs. `TEACHER_ASSIGNED`) is mapped via an **alias registry**, not
+renamed — collapsing them would lose real distinctions this table's own per-role naming already
+correctly preserves (`HOD_REMOVED` only ends a role assignment, never touches `User.status`, and is
+deliberately excluded from `USER_DEACTIVATED`'s alias set). `AuditActionRegistry`/
+`AuditVocabularyCoverageService` enforce this at the application layer, not the DB column type
+(which stays free-form `VarChar(64)` — a closed DB enum would fight this codebase's own pace of
+adding new actions on nearly every phase). The coverage service runs on every app boot (real server
+and every integration test), asserting every `LIVE` canonical action has ≥1 registered alias and
+that the `DEFERRED` set is exactly the six actions with no producer yet — the merge-blocking half of
+DoD item 1, with no separate CI step needed.
+
+**`atlas_audit_reader`**: not `BYPASSRLS` (not scopable to one table; would exempt the role from
+every other RLS-protected table). Instead: `audit_events_isolation` (B2's existing policy) has no
+`TO` clause, so it applies to every role via `PUBLIC`; a second, additive, permissive `FOR SELECT`
+policy scoped `TO atlas_audit_reader` with `USING (true)` makes every school's rows visible to that
+role alone, without touching `atlas_app`'s own evaluation of the isolation policy at all — Postgres
+combines multiple permissive policies with `OR`. No grant on any other table, no `INSERT`/`UPDATE`/
+`DELETE` grant ever. The role itself (cluster-wide, not database-scoped) lives in
+`infra/postgres/init.sql` and CI's hand-written bootstrap step, never in a migration — mirroring
+`atlas_app`'s own precedent exactly (`grep -rn "CREATE ROLE" packages/db/prisma/migrations/` returns
+zero hits). `PlatformAuditReaderService` owns its own separate `PrismaClient`
+(`DATABASE_AUDIT_READER_URL`, a new required env var), never the shared `prisma` singleton — no
+`withTenant` call site is reachable on it at all, a structural fact, not a convention to remember.
+Verified directly against a real local Postgres via `psql`: the role sees rows across two schools in
+one query with `app.current_school_id` never set; is rejected with `permission denied` on any
+`INSERT`/`UPDATE`/`DELETE`; is rejected with `permission denied` reading any other table (`schools`
+tested directly).
+
+**A real cross-module DI bug found only by a real compiled boot** (the same class of gap B1/B2/B4
+each hit once in their own phases): `PlatformAuditReaderService`/`PlatformAuditController`
+(`GET /v1/platform/audit`) need `PlatformAuthGuard`'s own DI graph — an unexported,
+`PlatformModule`-internal provider — so they live registered in `PlatformModule`, not
+`OperationsModule` (which already imports `OperationsModule`... `PlatformModule` does, and
+`OperationsModule` importing `PlatformModule` back would be circular). A second, smaller instance of
+the identical class of bug: `OperationsModule` gained `@Authorized`-decorated controllers
+(`AuditController`, `GET /v1/audit`) without importing `IdentityModule` — `AuthGuard`'s own
+constructor dependency (`SessionService`) is only exported from there. Both fixed by adding the
+missing import — the standard pair every `@Authorized`-using module already carries.
+
+**Notification center** (`apps/api/src/modules/notification-center/`, new peer module — distinct
+from the existing, unchanged `apps/api/src/notifications/` ADR-0019 channel/registry shim):
+`GET /v1/notifications` (paginated, includes `unreadCount`), `POST /v1/notifications/:id/read`,
+`POST /v1/notifications/read-all` — all scoped to `{schoolId, recipientUserId: self}`, no custom
+scope resolver needed. **Retry-queue architecture**: the out-of-band dispatch consumer lives in
+`apps/api` (`notification-dispatch-worker-bootstrap.ts`, started only from `main.ts`'s real
+`bootstrap()`, never via Nest's module lifecycle — mirroring B7's `import-worker-bootstrap.ts`
+exactly, for the identical reason: a live consumer must never start during an integration test that
+boots `AppModule` directly), reusing the _one_ shared `NOTIFICATION_CHANNEL`/`TemplateRegistry`
+every module in that process already registers templates against, rather than `apps/worker`'s own
+separate, independent registry. `apps/worker`'s subscription-expiry sweep became a cross-process
+_producer_ onto this same queue (`packages/notifications/src/dispatch-queue.ts`'s new shared
+contract) — both processes connect to the same Redis, BullMQ's producer/consumer split is exactly
+this. `apps/worker/src/queues/templates.ts`'s own `registerWorkerTemplates` function (a second,
+hand-duplicated copy of the subscription-warning template's content) became dead code and was
+removed — only the template _name_ remains, since that process no longer renders any template
+itself.
+
+**Two real bugs found and fixed in the same pass, in already-shipped B3 code**
+(`apps/worker/src/queues/subscription-expiry.queue.ts`): (1) an uncaught exception anywhere in the
+per-school sweep loop previously aborted the _entire_ sweep for every other school — now wrapped
+per-school, log-and-continue; (2) `lastWarningThresholdDays` was set unconditionally after the send
+attempt, regardless of whether it succeeded — a transient failure silently and permanently lost that
+threshold's warning forever. Now set only on a _successful enqueue_ to the retry queue (not
+delivery, which BullMQ's own retry/backoff now owns), so a failure to even hand the job off is
+retried on the next sweep tick instead of being marked "handled." Both proven by two new dedicated
+regression tests, forcing each failure mode deterministically (a rejecting fake `enqueueDispatch`; a
+`vi.spyOn` on `prisma.school.findUniqueOrThrow` that only misbehaves for one specific school).
+
+**A new, buildable-now notification producer**: `apps/worker/src/queues/unassigned-students-digest
+.queue.ts` — "students missing a class assignment" digest for Moderator (05 §57/04 §64), needing no
+unbuilt phase's data (`StudentEnrollment`/`ClassGroup`/`AcademicSession` all already exist).
+Anti-spam ("digest, not spam"): before creating a new notification for a Moderator, compares the
+current unassigned count against their most recent one of the same type — only notifies on a
+genuine change, reusing the already-indexed `[schoolId, recipientUserId, status, createdAt]`, no new
+schema needed.
+
+**A real, broad consequence of the append-only trigger, not a hypothetical**: `AuditEvent.schoolId`
+cascades on `School` deletion, and the ~55 action-emitting call sites across nearly every module
+meant most integration test files that create a school and exercise real behaviour against it now
+throw in their own `afterAll` teardown. Found by running the full integration suite once after the
+trigger migration landed (not guessed from static analysis) — 12 files failed teardown on that run;
+a broader grep found 20 total carrying the risky pattern, all fixed the same way (plus three
+pre-existing unguarded explicit `auditEvent.deleteMany` calls). Fixed with one new shared test
+helper per compilation root — `tests/support/safe-delete-schools.ts` for `tests/` files, a duplicate
+at `apps/api/src/test-support/safe-delete-schools.ts` for `apps/api/src/**` files
+(`apps/api/tsconfig.json`'s `rootDir: "./src"` means the two can't share a literal import — the same
+"convention reuse, not literal code sharing" precedent as `apps/worker`'s own duplicated template
+content). The full integration suite (251 real assertions) was green both before and after this
+sweep — every failure was teardown-only, zero regressions in actual behaviour. `tests/tenancy/rls
+.integration.test.ts` gained `Notification` in the existing shared B5–B9 block (no trigger, no
+special handling needed) and a **new, dedicated, isolated** describe block for `audit_events` — a
+more severe reason than B11's own precedent for doing the same: this table's trigger reaches the
+shared block's own teardown and, by extension, most other integration test files in the repo, not
+just one fixture's parent-state requirement.
+
+**Frontend**: `apps/web/lib/notifications/{queries,mutations}.ts` (a flat 30s poll, not
+`lib/imports/queries.ts`'s status-conditional backoff — there's no terminal-state concept for a
+notification feed); `NotificationPanel` rewritten with real loading/error/empty states and an
+unread-count badge, replacing F2's own "not yet available" stub; a new shared
+`components/platform/audit-log-table.tsx` (props-driven — `fixedSchoolId`/`showFilters`/`compact` —
+mirroring `SchoolDetailTabs`'s own "one component, mode via props" convention) consumed by all three
+F3 destinations (`/admin/audit`, and the per-school Audit/Activity tabs — Activity in `compact`
+mode: no filters, a smaller page, a "view full audit log" link instead of its own pager). All three
+always consume `GET /v1/platform/audit`, never `GET /v1/audit` — Software Admin has no school
+session, so the school-scoped endpoint is structurally unreachable from anywhere inside `/admin/*`.
+**`GET /v1/audit` therefore ships with no frontend consumer in this pass** — a deliberate, documented
+gap (both roadmap files' own text name only `GET /v1/platform/audit` for F3), not a silent omission.
+A real, if narrow, defensive-coding gap found only once `NotificationPanel` became part of every
+shell's shared chrome: a pre-existing shell test that blanket-mocks `apiClient.GET` for its own
+unrelated endpoint (`/me/permissions`) now also hands that same wrongly-shaped payload to
+`NotificationPanel`'s own query — fixed by reading `data?.items ?? []` rather than assuming a
+non-pending, non-error query always resolved to the exact typed shape (true in real usage, not
+guaranteed against a test double that doesn't know about a component's later-added dependency).
+
+**Testing**: `apps/api` — `audit.integration.test.ts` (13 tests: per-role `GET /v1/audit` scoping
+including the HOD two-hop department join, cross-tenant denial, action filtering, `GET /v1/platform
+/audit` cross-school + schoolId-filter + Software-Admin-only reachability, and the append-only
+trigger proven two ways — grant-level rejection via `atlas_app`, and trigger-level rejection via the
+schema owner, independently); `notification.integration.test.ts` (5 tests: own-notifications-only
+retrieval, cross-tenant denial, mark-read, cross-user mark-read as a scoped no-op not an error,
+read-all scoped to the caller); `audit-action.registry.test.ts`/`audit-vocabulary-coverage.service
+.test.ts` (13 unit tests). `apps/worker` — `unassigned-students-digest.integration.test.ts` (4
+tests) plus the two new `subscription-expiry.integration.test.ts` regression cases (8 tests total in
+that file, up from 6). `apps/web` — `notification-panel.test.tsx` (6 tests, rewritten — the old
+placeholder-text assertion is gone), `audit-log-table.test.tsx` (10 tests), one test file per F3
+route (3 tests). Full pipeline green throughout, run repeatedly after every fix: `pnpm lint && pnpm
+typecheck && pnpm build` at the monorepo root; the full `apps/api` integration suite (251/251 real
+assertions across 34 files — 3 pre-existing, unrelated environment-timing flakes in the BullMQ
+import-commit path, already documented as a known issue in B9's own Change Log entry, predating
+`B10` entirely and never touched by any of this phase's own changes); the full `apps/web` suite (all
+green after the `NotificationPanel` defensive fix); `pnpm generate` (`audit.v1`/`notification.v1` —
+5 new routes — published in `apps/api/openapi.json`/`packages/contracts`); `pnpm generate
+:permission-table-doc` (154 rows, up from 151 — the two new `notification.*` rows; `audit.viewLog`'s
+MODERATOR grant finalized from a placeholder, matching `questionBank.archive`'s own precedent).
+
+**Honestly deferred, not silently dropped** (full list in `backend-roadmap.md`'s B10 section):
+result-published/exam-opened/makeup-granted notification producers (owned by B15/B12/B16
+respectively — the `NotificationType` enum already declares all three so those phases only need a
+producer, not a migration); `AUDITED_READ_NOTE`'s broader read-audit emission mechanism (only ~5
+live `@AuthorizedPlatform` GET routes exist as of B10 — building a shared mechanism now for a
+handful of live routes was judged premature; each future phase wires its own call site); audit
+export/SIEM (B20 candidate); retention/archival policy (M-14/ADR-0028/B20's job explicitly — this
+phase only guarantees nothing is ever deleted, never decides when to archive); `GET /v1/audit`'s own
+frontend consumer (no School-workspace "my activity" screen is in scope anywhere yet).
+
+`docs/roadmaps/backend-roadmap.md`'s B10 section gained status `COMPLETE`, every DoD item checked
+with detail, a full "Implementation notes" subsection, and an expanded Deferred items list.
+`docs/roadmaps/frontend-roadmap.md`'s F2 (item 5) and F3 (items 4/9, Deferred items) sections were
+updated to record the real data now wired in, closing what had been honestly-flagged partial DoD
+items pointing at this exact phase. `docs/roadmaps/roadmap-index.md`'s version, Current State, and
+the stale "B10 has no dedicated frontend phase" note were all updated.
+
+Project state moves from _Implementation (B11 complete)_ to _Implementation (B10 complete)_.
+**Next: `B12 — Exam Activation & Control`** on the backend critical path — every backend phase up
+to the exam engine itself is now complete. A future `F11` (Exam Builder & Readiness UI) remains
+open whenever the frontend/backend phase-pairing default is next prioritized.

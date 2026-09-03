@@ -21,6 +21,93 @@
         "tags": ["authorization"]
       }
     },
+    "/audit": {
+      "get": {
+        "operationId": "AuditController_list",
+        "parameters": [
+          {
+            "name": "actorUserId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Scoped audit retrieval — filters: actor, action, entity type, date range (B10).",
+        "tags": ["audit"]
+      }
+    },
     "/tenant/resolve": {
       "get": {
         "operationId": "IdentityController_resolveTenant",
@@ -1163,6 +1250,102 @@
         },
         "summary": "Mark onboarding complete (05 §5.2: requires a current session and a class).",
         "tags": ["school"]
+      }
+    },
+    "/platform/audit": {
+      "get": {
+        "operationId": "PlatformAuditController_list",
+        "parameters": [
+          {
+            "name": "actorUserId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "schoolId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Platform-wide audit retrieval, optionally narrowed to one school (B10).",
+        "tags": ["platform"]
       }
     },
     "/academics/context": {
@@ -4122,6 +4305,26 @@
         "tags": ["questions"]
       }
     },
+    "/questions/assigned-subjects": {
+      "get": {
+        "operationId": "QuestionController_assignedSubjects",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Subjects the caller (a teacher) is actively assigned to teach — powers the Question Editor's Subject picker, since `schoolConfig.subject.view` is denied to TEACHER.",
+        "tags": ["questions"]
+      }
+    },
     "/questions/{id}": {
       "get": {
         "operationId": "QuestionController_get",
@@ -4750,6 +4953,97 @@
         "tags": ["question-review"]
       }
     },
+    "/notifications": {
+      "get": {
+        "operationId": "NotificationController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Current user's notifications, newest first, plus unread count (B10).",
+        "tags": ["notifications"]
+      }
+    },
+    "/notifications/{id}/read": {
+      "post": {
+        "operationId": "NotificationController_markRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mark one notification read (B10).",
+        "tags": ["notifications"]
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationController_markAllRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mark every unread notification read (B10).",
+        "tags": ["notifications"]
+      }
+    },
     "/exams": {
       "post": {
         "operationId": "ExamController_create",
@@ -5268,6 +5562,79 @@
           }
         },
         "required": ["roles", "permissions"]
+      },
+      "AuditEventResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "schoolId": {
+            "type": "string"
+          },
+          "actorUserId": {
+            "type": "string"
+          },
+          "actorDisplayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "actorRole": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string",
+            "nullable": true
+          },
+          "entityId": {
+            "type": "string",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "breakGlass": {
+            "type": "boolean"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "schoolId",
+          "actorUserId",
+          "actorRole",
+          "action",
+          "breakGlass",
+          "occurredAt"
+        ]
+      },
+      "AuditListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEventResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": ["items", "total", "page", "pageSize"]
       },
       "TenantResolveSchoolDto": {
         "type": "object",
@@ -8778,6 +9145,89 @@
           }
         },
         "required": ["history"]
+      },
+      "NotificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "QUESTION_APPROVED",
+              "QUESTION_REJECTED",
+              "QUESTION_CHANGES_REQUESTED",
+              "RESULT_PUBLISHED",
+              "EXAM_OPENED",
+              "MAKEUP_GRANTED",
+              "SUBSCRIPTION_EXPIRING",
+              "STUDENTS_UNASSIGNED"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["UNREAD", "READ"]
+          },
+          "relatedEntityType": {
+            "type": "string",
+            "nullable": true
+          },
+          "relatedEntityId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": ["id", "type", "title", "content", "status", "createdAt"]
+      },
+      "NotificationListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "unreadCount": {
+            "type": "number"
+          }
+        },
+        "required": ["items", "total", "page", "pageSize", "unreadCount"]
+      },
+      "MarkReadResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"]
+          }
+        },
+        "required": ["status"]
       },
       "CreateExamDto": {
         "type": "object",

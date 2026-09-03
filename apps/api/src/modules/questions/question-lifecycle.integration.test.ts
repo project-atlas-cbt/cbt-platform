@@ -425,6 +425,29 @@ describe('B8 Question Bank', () => {
     expect(res.json<{ error: { code: string } }>().error.code).toBe('QUESTION_OUT_OF_SCOPE');
   });
 
+  it("gap closure: GET /questions/assigned-subjects lists only the caller's real assignments", async () => {
+    // `teacher` is assigned to `mathOfferingId` (Mathematics) only — see
+    // this describe block's own `beforeAll`.
+    const res = await get(teacher, '/questions/assigned-subjects');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ subjects: { id: string; name: string }[] }>();
+    expect(body.subjects.map((s) => s.id)).toEqual([mathSubjectId]);
+
+    // `otherTeacher` has no `TeacherAssignment` row at all — an empty list,
+    // not an error, and (unlike the denied `GET /academics/subjects` this
+    // route replaces) never the whole-school subject list either.
+    const unassignedRes = await get(otherTeacher, '/questions/assigned-subjects');
+    expect(unassignedRes.statusCode).toBe(200);
+    expect(unassignedRes.json<{ subjects: unknown[] }>().subjects).toEqual([]);
+
+    // Denied outright for a role that doesn't hold `questionBank.create` —
+    // this route deliberately reuses that permission rather than the
+    // `schoolConfig.subject.view` grant this gap-closure found denied to
+    // TEACHER in the first place.
+    const adminRes = await get(admin, '/questions/assigned-subjects');
+    expect(adminRes.statusCode).toBe(403);
+  });
+
   it('DoD 8: validation catalogue refuses empty text, <2 options, missing correct answer, invalid marks', async () => {
     const base = {
       subjectId: mathSubjectId,

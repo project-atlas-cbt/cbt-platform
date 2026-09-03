@@ -10,6 +10,7 @@ import { StudentController } from './student.controller.js';
 import { StudentService } from './student.service.js';
 import { TeacherController } from './teacher.controller.js';
 import { TeacherService } from './teacher.service.js';
+import { UsersAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 
 /**
  * `people.v1` (B6, docs/roadmaps/backend-roadmap.md). Person directories/
@@ -30,6 +31,12 @@ import { TeacherService } from './teacher.service.js';
 @Module({
   imports: [IdentityModule, OperationsModule, AcademicsModule],
   controllers: [StudentController, TeacherController, HodController, ModeratorController],
-  providers: [StudentService, TeacherService, HodService, ModeratorService],
+  providers: [
+    StudentService,
+    TeacherService,
+    HodService,
+    ModeratorService,
+    UsersAuditActionRegistrationProvider,
+  ],
 })
 export class UsersModule {}

@@ -3,22 +3,25 @@ import { render, screen } from '@testing-library/react';
 import { useForm } from 'react-hook-form';
 import { Form } from '@/components/ui/form';
 import { MetadataPanel } from './metadata-panel';
-import { useDepartments, useSubjects } from '@/lib/academics/queries';
+import { useAssignedSubjects } from '@/lib/questions/queries';
 import type { QuestionFormValues } from '@/lib/questions/validation';
 
-vi.mock('@/lib/academics/queries', () => ({ useDepartments: vi.fn(), useSubjects: vi.fn() }));
-vi.mock('@/lib/questions/queries', () => ({ useTopics: vi.fn(() => ({ data: { topics: [] } })) }));
+// `useAssignedSubjects` (not `useSubjects`/`useDepartments` from
+// `lib/academics/queries` — both 403 for TEACHER; see MetadataPanel's own
+// doc comment for the gap-closure this replaced).
+vi.mock('@/lib/questions/queries', () => ({
+  useAssignedSubjects: vi.fn(),
+  useTopics: vi.fn(() => ({ data: { topics: [] } })),
+}));
 vi.mock('@/lib/questions/mutations', () => ({
   useCreateTopic: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }));
 
-const mockUseSubjects = vi.mocked(useSubjects);
-const mockUseDepartments = vi.mocked(useDepartments);
+const mockUseAssignedSubjects = vi.mocked(useAssignedSubjects);
 
 const SUBJECTS = [
   { id: 'sub1', name: 'Mathematics', code: 'MTH', departmentId: 'dep1', status: 'ACTIVE' },
 ];
-const DEPARTMENTS = [{ id: 'dep1', name: 'Sciences', code: 'SCI', status: 'ACTIVE' }];
 
 function Harness({
   subjectId = 'sub1',
@@ -51,18 +54,17 @@ function Harness({
 
 describe('MetadataPanel', () => {
   beforeEach(() => {
-    mockUseSubjects.mockReturnValue({ data: { subjects: SUBJECTS } } as never);
-    mockUseDepartments.mockReturnValue({ data: { departments: DEPARTMENTS } } as never);
+    mockUseAssignedSubjects.mockReturnValue({ data: { subjects: SUBJECTS } } as never);
   });
 
   it('derives the department read-only label from the selected subject', () => {
     render(<Harness />);
     expect(screen.getByText('Department')).toBeInTheDocument();
-    expect(screen.getByText('Sciences')).toBeInTheDocument();
+    expect(screen.getByText('Assigned to a department')).toBeInTheDocument();
   });
 
   it('shows "No department" when the subject has none', () => {
-    mockUseSubjects.mockReturnValue({
+    mockUseAssignedSubjects.mockReturnValue({
       data: { subjects: [{ ...SUBJECTS[0]!, departmentId: null }] },
     } as never);
     render(<Harness />);

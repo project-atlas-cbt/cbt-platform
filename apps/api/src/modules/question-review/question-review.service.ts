@@ -7,6 +7,7 @@ import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.j
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { NotificationService } from '../notification-center/notification.service.js';
 import { requireSchoolActor } from '../questions/question-scope.util.js';
 import {
   QUESTION_FOR_REVIEW_INCLUDE,
@@ -53,6 +54,7 @@ export class QuestionReviewService {
   constructor(
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
+    private readonly notificationCenter: NotificationService,
     @Inject(NOTIFICATION_CHANNEL) private readonly notifications: NotificationChannel,
   ) {}
 
@@ -186,7 +188,9 @@ export class QuestionReviewService {
       'APPROVED',
       dto.note,
       'questionBank.approve',
-      'QUESTION_REVIEW_APPROVED',
+      // B10: renamed from QUESTION_REVIEW_APPROVED to the 07 §11.1
+      // canonical name — see packages/domain/src/audit/vocabulary.ts.
+      'QUESTION_APPROVED',
       auditCtx,
     );
   }
@@ -205,7 +209,9 @@ export class QuestionReviewService {
       'REJECTED',
       dto.reason,
       'questionBank.reject',
-      'QUESTION_REVIEW_REJECTED',
+      // B10: renamed from QUESTION_REVIEW_REJECTED to the 07 §11.1
+      // canonical name — see packages/domain/src/audit/vocabulary.ts.
+      'QUESTION_REJECTED',
       auditCtx,
     );
   }
@@ -224,6 +230,9 @@ export class QuestionReviewService {
       'REQUEST_CHANGES',
       dto.reason,
       'questionBank.requestChanges',
+      // B10: left unrenamed — no canonical "request changes" audit action
+      // exists in 07 §11.1's list (legitimately outside it, per
+      // packages/domain/src/audit/vocabulary.ts's own comment).
       'QUESTION_REVIEW_CHANGES_REQUESTED',
       auditCtx,
     );
@@ -332,22 +341,61 @@ export class QuestionReviewService {
       metadata: { decision, questionId, reviewId: review.id },
     });
 
-    await this.dispatchDecisionNotification(question, decision, comment);
+    await this.dispatchDecisionNotification(schoolId, question, revision.id, decision, comment);
 
     const updatedQuestion = await this.loadQuestionForReview(schoolId, questionId);
     const history = await this.loadHistory(schoolId, questionId);
     return toWorkspaceResponseDto(updatedQuestion, history);
   }
 
-  /** A transient send failure must never fail the decision itself — the
-   * `QuestionReview` row and audit event already committed are the durable
-   * record regardless (no prior phase's own notification call site in this
-   * codebase awaits-and-rethrows either). */
+  /** A transient failure in either half (in-app row, out-of-band email)
+   * must never fail the decision itself — the `QuestionReview` row and
+   * audit event already committed are the durable record regardless (no
+   * prior phase's own notification call site in this codebase awaits-and-
+   * rethrows either).
+   *
+   * B10: now also persists a real in-app `Notification` row
+   * (`NotificationService`) alongside the pre-existing email send. Per
+   * ADR-0019, question approved/rejected is fundamentally an in-app type
+   * (an operational message that doesn't need to reach someone logged
+   * out) — the email stays a bonus secondary channel this module already
+   * shipped in B9, left untouched, not routed through B10's new retry
+   * queue (that queue exists for types where the *only* delivery
+   * mechanism is out-of-band, e.g. subscription-expiry warnings). */
   private async dispatchDecisionNotification(
+    schoolId: string,
     question: QuestionForReview,
+    revisionId: string,
     decision: QuestionReviewDecision,
     comment: string | undefined,
   ): Promise<void> {
+    const recipientUserId = question.authorProfile.membership.user.id;
+    const notificationType =
+      decision === 'APPROVED'
+        ? 'QUESTION_APPROVED'
+        : decision === 'REJECTED'
+          ? 'QUESTION_REJECTED'
+          : 'QUESTION_CHANGES_REQUESTED';
+    const title =
+      decision === 'APPROVED'
+        ? 'Question approved'
+        : decision === 'REJECTED'
+          ? 'Question rejected'
+          : 'Changes requested on your question';
+    try {
+      await this.notificationCenter.record({
+        schoolId,
+        recipientUserId,
+        type: notificationType,
+        title,
+        content: comment ?? title,
+        relatedEntityType: 'QuestionRevision',
+        relatedEntityId: revisionId,
+      });
+    } catch {
+      // Best-effort — see this method's own doc comment.
+    }
+
     const email = question.authorProfile.membership.user.email;
     if (!email) return; // structurally shouldn't happen — teachers always have one (B1)
 

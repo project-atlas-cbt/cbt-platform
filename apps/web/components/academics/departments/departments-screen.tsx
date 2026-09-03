@@ -67,6 +67,20 @@ export function DepartmentsScreen({ basePath }: { basePath: string }) {
     },
     { id: 'code', header: 'Code', cell: (row) => row.code },
     { id: 'status', header: 'Status', cell: (row) => <DepartmentStatusBadge value={row.status} /> },
+    {
+      id: 'view',
+      header: '',
+      align: 'right' as const,
+      // Same discoverability gap as `classes-screen.tsx` (found in the same
+      // pass, identical shape — see that file's comment): the name-link
+      // alone reads as plain text with only the "..." menu looking
+      // interactive. Mirrors `teachers-screen.tsx`'s "Assignments" button.
+      cell: (row: DepartmentRow) => (
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`${basePath}/departments/${row.id}`}>View</Link>
+        </Button>
+      ),
+    },
     ...(canManage
       ? [
           {

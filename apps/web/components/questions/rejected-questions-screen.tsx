@@ -29,7 +29,15 @@ import { QuestionBankScreen } from './question-bank-screen';
  * distinguished from "no data yet." Blocking on `counts.isPending` here
  * fixes both.
  */
-export function RejectedQuestionsScreen({ basePath }: { basePath: string }) {
+export function RejectedQuestionsScreen({
+  basePath,
+  assignedSubjectsOnly = false,
+}: {
+  basePath: string;
+  /** Forwarded to `QuestionBankScreen` — see its own doc comment (gap
+   * closure: Teacher's Subject filter otherwise calls a denied endpoint). */
+  assignedSubjectsOnly?: boolean;
+}) {
   const counts = useQuestionCounts();
 
   if (counts.isPending) {
@@ -49,5 +57,11 @@ export function RejectedQuestionsScreen({ basePath }: { basePath: string }) {
     );
   }
 
-  return <QuestionBankScreen basePath={basePath} pinnedStatus="REJECTED" />;
+  return (
+    <QuestionBankScreen
+      basePath={basePath}
+      pinnedStatus="REJECTED"
+      assignedSubjectsOnly={assignedSubjectsOnly}
+    />
+  );
 }

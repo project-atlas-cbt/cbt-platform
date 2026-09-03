@@ -219,7 +219,13 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
           <DialogHeader>
             <DialogTitle>Add student</DialogTitle>
           </DialogHeader>
-          <StudentForm onSaved={() => setFormOpen(false)} />
+          {/* `key` forces a fresh instance every time the dialog opens, so a
+              previously-issued credentials panel (or stale field values)
+              can never leak into the next "Add student" session — mirrors
+              `RevealCredentialsDialog`'s own defensive close-time reset,
+              applied here via remount since `StudentForm` doesn't own the
+              dialog's open state directly. */}
+          <StudentForm key={String(formOpen)} onSaved={() => setFormOpen(false)} />
         </DialogContent>
       </Dialog>
     </div>

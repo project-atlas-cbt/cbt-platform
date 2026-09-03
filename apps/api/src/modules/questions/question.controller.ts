@@ -16,6 +16,7 @@ import { prisma, withTenant } from '@atlas/db';
 import { Authorized } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
+import { SubjectListResponseDto } from '../academics/dto/subject.dto.js';
 import { resolveQuestionActorRole } from './actor.util.js';
 import { QuestionService } from './question.service.js';
 import { QUESTION_INCLUDE, deriveCurrentStatus } from './question-mappers.js';
@@ -132,6 +133,21 @@ export class QuestionController {
   ): Promise<QuestionListResponseDto> {
     const user = currentUser(req);
     return this.questions.list(user.schoolId, actorFromAuthenticatedUser(user), query);
+  }
+
+  // Declared before `GET :id` — same "literal segment before the generic
+  // :id route" precedent as `counts`/`export` above.
+  @Get('assigned-subjects')
+  @Authorized('questionBank.create')
+  @ApiOperation({
+    summary:
+      'Subjects the caller (a teacher) is actively assigned to teach — powers the Question ' +
+      "Editor's Subject picker, since `schoolConfig.subject.view` is denied to TEACHER.",
+  })
+  @ApiOkResponse({ type: SubjectListResponseDto })
+  async assignedSubjects(@Req() req: FastifyRequest): Promise<SubjectListResponseDto> {
+    const user = currentUser(req);
+    return this.questions.myAssignedSubjects(user.schoolId, actorFromAuthenticatedUser(user));
   }
 
   @Get(':id')

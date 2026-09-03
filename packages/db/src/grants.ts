@@ -38,3 +38,30 @@ export async function grantAppRole(ownerConnectionUrl: string): Promise<void> {
     await owner.$disconnect();
   }
 }
+
+/**
+ * Re-asserts `atlas_audit_reader`'s schema-level USAGE grant (B10).
+ *
+ * Same failure mode as `grantAppRole` above: `migrate reset` drops and
+ * recreates the `public` schema object outright, silently wiping this
+ * role's `GRANT USAGE ON SCHEMA public` along with it. Deliberately a
+ * separate, narrower function rather than folded into `grantAppRole` —
+ * that function's contract is "blanket re-grant everything to atlas_app";
+ * conflating it with a role that must never receive a blanket grant would
+ * be a footgun for a future reader of this file.
+ *
+ * This role's table-scoped SELECT grant and its additive RLS policy on
+ * `audit_events` both live inside the B10 migration's own SQL (not here),
+ * so `migrate reset` replays them naturally along with every other
+ * migration statement — only the schema-level USAGE grant, which lives
+ * outside migration history entirely (see infra/postgres/init.sql), needs
+ * this explicit re-assertion.
+ */
+export async function grantAuditReaderRole(ownerConnectionUrl: string): Promise<void> {
+  const owner = createPrismaClient(ownerConnectionUrl);
+  try {
+    await owner.$executeRawUnsafe('GRANT USAGE ON SCHEMA public TO atlas_audit_reader');
+  } finally {
+    await owner.$disconnect();
+  }
+}

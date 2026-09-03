@@ -21,6 +21,7 @@ import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
+import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -190,7 +191,11 @@ afterAll(async () => {
     );
   }
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
-  await prisma.school.deleteMany({ where: { id: { in: createdSchoolIds } } });
+  // B10: audit_events (now append-only) cascades from School — this
+  // module's own real endpoints write several action strings, so the
+  // fixture schools here are genuinely, permanently undeletable. Best-
+  // effort, matching every other affected file (safe-delete-schools.ts).
+  await safeDeleteSchools(prisma, createdSchoolIds);
 });
 
 describe('B6 StudentEnrollment / StudentSubjectRegistration', () => {

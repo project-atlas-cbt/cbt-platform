@@ -31,6 +31,24 @@ export interface QuestionListFilters {
   pageSize?: number;
 }
 
+/**
+ * Gap-closure (found via live testing): `GET /academics/subjects` is
+ * `schoolConfig.subject.view`-gated, `denied()` for TEACHER — so the
+ * Question Editor's Subject picker (`MetadataPanel`) rendered permanently
+ * empty for the only role that ever authors a question, making creation
+ * impossible. `GET /questions/assigned-subjects` derives the list from the
+ * teacher's real `TeacherAssignment` rows instead, reusing the already-
+ * granted `questionBank.create` permission — see `QuestionService
+ * .myAssignedSubjects`'s own doc comment for the full reasoning.
+ */
+export function useAssignedSubjects(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['questions', 'assigned-subjects'],
+    queryFn: () => unwrap(apiClient.GET('/questions/assigned-subjects', {})),
+    enabled: options?.enabled ?? true,
+  });
+}
+
 export function useQuestionCounts() {
   return useQuery({
     queryKey: ['questions', 'counts'],

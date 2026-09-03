@@ -7,6 +7,7 @@ import { ExamQuestionService } from './exam-question.service.js';
 import { ExamReadinessService } from './exam-readiness.service.js';
 import { ExamController } from './exam.controller.js';
 import { ExamService } from './exam.service.js';
+import { ExamsAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 
 /**
  * `exams.v1` (B11 — Exam Builder & Readiness; ADR-0001, ADR-0002,
@@ -36,6 +37,12 @@ import { ExamService } from './exam.service.js';
 @Module({
   imports: [IdentityModule, OperationsModule, QuestionsModule],
   controllers: [ExamController],
-  providers: [ExamService, ExamQuestionService, ExamConfigurationService, ExamReadinessService],
+  providers: [
+    ExamService,
+    ExamQuestionService,
+    ExamConfigurationService,
+    ExamReadinessService,
+    ExamsAuditActionRegistrationProvider,
+  ],
 })
 export class ExamsModule {}

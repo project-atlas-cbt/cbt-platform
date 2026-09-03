@@ -16,6 +16,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
+import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 
 async function createSchool() {
   return prisma.school.create({
@@ -34,7 +35,7 @@ afterAll(async () => {
     await withTenant(prisma, schoolId, (tx) => tx.importJob.deleteMany({ where: { schoolId } }));
   }
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
-  await prisma.school.deleteMany({ where: { id: { in: createdSchoolIds } } });
+  await safeDeleteSchools(prisma, createdSchoolIds);
 });
 
 describe('B7 — concurrent confirm() (Testing table, Concurrency)', () => {

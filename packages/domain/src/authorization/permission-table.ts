@@ -113,7 +113,20 @@ export interface PermissionRule {
   awaitingResource?: string;
 }
 
-const AUDITED_READ_NOTE = 'R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.';
+// B10 scoped this down deliberately, not silently: only ~5 live
+// @AuthorizedPlatform GET routes exist at all as of B10 (identity.me.read,
+// identity.permissions.read — about the actor's own session, not "school
+// academic reads," exempt; platform.media.viewOrphanReport, no note;
+// platform.school.viewAll/.viewMetrics, the only two that actually carry
+// this note), against ~50 rows carrying it — almost all `awaitingResource`
+// placeholders for endpoints that don't exist yet. Building a shared read-
+// audit mechanism now, for two call sites, ahead of the routes that would
+// give it real weight, was judged premature — recorded as a B10 Deferred
+// item instead: each future phase introducing a new platform-reachable GET
+// route whose row carries this note is responsible for its own read-audit
+// call site when it ships (the roadmap's own B10 section, Deferred items).
+const AUDITED_READ_NOTE =
+  'R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10\'s Deferred items.';
 const BREAK_GLASS_WRITE_NOTE =
   "R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.";
 const ADR_0017_NOTE =
@@ -302,15 +315,18 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     grants: {
       SOFTWARE_ADMIN: granted('PLATFORM'),
       SCHOOL_ADMIN: granted('SCHOOL', 'Own school.'),
-      MODERATOR: limitedReadOnly(
-        'SCHOOL',
-        'B10 defines the exact audit subset visible to Moderator.',
-      ),
-      HOD: limitedReadOnly('DEPARTMENT', 'B10 defines the exact audit subset visible to HOD.'),
-      TEACHER: limitedReadOnly(
-        'SELF',
-        'B10; mirrors the Audit/Security section\'s own "Own actions" row.',
-      ),
+      // B10 shipped GET /v1/platform/audit as @AuthorizedPlatform-only —
+      // PlatformAuthGuard admits SOFTWARE_ADMIN alone (the B2
+      // PlatformRoleAssignment.role CHECK constraint), so no controller
+      // route ever lets MODERATOR/HOD/TEACHER reach this specific
+      // endpoint. Kept as limitedReadOnly placeholders (not converted to
+      // granted(), unlike audit.viewLog's MODERATOR row below) because
+      // converting would assert working access that doesn't exist — same
+      // precedent as account.forcePasswordReset's HOD row. Their real
+      // audit access is audit.viewLog / GET /v1/audit instead.
+      MODERATOR: limitedReadOnly('SCHOOL', 'Unreachable via this endpoint — see audit.viewLog.'),
+      HOD: limitedReadOnly('DEPARTMENT', 'Unreachable via this endpoint — see audit.viewLog.'),
+      TEACHER: limitedReadOnly('SELF', 'Unreachable via this endpoint — see audit.viewLog.'),
       STUDENT: denied(),
     },
   },
@@ -2499,15 +2515,51 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     label: 'View audit log',
     action: 'READ',
     grants: {
+      // Presently unreachable in practice: GET /v1/audit's @Authorized(...)
+      // guard is AuthGuard (school session only), and Software Admin never
+      // has one. Implemented for correctness (pre-existing since B2), not
+      // fixed here — Software Admin's real audit access is
+      // platform.audit.view / GET /v1/platform/audit instead.
       SOFTWARE_ADMIN: platformRead(),
       SCHOOL_ADMIN: granted('SCHOOL'),
-      MODERATOR: limitedReadOnly('SCHOOL', 'B10.'),
+      // B10 finalization: converted from limitedReadOnly — GET /v1/audit
+      // shipped with a plain, unqualified SCHOOL-wide read for Moderator
+      // (matching this row's own 02 matrix cell, "Full"), the same
+      // "confirm the real, final boundary and drop the placeholder wrapper"
+      // precedent as questionBank.archive (B8).
+      MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
       TEACHER: granted('SELF', '"Own actions".'),
       STUDENT: granted('SELF', '"Own account".'),
     },
-    awaitingResource:
-      'AuditEvent retrieval endpoint (B10) — the write-path primitive itself ships with B2, see AuditService.',
+  },
+  {
+    id: 'notification.viewOwn',
+    section: 'Audit / Security',
+    label: 'View own notifications — not a literal 02 matrix row.',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: granted('SELF'),
+      SCHOOL_ADMIN: granted('SELF'),
+      MODERATOR: granted('SELF'),
+      HOD: granted('SELF'),
+      TEACHER: granted('SELF'),
+      STUDENT: granted('SELF'),
+    },
+  },
+  {
+    id: 'notification.markRead',
+    section: 'Audit / Security',
+    label: 'Mark own notification(s) read — not a literal 02 matrix row.',
+    action: 'UPDATE',
+    grants: {
+      SOFTWARE_ADMIN: granted('SELF'),
+      SCHOOL_ADMIN: granted('SELF'),
+      MODERATOR: granted('SELF'),
+      HOD: granted('SELF'),
+      TEACHER: granted('SELF'),
+      STUDENT: granted('SELF'),
+    },
   },
   {
     id: 'account.resetOwnPassword',

@@ -24,6 +24,16 @@ export const envSchema = z.object({
   DATABASE_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
   DATABASE_APP_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
 
+  // B10: a third, even-more-restricted role — read-only on audit_events
+  // alone, used only by PlatformAuditReaderService's cross-school query
+  // (GET /v1/platform/audit). Required, not optional: that endpoint is core
+  // B10 scope, not best-effort. See infra/postgres/init.sql and the B10
+  // migration's own hand-written GRANT/POLICY for why this must stay a
+  // separate connection from DATABASE_APP_URL — that one is scoped by
+  // request-time RLS, this one deliberately bypasses it for one table only.
+  DATABASE_AUDIT_READER_URL: z.url({ protocol: /^postgresql?$/ }),
+  DATABASE_AUDIT_READER_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
+
   REDIS_URL: z.url({ protocol: /^redis$/ }),
 
   SESSION_COOKIE_SECRET: z.string().min(16, 'SESSION_COOKIE_SECRET must be at least 16 chars'),
@@ -114,6 +124,18 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(60 * 60 * 1000),
+
+  // B10: apps/worker's "students with no active enrollment" digest sweep
+  // for Moderator, per school/session. Not precision-sensitive, same
+  // reasoning as the other sweep intervals above. Default: 12 hours — more
+  // frequent than the 24h media-orphan report (a genuinely actionable gap
+  // in day-to-day roster management), less frequent than the 1h import
+  // sweep (this isn't time-critical the way a stuck import staging row is).
+  UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(12 * 60 * 60 * 1000),
 });
 
 export type Env = z.infer<typeof envSchema>;

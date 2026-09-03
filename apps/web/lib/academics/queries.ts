@@ -95,10 +95,24 @@ export function useClass(id: string | undefined) {
   });
 }
 
-export function useSubjects() {
+/**
+ * `enabled` (optional, default `true`): `schoolConfig.subject.view` is
+ * `denied()` for TEACHER, so a caller reachable by Teacher (e.g.
+ * `QuestionBankScreen`, shared with HOD) must pass `enabled: false` there
+ * and source subjects from `lib/questions/queries.ts`'s `useAssignedSubjects`
+ * instead — see that hook's own doc comment. Declared as an option object
+ * (not disabled by inferring the caller's role from a permission check
+ * inside this hook) specifically to avoid a loading-race: `useHasPermission`
+ * returns `false` until `/me/permissions` resolves, so gating on it here
+ * would fire one doomed 403 request for every Teacher on first render,
+ * retried per the app's default `retry: 2` — the caller already knows its
+ * own role context statically, before first render, with no such race.
+ */
+export function useSubjects(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['academics', 'subjects'],
     queryFn: () => unwrap(apiClient.GET('/academics/subjects', {})),
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -118,6 +118,13 @@ describe('ClassesScreen', () => {
       'href',
       '/school/academics/classes/c1',
     );
+    // The name link alone doesn't read as interactive next to a badge — a
+    // real user reported no way into Class Detail with only the "..." menu
+    // looking clickable. An explicit "View" link is the fix.
+    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute(
+      'href',
+      '/school/academics/classes/c1',
+    );
   });
 
   it('shows the first-run empty state for a session with no classes yet', () => {
@@ -175,5 +182,6 @@ describe('ClassesScreen', () => {
     expect(screen.queryByRole('button', { name: /add class/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /actions for/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'SS2A' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View' })).toBeInTheDocument();
   });
 });

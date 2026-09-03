@@ -202,11 +202,25 @@ export function useCreateHod() {
   });
 }
 
-/** Create the student then immediately enroll them into the chosen class —
- * one perceived "Add student" action, two calls in sequence. If enrollment
- * fails after creation succeeds, the student still exists; the caller's
- * "added so far" list (refetched regardless) lets the admin retry just the
- * enrollment rather than re-creating the person. */
+/** Create the student, immediately enroll them into the chosen class, then
+ * immediately issue their initial credentials — one perceived "Add student"
+ * action, three calls in sequence. If enrollment fails after creation
+ * succeeds, the student still exists; the caller's "added so far" list
+ * (refetched regardless) lets the admin retry just the enrollment rather
+ * than re-creating the person.
+ *
+ * The credential-issuance step is a gap-closure found via live testing:
+ * `POST /students` never set a password at all — the only way to get one
+ * was the *separate* "Reset credentials" action in the student directory
+ * (`RevealCredentialsDialog`), a required extra step nothing in the create
+ * flow ever mentioned, leaving an admin with a login ID and no way to
+ * discover a password. Reuses the exact same `POST /students/:id/
+ * reset-credentials` endpoint and one-time-reveal semantics
+ * (`CredentialResetResponseDto`) — issuing "the first" password this way is
+ * behaviourally identical to issuing a replacement one; there is no
+ * separate "initial issuance" endpoint to call instead. Returned under
+ * `credentials`, additive to the existing `student` fields, so this mutation
+ * stays a drop-in replacement at every call site. */
 export function useCreateStudent() {
   const client = useQueryClient();
   return useMutation({
@@ -240,7 +254,18 @@ export function useCreateStudent() {
           body: { academicSessionId: input.academicSessionId, classId: input.classId },
         }),
       );
-      return student;
+      const credentials = await unwrap(
+        apiClient.POST('/students/{id}/reset-credentials', {
+          params: { path: { id: student.studentProfileId } },
+        }),
+      );
+      return {
+        ...student,
+        credentials: {
+          loginIdentifier: credentials.loginIdentifier,
+          initialPassword: credentials.initialPassword,
+        },
+      };
     },
     onSettled: () => invalidatePeople(client),
   });

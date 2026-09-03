@@ -9,6 +9,7 @@ const validEnv = {
   NODE_ENV: 'test',
   DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
   DATABASE_APP_URL: 'postgresql://app_user:pass@localhost:5432/db',
+  DATABASE_AUDIT_READER_URL: 'postgresql://audit_reader:pass@localhost:5432/db',
   REDIS_URL: 'redis://localhost:6379',
   SESSION_COOKIE_SECRET: 'x'.repeat(32),
   WEB_ORIGIN: 'http://localhost:3000',
@@ -35,6 +36,11 @@ describe('loadEnv', () => {
 
   it('fails fast when PLATFORM_ROOT_DOMAIN is missing', () => {
     const { PLATFORM_ROOT_DOMAIN: _omit, ...rest } = validEnv;
+    expect(() => loadEnv(rest)).toThrow(EnvValidationError);
+  });
+
+  it('fails fast when DATABASE_AUDIT_READER_URL is missing', () => {
+    const { DATABASE_AUDIT_READER_URL: _omit, ...rest } = validEnv;
     expect(() => loadEnv(rest)).toThrow(EnvValidationError);
   });
 

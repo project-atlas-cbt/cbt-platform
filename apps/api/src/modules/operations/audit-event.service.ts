@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
+import { AuditActionRegistry } from './audit-action.registry.js';
 
 export interface RecordAuditEventInput {
   /** The *affected* school — for a break-glass action this is the target
@@ -8,8 +9,10 @@ export interface RecordAuditEventInput {
   schoolId: string;
   actorUserId: string;
   actorRole: Role;
-  /** Free-form for now — 07 §11.1's canonical closed vocabulary
-   * (resolving audit finding C-02) is B10 scope. */
+  /** Free-form (see `packages/domain/src/audit/vocabulary.ts` for how 07
+   * §11.1's canonical vocabulary — resolving audit finding C-02 — is
+   * enforced at the application layer via `AuditActionRegistry`, not this
+   * column's type). */
   action: string;
   reason?: string;
   breakGlass?: boolean;
@@ -19,22 +22,30 @@ export interface RecordAuditEventInput {
 }
 
 /**
- * Minimal, real write-path for `AuditEvent` — deliberately not the B10
- * deliverable (canonical action vocabulary, retrieval endpoints, DB-
- * enforced immutability trigger, retention policy; see AuditEvent's own
- * schema doc comment). B2 needs a genuine sink now for ADR-0012's break-
- * glass requirement ("emits an elevated audit event"), the same shape of
- * decision as B0 shipping a minimal NotificationChannel ahead of B10's
- * full notification apparatus.
+ * The single write-path for `AuditEvent` — "Audit writes go through a
+ * single service; no module writes audit rows directly" (B10's own
+ * Security work section, already honoured since B2, which built this
+ * minimal write-only sink ahead of B10's full retrieval/vocabulary/
+ * immutability apparatus for ADR-0012's break-glass requirement).
  *
- * Write-only by design: nothing in this module reads AuditEvent back.
- * "Audit writes go through a single service; no module writes audit rows
- * directly" (B10's own Security work section, honoured a phase early) —
- * BreakGlassService is this service's only caller in B2.
+ * Reads are deliberately *not* added here: `AuditQueryService`
+ * (`GET /v1/audit`, the normal `atlas_app`/`withTenant` connection) and
+ * `PlatformAuditReaderService` (`GET /v1/platform/audit`, the privileged
+ * `atlas_audit_reader` connection) are separate services in this same
+ * module — this class stays write-only, matching its own single-
+ * responsibility precedent from B2.
  */
 @Injectable()
 export class AuditService {
+  constructor(private readonly actions: AuditActionRegistry) {}
+
   async record(event: RecordAuditEventInput): Promise<void> {
+    // B10: a write path must never hard-fail over a missing registration —
+    // this only warns (deduped) so a genuine gap is loud in logs. See
+    // AuditActionRegistry/AuditVocabularyCoverageService for the
+    // merge-blocking half of this (whether every *canonical* action has a
+    // real producer at all).
+    this.actions.warnIfUnknown(event.action);
     await withTenant(prisma, event.schoolId, (tx) =>
       tx.auditEvent.create({
         data: {

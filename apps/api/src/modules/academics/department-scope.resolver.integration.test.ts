@@ -11,6 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
+import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import { createDepartmentScopeResolver } from './department-scope.resolver.js';
 
 const createdSchoolIds: string[] = [];
@@ -34,7 +35,7 @@ afterAll(async () => {
     );
   }
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
-  await prisma.school.deleteMany({ where: { id: { in: createdSchoolIds } } });
+  await safeDeleteSchools(prisma, createdSchoolIds);
 });
 
 describe('DEPARTMENT scope resolver (DoD item 6)', () => {

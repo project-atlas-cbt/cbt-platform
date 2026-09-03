@@ -375,8 +375,8 @@ TEACHER > STUDENT`, a fixed engineering default for "where does a just-authentic
 
 # F2 — App Shell, Navigation & Notifications
 
-**Status:** COMPLETE (2026-08-26) · **Backend pair:** B2 (permissions), B10 (notifications, not yet
-built), B5 (context, not yet built)
+**Status:** COMPLETE (2026-08-26) · **Backend pair:** B2 (permissions), B10 (notifications — real
+data wired in B10's own 2026-09-03 pass), B5 (context — real data wired in F6)
 
 ## Objective
 
@@ -453,12 +453,12 @@ Every subsequent workspace phase renders inside this shell.
    switcher shows an explicit "not yet available" note. Not silently faked or silently dropped.
 4. **Blocked on B5**, same gap as item 3 — there is no session concept yet for a teacher/HOD to
    default into or view historically. Recorded here, not silently skipped.
-5. **Partial, honestly, matching item 3's pattern.** `components/shell/notification-panel.tsx` is
-   the real bell/panel chrome — B10 (`GET /v1/notifications`, `POST /v1/notifications/:id/read`)
-   hasn't shipped, so it renders an explicit "not yet available" empty state rather than a
-   fabricated notification. `roadmap-index.md` §1 already named this: "B10 has no dedicated
-   frontend phase — it surfaces through F2." The pipe is built; B10 only has to start returning
-   real rows through this same component.
+5. ✅ **Closed (2026-09-03, as part of B10's own implementation pass).**
+   `components/shell/notification-panel.tsx` now consumes real B10 data — `GET /v1/notifications`
+   (30s poll), `POST /v1/notifications/:id/read`, `POST /v1/notifications/read-all` — with real
+   loading/error/empty states and an unread-count badge on the bell trigger. B10 had no dedicated
+   frontend phase (`roadmap-index.md` §1); its own pass wired this component directly rather than
+   leaving it permanently unclaimed.
 6. ✅ `RouteGuard`'s new `requireRole` prop (replacing F1's `RoleLandingPage`) redirects a
    wrong-role user to their own landing route — no crash, no blank screen, no leaked data.
    `route-guard.test.tsx` covers correct-role, wrong-role, and multi-role-holding-one-of-several
@@ -625,10 +625,12 @@ Pairs with F4 — the key issued here is redeemed there.
 3. ✅ Captures name, admin, and subscription exactly per `CreateSchoolDto`; returns the generated
    subdomain (`05 §3.2`'s "System generates: School identifier"). No raw activation key is ever
    shown — the email is the one-time reveal channel, B3's own design.
-4. ⚠️ **Partial.** All seven sections (`04 §8`) render as real routes/tabs; three have real data
-   (Overview, Subscription, Usage) and four show a specific, honest "not yet available" state
-   (Users, Exams, Activity, Audit) — no platform-side user-list endpoint, no exam data (`B11`), no
-   audit-read API (`B10`). Not silently faked.
+4. ⚠️ **Partial, narrowed (2026-09-03, B10's own pass closed the Audit and Activity tabs).** All
+   seven sections (`04 §8`) render as real routes/tabs; five now have real data (Overview,
+   Subscription, Usage, Audit, Activity — the latter two via `<AuditLogTable fixedSchoolId>`,
+   B10's own component) and two still show a specific, honest "not yet available" state (Users,
+   Exams) — no platform-side user-list endpoint, no exam data (`B11` exists now but no
+   platform-facing exam-list endpoint was built). Not silently faked.
 5. ✅ Suspend/reactivate/deactivate all require a reason (`<ReasonDialog>`), are gated by current
    status (e.g. Suspend only enabled when `ACTIVE`), and never update optimistically — only a
    confirmed refetch changes what the screen shows.
@@ -642,10 +644,10 @@ Pairs with F4 — the key issued here is redeemed there.
    write endpoint reachable by Software Admin exists yet (all later phases, `B5`+). Platform
    lifecycle actions use `variant="platform"` instead (ADR-0012 marks these "Unrestricted," not
    break-glass grade). Recorded as Candidate/Deferred — component ready for the first real caller.
-9. ❌ **Deferred, per this phase's own pre-approved allowance** ("the audit and analytics tabs may
-   land in a second pass," this section's own Backend dependencies line). `GET /v1/platform/audit`
-   is `B10`, not yet built. `/admin/audit` is a real, permanent route with a specific "not yet
-   available" state, not a stub.
+9. ⚠️ **Half-closed (2026-09-03, B10's own pass).** `/admin/audit` now renders `<AuditLogTable
+showFilters />` against real `GET /v1/platform/audit` data — open, cross-school, filterable
+   (actor/action/entity type/date range). The analytics tab still shows its honest "not yet
+   available" state — `GET /v1/platform/analytics` is `B17`, not yet built.
 10. ✅ `PlatformRouteGuard` (new this phase) redirects any unauthenticated visitor to `/admin/login`;
     a school-session user has no platform session and is bounced the same way — proven by a
     dedicated security test.
@@ -747,9 +749,10 @@ confirmed the full intended route table (all `/admin/schools/[id]/*` sub-routes,
 
 ## Deferred items
 
-- Users/Exams/Activity tabs on School Detail, full Audit & Security screen (`B10`), full Platform
-  Analytics screen (`B17`) — no backend data source yet; each has a real, specific "not yet
-  available" state naming what unlocks it.
+- Users/Exams tabs on School Detail, full Platform Analytics screen (`B17`) — no backend data
+  source yet; each has a real, specific "not yet available" state naming what unlocks it. Audit
+  and Activity tabs, and the standalone `/admin/audit` screen, were closed by `B10`'s own
+  implementation pass (2026-09-03) — see that phase's Change Log entry.
 - Real break-glass wiring — `<ReasonDialog variant="breakGlass">` is built and tested but unused by
   any screen; no school-academic-write endpoint reachable by Software Admin exists yet.
 - Real Playwright E2E — standing deferral since F1.
@@ -1201,6 +1204,21 @@ F8 imports into these directories. F9 and F11 depend on assignments being correc
 - HOD request/approval UI — permanently withdrawn by `ADR-0017`; HOD has zero F7 screens (no HOD people nav item exists or is added).
 - Dedicated component test files for `student-detail-screen`, `teacher-detail-screen`, `hods-screen`, `move-class-dialog`, `reveal-credentials-dialog`, `hod-department-dialog`, `hod-edit-dialog`, `teacher-invitation-sent-dialog` — implemented, typechecked, linted, and covered indirectly by the screens that render them, but not yet given their own dedicated test file.
 
+## Post-completion gap closure (2026-09-03, found via live testing)
+
+Full detail in `CLAUDE.md`'s matching 2026-09-03 Change Log entry. Creating a student
+(`StudentForm`, and the identical `Step09Students` onboarding step, both via the shared
+`useCreateStudent`) never showed a password anywhere — the only path to one was the _separate_
+"Reset credentials" action this phase itself built, a required extra step nothing in the create flow
+mentioned or linked to. Fixed by having `useCreateStudent` (`lib/onboarding/mutations.ts`) call the
+existing `POST /students/:id/reset-credentials` immediately after creation+enrollment (no backend
+change — reuses this phase's own already-shipped, already-tested one-time-reveal primitive), and
+extracting `RevealCredentialsDialog`'s inline reveal markup into a shared `CredentialsRevealPanel`
+now used by three call sites. `StudentForm`'s create flow shows the panel and only calls `onSaved`
+once the admin explicitly acknowledges it; `students-screen.tsx`'s dialog remounts `StudentForm` by
+`key` on every open so a stale panel can never leak into the next session. New test file
+`student-form.test.tsx` (none existed before this closure).
+
 ---
 
 # F8 — Bulk Import UI
@@ -1492,9 +1510,11 @@ status=REJECTED`, genuinely filtered/paginated) with a working edit-and-resubmit
 - The full review-cycle E2E — blocked on `B9`/`F10` (Exit criteria).
 - "Reference/source" field (`05 §15.3`) — no backing schema field exists anywhere in `B8`; not
   built, not faked with unsaved local-only storage.
-- A self-service `GET /me/teacher-assignments`-style backend gap-closure — would let the
+- ~~A self-service `GET /me/teacher-assignments`-style backend gap-closure — would let the
   Subject/Level picker pre-filter to the teacher's real assigned scope instead of reactively
-  surfacing the server's `QUESTION_OUT_OF_SCOPE` message; not built here (frontend-only phase).
+  surfacing the server's `QUESTION_OUT_OF_SCOPE` message; not built here (frontend-only phase).~~
+  **Closed 2026-09-03** — see this section's own Post-completion gap closure below. (`Level` alone
+  stays unconstrained; the out-of-scope path for a bad subject+level combination is unchanged.)
 
 ## Implementation notes
 
@@ -1571,6 +1591,23 @@ isolation (16 files / 75 tests, 0 failures) — the monorepo-wide full-suite run
 already-documented worker-pool-startup/resource-contention flakiness unrelated to these changes
 (pre-existing, unrelated test files also failed under that same full-suite load), consistent with
 this project's established practice for that class of environment flake.
+
+## Post-completion gap closure (2026-09-03, found via live testing)
+
+Full detail in `CLAUDE.md`'s matching 2026-09-03 Change Log entry and `backend-roadmap.md`'s B8
+section. `MetadataPanel`'s Subject picker called `GET /academics/subjects`
+(`schoolConfig.subject.view`, correctly denied to TEACHER) — the _only_ endpoint it had, making the
+picker permanently empty and question creation impossible for the one role that authors questions.
+Fixed with a new `GET /questions/assigned-subjects` (`B8`'s own gap-closure), consumed here via a
+new `useAssignedSubjects` hook (`lib/questions/queries.ts`) replacing `useSubjects`/`useDepartments`
+in `MetadataPanel`. The Department read-only label now shows presence only ("Assigned to a
+department"), not the resolved name — `schoolConfig.department.view` is denied to TEACHER too, and
+fetching a second denied endpoint just for a label wasn't worth it. **Related, non-blocking finding,
+recorded as Candidate/Deferred, not fixed in this pass**: `QuestionBankScreen`'s Subject filter
+dropdown (shared by `/teacher/question-bank` and `/hod/question-bank`, `F10`) has the identical root
+cause via the same `useSubjects()` call — degrades to an empty filter for Teacher (HOD unaffected,
+already SCHOOL-scoped) but doesn't block the bank list itself, unlike the fixed creation-blocking
+bug. `metadata-panel.test.tsx` updated to mock the new hook.
 
 ---
 

@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scoped audit retrieval — filters: actor, action, entity type, date range (B10). */
+        get: operations["AuditController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenant/resolve": {
         parameters: {
             query?: never;
@@ -649,6 +666,23 @@ export interface paths {
         put?: never;
         /** Mark onboarding complete (05 §5.2: requires a current session and a class). */
         post: operations["SchoolOnboardingController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform-wide audit retrieval, optionally narrowed to one school (B10). */
+        get: operations["PlatformAuditController_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1752,6 +1786,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/questions/assigned-subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Subjects the caller (a teacher) is actively assigned to teach — powers the Question Editor's Subject picker, since `schoolConfig.subject.view` is denied to TEACHER. */
+        get: operations["QuestionController_assignedSubjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/questions/{id}": {
         parameters: {
             query?: never;
@@ -2026,6 +2077,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current user's notifications, newest first, plus unread count (B10). */
+        get: operations["NotificationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark one notification read (B10). */
+        post: operations["NotificationController_markRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark every unread notification read (B10). */
+        post: operations["NotificationController_markAllRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exams": {
         parameters: {
             query?: never;
@@ -2205,6 +2307,26 @@ export interface components {
         MePermissionsResponseDto: {
             roles: ("SOFTWARE_ADMIN" | "SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT")[];
             permissions: components["schemas"]["EffectivePermissionDto"][];
+        };
+        AuditEventResponseDto: {
+            id: string;
+            schoolId: string;
+            actorUserId: string;
+            actorDisplayName?: string | null;
+            actorRole: string;
+            action: string;
+            entityType?: string | null;
+            entityId?: string | null;
+            reason?: string | null;
+            breakGlass: boolean;
+            /** Format: date-time */
+            occurredAt: string;
+        };
+        AuditListResponseDto: {
+            items: components["schemas"]["AuditEventResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         TenantResolveSchoolDto: {
             name: string;
@@ -3318,6 +3440,32 @@ export interface components {
         QuestionReviewHistoryResponseDto: {
             history: components["schemas"]["QuestionReviewHistoryItemDto"][];
         };
+        NotificationResponseDto: {
+            id: string;
+            /** @enum {string} */
+            type: "QUESTION_APPROVED" | "QUESTION_REJECTED" | "QUESTION_CHANGES_REQUESTED" | "RESULT_PUBLISHED" | "EXAM_OPENED" | "MAKEUP_GRANTED" | "SUBSCRIPTION_EXPIRING" | "STUDENTS_UNASSIGNED";
+            title: string;
+            content: string;
+            /** @enum {string} */
+            status: "UNREAD" | "READ";
+            relatedEntityType?: string | null;
+            relatedEntityId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            readAt?: string | null;
+        };
+        NotificationListResponseDto: {
+            items: components["schemas"]["NotificationResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            unreadCount: number;
+        };
+        MarkReadResponseDto: {
+            /** @enum {string} */
+            status: "ok";
+        };
         CreateExamDto: {
             academicSessionId: string;
             academicTermId: string;
@@ -3528,6 +3676,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MePermissionsResponseDto"];
+                };
+            };
+        };
+    };
+    AuditController_list: {
+        parameters: {
+            query?: {
+                actorUserId?: string;
+                action?: string;
+                entityType?: string;
+                from?: string;
+                to?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditListResponseDto"];
                 };
             };
         };
@@ -4423,6 +4598,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnboardingStatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuditController_list: {
+        parameters: {
+            query?: {
+                actorUserId?: string;
+                action?: string;
+                entityType?: string;
+                from?: string;
+                to?: string;
+                page?: number;
+                pageSize?: number;
+                schoolId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditListResponseDto"];
                 };
             };
         };
@@ -6402,6 +6605,25 @@ export interface operations {
             };
         };
     };
+    QuestionController_assignedSubjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectListResponseDto"];
+                };
+            };
+        };
+    };
     QuestionController_get: {
         parameters: {
             query?: never;
@@ -6809,6 +7031,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionReviewHistoryResponseDto"];
+                };
+            };
+        };
+    };
+    NotificationController_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationListResponseDto"];
+                };
+            };
+        };
+    };
+    NotificationController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponseDto"];
+                };
+            };
+        };
+    };
+    NotificationController_markAllRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponseDto"];
                 };
             };
         };

@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useDepartments, useSubjects } from '@/lib/academics/queries';
+import { useAssignedSubjects } from '@/lib/questions/queries';
 import type { QuestionFormValues } from '@/lib/questions/validation';
 import { TopicCombobox } from './topic-combobox';
 
@@ -46,14 +46,17 @@ export function MetadataPanel({
   disabled?: boolean;
   outOfScopeError?: string | null;
 }) {
-  const subjects = useSubjects();
-  const departments = useDepartments();
+  // `useAssignedSubjects` (not `useSubjects`/`GET /academics/subjects`,
+  // which 403s for TEACHER — see the hook's own doc comment). This also
+  // means the picker only ever offers subjects the caller can actually
+  // save against, so the Department label below can't resolve a real
+  // department *name* (`schoolConfig.department.view` is denied to TEACHER
+  // too) — it shows presence only, not the name, rather than fetching a
+  // second denied endpoint just for display.
+  const subjects = useAssignedSubjects();
   const subjectId = form.watch('subjectId');
   const topicId = form.watch('topicId');
   const selectedSubject = subjects.data?.subjects.find((s) => s.id === subjectId);
-  const selectedDepartment = departments.data?.departments.find(
-    (d) => d.id === selectedSubject?.departmentId,
-  );
 
   return (
     <div className="space-y-4">
@@ -125,7 +128,7 @@ export function MetadataPanel({
       <div>
         <Label>Department</Label>
         <p className="text-sm text-text-secondary">
-          {selectedSubject?.departmentId ? (selectedDepartment?.name ?? '—') : 'No department'}
+          {selectedSubject?.departmentId ? 'Assigned to a department' : 'No department'}
         </p>
       </div>
 

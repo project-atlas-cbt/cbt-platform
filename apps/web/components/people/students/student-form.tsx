@@ -25,6 +25,7 @@ import { ApiError } from '@/lib/api';
 import { useAcademicsContext, useClasses } from '@/lib/academics/queries';
 import { useCreateStudent } from '@/lib/onboarding/mutations';
 import { useUpdateStudent } from '@/lib/people/mutations';
+import { CredentialsRevealPanel } from './reveal-credentials-dialog';
 
 const createSchema = z.object({
   firstName: z.string().min(1, 'Enter a first name.'),
@@ -71,6 +72,16 @@ export function StudentForm({
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent(student?.studentProfileId ?? '');
   const [error, setError] = useState<string | null>(null);
+  // Gap-closure (found via live testing): creating a student never showed
+  // a password anywhere — the admin was left with a login ID and no way to
+  // discover one. `useCreateStudent` now auto-issues initial credentials;
+  // this holds them until the admin explicitly acknowledges, so `onSaved()`
+  // (which closes the dialog) only fires after the one-time reveal has
+  // actually been seen, not immediately on creation.
+  const [issuedCredentials, setIssuedCredentials] = useState<{
+    loginIdentifier: string;
+    initialPassword: string;
+  } | null>(null);
 
   const editForm = useForm<EditValues>({
     resolver: zodResolver(editSchema),
@@ -95,7 +106,7 @@ export function StudentForm({
     if (!sessionId) return;
     setError(null);
     try {
-      await createStudent.mutateAsync({
+      const created = await createStudent.mutateAsync({
         firstName: values.firstName,
         lastName: values.lastName,
         studentId: values.studentId,
@@ -103,10 +114,23 @@ export function StudentForm({
         academicSessionId: sessionId,
         classId: values.classId,
       });
-      onSaved();
+      setIssuedCredentials(created.credentials);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not add this student.');
     }
+  }
+
+  if (issuedCredentials) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm font-medium text-text-primary">Student added</p>
+        <CredentialsRevealPanel
+          loginIdentifier={issuedCredentials.loginIdentifier}
+          initialPassword={issuedCredentials.initialPassword}
+        />
+        <Button onClick={() => onSaved()}>Done</Button>
+      </div>
+    );
   }
 
   async function onSubmitEdit(values: EditValues) {

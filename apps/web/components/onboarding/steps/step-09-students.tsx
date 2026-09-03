@@ -29,6 +29,7 @@ import { BulkImportFlow } from '@/components/imports/bulk-import-flow';
 import { ApiError } from '@/lib/api';
 import { useAcademicsContext, useClasses, useStudents } from '@/lib/onboarding/queries';
 import { useCreateStudent } from '@/lib/onboarding/mutations';
+import { CredentialsRevealPanel } from '@/components/people/students/reveal-credentials-dialog';
 import { StepList } from '../step-list';
 
 const schema = z.object({
@@ -52,6 +53,17 @@ export function Step09Students() {
   const students = useStudents();
   const createStudent = useCreateStudent();
   const [error, setError] = useState<string | null>(null);
+  // Gap-closure (found via live testing): creating a student never showed a
+  // password anywhere — the admin was left with a login ID and no way to
+  // discover one. `useCreateStudent` now auto-issues initial credentials;
+  // shown here as a dismissible panel (not a blocking dialog) since this
+  // step supports adding several students in a row — it's overwritten by
+  // the next student's credentials, or dismissed explicitly.
+  const [issuedCredentials, setIssuedCredentials] = useState<{
+    studentId: string;
+    loginIdentifier: string;
+    initialPassword: string;
+  } | null>(null);
   // DoD item 11 (resumability): if a validated-but-unconfirmed import is
   // already staged (e.g. after a hard refresh), open straight into that
   // tab instead of defaulting back to manual entry.
@@ -67,8 +79,9 @@ export function Step09Students() {
   async function onSubmit(values: Values) {
     if (!sessionId) return;
     setError(null);
+    setIssuedCredentials(null);
     try {
-      await createStudent.mutateAsync({
+      const created = await createStudent.mutateAsync({
         firstName: values.firstName,
         lastName: values.lastName,
         studentId: values.studentId,
@@ -76,6 +89,7 @@ export function Step09Students() {
         academicSessionId: sessionId,
         classId: values.classId,
       });
+      setIssuedCredentials({ studentId: values.studentId, ...created.credentials });
       form.reset({
         firstName: '',
         lastName: '',
@@ -205,6 +219,22 @@ export function Step09Students() {
               </Button>
             </form>
           </Form>
+          {issuedCredentials ? (
+            <div className="mt-4 rounded-md border border-border p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-text-primary">
+                  Credentials for {issuedCredentials.studentId}
+                </p>
+                <Button variant="secondary" size="sm" onClick={() => setIssuedCredentials(null)}>
+                  Dismiss
+                </Button>
+              </div>
+              <CredentialsRevealPanel
+                loginIdentifier={issuedCredentials.loginIdentifier}
+                initialPassword={issuedCredentials.initialPassword}
+              />
+            </div>
+          ) : null}
         </TabsContent>
         <TabsContent value="import">
           <BulkImportFlow type="STUDENTS" paramName="studentsImportJob" />

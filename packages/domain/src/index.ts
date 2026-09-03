@@ -115,3 +115,15 @@ export {
   type ExamNavigationPolicy,
   type ExamReadinessCheckCode,
 } from './exams/constants.js';
+export {
+  CANONICAL_AUDIT_ACTIONS,
+  DEFERRED_AUDIT_ACTION_IDS,
+  type CanonicalAuditAction,
+} from './audit/vocabulary.js';
+export {
+  NOTIFICATION_TYPES,
+  DEFERRED_NOTIFICATION_TYPES,
+  NOTIFICATION_STATUSES,
+  type NotificationType,
+  type NotificationStatus,
+} from './notifications/constants.js';

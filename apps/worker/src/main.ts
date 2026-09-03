@@ -1,8 +1,11 @@
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
-import { loadEnv, loadRootEnv, getProductName } from '@atlas/config';
+import { loadEnv, loadRootEnv } from '@atlas/config';
 import { prisma } from '@atlas/db';
-import { ConsoleNotificationChannel, TemplateRegistry } from '@atlas/notifications';
+import {
+  NOTIFICATION_DISPATCH_QUEUE_NAME,
+  type NotificationDispatchJobPayload,
+} from '@atlas/notifications';
 import { createProbeWorker } from './queues/probe.queue.js';
 import {
   SUBSCRIPTION_EXPIRY_QUEUE_NAME,
@@ -19,7 +22,11 @@ import {
   createImportExpiryWorker,
   scheduleImportExpirySweep,
 } from './queues/import-expiry.queue.js';
-import { registerWorkerTemplates } from './queues/templates.js';
+import {
+  UNASSIGNED_STUDENTS_DIGEST_QUEUE_NAME,
+  createUnassignedStudentsDigestWorker,
+  scheduleUnassignedStudentsDigest,
+} from './queues/unassigned-students-digest.queue.js';
 
 async function main() {
   loadRootEnv();
@@ -34,25 +41,51 @@ async function main() {
   const connection = { host: redisUrl.hostname, port: Number(redisUrl.port) || 6379 };
 
   const probeWorker = createProbeWorker(connection);
-
-  // B3: no Nest DI in this process — construct the notification channel
-  // directly, same class B0 decided on for apps/api (ConsoleNotificationChannel),
-  // with this process's own TemplateRegistry instance (see
-  // queues/templates.ts's own doc comment on why it isn't shared with
-  // apps/api's).
-  const templates = new TemplateRegistry();
-  registerWorkerTemplates(templates, getProductName(env));
-  const notifications = new ConsoleNotificationChannel(templates);
   const redis = new Redis(env.REDIS_URL);
 
+  // B10: this process is now a *producer only* onto the shared
+  // notification-dispatch queue — apps/api's worker-hosted consumer
+  // (started only from its own main.ts, never via Nest's module lifecycle)
+  // owns the actual template rendering/send, reusing the one shared
+  // NOTIFICATION_CHANNEL/TemplateRegistry every module in that process
+  // already registers templates against. This process no longer
+  // constructs its own ConsoleNotificationChannel/TemplateRegistry at all
+  // — see queues/templates.ts's own doc comment for the full history.
+  const notificationDispatchQueue = new Queue<NotificationDispatchJobPayload>(
+    NOTIFICATION_DISPATCH_QUEUE_NAME,
+    { connection },
+  );
+  const enqueueDispatch = async (
+    payload: NotificationDispatchJobPayload,
+    jobId?: string,
+  ): Promise<void> => {
+    await notificationDispatchQueue.add('dispatch', payload, {
+      ...(jobId !== undefined && { jobId }),
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 30_000 },
+      removeOnComplete: true,
+      removeOnFail: 10,
+    });
+  };
+
   const subscriptionExpiryWorker = createSubscriptionExpiryWorker(connection, {
-    notifications,
+    enqueueDispatch,
     redis,
   });
   const subscriptionExpiryQueue = new Queue(SUBSCRIPTION_EXPIRY_QUEUE_NAME, { connection });
   await scheduleSubscriptionExpirySweep(
     subscriptionExpiryQueue,
     env.SUBSCRIPTION_SWEEP_INTERVAL_MS,
+  );
+
+  // B10: "students missing a class assignment" digest for Moderator.
+  const unassignedStudentsDigestWorker = createUnassignedStudentsDigestWorker(connection, {});
+  const unassignedStudentsDigestQueue = new Queue(UNASSIGNED_STUDENTS_DIGEST_QUEUE_NAME, {
+    connection,
+  });
+  await scheduleUnassignedStudentsDigest(
+    unassignedStudentsDigestQueue,
+    env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS,
   );
 
   // B4: orphan-media reporting — report only, never deletes (see this
@@ -69,7 +102,13 @@ async function main() {
 
   // Same 'error'-event risk as the Workers below, for the Queue (enqueue)
   // side of each connection.
-  for (const queue of [subscriptionExpiryQueue, orphanMediaReportQueue, importExpiryQueue]) {
+  for (const queue of [
+    subscriptionExpiryQueue,
+    orphanMediaReportQueue,
+    importExpiryQueue,
+    unassignedStudentsDigestQueue,
+    notificationDispatchQueue,
+  ]) {
     queue.on('error', (err) => {
       console.error(`[worker] queue "${queue.name}" connection error:`, err.message);
     });
@@ -80,6 +119,7 @@ async function main() {
     subscriptionExpiryWorker,
     orphanMediaReportWorker,
     importExpiryWorker,
+    unassignedStudentsDigestWorker,
   ]) {
     worker.on('completed', (job) => {
       console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
@@ -98,7 +138,7 @@ async function main() {
   }
 
   console.log(
-    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms)`,
+    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
   );
 
   const shutdown = async () => {
@@ -108,10 +148,13 @@ async function main() {
       subscriptionExpiryWorker.close(),
       orphanMediaReportWorker.close(),
       importExpiryWorker.close(),
+      unassignedStudentsDigestWorker.close(),
     ]);
     await subscriptionExpiryQueue.close();
     await orphanMediaReportQueue.close();
     await importExpiryQueue.close();
+    await unassignedStudentsDigestQueue.close();
+    await notificationDispatchQueue.close();
     redis.disconnect();
     await prisma.$disconnect();
     process.exit(0);

@@ -95,6 +95,12 @@ jobs:
       # the `integration` job below for where this role's grants actually
       # matter.
       DATABASE_APP_URL: 'postgresql://atlas_app:atlas_app_ci_password@localhost:5432/atlas_ci?schema=public'
+      # B10: unused for this job (emit only builds the Swagger document,
+      # never queries) but @atlas/config's env schema requires a
+      # syntactically valid value regardless, and openapi:emit boots the
+      # whole AppModule (including OperationsModule's PlatformAuditReaderService)
+      # to generate it — same reasoning as DATABASE_APP_URL above.
+      DATABASE_AUDIT_READER_URL: 'postgresql://atlas_audit_reader:atlas_audit_reader_ci_password@localhost:5432/atlas_ci?schema=public'
       REDIS_URL: 'redis://localhost:6379'
       PRODUCT_NAME: 'Project Atlas'
       SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
@@ -171,6 +177,11 @@ jobs:
       # SQL by hand instead.
       DATABASE_APP_URL: 'postgresql://atlas_app:atlas_app_ci_password@localhost:5432/atlas_ci?schema=public'
       DATABASE_APP_URL_TEST: 'postgresql://atlas_app:atlas_app_ci_password@localhost:5432/atlas_ci?schema=public'
+      # B10: read-only, single-table (audit_events) role for
+      # PlatformAuditReaderService — see infra/postgres/init.sql and the
+      # "Bootstrap atlas_app role" step below, extended for this role too.
+      DATABASE_AUDIT_READER_URL: 'postgresql://atlas_audit_reader:atlas_audit_reader_ci_password@localhost:5432/atlas_ci?schema=public'
+      DATABASE_AUDIT_READER_URL_TEST: 'postgresql://atlas_audit_reader:atlas_audit_reader_ci_password@localhost:5432/atlas_ci?schema=public'
       REDIS_URL: 'redis://localhost:6379'
       PRODUCT_NAME: 'Project Atlas'
       SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
@@ -205,7 +216,9 @@ jobs:
             -c "CREATE ROLE atlas_app WITH LOGIN PASSWORD 'atlas_app_ci_password'" \
             -c "GRANT USAGE ON SCHEMA public TO atlas_app" \
             -c "ALTER DEFAULT PRIVILEGES FOR ROLE atlas IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO atlas_app" \
-            -c "ALTER DEFAULT PRIVILEGES FOR ROLE atlas IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO atlas_app"
+            -c "ALTER DEFAULT PRIVILEGES FOR ROLE atlas IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO atlas_app" \
+            -c "CREATE ROLE atlas_audit_reader WITH LOGIN PASSWORD 'atlas_audit_reader_ci_password'" \
+            -c "GRANT USAGE ON SCHEMA public TO atlas_audit_reader"
 
       # See the lint-typecheck-unit-build job above for why this must come
       # before db:generate.

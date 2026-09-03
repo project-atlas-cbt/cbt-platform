@@ -12,5 +12,5 @@ import { RejectedQuestionsScreen } from '@/components/questions/rejected-questio
  * phase (F10) shipped the HOD decision workflow's own frontend.
  */
 export default function TeacherRejectedQuestionsPage() {
-  return <RejectedQuestionsScreen basePath="/teacher/question-bank" />;
+  return <RejectedQuestionsScreen basePath="/teacher/question-bank" assignedSubjectsOnly />;
 }

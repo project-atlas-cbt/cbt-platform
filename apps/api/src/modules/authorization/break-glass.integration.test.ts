@@ -9,6 +9,8 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
+import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
+import { AuditActionRegistry } from '../operations/audit-action.registry.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { BreakGlassService } from './break-glass.service.js';
 import type { AuthorizedActor } from './authorization.types.js';
@@ -17,11 +19,12 @@ const createdSchoolIds: string[] = [];
 const createdUserIds: string[] = [];
 
 afterAll(async () => {
-  for (const schoolId of createdSchoolIds) {
-    await withTenant(prisma, schoolId, (tx) => tx.auditEvent.deleteMany({ where: { schoolId } }));
-  }
+  // B10: audit_events is now append-only (unconditional trigger) — a
+  // direct deleteMany against it always fails, and so does the school
+  // cascade below if it isn't wrapped. See safeDeleteSchools's own doc
+  // comment.
+  await safeDeleteSchools(prisma, createdSchoolIds);
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
-  await prisma.school.deleteMany({ where: { id: { in: createdSchoolIds } } });
 });
 
 describe('BreakGlassService — real database (ADR-0012 DoD item 9)', () => {
@@ -43,7 +46,7 @@ describe('BreakGlassService — real database (ADR-0012 DoD item 9)', () => {
       userId: platformUser.id,
       roles: ['SOFTWARE_ADMIN'],
     };
-    const service = new BreakGlassService(new AuditService());
+    const service = new BreakGlassService(new AuditService(new AuditActionRegistry()));
 
     const operationRan = { value: false };
     const result = await service.execute(
@@ -103,7 +106,7 @@ describe('BreakGlassService — real database (ADR-0012 DoD item 9)', () => {
       userId: platformUser.id,
       roles: ['SOFTWARE_ADMIN'],
     };
-    const service = new BreakGlassService(new AuditService());
+    const service = new BreakGlassService(new AuditService(new AuditActionRegistry()));
     await service.execute(
       actor,
       { schoolId: schoolB.id, permissionId: 'account.deactivate', reason: 'Regression test.' },

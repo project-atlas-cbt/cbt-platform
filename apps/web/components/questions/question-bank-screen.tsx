@@ -25,7 +25,11 @@ import {
 } from '@/components/ui/select';
 import { useHasPermission } from '@/lib/nav';
 import { useSubjects } from '@/lib/academics/queries';
-import { useQuestionCounts, useQuestionsPaginated } from '@/lib/questions/queries';
+import {
+  useAssignedSubjects,
+  useQuestionCounts,
+  useQuestionsPaginated,
+} from '@/lib/questions/queries';
 import { useExportQuestions } from '@/lib/questions/use-export-questions';
 import { QuestionStatusBadge } from './question-status-badge';
 import { QuestionStatusTabs } from './question-status-tabs';
@@ -85,15 +89,29 @@ interface QuestionRow {
  * Change Log already named this exact gap as deferred to "F9/F10" without
  * closing it) — recorded again here as Candidate/Deferred, not silently
  * dropped.
+ *
+ * `assignedSubjectsOnly` (gap closure, found via live testing): the Subject
+ * *filter* dropdown had the identical root cause as F9's Subject-picker bug
+ * — it called `useSubjects()` (`schoolConfig.subject.view`), denied to
+ * TEACHER, degrading to an empty filter for the Teacher route (HOD is
+ * unaffected — already `SCHOOL`-scoped there). An explicit, statically-known
+ * prop rather than inferring the caller's role from a permission check
+ * inside this component (`useHasPermission`'s data isn't available until
+ * `/me/permissions` resolves, so gating on it here would fire one doomed
+ * `useSubjects()` 403 for every Teacher on first render) — the same
+ * "each route knows and states its own role context" shape as `hideImport`
+ * above, just for a second, independently-broken data source.
  */
 export function QuestionBankScreen({
   basePath,
   pinnedStatus,
   hideImport = false,
+  assignedSubjectsOnly = false,
 }: {
   basePath: string;
   pinnedStatus?: string;
   hideImport?: boolean;
+  assignedSubjectsOnly?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -108,7 +126,12 @@ export function QuestionBankScreen({
   const canImport = useHasPermission('questionBank.import');
   const canExport = useHasPermission('questionBank.export');
 
-  const subjects = useSubjects();
+  // Exactly one of these two is ever `enabled` — see `assignedSubjectsOnly`'s
+  // own doc comment above for why this can't be inferred from a permission
+  // check here instead.
+  const allSubjects = useSubjects({ enabled: !assignedSubjectsOnly });
+  const teacherSubjects = useAssignedSubjects({ enabled: assignedSubjectsOnly });
+  const subjects = assignedSubjectsOnly ? teacherSubjects : allSubjects;
   const counts = useQuestionCounts();
   const exportQuestions = useExportQuestions();
 

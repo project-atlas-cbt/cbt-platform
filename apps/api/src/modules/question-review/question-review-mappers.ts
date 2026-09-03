@@ -22,7 +22,7 @@ export const QUESTION_FOR_REVIEW_INCLUDE = {
   subject: { select: { name: true, departmentId: true } },
   authorProfile: {
     include: {
-      membership: { include: { user: { select: { displayName: true, email: true } } } },
+      membership: { include: { user: { select: { id: true, displayName: true, email: true } } } },
     },
   },
   currentRevision: { include: QUESTION_REVISION_INCLUDE },

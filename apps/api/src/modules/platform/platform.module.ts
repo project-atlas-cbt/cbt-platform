@@ -26,6 +26,15 @@ import { SchoolResultPolicyController } from './school-result-policy.controller.
 import { SchoolOnboardingService } from './school-onboarding.service.js';
 import { SchoolOnboardingController } from './school-onboarding.controller.js';
 import { registerPlatformTemplates } from './templates.js';
+import { PlatformAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
+// B10: GET /v1/platform/audit lives here, not in OperationsModule — it
+// needs PlatformAuthGuard's own DI graph (an unexported, PlatformModule-
+// internal provider), and OperationsModule importing PlatformModule back
+// would be circular (PlatformModule already imports OperationsModule for
+// AuditService). See operations.module.ts's own doc comment for the full
+// reasoning.
+import { PlatformAuditReaderService } from '../operations/platform-audit-reader.service.js';
+import { PlatformAuditController } from '../operations/platform-audit.controller.js';
 
 /**
  * Bounded domain per 08 §5: "Platform — Software Admin, schools,
@@ -55,6 +64,7 @@ import { registerPlatformTemplates } from './templates.js';
     SchoolBrandingController,
     SchoolResultPolicyController,
     SchoolOnboardingController,
+    PlatformAuditController,
   ],
   providers: [
     PlatformSessionService,
@@ -67,6 +77,8 @@ import { registerPlatformTemplates } from './templates.js';
     SchoolBrandingService,
     SchoolResultPolicyService,
     SchoolOnboardingService,
+    PlatformAuditActionRegistrationProvider,
+    PlatformAuditReaderService,
   ],
 })
 export class PlatformModule implements OnModuleInit {

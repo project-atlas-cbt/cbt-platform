@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { grantAppRole } from '@atlas/db';
+import { grantAppRole, grantAuditReaderRole } from '@atlas/db';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dbPackageDir = resolve(__dirname, '../../packages/db');
@@ -45,5 +45,6 @@ export async function runPrisma(args: string[], databaseUrl: string | undefined)
 
   if (args[0] === 'migrate' && databaseUrl) {
     await grantAppRole(databaseUrl);
+    await grantAuditReaderRole(databaseUrl);
   }
 }

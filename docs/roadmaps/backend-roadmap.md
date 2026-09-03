@@ -851,6 +851,26 @@ real `node dist/main.js` boot reconfirmed `PolicyCoverageService` reports the tw
 with zero violations. No existing business rule altered; no schema change beyond the three additive
 `School` columns and two new enums.
 
+### 2026-09-03 — Fifth gap closure: deactivation dead-end (found via live testing)
+
+Full detail in `CLAUDE.md`'s matching 2026-09-03 Change Log entry. Summary: `DEACTIVATED` is
+confirmed, spec-backed, and correctly terminal (`03 §3`, `07 §3.3`) — the actual bug was that
+`SchoolsAdminService.issueSubscription()`/`.issueActivationGrant()` and `ActivationService`'s
+redemption path never checked it, so a fresh key could be issued _and redeemed_ against a
+permanently deactivated school (the activation-history table showing `ACTIVATED`) while login stayed
+blocked forever, with no error anywhere in that flow to explain why. Fixed with a shared
+`SchoolsAdminService.assertNotDeactivated()` guard on both issuance methods, and a check inside
+`ActivationService.findRedeemableGrant()` (the one choke point both `verify()`/`redeem()` already
+share) — both reuse the existing `SCHOOL_ACCESS_DEACTIVATED` code/message `AuthGuard` already uses
+for the login-blocking case. `SUSPENDED` deliberately stays unaffected by either check (reversible,
+independent of the subscription clock). No schema change, no permission-table change, no product
+decision beyond confirming the already-documented terminal-state semantics. New test cases in
+`activate-form.test.tsx`/`subscription/page.test.tsx` (frontend); backend verified via `tsc --noEmit`
+
+- the full unit suite (143/143) — `pnpm generate`/integration tests deferred, not silently skipped,
+  per this same Change Log entry's own "Verification" paragraph (blocked by unrelated concurrent
+  session activity on this repository, not by anything in this fix).
+
 ---
 
 # B4 — Media, Storage & Branding
@@ -1410,6 +1430,17 @@ security boundary) — 61 integration tests across the affected files, all green
 `node dist/main.js` boot reconfirmed `PolicyCoverageService` reports 116 routes checked with zero
 violations (up from 113).
 
+## Post-completion gap closure (2026-09-03, found via live testing)
+
+Full detail in `CLAUDE.md`'s matching 2026-09-03 Change Log entry. `StudentService.create()`
+(`POST /students`) never issued a password — the only path to one was the _separate_ "Reset
+credentials" action (`resetCredentials()`, this section's own DoD item 8), a required extra step
+nothing in the create flow mentioned, leaving an admin with a login ID and no way to discover a
+password. **No backend change was needed or made** — `resetCredentials()`'s existing one-time-reveal
+contract was already correct and sufficient; this was purely a frontend orchestration gap (the
+create flow never called it). Fixed in `apps/web` — see `frontend-roadmap.md`'s F7 section for the
+frontend-side detail.
+
 ---
 
 # B7 — Bulk Import Pipeline
@@ -1827,6 +1858,22 @@ B11's exam builder consumes approved revisions. B13's snapshot reads revision co
 
 **Closing `media.upload`'s TEACHER placeholder** (flagged by B4 as "B8's job"): verified `SCHOOL_ADMIN`/`MODERATOR`/`HOD` were already genuinely `granted('SCHOOL')` (final, not placeholders); only `TEACHER` carried the "temporary widening" text. Closed via a dedicated `POST /v1/questions/media/upload-target(/:id/complete)` pair (mirroring the school-branding-logo/import-source precedent for "a domain needing its own attach semantics gets its own route") that resolves real `ASSIGNED` scope from a `subjectId`+`level` pair using the identical ADR-0001 join question creation itself uses, before any `Question`/`QuestionRevision` exists yet — the real UX order (an image is attached to the editor before the question is necessarily saved). `TEACHER`'s `media.upload` grant is now plain `granted('ASSIGNED')`, no placeholder text. Documented, accepted side effect: the _generic_ `POST /v1/media/uploads` route (which never constructs a `ResourceContext`) is now unreachable for Teachers for every type, including `OTHER` — fail-closed, matching every other `ASSIGNED`/`DEPARTMENT` predicate's behaviour absent real scope; no current caller relies on Teacher `OTHER`-type uploads.
 
+### Post-completion gap closure (2026-09-03, found via live testing, F9's own Subject picker)
+
+Full detail in `CLAUDE.md`'s matching 2026-09-03 Change Log entry (and `frontend-roadmap.md`'s F9
+section). F9's Question Editor Subject picker called `GET /academics/subjects`
+(`schoolConfig.subject.view`) — correctly `denied()` for TEACHER per `02`'s matrix and F6's own
+confirmed decision, but the _only_ endpoint the picker had, making question creation (TEACHER's own
+genuinely granted `questionBank.create`) impossible in practice. Added `GET /v1/questions/
+assigned-subjects` (`QuestionController.assignedSubjects`/`QuestionService.myAssignedSubjects`),
+gated by the already-correct `questionBank.create` permission (no permission-table change — 152
+rows, unchanged) rather than widening the deliberately-denied `schoolConfig.subject.view` grant.
+Derives the list from the caller's real `TeacherAssignment` rows — the same ADR-0001 join
+`requireTeacherAssignedScope` already checks at save time — so it doubles as the closure of this
+phase's own "no client-side teacher-assignment data is reachable" note that F9's plan had already
+recorded as Candidate/Deferred. New unit-covered path via the existing question-scope utilities; no
+schema change.
+
 **`questionBank.archive`'s School Admin/Moderator grant finalized**, not left as a placeholder: verified `limitedReadOnly()` is functionally `GRANTED` (the "read-only placeholder" wording is a note, not a distinct engine behaviour) — confirmed the real, final boundary is unqualified `SCHOOL`-wide write access, the same broad-oversight shape these two roles already hold for nearly every other `.manage`-style row in this table, and low-risk since archiving is soft/reversible, never a hard delete. Permission table updated from `limitedReadOnly(...)` to plain `granted('SCHOOL')` for both roles.
 
 **Question bulk import** (extends B7's `ImportsModule`, not a new pipeline) — `ImportJobType` gained `QUESTIONS`; `ImportRow` gained `resultQuestionId` (a simpler one-shot progress marker than `resultMembershipId`'s two-step one, since question creation is a single atomic transaction with no separate enroll/invite step). Every imported question is authored as the uploader's own `TeacherProfile` — `questionBank.import`'s grant is wider than Teacher (Moderator/HOD/School Admin can all call the endpoint), but `Question.authorTeacherProfileId` is a required FK, so a non-teacher uploader gets a clean `QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE` (400) at job-creation time rather than every row failing individually — mirroring B7's own "reject a bad `academicSessionId` immediately, naming the real problem" precedent.
@@ -1988,7 +2035,7 @@ Three new tests added to `question-review.integration.test.ts` (12 total, up fro
 
 # B10 — Audit & Notifications
 
-**Status:** NOT STARTED · **Decided ADRs:** 0019 (messaging channel)
+**Status:** COMPLETE (2026-09-03) · **Decided ADRs:** 0019 (messaging channel)
 
 ## Objective
 
@@ -2065,26 +2112,50 @@ Every phase from B3 onward emits audit events. A coverage test asserts each voca
 
 ## Definition of Done
 
-1. Every action in `07 §11.1`'s vocabulary has an emitting code path, proven by the coverage test.
-2. Audit rows cannot be updated or deleted; attempts fail at the database.
-3. Audit retrieval is correctly scoped for all six roles.
-4. Audit entries capture actor, role, school, action, target, timestamp, and reason where applicable.
-5. No credential material or full answer content appears in any audit payload.
-6. Notifications generate for all specified types and mark read correctly.
-7. Out-of-band notifications dispatch through the `ADR-0019` channel with retry.
-8. Cross-tenant audit and notification access is denied.
-9. Break-glass events are distinctly typed and visible to the affected school.
+1. ✅ Every `status: 'LIVE'` action in `packages/domain/src/audit/vocabulary.ts`'s `CANONICAL_AUDIT_ACTIONS` (the 07 §11.1 vocabulary) has ≥1 registered alias, proven by `AuditVocabularyCoverageService` — runs on every app boot (real server and every integration test), not a separate CI step. A second assertion pins the `DEFERRED` set to exactly the six actions with no producer yet (EXAM_OPENED/CLOSED, MAKEUP_GRANTED, ATTEMPT_INVALIDATED, RESULT_PUBLISHED, RESULT_ADJUSTED) so a future phase can't ship a producer without flipping its entry first.
+2. ✅ Audit rows cannot be updated or deleted; verified two ways — `atlas_app` (the running application's only role) has no UPDATE/DELETE grant at all (`REVOKE`, belt-and-suspenders); the schema owner _does_ still have DML rights as table owner, and is blocked by the unconditional `audit_events_immutable` trigger regardless (proven via a direct `$executeRawUnsafe` bypass in both `apps/api`'s own integration suite and `tests/tenancy/rls.integration.test.ts`'s dedicated isolated block).
+3. ✅ Audit retrieval is correctly scoped for all six roles — `GET /v1/audit` (`AuditQueryService`): SCHOOL_ADMIN/MODERATOR full school read, HOD own actions + Question/QuestionRevision events in their department (the same two-hop `HODAssignment→Subject.departmentId→Question.subjectId` join B9 established), TEACHER/STUDENT own actions/account only. `GET /v1/platform/audit` (`PlatformAuditReaderService`): Software-Admin-only, genuinely cross-school in one query via the privileged `atlas_audit_reader` connection.
+4. ✅ Audit entries capture actor, role, school, action, target, timestamp, and reason — unchanged from B2's own write path (`AuditService.record`), now also readable.
+5. ✅ No credential material or full answer content appears in any audit payload — confirmed by inspecting every `AuditService.record()` call site's `metadata` literal directly; none currently pass credential/answer content.
+6. ⚠️ Notifications generate for the types that already have a real producer — question approved/rejected/changes-requested (B9's decision flow), subscription expiring (B3's worker sweep), and students-unassigned (B10's own new digest job) all fire and mark-read correctly. Result published/exam opened/makeup granted have no producer yet (B15/B12/B16 respectively) — honestly deferred, not silently dropped; `NotificationType`'s enum already declares all three so those phases only need to add a producer, not a migration.
+7. ✅ Out-of-band notifications dispatch through the ADR-0019 channel with real BullMQ retry (`attempts: 5`, exponential backoff) via the new shared `notification-dispatch` queue — the consumer lives in `apps/api` (started only from `main.ts`'s real `bootstrap()`, mirroring B7's import-worker precedent exactly), reusing the one shared `NOTIFICATION_CHANNEL`/`TemplateRegistry` every module already registers templates against. `apps/worker`'s subscription-expiry sweep became a cross-process _producer_ onto this same queue, closing a real pre-existing bug in the same pass (see Implementation notes).
+8. ✅ Cross-tenant audit and notification access is denied — proven directly (a second school's fixture never appears in a scoped query) for both `GET /v1/audit` and `GET /v1/notifications`/mark-read (a cross-user mark-read is a scoped no-op, not a 403/404, matching this codebase's established idempotent-updateMany idiom).
+9. ✅ Break-glass events remain distinctly typed (`breakGlass: true`, unchanged from B2) and visible to the affected school via `GET /v1/audit` (School Admin/Moderator's full-school read includes them).
 
 ## Exit criteria
 
-- Append-only enforcement verified at the database level.
-- Action coverage test green and wired as a merge blocker.
-- ADR-0019 operational.
+- ✅ Append-only enforcement verified at the database level (trigger + grant revocation, both proven independently).
+- ✅ Action coverage test green, wired as an app-boot assertion (real server and every integration test) rather than a separate CI step.
+- ✅ ADR-0019 operational — retry-with-backoff via BullMQ now covers every out-of-band notification, not just the ones this phase introduces.
 
 ## Deferred items
 
 - Audit export and SIEM integration (candidate, moves to B20 if approved).
-- Real-time audit streaming — not specified.
+- Real-time audit streaming — not specified; REST polling (30s, `apps/web/lib/notifications/queries.ts`) is the intended mechanism, matching F2's own roadmap text.
+- Retention/archival policy and partitioning strategy — `M-14`/ADR-0028/B20's job explicitly; this phase only guarantees nothing is ever deleted (the trigger), never decides when to archive.
+- `GET /v1/platform/audit` at real multi-hundred-school scale — the privileged-role design gives real single-query pagination now (not a per-school loop); revisit only if a future concern (e.g. read-replica routing) arises.
+- `AUDITED_READ_NOTE`'s read-audit emission (ADR-0012, ~50 permission-table rows) — only ~5 live `@AuthorizedPlatform` GET routes exist as of B10, almost all other rows are `awaitingResource` placeholders for endpoints that don't exist yet. Building a shared mechanism now for a handful of live routes was judged premature; each future phase introducing a new platform-reachable GET route whose row carries this note is responsible for its own read-audit call site when it ships.
+- A Software-Admin-reachable _school-context_ session — needed for `audit.viewLog`'s/`notification.viewOwn`'s Software-Admin branches (both implemented for correctness, per the permission table) to ever be exercised in practice. Not asked for by any DoD item here.
+- `GET /v1/audit` (school-session-scoped, all six roles, real per-role scoping including the HOD department join) ships with **no frontend consumer** — built and tested at the API layer; F3's three destinations all consume `GET /v1/platform/audit` instead (Software Admin has no school session). Waiting for a future School-workspace "my activity"/"school audit" screen.
+- Question pools/exam-opened/makeup-granted/result-published notification producers — each waits on its own owning phase (B12/B15/B16) per DoD item 6.
+
+## Implementation notes
+
+Two scope decisions were confirmed with the project owner before implementation: (1) `GET /v1/platform/audit`'s cross-school query is served by a **new, narrowly-scoped privileged Postgres role** (`atlas_audit_reader`) rather than iterating every school's RLS-scoped connection one at a time (the mechanism B3's worker sweep and `PlatformMetricsService` use for other cross-school jobs, which doesn't compose with real filtering/pagination); (2) **frontend wiring was included in this same pass** — F2's `NotificationPanel` and F3's three audit placeholder screens now consume real endpoints, even though B10 has no dedicated future frontend phase in the roadmap.
+
+**Canonical action vocabulary** (`packages/domain/src/audit/vocabulary.ts`): the ~55 already-shipped, correctly-named `AuditEvent.action` strings across academics/users/exams/platform/imports/question-review were **not** mass-renamed to force a superficial match against 07 §11.1's illustrative (not exhaustive) example list — that would have been an unrelated broad refactor across a dozen already-tested files. Two small, scoped exceptions, both real near-misses of a canonical name for the _same_ event: `question-review.service.ts`'s `QUESTION_REVIEW_APPROVED`/`QUESTION_REVIEW_REJECTED` renamed to `QUESTION_APPROVED`/`QUESTION_REJECTED`; `student-enrollment.service.ts`'s `enroll()` now distinguishes a fresh enrollment (`STUDENT_ENROLLED`) from a class move (`CLASS_CHANGED`), previously indistinguishable. Every other near-miss (`STUDENT_DEACTIVATED`/`TEACHER_DEACTIVATED`/`MODERATOR_REMOVED` vs. `USER_DEACTIVATED`; `TEACHER_ASSIGNMENTS_REPLACED` vs. `TEACHER_ASSIGNED`) is mapped via an alias registry, not renamed — each represents a genuinely distinct event this table's own per-role naming already correctly preserves (e.g. `HOD_REMOVED` only ends a role assignment, never touches `User.status`, and is deliberately excluded from `USER_DEACTIVATED`'s alias set). `AuditActionRegistry`/`AuditVocabularyCoverageService` enforce this at the application layer (not the DB column type, which stays free-form `VarChar(64)` — a closed DB enum would fight this codebase's own pace of adding new actions every phase).
+
+**`atlas_audit_reader`** — not `BYPASSRLS` (not scopable to one table; would exempt the role from every other RLS-protected table). Instead: `audit_events_isolation` (B2's existing policy) has no `TO` clause, so it applies to every role via `PUBLIC`; a second, additive, permissive `FOR SELECT` policy scoped `TO atlas_audit_reader` with `USING (true)` makes every school's rows visible to that role alone, without touching `atlas_app`'s own evaluation of the isolation policy at all — Postgres combines multiple permissive policies with `OR`. No grant on any other table, no `INSERT`/`UPDATE`/`DELETE` grant ever. The role itself (cluster-wide, not database-scoped) lives in `infra/postgres/init.sql` and CI's hand-written bootstrap step, never in a migration — mirroring `atlas_app`'s own precedent exactly (confirmed via `grep -rn "CREATE ROLE" packages/db/prisma/migrations/` returning zero hits). `PlatformAuditReaderService` owns its own separate `PrismaClient` (`DATABASE_AUDIT_READER_URL`), never the shared `prisma` singleton — no `withTenant` call site is reachable on it at all, a structural fact, not a convention to remember. Lives in `PlatformModule`, not `OperationsModule` — it needs `PlatformAuthGuard`'s own DI graph (an unexported, `PlatformModule`-internal provider), and `OperationsModule` importing `PlatformModule` back would be circular (`PlatformModule` already imports `OperationsModule` for `AuditService`) — a real cross-module DI bug found only by a real compiled-app boot, the same class of gap B1/B2/B4 each hit once in their own phases.
+
+**Retry-queue architecture**: the out-of-band dispatch consumer lives in `apps/api` (`notification-dispatch-worker-bootstrap.ts`, started only from `main.ts`'s real `bootstrap()`, never via Nest's module lifecycle — mirroring B7's `import-worker-bootstrap.ts` exactly, for the identical reason: a live consumer must never start during an integration test that boots `AppModule` directly), not `apps/worker` — it reuses the _one_ shared `NOTIFICATION_CHANNEL`/`TemplateRegistry` every module in that process already registers templates against, instead of `apps/worker`'s own separate, independent registry (which would need every template hand-duplicated a second time, as it already did for just one). `apps/worker`'s subscription-expiry sweep became a cross-process _producer_ onto this same queue (`packages/notifications/src/dispatch-queue.ts`'s shared contract) — both processes connect to the same Redis, and BullMQ's producer/consumer split is exactly this.
+
+**Two real bugs found and fixed in the same pass, in already-shipped B3 code** (`apps/worker/src/queues/subscription-expiry.queue.ts`): (1) an uncaught exception anywhere in the per-school loop previously aborted the _entire_ sweep for every other school — now wrapped per-school, log-and-continue; (2) `lastWarningThresholdDays` was set unconditionally after the send attempt, regardless of whether it succeeded — a transient failure silently and permanently lost that threshold's warning forever. Now set only on a _successful enqueue_ to the retry queue (not delivery, which BullMQ's own retry/backoff now owns), so a failure to even hand the job off is retried on the next sweep tick instead of being marked "handled." `apps/worker/src/queues/templates.ts`'s own `registerWorkerTemplates` function (a second, hand-duplicated copy of `platform-subscription-warning`'s content) is now dead code and was removed — only the template _name_ remains, since this process no longer renders any template itself.
+
+**A real, broad consequence of DoD item 2's append-only trigger, not a hypothetical**: `AuditEvent.schoolId` cascades on `School` deletion, and ~55 action-emitting call sites across nearly every module meant most integration test files that create a school and exercise real behaviour against it now throw in their own `afterAll` teardown. Found by running the full integration suite once after the trigger migration landed (not guessed from static analysis) — 12 files failed teardown on that run; a broader static grep found 20 files total carrying the risky pattern. Fixed with one new shared test helper per compilation root (`tests/support/safe-delete-schools.ts` for `tests/` files; a duplicate at `apps/api/src/test-support/safe-delete-schools.ts` for `apps/api/src/**` files — `apps/api/tsconfig.json`'s `rootDir: "./src"` means the two can't share a literal import, the same "convention reuse, not literal code sharing" precedent as `apps/worker`'s own duplicated template content), applied across all 20 files plus three pre-existing unguarded explicit `auditEvent.deleteMany` calls. The full integration suite (251 real assertions) was green both before and after this sweep — every failure was teardown-only, zero regressions in actual behaviour.
+
+**Cross-module DI bug found only by a real compiled boot** (same class of gap every prior phase has hit once): `OperationsModule` gained `@Authorized`-decorated controllers (`AuditController`) without importing `IdentityModule` — `AuthGuard`'s own constructor dependency (`SessionService`) is only exported from there, and Nest resolves a guard's DI graph from the _consuming_ module's injector, not wherever the guard happens to live. Fixed by adding the import (the standard pair every `@Authorized`-using module already carries).
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm build` at the monorepo root, the full `apps/api` integration suite (251/251 real assertions across 34 files; 3 pre-existing, unrelated environment-timing flakes in the BullMQ import-commit path — already documented as a known issue in B9's own Change Log entry, predating B10 entirely), `pnpm generate` (`audit.v1`/`notification.v1` — 5 new routes — published in `apps/api/openapi.json`/`packages/contracts`), and `pnpm generate:permission-table-doc` (154 rows, up from 151 — the two new `notification.*` rows).
 
 ---
 

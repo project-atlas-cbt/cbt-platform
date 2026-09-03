@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import SchoolSubscriptionPage from './page';
 import { useSchool, useActivationGrants } from '@/lib/platform/queries';
 import { useIssueSubscription, useIssueActivationGrant } from '@/lib/platform/mutations';
+import { ApiError } from '@/lib/api';
 
 vi.mock('next/navigation', () => ({ useParams: () => ({ id: 's1' }) }));
 vi.mock('@/lib/platform/queries', () => ({ useSchool: vi.fn(), useActivationGrants: vi.fn() }));
@@ -119,5 +120,50 @@ describe('SchoolSubscriptionPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /issue new activation key/i }));
     expect(issueGrantMutate).toHaveBeenCalled();
+  });
+
+  // Gap-closure (found via live testing): deactivation has no reactivate
+  // path, but issuing/renewing a key against a deactivated school used to
+  // silently "succeed" (the key even redeemed) while login stayed blocked
+  // forever. Both actions are now disabled with an explanation, matching
+  // the terminal-state semantics the Overview page's Deactivate dialog
+  // already documents.
+  it('disables both issuance actions and explains why for a deactivated school', () => {
+    mockUseSchool.mockReturnValue({
+      ...SCHOOL,
+      data: { ...SCHOOL.data, status: 'DEACTIVATED' },
+    } as never);
+    mockUseGrants.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { grants: [] },
+      refetch: vi.fn(),
+    } as never);
+    render(<SchoolSubscriptionPage />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/permanently deactivated/i);
+    expect(screen.getByRole('button', { name: /issue \/ renew subscription/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /issue new activation key/i })).toBeDisabled();
+  });
+
+  it('surfaces the real server error when issuing a key fails', async () => {
+    mockUseGrants.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { grants: [] },
+      refetch: vi.fn(),
+    } as never);
+    issueGrantMutate.mockRejectedValueOnce(
+      new ApiError({
+        code: 'CONFLICT',
+        message: 'This school has been permanently deactivated.',
+        retryable: false,
+        correlationId: 'corr-1',
+      }),
+    );
+    render(<SchoolSubscriptionPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /issue new activation key/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/permanently deactivated/i);
   });
 });

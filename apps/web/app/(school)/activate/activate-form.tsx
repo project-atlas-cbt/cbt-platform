@@ -50,6 +50,8 @@ function verifyErrorMessage(err: unknown): string {
         return 'This activation key has expired. Contact your platform administrator for a new one.';
       case 'ACTIVATION_KEY_INVALID':
         return 'This activation key is not valid for this school.';
+      case 'SCHOOL_ACCESS_DEACTIVATED':
+        return 'This school has been permanently deactivated and can no longer be activated.';
       default:
         return err.message;
     }

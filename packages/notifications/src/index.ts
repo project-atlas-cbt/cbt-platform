@@ -8,3 +8,7 @@ export {
   type RenderedTemplate,
 } from './template.js';
 export { ConsoleNotificationChannel } from './console-channel.js';
+export {
+  NOTIFICATION_DISPATCH_QUEUE_NAME,
+  type NotificationDispatchJobPayload,
+} from './dispatch-queue.js';

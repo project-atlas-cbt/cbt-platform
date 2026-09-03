@@ -88,7 +88,11 @@ describe('QuestionEditorScreen — create, autosave, submit (F9)', () => {
     push.mockClear();
 
     mockGet.mockImplementation((path: string) => {
-      if (path === '/academics/subjects') {
+      // Gap-closure (found via live testing): `MetadataPanel` sources the
+      // Subject picker from `useAssignedSubjects` (`GET /questions/
+      // assigned-subjects`), not `GET /academics/subjects` — the latter is
+      // denied to TEACHER. See `MetadataPanel`'s own doc comment.
+      if (path === '/questions/assigned-subjects') {
         return ok({
           subjects: [
             { id: 'sub1', name: 'Mathematics', code: 'MTH', departmentId: null, status: 'ACTIVE' },

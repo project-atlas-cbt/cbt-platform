@@ -21,6 +21,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { parseCookie } from 'cookie';
 import { prisma, withTenant } from '@atlas/db';
+import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import type { ErrorEnvelope } from '@atlas/validation';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from './password.service.js';
@@ -208,7 +209,7 @@ afterAll(async () => {
     );
   }
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } }); // User: no RLS
-  await prisma.school.deleteMany({ where: { id: { in: createdSchoolIds } } }); // School: no RLS
+  await safeDeleteSchools(prisma, createdSchoolIds);
 });
 
 // ---------------------------------------------------------------------

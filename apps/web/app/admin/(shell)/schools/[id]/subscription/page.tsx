@@ -11,6 +11,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ApiError } from '@/lib/api';
 import {
   Form,
   FormControl,
@@ -58,6 +59,7 @@ export default function SchoolSubscriptionPage() {
   const issueSubscription = useIssueSubscription(id);
   const issueGrant = useIssueActivationGrant(id);
   const [issueGrantError, setIssueGrantError] = useState<string | null>(null);
+  const [renewError, setRenewError] = useState<string | null>(null);
 
   const form = useForm<RenewalValues>({
     resolver: zodResolver(renewalSchema),
@@ -65,19 +67,30 @@ export default function SchoolSubscriptionPage() {
   });
 
   async function onRenew(values: RenewalValues) {
-    await issueSubscription.mutateAsync({
-      plan: values.plan,
-      periodDays: Number(values.periodDays),
-    });
-    form.reset(values);
+    setRenewError(null);
+    try {
+      await issueSubscription.mutateAsync({
+        plan: values.plan,
+        periodDays: Number(values.periodDays),
+      });
+      form.reset(values);
+    } catch (err) {
+      setRenewError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not issue the subscription. Please try again.',
+      );
+    }
   }
 
   async function onIssueGrant() {
     setIssueGrantError(null);
     try {
       await issueGrant.mutateAsync();
-    } catch {
-      setIssueGrantError('Could not issue a new key. Please try again.');
+    } catch (err) {
+      setIssueGrantError(
+        err instanceof ApiError ? err.message : 'Could not issue a new key. Please try again.',
+      );
     }
   }
 
@@ -87,9 +100,20 @@ export default function SchoolSubscriptionPage() {
   }
 
   const subscription = school.data.subscription;
+  const isDeactivated = school.data.status === 'DEACTIVATED';
 
   return (
     <div className="space-y-8">
+      {isDeactivated ? (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/30 bg-danger-subtle px-3 py-2 text-sm text-danger-subtle-foreground"
+        >
+          This school has been permanently deactivated. There is no reactivate path out of
+          deactivation — issuing a new subscription or activation key will not restore access, so
+          both actions below are disabled.
+        </div>
+      ) : null}
       <section>
         <h2 className="mb-2 text-sm font-medium text-text-secondary">Current subscription</h2>
         {subscription ? (
@@ -154,20 +178,21 @@ export default function SchoolSubscriptionPage() {
                 </FormItem>
               )}
             />
-            <Button type="submit" loading={form.formState.isSubmitting}>
+            <Button type="submit" disabled={isDeactivated} loading={form.formState.isSubmitting}>
               Issue / renew subscription
             </Button>
           </form>
         </Form>
-        {issueSubscription.isError ? (
+        {renewError ? (
           <p role="alert" className="mt-2 text-sm font-medium text-danger">
-            Could not issue the subscription. Please try again.
+            {renewError}
           </p>
         ) : null}
 
         <div className="mt-4">
           <Button
             variant="secondary"
+            disabled={isDeactivated}
             onClick={() => void onIssueGrant()}
             loading={issueGrant.isPending}
           >

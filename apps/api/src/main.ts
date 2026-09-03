@@ -10,6 +10,7 @@ import { AppModule } from './app.module.js';
 import { API_VERSION_PREFIX } from './openapi/version.js';
 import { isAllowedOrigin } from './security/cors.js';
 import { startImportWorkers } from './modules/imports/import-worker-bootstrap.js';
+import { startNotificationDispatchWorker } from './modules/notification-center/notification-dispatch-worker-bootstrap.js';
 import { buildOpenApiConfig } from './openapi/document.js';
 import { injectSharedComponents } from './openapi/shared-components.js';
 import { ErrorEnvelopeDto } from './common/error-envelope.dto.js';
@@ -119,11 +120,15 @@ async function bootstrap() {
   // live consumer running against the shared local Redis. See
   // ImportQueueService's own doc comment for the full reasoning.
   const importWorkers = startImportWorkers(app);
+  // B10: the notification out-of-band dispatch retry consumer — same
+  // "only from here, never via Nest's module lifecycle" reasoning as the
+  // import workers above. See NotificationDispatchQueueService's own doc
+  // comment.
+  const notificationDispatchWorker = startNotificationDispatchWorker(app);
   app.enableShutdownHooks();
   const shutdown = () => {
-    void importWorkers
-      .close()
-      .catch((err: unknown) => console.error('[api] error closing import workers:', err))
+    void Promise.all([importWorkers.close(), notificationDispatchWorker.close()])
+      .catch((err: unknown) => console.error('[api] error closing background workers:', err))
       .finally(() => process.exit(0));
   };
   process.on('SIGINT', shutdown);

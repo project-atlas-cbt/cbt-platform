@@ -88,3 +88,60 @@ export function useActivationGrants(schoolId: string) {
     enabled: Boolean(schoolId),
   });
 }
+
+export interface UseAuditLogParams {
+  schoolId?: string;
+  actorUserId?: string;
+  action?: string;
+  entityType?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * B10 — `GET /v1/platform/audit`, the privileged, cross-school connection
+ * behind all three F3 audit destinations (`/admin/audit`, the per-school
+ * Audit tab, and the per-school Activity tab) — never `GET /v1/audit`
+ * (that one is school-session-scoped, structurally unreachable from a
+ * Software Admin's platform session; see `audit-log-table.tsx`'s own doc
+ * comment for the full reasoning). Co-located here with `useSchools`, not
+ * a separate `lib/audit/` directory — this is platform-admin data, same
+ * as schools/subscriptions.
+ */
+export function useAuditLog(params: UseAuditLogParams) {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 25;
+  return useQuery({
+    queryKey: [
+      'platform',
+      'audit',
+      params.schoolId ?? null,
+      params.actorUserId ?? null,
+      params.action ?? null,
+      params.entityType ?? null,
+      params.from ?? null,
+      params.to ?? null,
+      page,
+      pageSize,
+    ],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/platform/audit', {
+          params: {
+            query: {
+              ...(params.schoolId ? { schoolId: params.schoolId } : {}),
+              ...(params.actorUserId ? { actorUserId: params.actorUserId } : {}),
+              ...(params.action ? { action: params.action } : {}),
+              ...(params.entityType ? { entityType: params.entityType } : {}),
+              ...(params.from ? { from: params.from } : {}),
+              ...(params.to ? { to: params.to } : {}),
+              page,
+              pageSize,
+            },
+          },
+        }),
+      ),
+  });
+}

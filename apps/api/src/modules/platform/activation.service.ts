@@ -127,6 +127,30 @@ export class ActivationService {
   }
 
   private async findRedeemableGrant(schoolId: string, rawKey: string) {
+    // A real gap found via live testing, not by inspection: neither this
+    // method nor SchoolsAdminService's issuance endpoints ever checked
+    // School.platformOverride. DEACTIVATED is a deliberate, spec-backed
+    // terminal state (03 §3 "for a permanently terminated account"; 07 §3.3
+    // "never normally deleted... becomes DEACTIVATED") with no reactivate
+    // path (backend-roadmap.md's own B3 notes) — but nothing stopped a key
+    // from being issued *and redeemed* against a deactivated school, which
+    // flipped the ActivationGrant to ACTIVATED and made the Subscription
+    // ACTIVE while login stayed blocked forever (AuthGuard's own
+    // SCHOOL_ACCESS_DEACTIVATED check, unaffected by any of this). Checked
+    // here — the one choke point both verify() and redeem() already funnel
+    // through — so the school-side flow fails clearly, before a password is
+    // ever set, rather than appearing to succeed. SUSPENDED is deliberately
+    // NOT checked here: it's reversible via reactivate(), and redeeming a
+    // renewal key while suspended is harmless (the subscription clock is
+    // independent of the platform override).
+    const school = await prisma.school.findUniqueOrThrow({ where: { id: schoolId } });
+    if (school.platformOverride === 'DEACTIVATED') {
+      throw new AppHttpException({
+        code: 'SCHOOL_ACCESS_DEACTIVATED',
+        message: 'This school has been deactivated.',
+      });
+    }
+
     const grant = await withTenant(prisma, schoolId, (tx) =>
       tx.activationGrant.findUnique({ where: { keyHash: hashKey(rawKey) } }),
     );

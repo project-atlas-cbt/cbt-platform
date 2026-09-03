@@ -21,6 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { prisma, withTenant } from '@atlas/db';
+import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import { AppModule } from '../../app.module.js';
 import { createPersonMembership } from '../users/person.util.js';
 import { ImportCommitService } from './import-commit.service.js';
@@ -67,7 +68,7 @@ afterAll(async () => {
     );
   }
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
-  await prisma.school.deleteMany({ where: { id: { in: createdSchoolIds } } });
+  await safeDeleteSchools(prisma, createdSchoolIds);
 });
 
 describe('B7 — ImportCommitService.commit() resumability (DoD item 8)', () => {

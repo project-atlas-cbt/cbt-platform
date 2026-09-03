@@ -90,7 +90,7 @@ export class StudentEnrollmentService {
       // Idempotent no-op re-submit — avoid manufacturing a needless
       // CONFLICT when the caller re-sends the same enrollment.
       if (existing && existing.classId === dto.classId) {
-        return { enrollment: existing, isNew: false };
+        return { enrollment: existing, isNew: false, isMove: false };
       }
 
       if (!existing) {
@@ -153,7 +153,14 @@ export class StudentEnrollmentService {
         });
       }
 
-      return { enrollment: created, isNew: true };
+      // isMove: true when this call closed a prior ACTIVE enrollment for a
+      // *different* class (07 §35's class-movement case) — distinct from a
+      // first-ever enrollment. Both are real, audit-worthy state changes,
+      // but conflating them (both previously always emitted
+      // STUDENT_ENROLLED) made a class move indistinguishable from an
+      // initial enrollment in the audit trail. B10 fix — see
+      // packages/domain/src/audit/vocabulary.ts's CLASS_CHANGED entry.
+      return { enrollment: created, isNew: true, isMove: existing !== null };
     });
 
     if (result.isNew) {
@@ -161,7 +168,7 @@ export class StudentEnrollmentService {
         schoolId,
         actorUserId: actor.actorUserId,
         actorRole: actor.actorRole,
-        action: 'STUDENT_ENROLLED',
+        action: result.isMove ? 'CLASS_CHANGED' : 'STUDENT_ENROLLED',
         entityType: 'StudentEnrollment',
         entityId: result.enrollment.id,
       });

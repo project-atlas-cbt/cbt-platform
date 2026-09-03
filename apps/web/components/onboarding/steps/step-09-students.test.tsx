@@ -40,7 +40,10 @@ describe('Step09Students', () => {
       data: { classes: [{ id: 'c1', name: 'SS2A', status: 'ACTIVE' }] },
       isPending: false,
     } as never);
-    mutateAsync.mockResolvedValueOnce({ membershipId: 'm1' });
+    mutateAsync.mockResolvedValueOnce({
+      membershipId: 'm1',
+      credentials: { loginIdentifier: 'ST001', initialPassword: 'Xy7-abcd' },
+    });
 
     render(<Step09Students />);
     await userEvent.type(screen.getByLabelText(/first name/i), 'Ada');
@@ -57,5 +60,38 @@ describe('Step09Students', () => {
       academicSessionId: 'sess1',
       classId: 'c1',
     });
+  });
+
+  // Gap-closure (found via live testing): creating a student never showed a
+  // password anywhere. `useCreateStudent` now auto-issues initial
+  // credentials; this proves the dismissible reveal panel actually renders
+  // them.
+  it('shows the newly issued credentials after adding a student', async () => {
+    vi.mocked(useAcademicsContext).mockReturnValue({
+      data: { session: { id: 'sess1', name: '2026/2027', status: 'CURRENT' } },
+      isPending: false,
+    } as never);
+    vi.mocked(useClasses).mockReturnValue({
+      data: { classes: [{ id: 'c1', name: 'SS2A', status: 'ACTIVE' }] },
+      isPending: false,
+    } as never);
+    mutateAsync.mockResolvedValueOnce({
+      membershipId: 'm1',
+      credentials: { loginIdentifier: 'ST001', initialPassword: 'Xy7-abcd' },
+    });
+
+    render(<Step09Students />);
+    await userEvent.type(screen.getByLabelText(/first name/i), 'Ada');
+    await userEvent.type(screen.getByLabelText(/last name/i), 'Obi');
+    await userEvent.type(screen.getByLabelText(/student id/i), 'ST001');
+    await userEvent.click(screen.getByRole('combobox'));
+    await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }));
+    await userEvent.click(screen.getByRole('button', { name: /add student/i }));
+
+    expect(await screen.findByText('Credentials for ST001')).toBeInTheDocument();
+    expect(screen.getByText('Xy7-abcd')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /dismiss/i }));
+    expect(screen.queryByText('Credentials for ST001')).not.toBeInTheDocument();
   });
 });

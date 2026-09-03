@@ -76,6 +76,11 @@ describe('PERMISSION_TABLE — ADR-0012: SOFTWARE_ADMIN is not a wildcard', () =
       'identity.me.read',
       'identity.session.manage',
       'identity.permissions.read',
+      // B10: same "universal own-identity capability" shape — every role,
+      // including Software Admin, only ever sees/marks-read their own
+      // notifications.
+      'notification.viewOwn',
+      'notification.markRead',
     ]);
     for (const rule of PERMISSION_TABLE) {
       if (selfAccountRowIds.has(rule.id)) continue;

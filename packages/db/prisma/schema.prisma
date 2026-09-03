@@ -114,6 +114,7 @@ model School {
   sessions            Session[]
   passwordResetTokens PasswordResetToken[]
   auditEvents         AuditEvent[]
+  notifications       Notification[]
   subscriptions       Subscription[]
   activationGrants    ActivationGrant[]
   mediaAssets         MediaAsset[]         @relation("SchoolMediaAssets")
@@ -491,9 +492,15 @@ model AuditEvent {
   schoolId    String   @map("school_id") @db.Uuid
   actorUserId String   @map("actor_user_id") @db.Uuid
   actorRole   Role     @map("actor_role")
-  /// Free-form for now (e.g. "BREAK_GLASS_FORCE_PASSWORD_RESET") — 07
-  /// §11.1's canonical, closed vocabulary (resolving audit finding C-02) is
-  /// B10 scope.
+  /// Free-form (e.g. "BREAK_GLASS_FORCE_PASSWORD_RESET") — deliberately not
+  /// a DB enum. 07 §11.1's canonical vocabulary (resolving audit finding
+  /// C-02) is enforced at the application layer instead
+  /// (packages/domain/src/audit/vocabulary.ts's CANONICAL_AUDIT_ACTIONS +
+  /// AuditActionRegistry/AuditVocabularyCoverageService, B10) — this column
+  /// already carries 55+ distinct, correctly-named action strings across
+  /// every module that writes here, and forcing a migration on every new
+  /// one would fight this codebase's own pace. See that file for the full
+  /// canonical-vs-shipped mapping.
   action      String   @db.VarChar(64)
   entityType  String?  @map("entity_type") @db.VarChar(64)
   entityId    String?  @map("entity_id") @db.Uuid
@@ -506,7 +513,68 @@ model AuditEvent {
 
   @@index([schoolId])
   @@index([schoolId, occurredAt])
+  @@index([schoolId, actorUserId, occurredAt]) // B10: Teacher "own actions" / Student "own account" (GET /v1/audit)
+  @@index([schoolId, action, occurredAt]) // B10: action filter (GET /v1/audit, GET /v1/platform/audit)
+  @@index([schoolId, entityType, entityId]) // B10: entity filter + HOD department resolution
   @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------------
+// Audit & Notifications (07 §11.1-11.2, 03 §57, 05 §56-57, 06 §63-64) — B10.
+// ---------------------------------------------------------------------------
+
+/// 07 §11.2's own example list, plus the three deferred types declared now
+/// so their owning phase only needs to add a producer, never a migration
+/// (mirroring this codebase's own "ship the enum value ahead of use"
+/// precedent — e.g. ExamStatus's unused-but-shipped values).
+enum NotificationType {
+  QUESTION_APPROVED
+  QUESTION_REJECTED
+  /// B9's own third decision (REQUEST_CHANGES) — not one of 07 §11.1's six
+  /// named types, but the identical producer as the other two.
+  QUESTION_CHANGES_REQUESTED
+  /// DEFERRED — no producer until B15 (Result Publication).
+  RESULT_PUBLISHED
+  /// DEFERRED — no producer until B12 (Exam Activation & Control).
+  EXAM_OPENED
+  /// DEFERRED — no producer until B16 (Participation, Absence & Makeup).
+  MAKEUP_GRANTED
+  SUBSCRIPTION_EXPIRING
+  STUDENTS_UNASSIGNED
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+/// 07 §11.2: "operational only, never social" (04 §64). Recipient-scoped,
+/// in-app; out-of-band delivery (email) for the types that need to reach a
+/// logged-out user is a *separate* concern handled by the ADR-0019
+/// NotificationChannel/retry-queue pipeline (packages/notifications,
+/// apps/api/src/modules/notification-center) — this row is always written
+/// regardless of whether an out-of-band send also happens.
+model Notification {
+  id                String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId          String             @map("school_id") @db.Uuid
+  recipientUserId   String             @map("recipient_user_id") @db.Uuid
+  type              NotificationType
+  title             String             @db.VarChar(200)
+  content           String
+  status            NotificationStatus @default(UNREAD)
+  relatedEntityType String?            @map("related_entity_type") @db.VarChar(64)
+  relatedEntityId   String?            @map("related_entity_id") @db.Uuid
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  readAt            DateTime?          @map("read_at") @db.Timestamptz(6)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  /// GET /v1/notifications (recipient's own list, unread-first) + the
+  /// unread-count derivation, and the unassigned-students digest's own
+  /// "did the count actually change since I last notified this Moderator"
+  /// lookup (apps/worker/src/queues/unassigned-students-digest.queue.ts).
+  @@index([schoolId, recipientUserId, status, createdAt])
+  @@map("notifications")
 }
 
 // ---------------------------------------------------------------------------

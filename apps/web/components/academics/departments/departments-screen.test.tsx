@@ -101,6 +101,13 @@ describe('DepartmentsScreen', () => {
       '/school/academics/departments/d1',
     );
     expect(within(screen.getByRole('table')).getByText('Active')).toBeInTheDocument();
+    // Same discoverability gap `classes-screen.test.tsx` documents — the
+    // name-link alone doesn't read as interactive; a separate "View" link
+    // fixes it.
+    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute(
+      'href',
+      '/school/academics/departments/d1',
+    );
   });
 
   it('creating a department calls the mutation', async () => {
@@ -148,5 +155,6 @@ describe('DepartmentsScreen', () => {
     expect(screen.queryByRole('button', { name: /actions for/i })).not.toBeInTheDocument();
     // Read access itself is preserved — the department name still links.
     expect(screen.getByRole('link', { name: 'Sciences' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View' })).toBeInTheDocument();
   });
 });

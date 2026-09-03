@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { prisma, withTenant, TENANT_SESSION_VARIABLE } from '@atlas/db';
 import type { Env } from '@atlas/config';
-import type { SchoolStatus } from '@atlas/domain';
+import type { PlatformOverride, SchoolStatus } from '@atlas/domain';
 import type { NotificationChannel } from '@atlas/notifications';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
@@ -376,6 +376,7 @@ export class SchoolsAdminService {
   ): Promise<{ subscriptionId: string }> {
     const school = await prisma.school.findUnique({ where: { id: schoolId } });
     if (!school) throw new AppHttpException({ code: 'NOT_FOUND', message: 'School not found.' });
+    this.assertNotDeactivated(school.platformOverride);
 
     const now = new Date();
     const current = await withTenant(prisma, schoolId, (tx) =>
@@ -426,6 +427,7 @@ export class SchoolsAdminService {
   ): Promise<{ subscriptionId: string }> {
     const school = await prisma.school.findUnique({ where: { id: schoolId } });
     if (!school) throw new AppHttpException({ code: 'NOT_FOUND', message: 'School not found.' });
+    this.assertNotDeactivated(school.platformOverride);
 
     const subscription = await this.currentSubscription(schoolId);
     if (!subscription) {
@@ -472,6 +474,34 @@ export class SchoolsAdminService {
   }
 
   // --- internal helpers ---------------------------------------------------
+
+  /**
+   * A real gap found via live testing, not by inspection: `DEACTIVATED` is a
+   * deliberate, spec-backed terminal state with no reactivate path (see
+   * `reactivate()`'s own precondition and `backend-roadmap.md`'s B3 notes —
+   * `03 §3`, `07 §3.3`) — but neither `issueSubscription()` nor
+   * `issueActivationGrant()` ever checked it, so a Software Admin could
+   * issue a fresh key against a permanently deactivated school and have it
+   * *redeem successfully* (the activation-history table would even show
+   * `ACTIVATED`), while every login attempt kept failing with
+   * `SCHOOL_ACCESS_DEACTIVATED` regardless — a confusing dead end with no
+   * error anywhere in the issuance flow to explain it. Checked here, once,
+   * for both callers. Deliberately narrower than a full `resolveAccessGate`
+   * check: `SUSPENDED` stays allowed to renew/re-key (it's reversible via
+   * `reactivate()`, and the subscription clock is independent of the
+   * platform override), matching `ActivationService.findRedeemableGrant`'s
+   * identical, deliberately-scoped check on the redemption side.
+   */
+  private assertNotDeactivated(platformOverride: PlatformOverride): void {
+    if (platformOverride === 'DEACTIVATED') {
+      throw new AppHttpException({
+        code: 'CONFLICT',
+        message:
+          'This school has been permanently deactivated. Deactivation has no reactivate path — ' +
+          'issuing a new subscription or activation key will not restore access.',
+      });
+    }
+  }
 
   /** Shared by `list()`, `detail()`, `issueSubscription()`, and
    * `issueActivationGrant()` — the school's current (most recent) subscription

@@ -7,7 +7,7 @@ import {
   PLATFORM_METRICS_CACHE_KEY,
   type PlatformMetricsSnapshot,
 } from '@atlas/domain';
-import type { NotificationChannel } from '@atlas/notifications';
+import type { NotificationDispatchJobPayload } from '@atlas/notifications';
 import { SUBSCRIPTION_WARNING_TEMPLATE_NAME } from './templates.js';
 
 export const SUBSCRIPTION_EXPIRY_QUEUE_NAME = 'atlas-subscription-expiry-sweep';
@@ -18,9 +18,17 @@ const SWEEP_JOB_ID = 'sweep';
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export interface SubscriptionExpirySweepDeps {
-  /** Already constructed with its own TemplateRegistry bound in — this
-   * function only ever calls `.send()`, never renders a template directly. */
-  notifications: NotificationChannel;
+  /** B10: enqueues onto the shared `notification-dispatch` BullMQ queue
+   * (`apps/api`'s worker-hosted consumer processes it, reusing the one
+   * shared `NOTIFICATION_CHANNEL`/`TemplateRegistry` every module in that
+   * process already registers templates against) rather than calling a
+   * `NotificationChannel` directly — this is what gives the expiry-warning
+   * email real retry (BullMQ `attempts`/`backoff`) instead of the previous
+   * fire-and-forget send, and what makes a transient failure here no
+   * longer silently swallow the warning for good (see
+   * `dispatchWarningIfDue`'s own comment on the `lastWarningThresholdDays`
+   * timing fix this enables). */
+  enqueueDispatch: (payload: NotificationDispatchJobPayload, jobId?: string) => Promise<void>;
   redis: { set: (key: string, value: string) => Promise<unknown> };
   now?: () => Date;
 }
@@ -62,88 +70,98 @@ export async function runSubscriptionExpirySweep(deps: SubscriptionExpirySweepDe
   };
 
   for (const school of schools) {
-    const subscription = await withTenant(prisma, school.id, (tx) =>
-      tx.subscription.findFirst({
-        where: { schoolId: school.id, status: { in: ['PENDING', 'ACTIVE', 'EXPIRING'] } },
-        orderBy: { createdAt: 'desc' },
-      }),
-    );
-
-    let subscriptionStatus = subscription?.status ?? 'PENDING';
-
-    // PENDING (never activated yet — no ActivationGrant redeemed) is
-    // excluded from both time-based transitions and warning dispatch: it
-    // hasn't started, so "expires soon" is meaningless and would otherwise
-    // wrongly email a School Admin who is likely still INVITED with no
-    // usable account yet.
-    if (subscription && subscription.status !== 'PENDING') {
-      const expiringAt = new Date(
-        subscription.expiresAt.getTime() - SUBSCRIPTION_EXPIRING_WINDOW_DAYS * MS_PER_DAY,
+    // B10: one school's failure (a transient DB hiccup, an enqueue error
+    // not itself caught deeper down, ...) must not abort the sweep for
+    // every other school — previously an uncaught rejection anywhere in
+    // this loop body propagated straight out of runSubscriptionExpirySweep
+    // itself. Log-and-continue, matching every BullMQ worker/queue
+    // 'error'-handler precedent elsewhere in this codebase.
+    try {
+      const subscription = await withTenant(prisma, school.id, (tx) =>
+        tx.subscription.findFirst({
+          where: { schoolId: school.id, status: { in: ['PENDING', 'ACTIVE', 'EXPIRING'] } },
+          orderBy: { createdAt: 'desc' },
+        }),
       );
 
-      if (subscription.status === 'ACTIVE' && now >= expiringAt) {
-        subscriptionStatus = 'EXPIRING';
-      }
-      if (
-        (subscription.status === 'ACTIVE' || subscription.status === 'EXPIRING') &&
-        now >= subscription.expiresAt
-      ) {
-        subscriptionStatus = 'EXPIRED';
-      }
+      let subscriptionStatus = subscription?.status ?? 'PENDING';
 
-      if (subscriptionStatus !== subscription.status) {
-        await withTenant(prisma, school.id, (tx) =>
-          tx.subscription.update({
-            where: { id: subscription.id },
-            data: { status: subscriptionStatus },
-          }),
+      // PENDING (never activated yet — no ActivationGrant redeemed) is
+      // excluded from both time-based transitions and warning dispatch: it
+      // hasn't started, so "expires soon" is meaningless and would otherwise
+      // wrongly email a School Admin who is likely still INVITED with no
+      // usable account yet.
+      if (subscription && subscription.status !== 'PENDING') {
+        const expiringAt = new Date(
+          subscription.expiresAt.getTime() - SUBSCRIPTION_EXPIRING_WINDOW_DAYS * MS_PER_DAY,
         );
+
+        if (subscription.status === 'ACTIVE' && now >= expiringAt) {
+          subscriptionStatus = 'EXPIRING';
+        }
+        if (
+          (subscription.status === 'ACTIVE' || subscription.status === 'EXPIRING') &&
+          now >= subscription.expiresAt
+        ) {
+          subscriptionStatus = 'EXPIRED';
+        }
+
+        if (subscriptionStatus !== subscription.status) {
+          await withTenant(prisma, school.id, (tx) =>
+            tx.subscription.update({
+              where: { id: subscription.id },
+              data: { status: subscriptionStatus },
+            }),
+          );
+        }
+
+        await dispatchWarningIfDue(deps, school.id, subscription, now);
       }
 
-      await dispatchWarningIfDue(deps, school.id, subscription, now);
-    }
+      const derivedStatus = resolveSchoolStatus(subscriptionStatus, school.platformOverride);
+      const currentSchool = await prisma.school.findUniqueOrThrow({
+        where: { id: school.id },
+        select: { status: true },
+      });
+      if (derivedStatus !== currentSchool.status) {
+        await prisma.school.update({ where: { id: school.id }, data: { status: derivedStatus } });
+      }
 
-    const derivedStatus = resolveSchoolStatus(subscriptionStatus, school.platformOverride);
-    const currentSchool = await prisma.school.findUniqueOrThrow({
-      where: { id: school.id },
-      select: { status: true },
-    });
-    if (derivedStatus !== currentSchool.status) {
-      await prisma.school.update({ where: { id: school.id }, data: { status: derivedStatus } });
-    }
+      switch (derivedStatus) {
+        case 'ACTIVE':
+          metrics.activeSchools += 1;
+          break;
+        case 'PROVISIONAL':
+          metrics.provisionalSchools += 1;
+          break;
+        case 'SUSPENDED':
+          metrics.suspendedSchools += 1;
+          break;
+        case 'EXPIRED':
+          metrics.expiredSchools += 1;
+          break;
+        case 'DEACTIVATED':
+          metrics.deactivatedSchools += 1;
+          break;
+      }
 
-    switch (derivedStatus) {
-      case 'ACTIVE':
-        metrics.activeSchools += 1;
-        break;
-      case 'PROVISIONAL':
-        metrics.provisionalSchools += 1;
-        break;
-      case 'SUSPENDED':
-        metrics.suspendedSchools += 1;
-        break;
-      case 'EXPIRED':
-        metrics.expiredSchools += 1;
-        break;
-      case 'DEACTIVATED':
-        metrics.deactivatedSchools += 1;
-        break;
+      const [students, teachers] = await Promise.all([
+        withTenant(prisma, school.id, (tx) =>
+          tx.roleAssignment.count({
+            where: { schoolId: school.id, role: 'STUDENT', status: 'ACTIVE' },
+          }),
+        ),
+        withTenant(prisma, school.id, (tx) =>
+          tx.roleAssignment.count({
+            where: { schoolId: school.id, role: 'TEACHER', status: 'ACTIVE' },
+          }),
+        ),
+      ]);
+      metrics.students += students;
+      metrics.teachers += teachers;
+    } catch (err) {
+      console.error(`[worker] subscription-expiry sweep failed for school ${school.id}:`, err);
     }
-
-    const [students, teachers] = await Promise.all([
-      withTenant(prisma, school.id, (tx) =>
-        tx.roleAssignment.count({
-          where: { schoolId: school.id, role: 'STUDENT', status: 'ACTIVE' },
-        }),
-      ),
-      withTenant(prisma, school.id, (tx) =>
-        tx.roleAssignment.count({
-          where: { schoolId: school.id, role: 'TEACHER', status: 'ACTIVE' },
-        }),
-      ),
-    ]);
-    metrics.students += students;
-    metrics.teachers += teachers;
   }
 
   await deps.redis.set(PLATFORM_METRICS_CACHE_KEY, JSON.stringify(metrics));
@@ -183,17 +201,59 @@ async function dispatchWarningIfDue(
   );
   const school = await prisma.school.findUniqueOrThrow({ where: { id: schoolId } });
 
+  // B10: the in-app Notification row is written unconditionally and
+  // best-effort — a School Admin sees "subscription expiring" on next
+  // login regardless of whether the out-of-band email below ever
+  // succeeds. Never gates lastWarningThresholdDays below.
+  if (admin) {
+    try {
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.notification.create({
+          data: {
+            schoolId,
+            recipientUserId: admin.membership.userId,
+            type: 'SUBSCRIPTION_EXPIRING',
+            title: 'Subscription expiring soon',
+            content: `${school.name}'s subscription expires in ${daysRemaining} day(s) (${subscription.expiresAt.toISOString().slice(0, 10)}).`,
+          },
+        }),
+      );
+    } catch (err) {
+      console.error(
+        `[worker] failed to persist SUBSCRIPTION_EXPIRING notification for ${schoolId}:`,
+        err,
+      );
+    }
+  }
+
+  // B10: enqueued for retry (see SubscriptionExpirySweepDeps's own doc
+  // comment) rather than sent directly and synchronously as before.
+  // lastWarningThresholdDays is set only on a *successful enqueue* — not
+  // on delivery, which BullMQ's own retry/backoff now owns — so a
+  // transient failure to even hand this off is retried on the next sweep
+  // tick instead of being silently marked "handled" forever (the real bug
+  // the previous unconditional update had: any exception here, from a
+  // network blip to a malformed template, meant this exact threshold
+  // crossing would never be attempted again).
   if (admin?.membership.user.email) {
-    await deps.notifications.send({
-      to: admin.membership.user.email,
-      template: SUBSCRIPTION_WARNING_TEMPLATE_NAME,
-      variables: {
-        displayName: admin.membership.user.displayName,
-        schoolName: school.name,
-        expiresAt: subscription.expiresAt.toISOString(),
-        daysRemaining,
-      },
-    });
+    try {
+      await deps.enqueueDispatch(
+        {
+          to: admin.membership.user.email,
+          template: SUBSCRIPTION_WARNING_TEMPLATE_NAME,
+          variables: {
+            displayName: admin.membership.user.displayName,
+            schoolName: school.name,
+            expiresAt: subscription.expiresAt.toISOString(),
+            daysRemaining,
+          },
+        },
+        `subscription-warning-${subscription.id}-${threshold}`,
+      );
+    } catch (err) {
+      console.error(`[worker] failed to enqueue subscription warning for ${schoolId}:`, err);
+      return; // do not mark this threshold as handled — retry next tick.
+    }
   }
 
   await withTenant(prisma, schoolId, (tx) =>

@@ -114,6 +114,24 @@ export function ClassesScreen({ basePath }: { basePath: string }) {
     { id: 'arm', header: 'Arm', cell: (row) => row.arm },
     { id: 'department', header: 'Department', cell: (row) => departmentName(row.departmentId) },
     { id: 'status', header: 'Status', cell: (row) => <ClassStatusBadge value={row.status} /> },
+    {
+      id: 'view',
+      header: '',
+      align: 'right' as const,
+      // The class name above is a link too, but it reads as plain text next
+      // to a badge with no other visibly-interactive control in the row —
+      // found via a real user unable to locate a way into Class Detail at
+      // all, with only the "..." actions menu (Edit/Archive/Delete, no
+      // "View") standing out as clickable. Mirrors `teachers-screen.tsx`'s
+      // own "Assignments" button precedent: an unmistakable, explicitly-
+      // labeled control alongside the subtler name-link, not a replacement
+      // for it.
+      cell: (row: ClassRow) => (
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`${basePath}/classes/${row.id}`}>View</Link>
+        </Button>
+      ),
+    },
     ...(canManage
       ? [
           {

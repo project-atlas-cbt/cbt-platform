@@ -19,6 +19,7 @@ import {
 } from './question-scope.util.js';
 import { validateQuestionRevisionForSubmit } from './question-validation.util.js';
 import { TopicService } from './topic.service.js';
+import type { SubjectListResponseDto } from '../academics/dto/subject.dto.js';
 import type {
   CreateQuestionDto,
   QuestionCountsResponseDto,
@@ -145,6 +146,65 @@ export class QuestionService {
     });
 
     return this.get(schoolId, actor, question);
+  }
+
+  /**
+   * Gap-closure found via live testing, not by inspection: the Question
+   * Editor's Subject picker (`MetadataPanel`) called `GET
+   * /academics/subjects`, gated by `schoolConfig.subject.view` —
+   * `denied()` for TEACHER per `02`'s own "Manage subjects" row (matching
+   * F6's confirmed "Teacher gets no schoolConfig.* access" decision, a
+   * deliberate call about the Academic Structure *workspace*). That denial
+   * is correct there; it also left the picker permanently empty, since
+   * it's the exact same endpoint — making question authoring (a genuinely
+   * granted TEACHER capability, `questionBank.create`: ASSIGNED)
+   * impossible in practice regardless of any real assignment.
+   *
+   * Rather than widen `schoolConfig.subject.view` (a School Configuration
+   * grant, deliberately confirmed Teacher-denied at F6), this reuses the
+   * already-correctly-scoped `questionBank.create` permission and derives
+   * the list directly from the teacher's real `TeacherAssignment` rows —
+   * the identical ADR-0001 join `requireTeacherAssignedScope` already
+   * checks at save time (`question-scope.util.ts`), applied here to
+   * *populate* the picker instead of only validating it after the fact.
+   * A side benefit over F9's originally planned "unconstrained" picker: it
+   * now only ever offers subjects the teacher can actually save against,
+   * closing that phase's own recorded "no client-side teacher-assignment
+   * data is reachable" Candidate/Deferred note in the same pass. `Level`
+   * stays unconstrained (all `CLASS_LEVELS`) — an out-of-scope subject+level
+   * combination still surfaces via `outOfScopeError`, an already-designed-
+   * for path, so narrowing Level too is left out of this fix's scope.
+   */
+  async myAssignedSubjects(
+    schoolId: string,
+    actor: AuthorizedActor,
+  ): Promise<SubjectListResponseDto> {
+    const schoolActor = requireSchoolActor(actor);
+    const teacherProfile = await requireTeacherProfile(schoolId, schoolActor.membershipId);
+
+    const assignments = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherAssignment.findMany({
+        where: { schoolId, teacherProfileId: teacherProfile.id, status: 'ACTIVE' },
+        select: { classSubject: { select: { subject: true } } },
+      }),
+    );
+
+    const bySubjectId = new Map<string, (typeof assignments)[number]['classSubject']['subject']>();
+    for (const assignment of assignments) {
+      bySubjectId.set(assignment.classSubject.subject.id, assignment.classSubject.subject);
+    }
+
+    return {
+      subjects: [...bySubjectId.values()]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          departmentId: s.departmentId,
+          status: s.status,
+        })),
+    };
   }
 
   async get(schoolId: string, actor: AuthorizedActor, id: string): Promise<QuestionResponseDto> {

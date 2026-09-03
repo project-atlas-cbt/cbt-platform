@@ -25,6 +25,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { parseCookie } from 'cookie';
 import { prisma, withTenant } from '@atlas/db';
+import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
@@ -230,7 +231,9 @@ afterAll(async () => {
       tx.teacherProfile.deleteMany({ where: { schoolId } }),
     );
     await withTenant(prisma, schoolId, (tx) => tx.mediaAsset.deleteMany({ where: { schoolId } }));
-    await withTenant(prisma, schoolId, (tx) => tx.auditEvent.deleteMany({ where: { schoolId } }));
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.deleteMany({ where: { schoolId } }),
+    ).catch(() => undefined);
     await withTenant(prisma, schoolId, (tx) =>
       tx.roleAssignment.deleteMany({ where: { schoolId } }),
     );
@@ -239,7 +242,7 @@ afterAll(async () => {
     );
   }
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
-  await prisma.school.deleteMany({ where: { id: { in: createdSchoolIds } } });
+  await safeDeleteSchools(prisma, createdSchoolIds);
 });
 
 /** One full school + admin + activated session + department + class,

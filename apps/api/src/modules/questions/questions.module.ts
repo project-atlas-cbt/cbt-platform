@@ -10,6 +10,7 @@ import { QuestionMediaController } from './question-media.controller.js';
 import { QuestionMediaService } from './question-media.service.js';
 import { TopicController } from './topic.controller.js';
 import { TopicService } from './topic.service.js';
+import { QuestionsAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 
 /**
  * `08 §5`'s Question Bank domain (B8) — `Question`/`QuestionRevision`/
@@ -38,7 +39,13 @@ import { TopicService } from './topic.service.js';
     QuestionMediaController,
     TopicController,
   ],
-  providers: [QuestionService, QuestionRevisionService, QuestionMediaService, TopicService],
+  providers: [
+    QuestionService,
+    QuestionRevisionService,
+    QuestionMediaService,
+    TopicService,
+    QuestionsAuditActionRegistrationProvider,
+  ],
   exports: [QuestionService, TopicService],
 })
 export class QuestionsModule {}

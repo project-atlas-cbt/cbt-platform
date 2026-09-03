@@ -32,12 +32,12 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 <details><summary>Notes</summary>
 
 - **View subscription status / SCHOOL_ADMIN:** View own school.
-- **View school metrics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View school metrics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View school metrics / MODERATOR:** LIMITED (read-only placeholder): Exact "Limited" metrics subset finalized when B19 builds the dashboards.
 - **Platform audit/logs / SCHOOL_ADMIN:** Own school.
-- **Platform audit/logs / MODERATOR:** LIMITED (read-only placeholder): B10 defines the exact audit subset visible to Moderator.
-- **Platform audit/logs / HOD:** LIMITED (read-only placeholder): B10 defines the exact audit subset visible to HOD.
-- **Platform audit/logs / TEACHER:** LIMITED (read-only placeholder): B10; mirrors the Audit/Security section's own "Own actions" row.
+- **Platform audit/logs / MODERATOR:** LIMITED (read-only placeholder): Unreachable via this endpoint — see audit.viewLog.
+- **Platform audit/logs / HOD:** LIMITED (read-only placeholder): Unreachable via this endpoint — see audit.viewLog.
+- **Platform audit/logs / TEACHER:** LIMITED (read-only placeholder): Unreachable via this endpoint — see audit.viewLog.
 
 </details>
 
@@ -73,18 +73,18 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Set primary colour / SCHOOL_ADMIN:** "Full / One-time" resolved as freely-editable, not a one-time lock (audit finding A-18) — School Admin may change the primary colour at any time; every change is audited (AuditService, action SCHOOL_BRANDING_CHANGED).
 - **Manage school onboarding wizard progress / SOFTWARE_ADMIN:** R1.
 - **Manage school onboarding wizard progress / SCHOOL_ADMIN:** F4: the ten-step onboarding wizard (03 §3, 05 §5.1-5.2) is School-Admin-only — never delegated to any other school role.
-- **Manage departments (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage departments (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manage departments (derived split: view) / HOD:** Matrix cell is "View" — whole-school visibility, not department-limited.
 - **Manage departments (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1: school structural/administrative setup, not academic content — flagged for review, not itself ADR-decided.
-- **Manage classes (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage classes (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manage classes (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
-- **Manage subjects (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage subjects (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manage subjects (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
-- **Manage academic sessions (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage academic sessions (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manage academic sessions (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
-- **Manage terms (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Manage terms (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manage terms (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
-- **View school settings (result policy) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View school settings (result policy) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manage school settings / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
 
 </details>
@@ -99,7 +99,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 <details><summary>Notes</summary>
 
-- **View branding (logo + primary colour + derived palette) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View branding (logo + primary colour + derived palette) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Upload media asset (question image/diagram/other) / SOFTWARE_ADMIN:** ADR-0012: content authoring denied to Software Admin.
 - **Get signed access URL for a non-logo media asset / SOFTWARE_ADMIN:** Matches the established "Software Admin: read + audited break-glass" default for school content elsewhere in this table.
 - **Get signed access URL for a non-logo media asset / STUDENT:** Students receive media via the attempt package (ADR-0021, B13), never this endpoint.
@@ -135,28 +135,28 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 <details><summary>Notes</summary>
 
-- **View moderators / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View moderators / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Create Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Remove Moderator / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
-- **View HODs / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View HODs / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Create HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Remove HOD / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Reset HOD credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
-- **View teachers / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View teachers / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Create Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Deactivate Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Reset Teacher credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
-- **View students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Create Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Deactivate Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Reset Student credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Import Teachers / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Import Students / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
-- **Export Users / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export Users / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 
 </details>
 
@@ -181,7 +181,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Assign student → class / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Move student between classes / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Move student between classes / HOD:** R11: mechanism is ADR-0017's HOD request/approval subsystem, explicitly deferred (not part of the immediate implementation) — DENIED, fail-closed, until that phase lands.
-- **View assignments / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View assignments / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View assignments / TEACHER:** Their own assignment records, not the ASSIGNED-scope resources those assignments grant access to.
 
 </details>
@@ -207,14 +207,14 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 <details><summary>Notes</summary>
 
-- **View question bank / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View question bank / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Comment on question (derived split: view) / TEACHER:** Comments on their own submitted question.
 - **Comment on question (derived split: create) / TEACHER:** "Respond to feedback" — replies on their own question's review thread, not an initiating review comment.
 - **Archive question / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
 - **Archive question / TEACHER:** "Own/assigned" — an author may archive their own question.
 - **Import questions / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Import questions / SCHOOL_ADMIN:** LIMITED (read-only placeholder): B7/B8 — School Admin's import boundary is not yet finalized (this is a CREATE-shaped row; "Limited" is recorded here as a placeholder pending that phase, not a working read-only grant).
-- **Export questions / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export questions / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Export questions / SCHOOL_ADMIN:** LIMITED (read-only placeholder): B8.
 
 </details>
@@ -235,11 +235,11 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 - **Create Draft / TEACHER:** Duplicate of "Create question" — gated by subject/class assignment before the question exists to be OWNED.
 - **Submit / TEACHER:** Duplicate of "Submit question for review".
-- **Under Review (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Approved (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Rejected (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Under Review (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Approved (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Rejected (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Rejected (derived split: edit & resubmit) / TEACHER:** Only while question.status = REJECTED — resource-state gate enforced by QuestionRevisionService.createRevision() (B8), reachable for real once B9's review endpoints actually produce a REJECTED revision.
-- **Archived (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Archived (view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 
 </details>
 
@@ -266,7 +266,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 <details><summary>Notes</summary>
 
-- **View all exams / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View all exams / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View all exams / STUDENT:** "Available only" — ADR-0006's eligibility predicate; B12 wires the actual filter.
 - **Create exam / SCHOOL_ADMIN:** R12/C-07: exam authoring is a Teacher capability; School Admin holds administration rights on existing exams instead.
 - **Create exam / MODERATOR:** R12/C-07.
@@ -293,10 +293,10 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 <details><summary>Notes</summary>
 
 - **Exam Control Center / SOFTWARE_ADMIN:** R4: operating a school's live Exam Control Center is a school-academic write surface; SA reads (viewing live status) are separately permitted+audited — see the view-* rows below.
-- **View registered students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **View live attempts / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **See who has started / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **See who has completed / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View registered students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **View live attempts / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **See who has started / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **See who has completed / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manually allow student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Grant makeup access / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
 - **Mark/confirm absence / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
@@ -341,15 +341,15 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 <details><summary>Notes</summary>
 
-- **View exam results / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View exam results / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View exam results / STUDENT:** "Own published results" — gated by ResultPublication (ADR-0010); B17 wires the publication-state check.
-- **View individual student result / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **View class performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **View subject performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View individual student result / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **View class performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **View subject performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View subject performance / TEACHER:** "Own subjects".
-- **View question performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **View question performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View question performance / TEACHER:** "Own exams".
-- **Export CSV / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export CSV / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 
 </details>
 
@@ -367,13 +367,13 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 <details><summary>Notes</summary>
 
-- **School-wide analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Department analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **School-wide analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Department analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Department analytics / MODERATOR:** LIMITED (read-only placeholder): Exact "Limited" department-analytics subset for Moderator finalized in B19.
-- **Class analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Student performance history / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Question difficulty analysis / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Exam completion statistics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Class analytics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Student performance history / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Question difficulty analysis / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Exam completion statistics / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 
 </details>
 
@@ -389,13 +389,13 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 <details><summary>Notes</summary>
 
-- **Export school data / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Export exam results / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Export student list / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **Export question bank / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Export school data / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Export exam results / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Export student list / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **Export question bank / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Export question bank / SCHOOL_ADMIN:** LIMITED (read-only placeholder): B8.
 - **Export question bank / TEACHER:** "Own subjects".
-- **Generate printable reports / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Generate printable reports / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Generate printable reports / STUDENT:** "if enabled" — school-setting gated, same family as studentCbt.viewPreviousResults.
 
 </details>
@@ -412,9 +412,9 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 <details><summary>Notes</summary>
 
-- **Promote students (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Promote students (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Promote students (derived split: execute) / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
-- **Review promotion list / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
+- **Review promotion list / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Move student to next session / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Graduate/archive students / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 
@@ -438,18 +438,19 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Audit / Security
 
-| Action               | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD           | TEACHER | STUDENT | Awaiting                                                                                               |
-| -------------------- | -------------- | ------------ | --------- | ------------- | ------- | ------- | ------------------------------------------------------------------------------------------------------ |
-| View audit log       | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | SELF ⚠️ | SELF ⚠️ | AuditEvent retrieval endpoint (B10) — the write-path primitive itself ships with B2, see AuditService. |
-| Reset own password   | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    |                                                                                                        |
-| Change own profile   | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    | No profile-edit endpoint yet (future phase); identity read already exists (auth/me).                   |
-| Force password reset | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT ⚠️ | —       | —       |                                                                                                        |
-| Deactivate account   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —             | —       | —       |                                                                                                        |
+| Action                                                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD           | TEACHER | STUDENT | Awaiting                                                                             |
+| ------------------------------------------------------------ | -------------- | ------------ | --------- | ------------- | ------- | ------- | ------------------------------------------------------------------------------------ |
+| View audit log                                               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT    | SELF ⚠️ | SELF ⚠️ |                                                                                      |
+| View own notifications — not a literal 02 matrix row.        | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    |                                                                                      |
+| Mark own notification(s) read — not a literal 02 matrix row. | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    |                                                                                      |
+| Reset own password                                           | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    |                                                                                      |
+| Change own profile                                           | SELF           | SELF         | SELF      | SELF          | SELF    | SELF    | No profile-edit endpoint yet (future phase); identity read already exists (auth/me). |
+| Force password reset                                         | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT ⚠️ | —       | —       |                                                                                      |
+| Deactivate account                                           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —             | —       | —       |                                                                                      |
 
 <details><summary>Notes</summary>
 
-- **View audit log / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — B10 wires the read-audit emission.
-- **View audit log / MODERATOR:** LIMITED (read-only placeholder): B10.
+- **View audit log / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View audit log / TEACHER:** "Own actions".
 - **View audit log / STUDENT:** "Own account".
 - **Force password reset / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.

@@ -3,9 +3,11 @@ import type { TemplateRegistry } from '@atlas/notifications';
 import { NOTIFICATION_TEMPLATE_REGISTRY } from '../../notifications/notifications.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { OperationsModule } from '../operations/operations.module.js';
+import { NotificationCenterModule } from '../notification-center/notification-center.module.js';
 import { QuestionReviewController } from './question-review.controller.js';
 import { QuestionReviewService } from './question-review.service.js';
 import { registerQuestionReviewTemplates } from './templates.js';
+import { QuestionReviewAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 
 /**
  * `question-review.v1` (B9) — the HOD approve/reject/request-changes
@@ -28,9 +30,9 @@ import { registerQuestionReviewTemplates } from './templates.js';
  * `NOTIFICATION_CHANNEL`/`NOTIFICATION_TEMPLATE_REGISTRY`.
  */
 @Module({
-  imports: [IdentityModule, OperationsModule],
+  imports: [IdentityModule, OperationsModule, NotificationCenterModule],
   controllers: [QuestionReviewController],
-  providers: [QuestionReviewService],
+  providers: [QuestionReviewService, QuestionReviewAuditActionRegistrationProvider],
 })
 export class QuestionReviewModule implements OnModuleInit {
   constructor(

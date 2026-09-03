@@ -11,7 +11,7 @@
  * than a separate test connection).
  */
 import { randomUUID } from 'node:crypto';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import { runSubscriptionExpirySweep } from './subscription-expiry.queue.js';
 import { PLATFORM_METRICS_CACHE_KEY, type PlatformMetricsSnapshot } from '@atlas/domain';
@@ -88,16 +88,22 @@ async function cleanupSchool(schoolId: string): Promise<void> {
   if (membership) await prisma.user.delete({ where: { id: membership.userId } });
 }
 
-class FakeNotificationChannel {
-  sent: Array<{ to: string; template: string; variables?: Record<string, unknown> }> = [];
-  send(message: {
-    to: string;
-    template: string;
-    variables?: Record<string, unknown>;
-  }): Promise<void> {
-    this.sent.push(message);
+/** B10: `SubscriptionExpirySweepDeps` now enqueues onto the shared
+ * notification-dispatch retry queue instead of calling a `NotificationChannel`
+ * directly — this fake records every `enqueueDispatch(...)` call the same
+ * way the old `FakeNotificationChannel` recorded `.send(...)` calls. */
+class FakeDispatchQueue {
+  enqueued: Array<{
+    payload: { to: string; template: string; variables?: Record<string, unknown> };
+    jobId: string | undefined;
+  }> = [];
+  enqueueDispatch = (
+    payload: { to: string; template: string; variables?: Record<string, unknown> },
+    jobId?: string,
+  ): Promise<void> => {
+    this.enqueued.push({ payload, jobId });
     return Promise.resolve();
-  }
+  };
 }
 
 class FakeRedis {
@@ -125,16 +131,16 @@ describe.skipIf(!ownerDatabaseUrl)('subscription-expiry sweep (B3)', () => {
     });
     schools.push(school);
 
-    const notifications = new FakeNotificationChannel();
+    const dispatch = new FakeDispatchQueue();
     const redis = new FakeRedis();
-    await runSubscriptionExpirySweep({ notifications, redis });
+    await runSubscriptionExpirySweep({ enqueueDispatch: dispatch.enqueueDispatch, redis });
 
     const subscription = await withTenant(prisma, school.schoolId, (tx) =>
       tx.subscription.findUniqueOrThrow({ where: { id: school.subscriptionId } }),
     );
     expect(subscription.status).toBe('PENDING');
     expect(subscription.lastWarningThresholdDays).toBeNull();
-    expect(notifications.sent).toHaveLength(0);
+    expect(dispatch.enqueued).toHaveLength(0);
 
     const schoolRow = await prisma.school.findUniqueOrThrow({ where: { id: school.schoolId } });
     expect(schoolRow.status).toBe('PROVISIONAL');
@@ -148,7 +154,7 @@ describe.skipIf(!ownerDatabaseUrl)('subscription-expiry sweep (B3)', () => {
     schools.push(school);
 
     await runSubscriptionExpirySweep({
-      notifications: new FakeNotificationChannel(),
+      enqueueDispatch: new FakeDispatchQueue().enqueueDispatch,
       redis: new FakeRedis(),
     });
 
@@ -168,7 +174,7 @@ describe.skipIf(!ownerDatabaseUrl)('subscription-expiry sweep (B3)', () => {
     schools.push(school);
 
     await runSubscriptionExpirySweep({
-      notifications: new FakeNotificationChannel(),
+      enqueueDispatch: new FakeDispatchQueue().enqueueDispatch,
       redis: new FakeRedis(),
     });
 
@@ -188,7 +194,7 @@ describe.skipIf(!ownerDatabaseUrl)('subscription-expiry sweep (B3)', () => {
     schools.push(school);
 
     await runSubscriptionExpirySweep({
-      notifications: new FakeNotificationChannel(),
+      enqueueDispatch: new FakeDispatchQueue().enqueueDispatch,
       redis: new FakeRedis(),
     });
 
@@ -207,12 +213,28 @@ describe.skipIf(!ownerDatabaseUrl)('subscription-expiry sweep (B3)', () => {
     });
     schools.push(school);
 
-    const notifications = new FakeNotificationChannel();
-    await runSubscriptionExpirySweep({ notifications, redis: new FakeRedis() });
+    const dispatch = new FakeDispatchQueue();
+    await runSubscriptionExpirySweep({
+      enqueueDispatch: dispatch.enqueueDispatch,
+      redis: new FakeRedis(),
+    });
 
-    expect(notifications.sent).toHaveLength(1);
-    expect(notifications.sent[0]?.to).toBe(school.adminEmail);
-    expect(notifications.sent[0]?.template).toBe('platform-subscription-warning');
+    expect(dispatch.enqueued).toHaveLength(1);
+    expect(dispatch.enqueued[0]?.payload.to).toBe(school.adminEmail);
+    expect(dispatch.enqueued[0]?.payload.template).toBe('platform-subscription-warning');
+    // Real BullMQ retry dedup key, per SubscriptionExpirySweepDeps's own
+    // doc comment — jobId, not a second in-app guard.
+    expect(dispatch.enqueued[0]?.jobId).toBe(`subscription-warning-${school.subscriptionId}-7`);
+
+    // B10: a real in-app Notification row for the School Admin, alongside
+    // the enqueued out-of-band email.
+    const notifications = await withTenant(prisma, school.schoolId, (tx) =>
+      tx.notification.findMany({
+        where: { schoolId: school.schoolId, type: 'SUBSCRIPTION_EXPIRING' },
+      }),
+    );
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]?.status).toBe('UNREAD');
 
     const afterFirst = await withTenant(prisma, school.schoolId, (tx) =>
       tx.subscription.findUniqueOrThrow({ where: { id: school.subscriptionId } }),
@@ -220,13 +242,19 @@ describe.skipIf(!ownerDatabaseUrl)('subscription-expiry sweep (B3)', () => {
     expect(afterFirst.lastWarningThresholdDays).toBe(7);
 
     // A second sweep tick with no time having passed must not re-send.
-    await runSubscriptionExpirySweep({ notifications, redis: new FakeRedis() });
-    expect(notifications.sent).toHaveLength(1);
+    await runSubscriptionExpirySweep({
+      enqueueDispatch: dispatch.enqueueDispatch,
+      redis: new FakeRedis(),
+    });
+    expect(dispatch.enqueued).toHaveLength(1);
   });
 
   it('writes a platform metrics snapshot to the provided redis client', async () => {
     const redis = new FakeRedis();
-    await runSubscriptionExpirySweep({ notifications: new FakeNotificationChannel(), redis });
+    await runSubscriptionExpirySweep({
+      enqueueDispatch: new FakeDispatchQueue().enqueueDispatch,
+      redis,
+    });
 
     const raw = redis.store.get(PLATFORM_METRICS_CACHE_KEY);
     expect(raw).toBeDefined();
@@ -235,5 +263,92 @@ describe.skipIf(!ownerDatabaseUrl)('subscription-expiry sweep (B3)', () => {
     expect(snapshot.examsConducted).toBe(0);
     expect(snapshot.attempts).toBe(0);
     expect(typeof snapshot.computedAt).toBe('string');
+  });
+
+  it('B10 fix: a failed enqueue does not mark the threshold as handled — the next tick retries it', async () => {
+    const school = await createFixtureSchool({
+      status: 'ACTIVE',
+      expiresAt: new Date(Date.now() + 6 * DAY_MS),
+    });
+    schools.push(school);
+
+    const failing = new FakeDispatchQueue();
+    failing.enqueueDispatch = () => Promise.reject(new Error('simulated Redis outage'));
+    await runSubscriptionExpirySweep({
+      enqueueDispatch: failing.enqueueDispatch,
+      redis: new FakeRedis(),
+    });
+
+    const afterFailedTick = await withTenant(prisma, school.schoolId, (tx) =>
+      tx.subscription.findUniqueOrThrow({ where: { id: school.subscriptionId } }),
+    );
+    // The old bug: this would already be 7 here, even though the send/
+    // enqueue never actually succeeded — silently losing the warning
+    // forever. The in-app Notification, by contrast, is written
+    // unconditionally regardless of enqueue outcome.
+    expect(afterFailedTick.lastWarningThresholdDays).toBeNull();
+    const notifications = await withTenant(prisma, school.schoolId, (tx) =>
+      tx.notification.findMany({
+        where: { schoolId: school.schoolId, type: 'SUBSCRIPTION_EXPIRING' },
+      }),
+    );
+    expect(notifications).toHaveLength(1);
+
+    // A later tick, once the queue is healthy again, successfully retries.
+    const healthy = new FakeDispatchQueue();
+    await runSubscriptionExpirySweep({
+      enqueueDispatch: healthy.enqueueDispatch,
+      redis: new FakeRedis(),
+    });
+    expect(healthy.enqueued).toHaveLength(1);
+    const afterRetry = await withTenant(prisma, school.schoolId, (tx) =>
+      tx.subscription.findUniqueOrThrow({ where: { id: school.subscriptionId } }),
+    );
+    expect(afterRetry.lastWarningThresholdDays).toBe(7);
+  });
+
+  it('B10 fix: one school throwing does not abort the sweep for the others', async () => {
+    const failingSchool = await createFixtureSchool({
+      status: 'ACTIVE',
+      expiresAt: new Date(Date.now() + 300 * DAY_MS),
+    });
+    schools.push(failingSchool);
+    const healthySchool = await createFixtureSchool({
+      status: 'ACTIVE',
+      expiresAt: new Date(Date.now() - DAY_MS),
+    });
+    schools.push(healthySchool);
+
+    // Deterministically force one specific school's iteration to throw
+    // partway through, without corrupting real fixture data — a spy on the
+    // real `prisma.school.findUniqueOrThrow` (the same call every school's
+    // iteration makes to re-read its derived status) that only misbehaves
+    // for `failingSchool`.
+    const originalFindUniqueOrThrow = prisma.school.findUniqueOrThrow.bind(prisma.school);
+    const spy = vi
+      .spyOn(prisma.school, 'findUniqueOrThrow')
+      .mockImplementation((args: Parameters<typeof prisma.school.findUniqueOrThrow>[0]) => {
+        const id = (args as { where?: { id?: string } })?.where?.id;
+        if (id === failingSchool.schoolId) {
+          throw new Error('simulated failure for this one school');
+        }
+        return originalFindUniqueOrThrow(args);
+      });
+
+    try {
+      await runSubscriptionExpirySweep({
+        enqueueDispatch: new FakeDispatchQueue().enqueueDispatch,
+        redis: new FakeRedis(),
+      });
+    } finally {
+      spy.mockRestore();
+    }
+
+    // The healthy school's own transition still ran, proving the loop
+    // didn't abort when the other school's iteration threw.
+    const healthySubscription = await withTenant(prisma, healthySchool.schoolId, (tx) =>
+      tx.subscription.findUniqueOrThrow({ where: { id: healthySchool.subscriptionId } }),
+    );
+    expect(healthySubscription.status).toBe('EXPIRED');
   });
 });

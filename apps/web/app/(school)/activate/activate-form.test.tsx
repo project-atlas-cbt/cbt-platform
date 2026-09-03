@@ -61,6 +61,16 @@ describe('ActivateForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/not valid for this school/i);
   });
 
+  it('shows a specific message for a deactivated school', async () => {
+    mockPost.mockReturnValueOnce(
+      fail('SCHOOL_ACCESS_DEACTIVATED', 'This school has been deactivated.'),
+    );
+    render(<ActivateForm />);
+    await userEvent.type(screen.getByLabelText(/activation key/i), 'KEY-1');
+    await userEvent.click(screen.getByRole('button', { name: /verify key/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/permanently deactivated/i);
+  });
+
   it('INITIAL_ACTIVATION: verifies, sets a password, redeems, logs in, and routes to onboarding', async () => {
     mockPost.mockReturnValueOnce(
       ok({ schoolName: 'Greenfield High', purpose: 'INITIAL_ACTIVATION', requiresPassword: true }),
