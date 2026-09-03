@@ -247,21 +247,22 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 | Action                          | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                                                       |
 | ------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | -------------------------------------------------------------- |
-| View all exams                  | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | SELF ⚠️ | Exam (B11)                                                     |
-| Create exam                     | —              | —            | —         | —          | ASSIGNED | —       | Exam (B11)                                                     |
-| Edit draft exam                 | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
-| Delete draft exam               | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
-| Add questions to exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
-| Use approved questions          | —              | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       | Exam (B11)                                                     |
-| Schedule/configure availability | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
-| Configure duration              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
-| Configure randomization         | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
-| Configure attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
-| Publish/activate exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11/B12)                                                 |
+| View all exams                  | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | SELF ⚠️ |                                                                |
+| Create exam                     | —              | —            | —         | —          | ASSIGNED | —       |                                                                |
+| Edit draft exam                 | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Delete draft exam               | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Cancel exam                     | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Add questions to exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Use approved questions          | —              | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       |                                                                |
+| Schedule/configure availability | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Configure duration              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Configure randomization         | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Configure attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Publish/activate exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
 | Pause exam                      | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12) — ADR-0009: PAUSED is the UI label for OPEN→CLOSED. |
 | Close new attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12)                                                     |
 | Reopen exam                     | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12)                                                     |
-| Archive exam                    | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B11)                                                     |
+| Archive exam                    | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
 
 <details><summary>Notes</summary>
 

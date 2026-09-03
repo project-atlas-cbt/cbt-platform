@@ -1485,7 +1485,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
         '"Available only" — ADR-0006\'s eligibility predicate; B12 wires the actual filter.',
       ),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.create',
@@ -1502,7 +1501,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.editDraft',
@@ -1517,7 +1515,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.deleteDraft',
@@ -1532,7 +1529,32 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
+  },
+  {
+    // B11 gap-closure: `02`'s own Exam Management matrix never lists a
+    // "Cancel exam" row at all — roadmap DoD item 7 ("cancelling from
+    // DRAFT or READY records a reason and is audited") is real, approved
+    // scope with no permission id to attach to, mirroring the same shape
+    // of small necessary addition B6/F7/B9 each made once building the
+    // real consumer surfaced a gap the source matrix itself never
+    // enumerated. Grant shape mirrors `exam.deleteDraft` exactly — its
+    // closest conceptual sibling (an early-lifecycle, DRAFT/READY-only
+    // administrative action) — rather than `exam.archive`'s: SOFTWARE_ADMIN
+    // stays `denied()`, not break-glass, since "cancel exam" is not among
+    // ADR-0012's named break-glass examples (R4's own conservative default:
+    // only the specifically-named examples extend, nothing speculative).
+    id: 'exam.cancel',
+    section: 'Exam Management',
+    label: 'Cancel exam',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: denied(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('DEPARTMENT'),
+      TEACHER: granted('OWNED'),
+      STUDENT: denied(),
+    },
   },
   {
     id: 'exam.addQuestions',
@@ -1547,7 +1569,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.useApprovedQuestions',
@@ -1562,7 +1583,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.configureAvailability',
@@ -1577,7 +1597,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.configureDuration',
@@ -1592,7 +1611,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.configureRandomization',
@@ -1607,7 +1625,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.configureAttempts',
@@ -1622,7 +1639,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
   {
     id: 'exam.publish',
@@ -1637,7 +1653,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11/B12)',
   },
   {
     id: 'exam.pause',
@@ -1699,7 +1714,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B11)',
   },
 
   // ------------------------------------------------------------------

@@ -343,8 +343,15 @@ dialog; reject/request-changes each behind a mandatory-reason dialog; queue-orde
 instant "Next"; keyboard shortcuts), department bank oversight (`/hod/question-bank`, reusing F9's
 `QuestionBankScreen`/`QuestionDetailScreen` verbatim once a real hardcoded-path bug in the former was
 fixed), and the dashboard's pending-review widget. Every currently-open frontend phase is now closed
-out. `B11 — Exam Builder & Readiness` is next on the backend critical path; a future `F11` remains
-open once it ships.
+out. **`B11 — Exam Builder & Readiness`** is now complete too: `exams.v1` — exam construction from
+approved question revisions only, full configuration (duration/attempts/navigation/randomization/
+result policy/instructions), and the itemised (never boolean) readiness checklist gating
+`DRAFT → READY`, with the approved-revision-only rule and READY-immutability both enforced by real
+Postgres triggers, each proven independently of the service layer by a direct-Prisma-bypass test.
+ADR-0013's multi-class targeting is enforced at the service layer (mirroring `HODAssignment`'s own
+precedent for this class of cross-table check) rather than a novel schema scheme, leaving every
+already-shipped table untouched. `B12 — Exam Activation & Control` is next on the backend critical
+path; a future `F11` remains open once the frontend/backend phase-pairing default reaches it.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -3679,3 +3686,177 @@ frontend phase through F10 closed out)_.
 **Next: `B11 — Exam Builder & Readiness`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2
 → B3 → B5 → B6 → B8 → B9 → B11 → B12 → …`) — a future `F11` (Exam Builder & Readiness UI) remains
 open whenever the frontend/backend phase-pairing default is next prioritized once `B11` ships.
+
+### 2026-09-03 — `B11` complete: Exam Builder & Readiness
+
+Requested explicitly: start `B11`. Followed the working-rules checklist: three parallel research
+passes (the B11 roadmap section, its full text and ADR-0006's own B11-targeted requirement not in
+its "Blocks phases" header; the newest module (`question-review`, B9) plus `questions` (B8) as
+implementation templates — service/controller/DTO/mapper conventions, the migration/trigger idiom,
+the two established concurrency-proving techniques; the academics/people schema `Exam` would need to
+join against), then a dedicated Plan agent, then direct verification reads of the permission table's
+already-pre-graded `exam.*` rows, `AuthorizationService`/`ScopeResolverRegistry`, and
+`packages/domain/src/platform/result-policy.ts`'s own doc comment (which had already anticipated
+exactly how `Exam.resultPolicy` would be seeded) — before writing any code, per this project's own
+precedent for a phase of this size. Two genuine open product-modeling questions with no spec/ADR
+answer were confirmed with the project owner before implementation: **exam type is free text** (not
+a fixed platform vocabulary, matching `AcademicSession.name`'s own precedent) and **navigation policy
+is one enum with "revisit" folded in** (`FREE`/`SEQUENTIAL_NO_REVISIT`/`SEQUENTIAL_WITH_REVISIT`),
+matching `07 §8.1`'s single-attribute ERD literally.
+
+**The permission table already resolved the one product-policy question the audit had flagged as
+open (`C-07`, "Limited" School Admin/Moderator create rights)** — `packages/domain`'s `exam.*` rows
+were pre-graded since `B2`, with `create` already `TEACHER`-`ASSIGNED`-only and School Admin/
+Moderator/HOD holding full administration rights (edit/delete/configure/publish/archive) on an
+existing draft, never authorship. `B11` implemented against that frozen table; it did not renegotiate
+it — clearing the twelve `awaitingResource: 'Exam (B11)'` flags with zero grant-shape changes.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260903120000_b11_exam_builder_
+readiness`): `Exam`/`ExamClass`/`ExamSection`/`ExamQuestion` plus three new enums
+(`ExamStatus` — all seven `07 §14` lifecycle values carried now, mirroring
+`QuestionRevisionStatus.ARCHIVED`'s own "shipped even though unused by this phase" precedent;
+`ExamAccessMode`, ADR-0006's own required B11 slice — the column + `OPEN_TO_ELIGIBLE` default only,
+participant-authorization mechanics staying entirely `B12`'s job; `ExamNavigationPolicy`, the
+confirmed product decision). **A deliberate schema simplification, not the roadmap's most literal
+reading**: `Exam` carries no `level` column, and `ExamClass`/`Exam.term` use plain existing
+composite-FK targets — zero changes to any already-shipped table (`ClassGroup`/`ClassSubject`/
+`AcademicTerm`/`Subject` untouched). ADR-0013's "all targeted classes share school, session, and
+level" rule is enforced at the **service layer** (`exam-scope.util.ts`'s
+`resolveAndValidateClassTargets`/`assertTermBelongsToSession`), inside the same transaction as the
+write, mirroring `HODAssignment`'s own documented precedent exactly ("a cross-table invariant…
+enforced at the service layer… this codebase avoids triggers" for this class of check) — reserving
+the roadmap's own explicit demand for **database-constraint-level** enforcement for the one thing it
+actually names that way: the approved-revision-only rule. `ExamClass` FKs to `ClassSubject(schoolId,
+id)` alone, which already encodes class+subject+session+level together via
+`classGroupSession.level`. `ExamSection.marks` is not a column at all — always derived (`SUM` of the
+section's own `ExamQuestion.marks`), computed in `exam-mappers.ts` on every read, per ADR-0029.
+`ExamQuestion.questionRevisionId` binds the **specific** `QuestionRevision` row, never `Question
+.currentRevisionId` — the design choice that makes DoD item 8 ("a later revision doesn't alter the
+binding") true automatically, with zero new machinery, since B8's own trigger already forbids any
+mutation of an `APPROVED` revision and this FK target never moves.
+
+**Two hand-written Postgres triggers** — the two things the roadmap's own text explicitly demands at
+the database-constraint level, mirroring B8's existing trigger idiom precisely: approved-revision-
+only binding (`enforce_exam_question_revision_approved`, checking the **referenced** revision's
+status rather than a parent's, since an `exam_questions` row has no status-bearing parent to defer
+to) and READY-immutability (two child-table blanket-freeze triggers for `exam_questions`/
+`exam_classes`, one column-diff trigger for `exams` itself — a blanket freeze would incorrectly block
+the legitimate status-only transitions `READY→CANCELLED`/`READY→ARCHIVED` still need). `ExamSection`
+gets no trigger at all — nothing in B11 ever `UPDATE`s that row (no section UI), so a lock trigger
+would be dead code.
+
+**A real trigger bug found only by the integration tests, not by inspection — the same class of gap
+this codebase's own precedent (B1/B2/B4's boot-only DI bugs) keeps surfacing in a new shape each
+phase.** The first version of the two child-table immutability triggers blocked a mutation whenever
+`SELECT status FROM exams WHERE id = …` returned anything `IS DISTINCT FROM 'DRAFT'` — including
+`NULL`, which `IS DISTINCT FROM` treats as true. `NULL` is exactly what that subquery returns when
+the trigger fires as part of `Exam`'s own `ON DELETE CASCADE`: by the time the cascaded child-row
+trigger runs, the parent `exams` row has already been removed from the table. Practical consequence:
+`ExamService.deleteDraft()` — deleting a genuinely `DRAFT` exam — failed with a 500 every time, its
+own legitimate cascade delete of `ExamSection`/`ExamClass`/`ExamQuestion` incorrectly blocked by
+triggers meant to protect a _still-existing_, non-DRAFT exam's children, not the exam's own
+deletion. Fixed by changing the guard to `parent_status IS NOT NULL AND parent_status IS DISTINCT
+FROM 'DRAFT'` — `NULL` (parent gone, i.e. cascading from the exam's own deletion) now correctly
+means "allow"; a direct mutation of a child row while the parent genuinely still exists and is
+non-DRAFT stays blocked exactly as before, proven by the very test that caught the bug in its
+inverted form.
+
+**API** (`apps/api/src/modules/exams/`, replacing the B0-era empty stub): `exams.v1` — a peer
+top-level module mirroring `QuestionReviewModule`'s (B9) own precedent, one-directionally importing
+`QuestionsModule` to reuse `QuestionService.list()` verbatim for the "browse approved questions
+available to bind" route rather than reimplementing its scope-filter/pagination logic. Four services
+split along the same route/permission-cluster boundaries `question.service.ts`/`question-revision
+.service.ts` already established: `ExamService` (identity/lifecycle — create/list/get/editDraft/
+deleteDraft/cancel/archive/ready), `ExamQuestionService` (question selection, full-replace per bind),
+`ExamConfigurationService` (the four `exam.configure*` permission ids collapsing onto one endpoint),
+`ExamReadinessService` (the itemised checklist — one function, called by both `GET .../readiness`
+directly and `ready()`'s own pre-transition re-check, so the two can never disagree on what "ready"
+means). Fifteen readiness checks (05 §23/§72, 07 §20); two are deliberately defensive (structurally
+unreachable given the DB trigger and a `NOT NULL` column) and kept anyway for spec fidelity, mirroring
+`QuestionRevisionStatus.ARCHIVED`'s "kept even though never written" precedent.
+
+**The multi-class ASSIGNED scope check is genuinely widened, not reused verbatim**:
+`requireTeacherAssignedToAnyClass` (`exam-scope.util.ts`) mirrors `question-scope.util.ts`'s own
+`requireTeacherAssignedScope` but resolves **any-of-N** candidate classes (ADR-0013's "assignment to
+at least one targeted class grants operation of the exam"), used only by `exam.create` — the one exam
+permission graded `ASSIGNED` for TEACHER. Every other TEACHER-reachable action is `OWNED` and needs
+nothing beyond the already-built `OWNED` resolver plus `Exam.createdByMembershipId` — zero new scope-
+resolver registration anywhere in this phase. A load-bearing ordering consequence, not an incidental
+choice: because only `create` carries the `ASSIGNED` gate, `CreateExamDto.classIds` is required with
+`@ArrayMinSize(1)` — a teacher cannot create an empty shell and add classes afterward with no scope
+check ever applied.
+
+**Two small confirmed gap-closures, mirroring this codebase's own established precedent for this
+class of discovery (F3/F6/F7/B6 each found one or two within their own phase):**
+
+1. **`02`'s own Exam Management matrix never lists a "Cancel exam" row at all**, yet DoD item 7
+   ("cancelling… records a reason and is audited") is real, approved scope with no permission id to
+   attach to. Added `exam.cancel`, mirroring `exam.deleteDraft`'s exact grant shape (its closest
+   conceptual sibling) rather than `exam.archive`'s break-glass-for-Software-Admin shape, since
+   "cancel exam" is not among ADR-0012's named break-glass examples — 152 permission-table rows, up
+   from 151.
+2. **Two additive endpoints beyond the roadmap's own illustrative `exams.v1` table**:
+   `DELETE /v1/exams/:id` (DRAFT-only hard delete, attaching to the already-pre-graded
+   `exam.deleteDraft` row) and `GET /v1/exams/:id/available-questions` (attaching to
+   `exam.useApprovedQuestions`, delegating straight to `QuestionService.list()`).
+
+**A real, if minor, bug found in the DELETE route's own initial implementation, caught by the
+integration tests**: the first version used `@HttpCode(HttpStatus.NO_CONTENT)` returning `void` —
+this codebase's actual established DELETE convention (`ClassGroupController.remove()` et al.) is
+`{status: 'ok'}` at plain 200, not 204; the deviation surfaced as a real 500 under Fastify. Fixed by
+following the established convention instead of introducing a new one.
+
+**Testing**: `exam-builder.integration.test.ts` (19 tests, real HTTP via `app.inject()` against a
+real running `AppModule` and real Postgres, mirroring `question-lifecycle.integration.test.ts`'s own
+harness) — every DoD item, all three class-agreement error codes, the concurrency race (two
+simultaneous `ready()` calls on one DRAFT exam, exactly one wins), and both direct-Prisma-bypass
+proofs. One real fixture bug this suite's own first run caught: promoting the _same_ teacher who
+authored the test's questions to HOD silently tripped B9's self-review-forbidden check on every
+`approve()` call in `beforeAll`, cascading into failures across half the suite until traced back and
+fixed by promoting a distinct person instead — a genuine "read the actual response, don't assume
+success" lesson `AGENTS.md` §10 already counsels, applied concretely.
+`tests/tenancy/rls.integration.test.ts` gained a **new, dedicated** describe block for the four new
+tables rather than joining the shared B5–B9 block every phase since `B3` has extended — a deliberate
+break from that "economy" precedent, not an oversight: `exam_questions` requires its bound
+`question_revisions` row to be `APPROVED`, and that shared block's fixture is kept at `DRAFT` status
+specifically "so an APPROVED row would make afterAll's cleanup fight that trigger for no reason" (its
+own comment) — a single Postgres multi-row `DELETE` statement fails atomically if it hits even one
+trigger-blocked row, so introducing one there would have silently regressed cleanup for every other
+row in that block, not just this phase's own addition. A dedicated school pair (mirroring the B3/B4
+blocks' own shape) avoids that regression entirely — 87 tests in that file total, up from 68.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm build` at the
+monorepo root (16/16 turbo tasks each), the full `apps/api` unit suite (143 tests), the extended RLS
+suite, and the new exam-builder suite — plus `pnpm generate` (`exams.v1`, 10 routes, published in
+`apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (152 rows). A
+real `node dist/main.js` boot confirmed `PolicyCoverageService` reports 162 routes checked with zero
+violations. One pre-existing, unrelated environment flake was observed in the full `apps/api`
+integration run (`imports.integration.test.ts`/`import-1500-rows.integration.test.ts` — the
+background BullMQ import worker not completing within the test's polling window) — already
+documented as a known, pre-existing issue unrelated to feature work in `B9`'s own Change Log entry
+("reconfirmed failing the same way in isolation"); `B11` touches zero files in `ImportsModule` and
+did not investigate further.
+
+`docs/roadmaps/backend-roadmap.md`'s B11 section gained status `COMPLETE`, every DoD item checked
+with detail, a full "Implementation notes" subsection covering the trigger bug and both gap-closures
+above, and an expanded Deferred items list (including a Candidate/Deferred note for a standalone
+`ExamReadinessService` unit test, not built this pass — the integration suite already exercises every
+_reachable_ check directly). `docs/roadmaps/roadmap-index.md`'s version, Current State, and Immediate
+Next Actions all updated to record `B11` complete and `B12` next on the critical path.
+
+**Honestly out of scope, per `AGENTS.md` §14 — not built opportunistically**: `ExamSessionParticipant`
+and any attempt/session machinery or Control Center (all `B12`/`B13`); `School.resultPolicyLocked`
+enforcement (seeded and freely editable while DRAFT; the lock check itself is explicitly `B15`'s job);
+question pools (`ADR-0002` — fixed selection only; the `randomizeQuestions`/`randomizeOptions`
+_flags_ are this phase's job, the actual per-attempt shuffle is `B13`'s); `ExamAdministrator`
+delegation into the `OWNED` resolver (`B12`'s job — this phase uses the plain, un-delegated resolver
+already built in `B2`); per-student accommodations (one free-text exam-level field only); a
+notification template (the roadmap's own Security section names `EXAM_READY`/`EXAM_CANCELLED` as
+audited, not notified, unlike B9's explicit requirement).
+
+Project state moves from _Implementation (B9/F10 complete; every frontend phase through F10 closed
+out)_ to _Implementation (B11 complete)_.
+**Next: `B12 — Exam Activation & Control`** on the backend critical path (`Gate 1 ADRs → B0 → B1 →
+B2 → B3 → B5 → B6 → B8 → B9 → B11 → B12 → B13 → …`) — the next phase in the highest-risk segment of
+the roadmap (`B13`/`B14` carry the most risk of the whole plan). A future `F11` (Exam Builder &
+Readiness UI) remains open whenever the frontend/backend phase-pairing default is next prioritized.

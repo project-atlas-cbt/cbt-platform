@@ -205,6 +205,57 @@ export const BASE_ERROR_CODES = {
   // domain-rule failure distinct from the authorization engine's own
   // FORBIDDEN, mirroring QUESTION_OUT_OF_SCOPE's exact reasoning.
   QUESTION_SELF_REVIEW_FORBIDDEN: { httpStatus: 400, retryable: false },
+
+  // B11 (Exam Builder & Readiness).
+  //
+  // EXAM_OUT_OF_SCOPE: the actor holds no active TeacherAssignment covering
+  // ANY of the exam's targeted classes (ADR-0013's "at least one" rule) —
+  // mirrors QUESTION_OUT_OF_SCOPE's exact reasoning, widened from one
+  // candidate to N.
+  EXAM_OUT_OF_SCOPE: { httpStatus: 400, retryable: false },
+  // EXAM_TERM_SESSION_MISMATCH: the given academicTermId doesn't belong to
+  // the given academicSessionId.
+  EXAM_TERM_SESSION_MISMATCH: { httpStatus: 400, retryable: false },
+  // EXAM_CLASS_SUBJECT_NOT_OFFERED: a targeted classId has no ACTIVE
+  // ClassSubject row for the exam's own subjectId — this subject isn't
+  // taught to that class in this session at all, so no teacher assignment
+  // and no eligible student could ever exist for it.
+  EXAM_CLASS_SUBJECT_NOT_OFFERED: { httpStatus: 400, retryable: false },
+  // EXAM_CLASS_SESSION_MISMATCH: a targeted class's own ClassSubject
+  // resolves to a different academicSessionId than the exam's.
+  EXAM_CLASS_SESSION_MISMATCH: { httpStatus: 400, retryable: false },
+  // EXAM_CLASS_LEVEL_MISMATCH: ADR-0013 — every targeted class must share
+  // one ClassGroup.level; two arms of different levels cannot sit the same
+  // exam (questions are level-scoped, ADR-0001).
+  EXAM_CLASS_LEVEL_MISMATCH: { httpStatus: 400, retryable: false },
+  // EXAM_REVISION_NOT_APPROVED: a questionRevisionId in the selection DTO
+  // does not currently resolve to an APPROVED revision — the service-layer
+  // half of DoD item 2 (the database trigger is the other, unconditional
+  // half — see this migration's own hand-written SQL).
+  EXAM_REVISION_NOT_APPROVED: { httpStatus: 400, retryable: false },
+  // EXAM_QUESTION_OUT_OF_SCOPE: a bound/to-be-bound revision's own Question
+  // doesn't match the exam's subject or targeted-class level.
+  EXAM_QUESTION_OUT_OF_SCOPE: { httpStatus: 400, retryable: false },
+  // EXAM_MARKS_INVALID: a marks override in PUT .../questions is <= 0.
+  EXAM_MARKS_INVALID: { httpStatus: 400, retryable: false },
+  // EXAM_NOT_DRAFT: a DRAFT-only mutation (edit, delete, set questions, set
+  // configuration) was attempted on an exam that has already left DRAFT —
+  // the service-layer half of DoD item 6 (the database triggers are the
+  // unconditional other half).
+  EXAM_NOT_DRAFT: { httpStatus: 409, retryable: false },
+  // EXAM_NOT_READY: POST .../ready's own readiness re-check failed — the
+  // response's `details` carries the full itemised checklist (05 §72) so
+  // the client never needs a second round-trip to learn why.
+  EXAM_NOT_READY: { httpStatus: 409, retryable: false },
+  // EXAM_NOT_CANCELLABLE: POST .../cancel attempted from a status other
+  // than DRAFT or READY (07 §14's own transition table).
+  EXAM_NOT_CANCELLABLE: { httpStatus: 409, retryable: false },
+  // EXAM_NOT_ARCHIVABLE: POST .../archive attempted from OPEN/CLOSED/
+  // COMPLETED — those states don't exist yet in this phase (B12/B13
+  // produce them), but the guard is real regardless of how a row reaches
+  // one; DRAFT/READY/CANCELLED/ARCHIVED are all archivable, matching this
+  // codebase's general "archival always allowed" convention.
+  EXAM_NOT_ARCHIVABLE: { httpStatus: 409, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

@@ -2026,6 +2026,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List exams within the caller's scope, tabbed by status and filtered. */
+        get: operations["ExamController_list"];
+        put?: never;
+        /** Create an exam within the caller's assigned scope (DoD item 1). */
+        post: operations["ExamController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A single exam with its full configuration and question selection. */
+        get: operations["ExamController_get"];
+        put?: never;
+        post?: never;
+        /** Delete a DRAFT exam outright. */
+        delete: operations["ExamController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a DRAFT exam's identity fields, including class targeting. */
+        patch: operations["ExamController_update"];
+        trace?: never;
+    };
+    "/exams/{id}/available-questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Approved question revisions available to bind — this exam's subject/level only. */
+        get: operations["ExamController_availableQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the exam's question selection — a full replace (DoD items 2/9). */
+        put: operations["ExamController_setQuestions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Configure duration/attempts/navigation/randomization/result policy. */
+        put: operations["ExamController_setConfiguration"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The itemised readiness checklist (05 §72) — never a single boolean. */
+        get: operations["ExamController_getReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** DRAFT → READY — succeeds only when every readiness check passes. */
+        post: operations["ExamController_ready"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel from DRAFT or READY — mandatory reason, audited (DoD item 7). */
+        post: operations["ExamController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive from DRAFT, READY, or CANCELLED. */
+        post: operations["ExamController_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3161,6 +3317,169 @@ export interface components {
         };
         QuestionReviewHistoryResponseDto: {
             history: components["schemas"]["QuestionReviewHistoryItemDto"][];
+        };
+        CreateExamDto: {
+            academicSessionId: string;
+            academicTermId: string;
+            subjectId: string;
+            title: string;
+            /** @description Free text (e.g. "First CA", "Mock Examination") — confirmed product decision, not a fixed platform vocabulary (2026-09-03). */
+            examType: string;
+            /** @description ClassGroup ids this exam targets — at least one. All must share school, session, and level with each other and with this exam (ADR-0013). */
+            classIds: string[];
+        };
+        ExamClassResponseDto: {
+            id: string;
+            classId: string;
+            classSubjectId: string;
+            className: string;
+            level: string;
+            arm: string;
+        };
+        ExamQuestionResponseDto: {
+            id: string;
+            questionId: string;
+            questionRevisionId: string;
+            sequence: number;
+            marks: number;
+            content: string;
+            questionType: string;
+            difficulty: string;
+            topicName: string | null;
+        };
+        ExamSectionResponseDto: {
+            id: string;
+            title: string;
+            sequence: number;
+            /** @description Derived — SUM of this section's ExamQuestion.marks (ADR-0029), never stored. */
+            marks: number;
+            questions: components["schemas"]["ExamQuestionResponseDto"][];
+        };
+        ExamResponseDto: {
+            id: string;
+            title: string;
+            examType: string;
+            /** @enum {string} */
+            status: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+            academicSessionId: string;
+            sessionName: string;
+            academicTermId: string;
+            termName: string;
+            subjectId: string;
+            subjectName: string;
+            departmentId: string | null;
+            departmentName: string | null;
+            createdByMembershipId: string;
+            createdByName: string;
+            classes: components["schemas"]["ExamClassResponseDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            durationSeconds: number;
+            attemptLimit: number;
+            /** @enum {string} */
+            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            randomizeQuestions: boolean;
+            randomizeOptions: boolean;
+            /** @enum {string} */
+            resultPolicy: "TEACHER" | "SCHOOL_ADMIN" | "AUTOMATIC";
+            /** @enum {string} */
+            resultDetailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            /** @enum {string} */
+            accessMode: "OPEN_TO_ELIGIBLE" | "EXPLICIT_AUTHORIZATION";
+            generalInstructions: string | null;
+            navigationInstructions: string | null;
+            submissionInstructions: string | null;
+            accommodations: string | null;
+            cancelledReason: string | null;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            /** Format: date-time */
+            archivedAt: string | null;
+            sections: components["schemas"]["ExamSectionResponseDto"][];
+        };
+        ExamListItemResponseDto: {
+            id: string;
+            title: string;
+            examType: string;
+            /** @enum {string} */
+            status: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+            academicSessionId: string;
+            sessionName: string;
+            academicTermId: string;
+            termName: string;
+            subjectId: string;
+            subjectName: string;
+            departmentId: string | null;
+            departmentName: string | null;
+            createdByMembershipId: string;
+            createdByName: string;
+            classes: components["schemas"]["ExamClassResponseDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ExamListResponseDto: {
+            exams: components["schemas"]["ExamListItemResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        UpdateExamDto: {
+            academicSessionId?: string;
+            academicTermId?: string;
+            subjectId?: string;
+            title?: string;
+            examType?: string;
+            classIds?: string[];
+        };
+        ExamQuestionInputDto: {
+            questionRevisionId: string;
+            /** @description Overrides QuestionRevision.marks for this exam only. Omit to use the default. */
+            marks?: number;
+        };
+        SetExamQuestionsDto: {
+            questions: components["schemas"]["ExamQuestionInputDto"][];
+        };
+        UpdateExamConfigurationDto: {
+            /** @description Duration in whole seconds. */
+            durationSeconds?: number;
+            attemptLimit?: number;
+            /** @enum {string} */
+            navigationPolicy?: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            randomizeQuestions?: boolean;
+            randomizeOptions?: boolean;
+            /** @enum {string} */
+            resultPolicy?: "TEACHER" | "SCHOOL_ADMIN" | "AUTOMATIC";
+            /** @enum {string} */
+            resultDetailVisibility?: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            /** @enum {string} */
+            accessMode?: "OPEN_TO_ELIGIBLE" | "EXPLICIT_AUTHORIZATION";
+            /** @description 05 §71 — shown before the exam. */
+            generalInstructions?: string;
+            /** @description 05 §71 — navigation-specific. */
+            navigationInstructions?: string;
+            /** @description 05 §71 — submission-specific. */
+            submissionInstructions?: string;
+            /** @description 05 §22 — free text, exam-level only; per-student grants are B12/B13. */
+            accommodations?: string;
+        };
+        ExamReadinessCheckItemDto: {
+            /** @enum {string} */
+            code: "SCHOOL_ACTIVE" | "SESSION_ACTIVE" | "TERM_ACTIVE" | "CLASSES_TARGETED" | "CLASSES_ACTIVE" | "SUBJECT_ACTIVE" | "QUESTIONS_SELECTED" | "QUESTIONS_APPROVED" | "QUESTIONS_IN_SCOPE" | "MARKS_VALID" | "DURATION_CONFIGURED" | "INSTRUCTIONS_CONFIGURED" | "ELIGIBLE_STUDENTS_EXIST" | "RESULT_POLICY_CONFIGURED" | "DETAILS_COMPLETE";
+            label: string;
+            passed: boolean;
+            message: string;
+        };
+        ExamReadinessResponseDto: {
+            examId: string;
+            ready: boolean;
+            checks: components["schemas"]["ExamReadinessCheckItemDto"][];
+        };
+        CancelExamDto: {
+            reason: string;
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -6490,6 +6809,286 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionReviewHistoryResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_list: {
+        parameters: {
+            query?: {
+                status?: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+                academicSessionId?: string;
+                academicTermId?: string;
+                subjectId?: string;
+                /** @description A targeted ClassGroup id. */
+                classId?: string;
+                departmentId?: string;
+                /** @description The creating teacher's SchoolMembership id. */
+                teacherMembershipId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamListResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_availableQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionListResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_setQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetExamQuestionsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_setConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExamConfigurationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_getReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamReadinessResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_ready: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelExamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
                 };
             };
         };

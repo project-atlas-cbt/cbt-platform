@@ -306,6 +306,8 @@ model SchoolMembership {
   hodAssignments  HODAssignment[]
   // B9: reviews this membership has personally decided, as reviewer.
   questionReviews QuestionReview[]
+  // B11: exams this membership has authored (createdByMembershipId).
+  examsCreated    Exam[]           @relation("ExamCreatedBy")
 
   // Composite-FK target for RoleAssignment/StudentProfile/TeacherProfile,
   // matching TenancyProbe's proven (schoolId, id) pattern.
@@ -843,6 +845,8 @@ model AcademicSession {
   hodAssignments     HODAssignment[]
   studentEnrollments StudentEnrollment[]
   teacherAssignments TeacherAssignment[]
+  // B11: exams held in this session.
+  exams              Exam[]
 
   // Composite-FK target for AcademicTerm/ClassGroup/ClassSubject/
   // HODAssignment, matching the established (schoolId, id) convention.
@@ -869,8 +873,14 @@ model AcademicTerm {
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   session AcademicSession @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  // B11: exams held in this term.
+  exams   Exam[]
 
   @@unique([schoolId, academicSessionId, sequence])
+  // Composite-FK target for Exam (B11) — every other composite-FK-target
+  // table already carries this exact line; AcademicTerm didn't need it
+  // until B11 gave it its first FK-consuming child.
+  @@unique([schoolId, id])
   @@index([schoolId])
   @@index([schoolId, academicSessionId])
   @@index([schoolId, status])
@@ -893,6 +903,9 @@ model Department {
   subjects       Subject[]
   classGroups    ClassGroup[]
   hodAssignments HODAssignment[]
+  // B11: exams denormalized to this department (from Subject.departmentId
+  // at creation time).
+  exams          Exam[]
 
   // Composite-FK target for Subject/ClassGroup/HODAssignment.
   @@unique([schoolId, id])
@@ -968,6 +981,8 @@ model Subject {
   // B8: Question/Topic back-relations.
   questions     Question[]
   topics        Topic[]
+  // B11: exams held in this subject.
+  exams         Exam[]
 
   // Composite-FK target for ClassSubject.
   @@unique([schoolId, id])
@@ -1003,6 +1018,8 @@ model ClassSubject {
 
   teacherAssignments TeacherAssignment[]
   registrations      StudentSubjectRegistration[]
+  // B11: ExamClass rows targeting this class+subject+session.
+  examClasses        ExamClass[]
 
   @@unique([schoolId, classId, subjectId])
   // Composite-FK target for TeacherAssignment/StudentSubjectRegistration
@@ -1524,10 +1541,14 @@ model QuestionRevision {
   topic      Topic?    @relation("RevisionTopic", fields: [schoolId, topicId], references: [schoolId, id], onDelete: Restrict)
   subtopic   Topic?    @relation("RevisionSubtopic", fields: [schoolId, subtopicId], references: [schoolId, id], onDelete: Restrict)
 
-  options QuestionOption[]
-  media   QuestionMedia[]
+  options       QuestionOption[]
+  media         QuestionMedia[]
   // B9: this revision's own review history (07 §7.5) — 1:N, append-only.
-  reviews QuestionReview[]
+  reviews       QuestionReview[]
+  // B11: ExamQuestion rows binding this specific (immutable-once-APPROVED)
+  // revision to an exam — never Question.currentRevisionId, which is what
+  // makes a later revision not retroactively alter an existing binding.
+  examQuestions ExamQuestion[]
 
   @@unique([schoolId, questionId, revisionNumber])
   // Composite-FK target for QuestionOption/QuestionMedia, and the target of
@@ -1693,4 +1714,240 @@ model QuestionReview {
   @@index([schoolId])
   @@index([schoolId, questionRevisionId])
   @@map("question_reviews")
+}
+
+// ---------------------------------------------------------------------------
+// B11 — Exam Builder & Readiness (docs/roadmaps/backend-roadmap.md "B11",
+// ADR-0001, ADR-0002, ADR-0006, ADR-0013, ADR-0029). Purely additive: no
+// changes to any table above besides the two small composite-FK-target
+// back-relations added when this block was written (SchoolMembership,
+// AcademicSession, AcademicTerm, Department, Subject, ClassSubject,
+// QuestionRevision all gained a plain back-relation array; AcademicTerm
+// additionally gained its first-ever @@unique([schoolId, id]), the same
+// "didn't need it until this phase gave it a child" precedent ClassSubject's
+// own doc comment already recorded for B6).
+//
+// Deliberate simplification, documented here rather than only in the
+// roadmap: ADR-0013's "all targeted classes share school, session and
+// level" rule is enforced at the SERVICE layer (ExamService's
+// assertExamClassAgreement), not via a novel multi-column FK scheme or a
+// trigger — mirrors HODAssignment's own precedent exactly ("a cross-table
+// invariant... enforced at the service layer... this codebase avoids
+// triggers" for this class of check). The two things the roadmap actually
+// demands at the database-constraint level — the approved-revision-only
+// binding rule (DoD item 2) and READY-immutability (DoD item 6) — get real
+// triggers below, mirroring B8's existing trigger idiom precisely.
+// ---------------------------------------------------------------------------
+
+/// 07 §14's full seven-state lifecycle, carried in full now — mirrors
+/// QuestionRevisionStatus.ARCHIVED's own precedent of shipping the complete
+/// spec vocabulary even though this phase's own code only ever writes
+/// DRAFT/READY/CANCELLED/ARCHIVED. OPEN/CLOSED/COMPLETED are B12/B13's to
+/// write; no migration is needed when those phases start using them.
+enum ExamStatus {
+  DRAFT
+  READY
+  OPEN
+  CLOSED
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
+/// ADR-0006's own required B11 slice: the column + default only.
+/// Participant-authorization mechanics (ExamSessionParticipant, the actual
+/// bulk-authorize-on-open behaviour) are entirely B12's job.
+enum ExamAccessMode {
+  OPEN_TO_ELIGIBLE
+  EXPLICIT_AUTHORIZATION
+}
+
+/// Confirmed product decision (2026-09-03) — one enum, "revisit" folded in,
+/// matching 07 §8.1's single navigation_policy attribute literally rather
+/// than a second allow_revisit column.
+enum ExamNavigationPolicy {
+  FREE
+  SEQUENTIAL_NO_REVISIT
+  SEQUENTIAL_WITH_REVISIT
+}
+
+/// 07 §8.1 — exam identity + configuration. `examType` is free text
+/// (confirmed product decision, 2026-09-03), mirroring
+/// AcademicSession.name/AcademicTerm.name's own precedent rather than a
+/// fixed enum — 05 §19.2's examples ("First CA" / "Mock Examination" / ...)
+/// are illustrative, not an exhaustive taxonomy, and Nigerian schools vary
+/// in naming.
+///
+/// resultPolicy/resultDetailVisibility are seeded from School's current
+/// values at creation (F5/B3 gap-closure — see result-policy.ts's own doc
+/// comment: "Seeds Exam.result_policy at exam creation once B11 exists")
+/// and freely editable while DRAFT; School.resultPolicyLocked is
+/// deliberately NOT enforced here — that governs whether a teacher may
+/// override the seeded value, and is explicitly B15's job per that field's
+/// own doc comment.
+///
+/// createdByMembershipId feeds ResourceContext.ownerMembershipId directly —
+/// the existing OWNED scope resolver needs zero new code for every
+/// TEACHER-reachable action past creation (editDraft/deleteDraft/
+/// addQuestions/configure*/publish/archive are all OWNED-graded in the
+/// permission table).
+model Exam {
+  id                String  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId          String  @map("school_id") @db.Uuid
+  academicSessionId String  @map("academic_session_id") @db.Uuid
+  academicTermId    String  @map("academic_term_id") @db.Uuid
+  subjectId         String  @map("subject_id") @db.Uuid
+  /// Denormalized from Subject.departmentId at creation — never
+  /// independently editable. Powers the DEPARTMENT scope resolver's
+  /// resource.departmentId directly without an extra join per check.
+  departmentId      String? @map("department_id") @db.Uuid
+
+  title    String @db.VarChar(255)
+  examType String @map("exam_type") @db.VarChar(64)
+
+  durationSeconds    Int                  @map("duration_seconds")
+  attemptLimit       Int                  @default(1) @map("attempt_limit")
+  navigationPolicy   ExamNavigationPolicy @default(FREE) @map("navigation_policy")
+  randomizeQuestions Boolean              @default(false) @map("randomize_questions")
+  randomizeOptions   Boolean              @default(false) @map("randomize_options")
+
+  resultPolicy           ResultPolicy           @map("result_policy")
+  resultDetailVisibility ResultDetailVisibility @map("result_detail_visibility")
+  accessMode             ExamAccessMode         @default(OPEN_TO_ELIGIBLE) @map("access_mode")
+
+  /// 05 §71 — exactly 3 fixed instruction types, never a 4th; 3 nullable
+  /// columns rather than a child table (a Topic-style open list buys
+  /// nothing for a fixed, closed set this small).
+  generalInstructions    String? @map("general_instructions")
+  navigationInstructions String? @map("navigation_instructions")
+  submissionInstructions String? @map("submission_instructions")
+  /// 05 §22's "accessibility accommodations where applicable" — free text
+  /// at exam level. Per-student accommodation grants are explicitly
+  /// Candidate/Deferred to B12/B13's ExamSessionParticipant, not built here.
+  accommodations         String? @map("accommodations")
+
+  status ExamStatus @default(DRAFT)
+
+  createdByMembershipId   String    @map("created_by_membership_id") @db.Uuid
+  cancelledReason         String?   @map("cancelled_reason")
+  cancelledAt             DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledByMembershipId String?   @map("cancelled_by_membership_id") @db.Uuid
+  archivedAt              DateTime? @map("archived_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session         AcademicSession  @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Restrict)
+  term            AcademicTerm     @relation(fields: [schoolId, academicTermId], references: [schoolId, id], onDelete: Restrict)
+  subject         Subject          @relation(fields: [schoolId, subjectId], references: [schoolId, id], onDelete: Restrict)
+  department      Department?      @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  createdByMember SchoolMembership @relation("ExamCreatedBy", fields: [schoolId, createdByMembershipId], references: [schoolId, id], onDelete: Restrict)
+
+  classes   ExamClass[]
+  sections  ExamSection[]
+  questions ExamQuestion[]
+
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@index([schoolId, academicSessionId])
+  @@index([schoolId, academicTermId])
+  @@index([schoolId, subjectId])
+  @@index([schoolId, departmentId])
+  @@index([schoolId, createdByMembershipId])
+  @@map("exams")
+}
+
+/// ADR-0013: an exam targets one or more classes. FKs to ClassSubject
+/// (not directly to ClassGroup) — ClassSubject already encodes
+/// class+subject+session+level together (via classGroupSession.level), so
+/// one id gives ExamService.assertExamClassAgreement everything it needs to
+/// validate school/session/subject/level agreement in one query, with no
+/// denormalized columns of its own. "Same level across every targeted
+/// class" (ADR-0013) is enforced there, at the service layer, not by schema
+/// shape — see this file's B11 header comment above for why.
+model ExamClass {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  examId         String   @map("exam_id") @db.Uuid
+  classSubjectId String   @map("class_subject_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  exam         Exam         @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Cascade)
+  classSubject ClassSubject @relation(fields: [schoolId, classSubjectId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, examId, classSubjectId])
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  @@index([schoolId, classSubjectId])
+  @@map("exam_classes")
+}
+
+/// ADR-0029: always exactly one row per exam, created invisibly by
+/// ExamService.create() in the same transaction as the exam itself — never
+/// user-editable in B11 (no section UI). No `marks` column: always derived
+/// (SUM of this section's ExamQuestion.marks), computed in
+/// exam-mappers.ts on read, never persisted ("a stored section total that
+/// can disagree with its own children is a defect waiting to happen").
+/// No `instructions` column — 05 §71 places instructions at the exam level,
+/// not per-section. No immutability trigger — nothing in B11 ever UPDATEs
+/// this row (no section UI), so a lock trigger here would be dead code.
+model ExamSection {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  examId    String   @map("exam_id") @db.Uuid
+  title     String   @default("Main Section") @db.VarChar(128)
+  sequence  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam      Exam           @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Cascade)
+  questions ExamQuestion[]
+
+  @@unique([schoolId, examId, sequence])
+  // Composite-FK target for ExamQuestion.
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  @@map("exam_sections")
+}
+
+/// 07 §8.3's binding. questionRevisionId points at the SPECIFIC,
+/// B8-immutable-once-APPROVED QuestionRevision row — never at
+/// Question.currentRevisionId — which is what makes DoD item 8 ("a later
+/// revision does not alter the binding") true automatically: currentFor may
+/// later repoint to a brand-new revision, but this row's FK target never
+/// moves, and the row it points at can never itself change (B8's own
+/// question_revisions_immutable_when_approved trigger already forbids any
+/// mutation once APPROVED). No new B11 machinery is needed for that
+/// guarantee — it falls out of B8's existing design plus this column's
+/// choice of FK target.
+///
+/// Approved-only binding is enforced by this migration's hand-written
+/// trigger (DoD item 2 — "even by direct insert"), not only by the service.
+/// `marks` is authoritative (ADR-0029): defaulted from
+/// QuestionRevision.marks at bind time by the service, freely reweightable
+/// while the exam is DRAFT, and locked at READY by this migration's second
+/// trigger.
+model ExamQuestion {
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId           String   @map("school_id") @db.Uuid
+  examId             String   @map("exam_id") @db.Uuid
+  examSectionId      String   @map("exam_section_id") @db.Uuid
+  questionRevisionId String   @map("question_revision_id") @db.Uuid
+  sequence           Int
+  marks              Int
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam     Exam             @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Cascade)
+  section  ExamSection      @relation(fields: [schoolId, examSectionId], references: [schoolId, id], onDelete: Restrict)
+  revision QuestionRevision @relation(fields: [schoolId, questionRevisionId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, examId, questionRevisionId])
+  @@unique([schoolId, examSectionId, sequence])
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  @@index([schoolId, questionRevisionId])
+  @@map("exam_questions")
 }

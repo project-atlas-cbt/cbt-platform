@@ -105,3 +105,13 @@ export {
   type QuestionRevisionStatus,
   type QuestionReviewDecision,
 } from './questions/constants.js';
+export {
+  EXAM_STATUSES,
+  EXAM_ACCESS_MODES,
+  EXAM_NAVIGATION_POLICIES,
+  EXAM_READINESS_CHECK_CODES,
+  type ExamStatus,
+  type ExamAccessMode,
+  type ExamNavigationPolicy,
+  type ExamReadinessCheckCode,
+} from './exams/constants.js';
