@@ -58,9 +58,17 @@ export class ExamConfigurationService {
       });
     }
 
-    await withTenant(prisma, schoolId, (tx) =>
-      tx.exam.update({
-        where: { id: examId },
+    // Conditional updateMany (`WHERE status = 'DRAFT'`), not the plain
+    // `update()` this originally used — the same idiom `ExamService
+    // .ready()`/`.cancel()`/`.archive()` already use. Without it, a
+    // `ready()` landing between the DRAFT check above and this write would
+    // still be correctly blocked by the migration's own column-diff
+    // trigger, but as a raw, unhandled Postgres exception (a generic 500)
+    // instead of a clean `EXAM_NOT_DRAFT` — found in review, not by any
+    // test.
+    const { count } = await withTenant(prisma, schoolId, (tx) =>
+      tx.exam.updateMany({
+        where: { id: examId, status: 'DRAFT' },
         data: {
           ...(dto.durationSeconds !== undefined && { durationSeconds: dto.durationSeconds }),
           ...(dto.attemptLimit !== undefined && { attemptLimit: dto.attemptLimit }),
@@ -87,6 +95,12 @@ export class ExamConfigurationService {
         },
       }),
     );
+    if (count === 0) {
+      throw new AppHttpException({
+        code: 'EXAM_NOT_DRAFT',
+        message: 'Configuration can only be changed while the exam is in DRAFT.',
+      });
+    }
 
     await this.audit.record({
       schoolId,

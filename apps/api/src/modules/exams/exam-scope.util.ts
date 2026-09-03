@@ -3,7 +3,33 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import type { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 
-export { requireSchoolActor, requireTeacherProfile } from '../questions/question-scope.util.js';
+export { requireSchoolActor } from '../questions/question-scope.util.js';
+
+/** `exam.create` is reachable only by an actor holding TEACHER — every
+ * other role's grant is `denied()` in the frozen permission table — so this
+ * is a defensive data-integrity check, not a real authorization gap. Kept
+ * as its own function (rather than reusing `questions/question-scope.util
+ * .ts`'s `requireTeacherProfile`) specifically so a hit throws an
+ * exam-domain error code/message, not `QUESTION_IMPORT_REQUIRES_TEACHER
+ * _PROFILE`'s question/import-specific one. */
+export async function requireTeacherProfileForExam(
+  schoolId: string,
+  membershipId: string,
+): Promise<{ id: string }> {
+  const profile = await withTenant(prisma, schoolId, (tx) =>
+    tx.teacherProfile.findUnique({
+      where: { schoolId_membershipId: { schoolId, membershipId } },
+      select: { id: true },
+    }),
+  );
+  if (!profile) {
+    throw new AppHttpException({
+      code: 'EXAM_REQUIRES_TEACHER_PROFILE',
+      message: 'Only an actor with an active teacher profile at this school can create an exam.',
+    });
+  }
+  return profile;
+}
 
 /**
  * ADR-0013's "at least one targeted class" rule. Resolves whether an active

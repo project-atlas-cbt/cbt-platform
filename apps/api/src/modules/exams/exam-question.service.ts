@@ -125,12 +125,35 @@ export class ExamQuestionService {
       };
     });
 
-    await withTenant(prisma, schoolId, async (tx) => {
+    // Conditional updateMany on the parent `exams` row — an atomic "claim"
+    // touching only `updatedAt` — before the actual `examQuestion` rewrite,
+    // both inside this one transaction. `examQuestion` itself carries no
+    // `status` of its own to guard on, so this mirrors `ExamService.ready()`
+    // /`.cancel()`/`.archive()`'s own idiom one level up: without it, a
+    // `ready()` landing between the DRAFT check above and this write would
+    // still be correctly blocked by the migration's own trigger, but as a
+    // raw, unhandled Postgres exception (a generic 500) instead of a clean
+    // `EXAM_NOT_DRAFT` — found in review, not by any test.
+    const { count } = await withTenant(prisma, schoolId, async (tx) => {
+      const claimed = await tx.exam.updateMany({
+        where: { id: examId, status: 'DRAFT' },
+        data: {},
+      });
+      if (claimed.count === 0) {
+        return { count: 0 };
+      }
       await tx.examQuestion.deleteMany({ where: { schoolId, examId } });
       if (rows.length > 0) {
         await tx.examQuestion.createMany({ data: rows });
       }
+      return { count: claimed.count };
     });
+    if (count === 0) {
+      throw new AppHttpException({
+        code: 'EXAM_NOT_DRAFT',
+        message: 'Questions can only be changed while the exam is in DRAFT.',
+      });
+    }
 
     await this.audit.record({
       schoolId,

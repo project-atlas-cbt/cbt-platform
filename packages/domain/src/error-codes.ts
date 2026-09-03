@@ -213,6 +213,14 @@ export const BASE_ERROR_CODES = {
   // mirrors QUESTION_OUT_OF_SCOPE's exact reasoning, widened from one
   // candidate to N.
   EXAM_OUT_OF_SCOPE: { httpStatus: 400, retryable: false },
+  // EXAM_REQUIRES_TEACHER_PROFILE: exam.create is reachable only by an actor
+  // holding TEACHER (exam.create is denied for every other role in the
+  // frozen permission table), so this is a defensive data-integrity check,
+  // not a real authorization gap — but it needs its own code/message rather
+  // than reusing QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE's (that one is
+  // about authoring questions/imports, not exams, and would surface a
+  // wrongly-labelled message here).
+  EXAM_REQUIRES_TEACHER_PROFILE: { httpStatus: 400, retryable: false },
   // EXAM_TERM_SESSION_MISMATCH: the given academicTermId doesn't belong to
   // the given academicSessionId.
   EXAM_TERM_SESSION_MISMATCH: { httpStatus: 400, retryable: false },

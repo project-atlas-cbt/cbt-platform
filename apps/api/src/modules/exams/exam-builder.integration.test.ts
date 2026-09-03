@@ -895,4 +895,217 @@ describe('B11 Exam Builder & Readiness', () => {
     const statuses = [first.statusCode, second.statusCode].sort();
     expect(statuses).toEqual([200, 409]);
   });
+
+  // --- Gap-closure regression coverage (review fixes) -------------------
+
+  it('review fix: a teacher can still view (not just edit) an exam they authored after losing every assignment to its classes', async () => {
+    const reassignTeacherRes = await post(admin, '/teachers', {
+      firstName: 'Chidi',
+      lastName: 'Nwosu',
+      email: `chidi-${randomUUID().slice(0, 8)}@example.com`,
+      staffId: `STF-${randomUUID().slice(0, 8)}`,
+    });
+    const reassignTeacherBody = reassignTeacherRes.json<{
+      teacherProfileId: string;
+      membershipId: string;
+      loginIdentifier: string;
+    }>();
+    await prisma.user.update({
+      where: { id: await userIdForMembership(schoolId, reassignTeacherBody.membershipId) },
+      data: {
+        passwordHash: await passwords.hash('a-real-password-123'),
+        credentialState: 'OK',
+        status: 'ACTIVE',
+      },
+    });
+    const classAMathOfferingId = (await get(admin, `/academics/classes/${classAId}/subjects`))
+      .json<{ offerings: { id: string; subjectId: string }[] }>()
+      .offerings.find((o) => o.subjectId === mathSubjectId)!.id;
+    await put(admin, `/teachers/${reassignTeacherBody.teacherProfileId}/assignments`, {
+      academicSessionId: sessionId,
+      classSubjectIds: [classAMathOfferingId],
+    });
+    const reassignTeacher = await freshCtx(host, `10.${RUN}.11.5`);
+    await login(reassignTeacher, reassignTeacherBody.loginIdentifier, 'a-real-password-123');
+
+    const ownedExam = (
+      await post(reassignTeacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'Owned then reassigned away',
+        examType: 'Mock Examination',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>();
+
+    // Full-replace to zero assignments — the teacher no longer has an
+    // active TeacherAssignment covering ANY of this exam's targeted
+    // classes, exactly the state that exposed the list()/get() gap.
+    await put(admin, `/teachers/${reassignTeacherBody.teacherProfileId}/assignments`, {
+      academicSessionId: sessionId,
+      classSubjectIds: [],
+    });
+
+    const listRes = await get(reassignTeacher, '/exams');
+    const listBody = listRes.json<{ exams: { id: string }[] }>();
+    expect(listBody.exams.map((e) => e.id)).toContain(ownedExam.id);
+
+    const getRes = await get(reassignTeacher, `/exams/${ownedExam.id}`);
+    expect(getRes.statusCode).toBe(200);
+
+    const readinessRes = await get(reassignTeacher, `/exams/${ownedExam.id}/readiness`);
+    expect(readinessRes.statusCode).toBe(200);
+
+    const availableRes = await get(reassignTeacher, `/exams/${ownedExam.id}/available-questions`);
+    expect(availableRes.statusCode).toBe(200);
+  });
+
+  it('review fix: exam.create on a TEACHER-role actor with no TeacherProfile row is refused with an exam-specific code', async () => {
+    const passwordHash = await passwords.hash('a-real-password-123');
+    const user = await prisma.user.create({
+      data: {
+        firstName: 'No',
+        lastName: 'Profile',
+        displayName: 'No Profile',
+        passwordHash,
+        status: 'ACTIVE',
+        credentialState: 'OK',
+      },
+    });
+    createdUserIds.push(user.id);
+    const loginIdentifier = `noprofile-${randomUUID().slice(0, 8)}`;
+    const membership = await withTenant(prisma, schoolId, (tx) =>
+      tx.schoolMembership.create({
+        data: { schoolId, userId: user.id, loginIdentifier, status: 'ACTIVE' },
+      }),
+    );
+    // A real TEACHER RoleAssignment with deliberately NO accompanying
+    // TeacherProfile — every real /teachers-created account gets both
+    // together; this fixture only needs the data-integrity edge case.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.roleAssignment.create({
+        data: { schoolId, membershipId: membership.id, role: 'TEACHER' },
+      }),
+    );
+    const noProfileCtx = await freshCtx(host, `10.${RUN}.11.6`);
+    await login(noProfileCtx, loginIdentifier, 'a-real-password-123');
+
+    const res = await post(noProfileCtx, '/exams', {
+      academicSessionId: sessionId,
+      academicTermId: termId,
+      subjectId: mathSubjectId,
+      title: 'Should never be created',
+      examType: 'Mock Examination',
+      classIds: [classAId],
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe(
+      'EXAM_REQUIRES_TEACHER_PROFILE',
+    );
+  });
+
+  it('review fix: a losing race against ready() on PUT .../questions never surfaces a raw 500', async () => {
+    const raceExam = (
+      await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'Questions-vs-ready race',
+        examType: 'Mock Examination',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>();
+    await put(teacher, `/exams/${raceExam.id}/questions`, {
+      questions: [{ questionRevisionId: approvedRevisionId }],
+    });
+    await put(teacher, `/exams/${raceExam.id}/configuration`, {
+      durationSeconds: 1800,
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'SCORE_ONLY',
+      generalInstructions: 'Answer all questions.',
+    });
+
+    const [readyRes, questionsRes] = await Promise.all([
+      post(teacher, `/exams/${raceExam.id}/ready`, {}),
+      put(teacher, `/exams/${raceExam.id}/questions`, {
+        questions: [{ questionRevisionId: approvedRevisionId, marks: 5 }],
+      }),
+    ]);
+    expect(readyRes.statusCode).not.toBe(500);
+    expect(questionsRes.statusCode).not.toBe(500);
+    expect([200, 409]).toContain(readyRes.statusCode);
+    expect([200, 409]).toContain(questionsRes.statusCode);
+    if (questionsRes.statusCode === 409) {
+      expect(questionsRes.json<{ error: { code: string } }>().error.code).toBe('EXAM_NOT_DRAFT');
+    }
+  });
+
+  it('review fix: a losing race against ready() on PUT .../configuration never surfaces a raw 500', async () => {
+    const raceExam = (
+      await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'Configuration-vs-ready race',
+        examType: 'Mock Examination',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>();
+    await put(teacher, `/exams/${raceExam.id}/questions`, {
+      questions: [{ questionRevisionId: approvedRevisionId }],
+    });
+    await put(teacher, `/exams/${raceExam.id}/configuration`, {
+      durationSeconds: 1800,
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'SCORE_ONLY',
+      generalInstructions: 'Answer all questions.',
+    });
+
+    const [readyRes, configRes] = await Promise.all([
+      post(teacher, `/exams/${raceExam.id}/ready`, {}),
+      put(teacher, `/exams/${raceExam.id}/configuration`, { durationSeconds: 2400 }),
+    ]);
+    expect(readyRes.statusCode).not.toBe(500);
+    expect(configRes.statusCode).not.toBe(500);
+    expect([200, 409]).toContain(readyRes.statusCode);
+    expect([200, 409]).toContain(configRes.statusCode);
+    if (configRes.statusCode === 409) {
+      expect(configRes.json<{ error: { code: string } }>().error.code).toBe('EXAM_NOT_DRAFT');
+    }
+  });
+
+  it('review fix: a losing race against ready() on PATCH never surfaces a raw 500', async () => {
+    const raceExam = (
+      await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'Patch-vs-ready race',
+        examType: 'Mock Examination',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>();
+    await put(teacher, `/exams/${raceExam.id}/questions`, {
+      questions: [{ questionRevisionId: approvedRevisionId }],
+    });
+    await put(teacher, `/exams/${raceExam.id}/configuration`, {
+      durationSeconds: 1800,
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'SCORE_ONLY',
+      generalInstructions: 'Answer all questions.',
+    });
+
+    const [readyRes, patchRes] = await Promise.all([
+      post(teacher, `/exams/${raceExam.id}/ready`, {}),
+      patch(teacher, `/exams/${raceExam.id}`, { title: 'Renamed mid-race' }),
+    ]);
+    expect(readyRes.statusCode).not.toBe(500);
+    expect(patchRes.statusCode).not.toBe(500);
+    expect([200, 409]).toContain(readyRes.statusCode);
+    expect([200, 409]).toContain(patchRes.statusCode);
+    if (patchRes.statusCode === 409) {
+      expect(patchRes.json<{ error: { code: string } }>().error.code).toBe('EXAM_NOT_DRAFT');
+    }
+  });
 });

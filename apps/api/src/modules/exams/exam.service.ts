@@ -16,7 +16,7 @@ import {
   assertTermBelongsToSession,
   requireSchoolActor,
   requireTeacherAssignedToAnyClass,
-  requireTeacherProfile,
+  requireTeacherProfileForExam,
   resolveAndValidateClassTargets,
 } from './exam-scope.util.js';
 import { toExamResponseDtoFresh } from './exam.util.js';
@@ -62,7 +62,7 @@ export class ExamService {
     auditCtx: ActorContext,
   ): Promise<ExamResponseDto> {
     const schoolActor = requireSchoolActor(actor);
-    const teacherProfile = await requireTeacherProfile(schoolId, schoolActor.membershipId);
+    const teacherProfile = await requireTeacherProfileForExam(schoolId, schoolActor.membershipId);
 
     const subject = await withTenant(prisma, schoolId, (tx) =>
       tx.subject.findFirst({
@@ -188,7 +188,7 @@ export class ExamService {
     const exam = await loadExamOrThrow(schoolId, id);
     const resource = await this.resolveViewResourceContext(schoolId, actor, exam);
     const decision = await this.authz.evaluate(actor, 'exam.viewAll', resource);
-    if (!decision.allowed) {
+    if (!decision.allowed && !this.isCreator(actor, exam)) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Exam not found.' });
     }
     return toExamResponseDto(exam);
@@ -209,7 +209,7 @@ export class ExamService {
     const exam = await loadExamOrThrow(schoolId, id);
     const resource = await this.resolveViewResourceContext(schoolId, actor, exam);
     const decision = await this.authz.evaluate(actor, 'exam.useApprovedQuestions', resource);
-    if (!decision.allowed) {
+    if (!decision.allowed && !this.isCreator(actor, exam)) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Exam not found.' });
     }
     return {
@@ -283,7 +283,17 @@ export class ExamService {
       );
     }
 
-    await withTenant(prisma, schoolId, async (tx) => {
+    // Conditional updateMany (`WHERE status = 'DRAFT'`) rather than the
+    // plain `update()` this originally used — the same concurrency idiom
+    // `ready()`/`cancel()`/`archive()` already use. Without it, a `ready()`
+    // landing between the DRAFT check above and this write would still be
+    // correctly blocked by the migration's own immutability triggers, but
+    // as a raw, unhandled Postgres exception (a generic 500) instead of a
+    // clean `EXAM_NOT_DRAFT` — found in review, not by any test. The class-
+    // target mutation is gated on the same guard, inside the same
+    // transaction, so a losing race never reaches the child-table triggers
+    // at all.
+    const { count } = await withTenant(prisma, schoolId, async (tx) => {
       let resolvedClassSubjectIds: string[] | undefined;
       if (dto.classIds !== undefined) {
         const resolved = await resolveAndValidateClassTargets(tx, {
@@ -307,8 +317,8 @@ export class ExamService {
         resolvedClassSubjectIds = resolved.map((c) => c.classSubjectId);
       }
 
-      await tx.exam.update({
-        where: { id },
+      const updated = await tx.exam.updateMany({
+        where: { id, status: 'DRAFT' },
         data: {
           ...(dto.academicSessionId !== undefined && { academicSessionId: dto.academicSessionId }),
           ...(dto.academicTermId !== undefined && { academicTermId: dto.academicTermId }),
@@ -320,6 +330,9 @@ export class ExamService {
           ...(dto.examType !== undefined && { examType: dto.examType }),
         },
       });
+      if (updated.count === 0) {
+        return { count: 0 };
+      }
 
       if (resolvedClassSubjectIds !== undefined) {
         await tx.examClass.deleteMany({ where: { schoolId, examId: id } });
@@ -333,7 +346,14 @@ export class ExamService {
           });
         }
       }
+      return { count: updated.count };
     });
+    if (count === 0) {
+      throw new AppHttpException({
+        code: 'EXAM_NOT_DRAFT',
+        message: 'This exam is no longer in DRAFT.',
+      });
+    }
 
     await this.audit.record({
       schoolId,
@@ -553,12 +573,31 @@ export class ExamService {
     return toExamResponseDtoFresh(schoolId, id);
   }
 
+  /** `exam.viewAll`/`exam.useApprovedQuestions` are graded `ASSIGNED` for
+   * TEACHER, not `OWNED` — so, on their own, they deny a teacher who
+   * authored an exam but was later reassigned away from every one of its
+   * targeted classes, even though `list()`'s own `buildScopeFilter` always
+   * keeps such an exam visible in the list (a deliberate "safe superset,"
+   * per its own comment) and every `OWNED`-gated mutation (`editDraft`,
+   * `addQuestions`, `ready`, `cancel`, `archive`, ...) stays reachable to
+   * them regardless. Without this fallback, the exam would appear in the
+   * list but 404 on open — a real inconsistency found in review, not by any
+   * test. `get()`/`assertUsableForQuestionSelection()` both check this
+   * alongside the real `evaluate()` decision, so authorship alone is always
+   * enough to view (never to configure/publish/etc. — those still go
+   * through the real `OWNED` grant on their own permission id). */
+  private isCreator(actor: AuthorizedActor, exam: { createdByMembershipId: string }): boolean {
+    return actor.kind === 'SCHOOL' && actor.membershipId === exam.createdByMembershipId;
+  }
+
   /** Builds the `ResourceContext` `get()`'s `exam.viewAll` check needs —
    * `departmentId` (HOD DEPARTMENT) plus a best-effort `classSubjectId`
    * (TEACHER ASSIGNED, resolved against ANY of the exam's own targeted
    * classes — mirrors `QuestionService.resolveResourceContext`'s own
    * precedent, widened from one class to N the same way
-   * `requireTeacherAssignedToAnyClass` widens creation's check). */
+   * `requireTeacherAssignedToAnyClass` widens creation's check). Authorship
+   * alone isn't encoded here — see `isCreator()`'s own doc comment for why
+   * that's checked as a separate fallback by each caller instead. */
   private async resolveViewResourceContext(
     schoolId: string,
     actor: AuthorizedActor,
