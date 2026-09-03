@@ -78,7 +78,15 @@ export function DecisionPanel({
       toast.success('Question rejected');
       onDecided();
     } catch (err) {
-      if (isSelfReviewForbidden(err)) setSelfReviewBlocked(true);
+      if (isSelfReviewForbidden(err)) {
+        // Don't rethrow: `ReviewDecisionDialog`'s own catch would set an
+        // inline error it can never actually show — the very next render
+        // (selfReviewBlocked) replaces this whole panel, dialogs included,
+        // with the permanent banner. Returning normally instead lets the
+        // dialog close cleanly via its own success path.
+        setSelfReviewBlocked(true);
+        return;
+      }
       throw err;
     }
   }
@@ -89,7 +97,10 @@ export function DecisionPanel({
       toast.success('Changes requested');
       onDecided();
     } catch (err) {
-      if (isSelfReviewForbidden(err)) setSelfReviewBlocked(true);
+      if (isSelfReviewForbidden(err)) {
+        setSelfReviewBlocked(true);
+        return;
+      }
       throw err;
     }
   }

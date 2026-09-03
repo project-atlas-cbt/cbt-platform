@@ -147,7 +147,20 @@ export function ReviewWorkspace({ questionId }: { questionId: string }) {
         ) : null}
       </div>
 
-      <DecisionPanel questionId={questionId} onDecided={() => goToQuestion(next)} />
+      {/* `key={questionId}` is load-bearing, not decorative: Next.js App
+          Router does not remount this page purely because the `[id]`
+          dynamic segment changed (Previous/Next/onDecided all navigate via
+          `router.push` without a full reload), so without a keyed element
+          here `DecisionPanel`'s local state (the self-review-blocked banner,
+          an in-progress note) would silently carry over from the previous
+          question onto this one — found in a post-completion review, not
+          caught by any test that only ever mounted one questionId per
+          render. */}
+      <DecisionPanel
+        key={questionId}
+        questionId={questionId}
+        onDecided={() => goToQuestion(next)}
+      />
 
       <ReviewHistoryTimeline history={data.history} />
     </div>

@@ -45,5 +45,13 @@ export function useReviewHistory(questionId: string | undefined) {
         }),
       ),
     enabled: Boolean(questionId),
+    // `questionBank.comment.view` is OWNED-scoped for TEACHER — this hook is
+    // also called from `QuestionDetailScreen`, which a teacher legitimately
+    // opens for a colleague's question too (their bank view is ASSIGNED-
+    // scoped, not owner-restricted). That call is a guaranteed, expected
+    // 404, not a transient failure — retrying it three times (the app's
+    // global default) would just be guaranteed-failing traffic on a common
+    // path. Found in a post-completion review.
+    retry: false,
   });
 }

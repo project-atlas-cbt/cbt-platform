@@ -101,6 +101,19 @@ describe('DecisionPanel', () => {
     expect(screen.queryByRole('button', { name: /^reject$/i })).not.toBeInTheDocument();
   });
 
+  it('a self-review block on reject closes the dialog cleanly and shows the banner, without leaving onDecided called', async () => {
+    rejectMutateAsync.mockRejectedValueOnce(selfReviewError());
+    const onDecided = vi.fn();
+    render(<DecisionPanel questionId="q1" onDecided={onDecided} />);
+    await userEvent.click(screen.getByRole('button', { name: /^reject$/i }));
+    await userEvent.type(screen.getByLabelText(/reason/i), 'Doesn’t matter.');
+    await userEvent.click(screen.getByRole('button', { name: /^reject question$/i }));
+
+    expect(await screen.findByText(/cannot review your own submissions/i)).toBeInTheDocument();
+    expect(screen.queryByText(/reject this question\?/i)).not.toBeInTheDocument();
+    expect(onDecided).not.toHaveBeenCalled();
+  });
+
   it('the "A" keyboard shortcut approves', async () => {
     approveMutateAsync.mockResolvedValueOnce({});
     render(<DecisionPanel questionId="q1" onDecided={vi.fn()} />);
