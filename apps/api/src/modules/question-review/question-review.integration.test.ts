@@ -509,6 +509,29 @@ describe('B9 Question Review & Governance', () => {
     expect(approve.statusCode).toBe(403);
   });
 
+  it(
+    "security: an HOD outside the question's department gets FORBIDDEN, not a business-state " +
+      'error, even once the revision is already decided (regression: authorization must run ' +
+      "before any state check reveals the question's review status to an out-of-scope actor)",
+    async () => {
+      const { questionId } = await createAndSubmitQuestion(
+        teacherA,
+        mathSubjectId,
+        'Already-decided cross-dept Q',
+      );
+      const decided = await post(hodSci, `/reviews/questions/${questionId}/approve`, {});
+      expect(decided.statusCode).toBe(200);
+
+      // hodArts (a different department) must see FORBIDDEN here — not
+      // QUESTION_REVISION_NOT_SUBMITTED, which would disclose that this
+      // question exists and has already been decided to an actor with no
+      // authorization to know either fact.
+      const res = await post(hodArts, `/reviews/questions/${questionId}/approve`, {});
+      expect(res.statusCode).toBe(403);
+      expect(res.json<{ error: { code: string } }>().error.code).toBe('FORBIDDEN');
+    },
+  );
+
   it('DoD item 7: a teacher who is also HOD of the department cannot approve their own question', async () => {
     const { questionId } = await createAndSubmitQuestion(
       teacherHod,
@@ -546,6 +569,46 @@ describe('B9 Question Review & Governance', () => {
       'QUESTION_REVISION_NOT_SUBMITTED',
     );
   });
+
+  it(
+    'concurrency: exactly one of two simultaneous decisions on the same revision succeeds ' +
+      "(decide()'s guard is a conditional UPDATE, not merely an application-level pre-check " +
+      'that reads the status before the transaction starts)',
+    async () => {
+      const { revisionId } = await createAndSubmitQuestion(
+        teacherA,
+        mathSubjectId,
+        'Concurrent decision Q',
+      );
+
+      // The exact conditional statement decide() issues for approve/reject,
+      // fired twice concurrently — Promise.all gives genuine concurrent
+      // dispatch; Postgres's own row lock (not test timing) is what
+      // guarantees the outcome, mirroring
+      // import-confirm-concurrency.integration.test.ts's own precedent
+      // exactly (a plain conditional UPDATE races deterministically,
+      // unlike an INSERT-vs-unique-index race, which needs pg_sleep
+      // forcing instead).
+      const [resultA, resultB] = await Promise.all([
+        withTenant(prisma, schoolId, (tx) =>
+          tx.questionRevision.updateMany({
+            where: { id: revisionId, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } },
+            data: { status: 'APPROVED' },
+          }),
+        ),
+        withTenant(prisma, schoolId, (tx) =>
+          tx.questionRevision.updateMany({
+            where: { id: revisionId, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } },
+            data: { status: 'REJECTED' },
+          }),
+        ),
+      ]);
+
+      // Never both, never neither — exactly one of the two racing decisions
+      // is the one that should go on to create its own QuestionReview row.
+      expect(resultA.count + resultB.count).toBe(1);
+    },
+  );
 
   it(
     'full cycle: submit -> queue -> request-changes -> revise -> resubmit -> approve, ' +
@@ -655,6 +718,60 @@ describe('B9 Question Review & Governance', () => {
           (tx) => tx.$executeRaw`DELETE FROM question_reviews WHERE id = ${reviewRow.id}::uuid`,
         ),
       ).rejects.toThrow();
+    },
+  );
+
+  it(
+    "queue orders by the current revision's own updatedAt (submission time), not " +
+      "Question.updatedAt — regression: Question's own row is never touched by submit(), " +
+      'only by creation/resubmission, so ordering by it can invert real queue age',
+    async () => {
+      // A is created first but held in DRAFT, submitted LAST. B is created
+      // second but submitted FIRST (immediately). A genuinely waited less
+      // time once submitted, but its Question row is *older* than B's
+      // (submit() never touches Question) — ordering by Question.updatedAt
+      // would (wrongly) rank A ahead of B; ordering by the revision's own
+      // updatedAt correctly ranks B ahead of A.
+      const createdA = await post(teacherA, '/questions', {
+        subjectId: mathSubjectId,
+        level: 'SS2',
+        questionType: 'SINGLE_CHOICE',
+        content: 'Ordering regression - A (created first, submitted last)',
+        difficulty: 'EASY',
+        marks: 2,
+        options: [
+          { content: '1', correctFlag: false },
+          { content: '2', correctFlag: true },
+        ],
+      });
+      const createdABody = createdA.json<{ id: string; revisions: { id: string }[] }>();
+      const questionAId = createdABody.id;
+      const revisionAId = createdABody.revisions[0]!.id;
+
+      const { questionId: questionBId } = await createAndSubmitQuestion(
+        teacherA,
+        mathSubjectId,
+        'Ordering regression - B (created second, submitted first)',
+      );
+
+      const submitA = await post(
+        teacherA,
+        `/questions/${questionAId}/revisions/${revisionAId}/submit`,
+      );
+      expect(submitA.statusCode).toBe(200);
+
+      const queue = await get(hodSci, '/reviews/queue');
+      const items =
+        queue
+          .json<{ subjects: { subjectId: string; items: { questionId: string }[] }[] }>()
+          .subjects.find((s) => s.subjectId === mathSubjectId)?.items ?? [];
+      const indexA = items.findIndex((i) => i.questionId === questionAId);
+      const indexB = items.findIndex((i) => i.questionId === questionBId);
+      expect(indexA).toBeGreaterThanOrEqual(0);
+      expect(indexB).toBeGreaterThanOrEqual(0);
+      // B was submitted first (has been waiting longer) — it must rank
+      // ahead of A regardless of which question was created first.
+      expect(indexB).toBeLessThan(indexA);
     },
   );
 

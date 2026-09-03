@@ -38,13 +38,16 @@ interface ActorContext {
 
 /** `question-review.v1` (B9) — the HOD review queue, review workspace, the
  * three decision endpoints, and immutable review history. Every decision
- * runs the same shared `decide()`: resource-state guard, self-review
- * check, the real two-hop department-scope `evaluate()` call
- * (`QuestionService.resolveResourceContext()`'s own established pattern —
- * `Subject.departmentId` resolved by this caller before constructing the
- * `ResourceContext`, exactly as ADR-0001 requires), one transaction writing
- * both the revision-status transition and the new `QuestionReview` row,
- * then an audit event and a best-effort teacher notification. */
+ * runs the same shared `decide()`, in this order: the real two-hop
+ * department-scope `evaluate()` call first (`QuestionService
+ * .resolveResourceContext()`'s own established pattern — `Subject
+ * .departmentId` resolved by this caller before constructing the
+ * `ResourceContext`, exactly as ADR-0001 requires) so nothing about the
+ * question's state is revealed to an out-of-scope actor, then the
+ * self-review check, then one transaction writing both the
+ * revision-status transition (guarded atomically against a concurrent
+ * decision) and the new `QuestionReview` row, then an audit event and a
+ * best-effort teacher notification. */
 @Injectable()
 export class QuestionReviewService {
   constructor(
@@ -95,7 +98,15 @@ export class QuestionReviewService {
         include: QUESTION_FOR_REVIEW_INCLUDE,
         // Oldest-submitted-first — matches "queue age" (04 §29/§70): the
         // longest-waiting question surfaces first in each subject's list.
-        orderBy: { updatedAt: 'asc' },
+        // Ordered through the *revision's* own updatedAt, not Question's —
+        // submit() only ever touches QuestionRevision, never the parent
+        // Question row, so Question.updatedAt reflects the last time the
+        // question itself changed (creation, or a resubmission cycle's
+        // currentRevisionId repoint), not when the pending revision was
+        // actually submitted. This is the same field toQueueItemDto's own
+        // `submittedAt` uses — the sort key and the displayed value must
+        // agree.
+        orderBy: { currentRevision: { updatedAt: 'asc' } },
       }),
     );
 
@@ -236,10 +247,27 @@ export class QuestionReviewService {
     const question = await this.loadQuestionForReview(schoolId, questionId);
     const revision = question.currentRevision;
 
-    if (revision.status !== 'SUBMITTED' && revision.status !== 'UNDER_REVIEW') {
+    // Authorize before revealing anything about this question's state —
+    // mirrors getWorkspace()/getHistory()'s own "authorize, then reveal"
+    // ordering in this file, and requireOwnedRevision()'s identical
+    // "authorize, then inspect state" precedent in
+    // question-revision.service.ts. Checking the revision's status first
+    // would let an HOD outside this question's department learn its
+    // review state (e.g. "already decided", via a 409) before ever being
+    // authorized to know the question exists at all — the guard-level
+    // @Authorized() check alone can't catch this, since any HOD passes it
+    // regardless of department (DEPARTMENT's own "no resource yet ->
+    // optimistic pass" behaviour).
+    const authzDecision = await this.authz.evaluate(actor, permissionId, {
+      schoolId,
+      ...(question.subject.departmentId !== null && {
+        departmentId: question.subject.departmentId,
+      }),
+    });
+    if (!authzDecision.allowed) {
       throw new AppHttpException({
-        code: 'QUESTION_REVISION_NOT_SUBMITTED',
-        message: 'This question is not currently awaiting review.',
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to review this question.',
       });
     }
 
@@ -255,25 +283,25 @@ export class QuestionReviewService {
       });
     }
 
-    const authzDecision = await this.authz.evaluate(actor, permissionId, {
-      schoolId,
-      ...(question.subject.departmentId !== null && {
-        departmentId: question.subject.departmentId,
-      }),
-    });
-    if (!authzDecision.allowed) {
-      throw new AppHttpException({
-        code: 'FORBIDDEN',
-        message: 'You do not have permission to review this question.',
-      });
-    }
-
     const revisionStatus = decision === 'APPROVED' ? 'APPROVED' : 'REJECTED';
     const review = await withTenant(prisma, schoolId, async (tx) => {
-      await tx.questionRevision.update({
-        where: { id: revision.id },
+      // Concurrency guard: the SUBMITTED/UNDER_REVIEW precondition is
+      // re-checked atomically inside this UPDATE, not merely by having
+      // been read moments earlier — two decisions racing on the same
+      // revision (e.g. two HODs approving/rejecting near-simultaneously)
+      // must not both succeed. Same conditional-updateMany idiom as B7's
+      // import confirm()/commit() claim (imports.service.ts,
+      // import-commit.service.ts) and B5's session activation.
+      const { count } = await tx.questionRevision.updateMany({
+        where: { id: revision.id, status: { in: ['SUBMITTED', 'UNDER_REVIEW'] } },
         data: { status: revisionStatus },
       });
+      if (count === 0) {
+        throw new AppHttpException({
+          code: 'QUESTION_REVISION_NOT_SUBMITTED',
+          message: 'This question is not currently awaiting review.',
+        });
+      }
       return tx.questionReview.create({
         data: {
           schoolId,

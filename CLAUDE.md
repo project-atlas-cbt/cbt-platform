@@ -3525,3 +3525,43 @@ _Implementation (B9 complete)_.
 complete. A future `F10` (Question Review Workspace) remains open whenever the frontend/backend
 phase-pairing default is next prioritized, and would close the one exit criterion this pass left
 honestly open.
+
+### 2026-09-03 — `B9` gap closure: thorough implementation review, three fixes
+
+Requested explicitly, same day as `B9` itself: a thorough review of the just-shipped implementation
+looking for bugs, not new scope. Read every B9 file end to end and cross-checked each decision path
+against the established conventions elsewhere in the codebase (B8's `question.service.ts`/
+`question-revision.service.ts`, the `DEPARTMENT`/`OWNED` scope resolvers, `AuditService`) rather than
+just re-reading B9 in isolation. Three real, fixable issues surfaced in `question-review.service.ts`
+— none caught by the original 9-test suite. Full detail (failure scenarios, the fix for each, and
+file references) is in `docs/roadmaps/backend-roadmap.md`'s B9 section, "Post-completion gap closure"
+note, not duplicated here:
+
+1. **Queue ordering used the wrong field.** `getQueue()` sorted by `Question.updatedAt`, which
+   `submit()` never touches (only `QuestionRevision.status` changes on submit) — the sort key and
+   the response's own `submittedAt` DTO field (`currentRevision.updatedAt`) disagreed, so the queue
+   could invert real submission order for a question drafted for days before submitting. Fixed to
+   order through the revision relation instead.
+2. **`decide()` checked business state before authorization.** The revision-status and self-review
+   checks both ran before `authz.evaluate()`, unlike every comparable write path elsewhere in this
+   codebase (`requireOwnedRevision()`, `question.service.ts`'s `archive()`, and this same file's own
+   `getWorkspace()`/`getHistory()`) — letting an HOD outside a question's department learn its review
+   state (already-decided vs. still-pending) via a `409` instead of a `403`, before ever being
+   authorized to know the question exists. Fixed by authorizing first.
+3. **No concurrency guard on the decision write.** The `QuestionRevision` status update had no
+   status precondition inside the transaction, so two decisions racing on the same revision (e.g.
+   two HODs approving/rejecting near-simultaneously) could both commit, producing two `QuestionReview`
+   rows and an ambiguous final status. Fixed with the same conditional-`updateMany` idiom B5's session
+   activation and B7's import confirm/commit claim already established in this codebase.
+
+Three new regression tests added to `question-review.integration.test.ts` (12 total, up from 9),
+mirroring `import-confirm-concurrency.integration.test.ts`'s own direct-Prisma-race technique for the
+concurrency proof. Full pipeline reconfirmed green after every fix: `pnpm --filter @atlas/api
+{typecheck,lint,test}`, the full `apps/api` integration suite for this module plus the neighbouring
+B8 question suites (22 tests, unaffected), the extended `tests/tenancy/rls.integration.test.ts` suite
+(71 tests, unaffected), and `pnpm --filter @atlas/api run build`.
+
+No schema change, no permission-table change, no product-behaviour change beyond correcting the three
+bugs themselves, no ADR involved, no roadmap phase status changed. Project state remains
+_Implementation (B9 complete)_ — this was a same-phase gap closure, not a new phase. **Next:
+`B11 — Exam Builder & Readiness`**, unchanged.
