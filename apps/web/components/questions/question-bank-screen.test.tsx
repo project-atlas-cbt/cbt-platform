@@ -131,4 +131,38 @@ describe('QuestionBankScreen', () => {
     expect(screen.queryByRole('tab', { name: /^all$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /rejected questions/i })).not.toBeInTheDocument();
   });
+
+  it('F10 regression: Rejected/Create/Import links follow basePath, not a hardcoded teacher route', () => {
+    // Non-empty rows deliberately — an empty result set renders a *second*
+    // "Create question" link inside `DataTable`'s own empty state, which
+    // would make the toolbar assertion below ambiguous.
+    mockUseQuestionsPaginated.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { questions: QUESTIONS, total: 1, page: 1, pageSize: 25 },
+    } as never);
+    render(<QuestionBankScreen basePath="/hod/question-bank" />);
+    expect(screen.getByRole('link', { name: /rejected questions/i })).toHaveAttribute(
+      'href',
+      '/hod/question-bank/rejected',
+    );
+    expect(screen.getByRole('link', { name: /^import$/i })).toHaveAttribute(
+      'href',
+      '/hod/question-bank/import',
+    );
+    expect(screen.getByRole('link', { name: /create question/i })).toHaveAttribute(
+      'href',
+      '/hod/question-bank/new',
+    );
+  });
+
+  it('F10: hideImport suppresses the Import link even when the actor holds the grant', () => {
+    mockUseQuestionsPaginated.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { questions: [], total: 0, page: 1, pageSize: 25 },
+    } as never);
+    render(<QuestionBankScreen basePath="/hod/question-bank" hideImport />);
+    expect(screen.queryByRole('link', { name: /^import$/i })).not.toBeInTheDocument();
+  });
 });

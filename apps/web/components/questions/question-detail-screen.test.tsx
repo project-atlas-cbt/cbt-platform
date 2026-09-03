@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QuestionDetailScreen } from './question-detail-screen';
 import { useQuestion } from '@/lib/questions/queries';
 import { useArchiveQuestion, useCreateRevision } from '@/lib/questions/mutations';
+import { useReviewHistory } from '@/lib/question-review/queries';
 import { useHasPermission } from '@/lib/nav';
 
 const push = vi.fn();
@@ -17,11 +18,13 @@ vi.mock('@/lib/questions/mutations', () => ({
   useArchiveQuestion: vi.fn(),
   useCreateRevision: vi.fn(),
 }));
+vi.mock('@/lib/question-review/queries', () => ({ useReviewHistory: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 
 const mockUseQuestion = vi.mocked(useQuestion);
 const mockUseArchive = vi.mocked(useArchiveQuestion);
 const mockUseCreateRevision = vi.mocked(useCreateRevision);
+const mockUseReviewHistory = vi.mocked(useReviewHistory);
 const mockUseHasPermission = vi.mocked(useHasPermission);
 
 function question(overrides: Partial<{ status: string; archivedAt: string | null }> = {}) {
@@ -84,6 +87,7 @@ describe('QuestionDetailScreen', () => {
       isPending: false,
     } as never);
     mockUseHasPermission.mockReturnValue(true);
+    mockUseReviewHistory.mockReturnValue({ data: undefined } as never);
   });
 
   it('shows a loading state', () => {
@@ -159,6 +163,33 @@ describe('QuestionDetailScreen', () => {
     expect(screen.getByText(/archive this question\?/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /^archive question$/i }));
     expect(archiveMutateAsync).toHaveBeenCalledWith('q1');
+  });
+
+  it('F10: shows the real reviewer decision instead of the honest placeholder once available', async () => {
+    mockUseQuestion.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: question({ status: 'REJECTED' }),
+    } as never);
+    mockUseReviewHistory.mockReturnValue({
+      data: {
+        history: [
+          {
+            id: 'review1',
+            revisionNumber: 1,
+            decision: 'REJECTED',
+            comment: 'Option B is ambiguous.',
+            reviewerName: 'Mrs Bello',
+            createdAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+      },
+    } as never);
+    render(<QuestionDetailScreen questionId="q1" />);
+    await userEvent.click(screen.getByRole('button', { name: /revision 1/i }));
+    expect(screen.getByText(/option b is ambiguous/i)).toBeInTheDocument();
+    expect(screen.getByText(/mrs bello/i)).toBeInTheDocument();
+    expect(screen.queryByText(/reviewer feedback isn.t available yet/i)).not.toBeInTheDocument();
   });
 
   it('hides Edit/Archive for an actor without the grants', () => {

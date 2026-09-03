@@ -9,16 +9,15 @@ import { QuestionBankScreen } from './question-bank-screen';
 /**
  * F9 — `04 §40`'s dedicated Rejected-questions view. Genuinely calls
  * `GET /questions?status=REJECTED` (via `QuestionBankScreen`) — real,
- * filtered, paginated — but since no endpoint anywhere can produce a
- * `REJECTED` revision yet (`B9`, the HOD approve/reject/comment workflow,
- * doesn't exist), it will be empty for every real school today.
- * Honestly-partial by design (confirmed with the project owner): the empty
- * state names the exact gap rather than a vague "coming soon," matching
- * `NotificationPanel`'s (F2) own established "not yet available, here's
- * what unlocks it" precedent. Once a row genuinely has `status: REJECTED`
- * (B9, once shipped), the shared `QuestionBankScreen` renders it like any
- * other question — DoD item 8's remaining gap (the HOD's actual reason)
- * lives in `RevisionHistory`'s own honest placeholder, not here.
+ * filtered, paginated. `B9` (the HOD approve/reject/comment workflow) and
+ * `F10` (the HOD-facing review UI that actually calls it) are both complete
+ * now, so a real `status: REJECTED` row can genuinely exist — this screen's
+ * own count-gated logic already renders it correctly via the shared
+ * `QuestionBankScreen` with no change needed; the empty-state copy below
+ * (previously "the workflow hasn't shipped yet") was the only stale part,
+ * fixed to describe the honest current-vs-empty distinction instead. The
+ * HOD's actual reason is shown via `RevisionHistory`'s own `reviewHistory`
+ * wiring (F10), not here.
  *
  * Reuses `useQuestionCounts()` — the same `['questions','counts']` query
  * `QuestionBankScreen` itself will call once rendered — rather than a
@@ -44,7 +43,7 @@ export function RejectedQuestionsScreen({ basePath }: { basePath: string }) {
         <NotYetAvailable
           icon={XCircle}
           title="No rejected questions"
-          description="The HOD review workflow that can reject a question hasn't shipped yet (B9) — nothing has been rejected because nothing can be, yet."
+          description="Nothing within your scope has been rejected by an HOD yet."
         />
       </div>
     );

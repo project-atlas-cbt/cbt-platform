@@ -55,4 +55,32 @@ describe('RevisionHistory', () => {
     await userEvent.click(screen.getByRole('button', { name: /revision 2/i }));
     expect(screen.queryByText(/reviewer feedback isn.t available yet/i)).not.toBeInTheDocument();
   });
+
+  it('F10: a matching reviewHistory entry replaces the placeholder with the real decision', async () => {
+    render(
+      <RevisionHistory
+        currentRevisionId="rev2"
+        revisions={REVISIONS}
+        reviewHistory={[
+          {
+            revisionNumber: 1,
+            decision: 'REJECTED',
+            comment: 'Option B is ambiguous.',
+            reviewerName: 'Mrs Bello',
+            createdAt: '2026-01-01T00:00:00Z',
+          },
+        ]}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /revision 1/i }));
+    expect(screen.getByText(/option b is ambiguous/i)).toBeInTheDocument();
+    expect(screen.getByText(/mrs bello/i)).toBeInTheDocument();
+    expect(screen.queryByText(/reviewer feedback isn.t available yet/i)).not.toBeInTheDocument();
+  });
+
+  it('F10: a revision with no matching reviewHistory entry still falls back to the honest placeholder', async () => {
+    render(<RevisionHistory currentRevisionId="rev2" revisions={REVISIONS} reviewHistory={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /revision 1/i }));
+    expect(screen.getByText(/reviewer feedback isn.t available yet/i)).toBeInTheDocument();
+  });
 });

@@ -72,13 +72,28 @@ interface QuestionRow {
  *
  * `pinnedStatus`, when given, forces the status filter and hides the tab
  * strip — used by `RejectedQuestionsScreen` (`04 §40`'s dedicated view).
+ *
+ * `hideImport` (F10): the Rejected/Create/Import links below are now all
+ * `basePath`-relative — a real bug fix, not cosmetic. They were hardcoded to
+ * `/teacher/question-bank/...` until this phase found HOD's own
+ * `/hod/question-bank` reuse of this same component would otherwise send an
+ * HOD to the teacher's own import screen (HOD holds `questionBank.import` at
+ * `DEPARTMENT` scope — confirmed in the permission table — so `canImport`
+ * really is `true` there, not merely a permission-gated no-op). `hideImport`
+ * additionally suppresses that link for HOD specifically: building a real
+ * HOD-facing bulk-import screen is out of F10's approved scope (F8's own
+ * Change Log already named this exact gap as deferred to "F9/F10" without
+ * closing it) — recorded again here as Candidate/Deferred, not silently
+ * dropped.
  */
 export function QuestionBankScreen({
   basePath,
   pinnedStatus,
+  hideImport = false,
 }: {
   basePath: string;
   pinnedStatus?: string;
+  hideImport?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -162,7 +177,7 @@ export function QuestionBankScreen({
         <div className="flex gap-2">
           {!pinnedStatus ? (
             <Button variant="secondary" asChild>
-              <Link href="/teacher/question-bank/rejected">
+              <Link href={`${basePath}/rejected`}>
                 <XCircle aria-hidden /> Rejected questions
               </Link>
             </Button>
@@ -176,16 +191,16 @@ export function QuestionBankScreen({
               <Download aria-hidden /> Export
             </Button>
           ) : null}
-          {canImport ? (
+          {canImport && !hideImport ? (
             <Button variant="secondary" asChild>
-              <Link href="/teacher/question-bank/import">
+              <Link href={`${basePath}/import`}>
                 <Upload aria-hidden /> Import
               </Link>
             </Button>
           ) : null}
           {canCreate ? (
             <Button asChild>
-              <Link href="/teacher/question-bank/new">
+              <Link href={`${basePath}/new`}>
                 <Plus aria-hidden /> Create question
               </Link>
             </Button>
@@ -291,7 +306,7 @@ export function QuestionBankScreen({
                 action={
                   canCreate ? (
                     <Button asChild>
-                      <Link href="/teacher/question-bank/new">Create question</Link>
+                      <Link href={`${basePath}/new`}>Create question</Link>
                     </Button>
                   ) : undefined
                 }

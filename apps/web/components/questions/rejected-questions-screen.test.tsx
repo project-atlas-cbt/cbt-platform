@@ -55,7 +55,7 @@ describe('RejectedQuestionsScreen', () => {
     } as never);
     render(<RejectedQuestionsScreen basePath="/teacher/question-bank/rejected" />);
     expect(screen.getByText('No rejected questions')).toBeInTheDocument();
-    expect(screen.getByText(/hasn.t shipped yet \(b9\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing within your scope has been rejected/i)).toBeInTheDocument();
   });
 
   it('renders the real, filtered list once a rejected question genuinely exists', () => {

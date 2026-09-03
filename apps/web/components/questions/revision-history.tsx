@@ -20,21 +20,41 @@ export interface RevisionHistoryItem {
   options: { id: string; content: string; correctFlag: boolean }[];
 }
 
+/** One `question-review.v1` (B9) decision, keyed to the revision it was
+ * made against by `revisionNumber` — both DTOs carry this field. */
+export interface RevisionReviewDecision {
+  revisionNumber: number;
+  decision: string;
+  comment: string | null;
+  reviewerName: string;
+  createdAt: string;
+}
+
+const DECISION_LABEL: Record<string, string> = {
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  REQUEST_CHANGES: 'Changes requested',
+};
+
 /**
  * F9 — `RevisionHistory` (DoD item 9). Real, from `QuestionRevisionResponseDto`:
  * `revisionNumber`, `status`, timestamps, author, and on expand the full
- * content/options/difficulty/marks snapshot. Honestly placeholder: the
- * decision reason/HOD comment — no such field exists anywhere in `B8`'s
- * schema (`questionBank.comment.*` are `awaitingResource: 'Question review
- * workflow (B9)'`) — shown per-revision rather than omitting the row,
- * matching the rejected-view's own honest-partial treatment.
+ * content/options/difficulty/marks snapshot.
+ *
+ * F10 update: `reviewHistory`, when supplied, replaces the "not yet
+ * available" placeholder with the real HOD decision matched by
+ * `revisionNumber` (B9's `GET /reviews/history/:questionId` is now real).
+ * Left `undefined` by any caller that hasn't been updated to fetch it, this
+ * still degrades to the original honest placeholder rather than crashing.
  */
 export function RevisionHistory({
   currentRevisionId,
   revisions,
+  reviewHistory,
 }: {
   currentRevisionId: string | undefined;
   revisions: RevisionHistoryItem[];
+  reviewHistory?: RevisionReviewDecision[];
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const ordered = sortRevisionsDescending(revisions);
@@ -46,8 +66,11 @@ export function RevisionHistory({
         {ordered.map((revision) => {
           const isOpen = expanded === revision.id;
           const isCurrent = revision.id === currentRevisionId;
+          const decision = reviewHistory?.find(
+            (entry) => entry.revisionNumber === revision.revisionNumber,
+          );
           const showFeedbackPlaceholder =
-            revision.status === 'REJECTED' || revision.status === 'APPROVED';
+            !decision && (revision.status === 'REJECTED' || revision.status === 'APPROVED');
           return (
             <li key={revision.id}>
               <button
@@ -100,11 +123,23 @@ export function RevisionHistory({
                   <p className="text-xs text-text-muted">
                     {revision.difficulty} · {revision.marks} mark{revision.marks === 1 ? '' : 's'}
                   </p>
-                  {showFeedbackPlaceholder ? (
+                  {decision ? (
+                    <div className="rounded-md border border-border bg-surface-muted/40 p-2 text-sm">
+                      <p className="font-medium text-text-primary">
+                        {DECISION_LABEL[decision.decision] ?? decision.decision} —{' '}
+                        {decision.reviewerName}
+                      </p>
+                      <p className="text-text-secondary">
+                        {decision.comment ?? (
+                          <span className="italic text-text-muted">No note left.</span>
+                        )}
+                      </p>
+                    </div>
+                  ) : showFeedbackPlaceholder ? (
                     <NotYetAvailable
                       icon={MessageSquareOff}
                       title="Reviewer feedback isn't available yet"
-                      description="The review workflow (B9) that captures an HOD's reason or comment hasn't shipped yet."
+                      description="No review decision is recorded against this revision yet."
                     />
                   ) : null}
                 </div>

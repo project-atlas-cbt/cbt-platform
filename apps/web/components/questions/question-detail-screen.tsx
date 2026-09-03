@@ -18,6 +18,7 @@ import {
 import { useHasPermission } from '@/lib/nav';
 import { ApiError } from '@/lib/api';
 import { useQuestion } from '@/lib/questions/queries';
+import { useReviewHistory } from '@/lib/question-review/queries';
 import { useArchiveQuestion, useCreateRevision } from '@/lib/questions/mutations';
 import { sanitizeQuestionHtml } from '@/lib/questions/sanitize-html';
 import { pickCurrentRevision } from '@/lib/questions/revision-order';
@@ -38,6 +39,7 @@ export function QuestionDetailScreen({ questionId }: { questionId: string }) {
   const notice = searchParams.get('notice');
 
   const question = useQuestion(questionId);
+  const reviewHistory = useReviewHistory(questionId);
   const canManageOwn = useHasPermission('questionBank.editOwnDraft');
   const canArchive = useHasPermission('questionBank.archive');
 
@@ -176,7 +178,11 @@ export function QuestionDetailScreen({ questionId }: { questionId: string }) {
         </div>
       ) : null}
 
-      <RevisionHistory currentRevisionId={current?.id} revisions={data.revisions} />
+      <RevisionHistory
+        currentRevisionId={current?.id}
+        revisions={data.revisions}
+        {...(reviewHistory.data ? { reviewHistory: reviewHistory.data.history } : {})}
+      />
 
       <Dialog open={confirmNewRevision} onOpenChange={setConfirmNewRevision}>
         <DialogContent>

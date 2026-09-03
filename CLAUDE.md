@@ -336,10 +336,15 @@ and requiring zero changes to `B8`'s existing resubmission gate (`REQUEST_CHANGE
 question; HOD reassignment needed no new mechanism, since the queue always re-resolves live
 `HODAssignment` rows against B6's already-shipped removal/reassignment endpoints. Notifications reuse
 the existing B0 `NotificationChannel` synchronously rather than waiting on the still-unbuilt `B10`,
-matching B1/B3/B6's own precedent. Honestly open: `F10` (Question Review Workspace) wasn't built in
-this pass, so the roadmap's own "F10 confirms the contract" exit criterion stays open, matching every
-prior backend-only phase's identical gap. `B11 — Exam Builder & Readiness` is next on the backend
-critical path.
+matching B1/B3/B6's own precedent. **`F10 — Question Review Workspace`** is now complete too,
+closing the "F10 confirms the contract" exit criterion `B9` left open: the HOD review queue
+(`/hod/question-review`, grouped by subject), review workspace (approve with an optional note and no
+dialog; reject/request-changes each behind a mandatory-reason dialog; queue-order prefetching for an
+instant "Next"; keyboard shortcuts), department bank oversight (`/hod/question-bank`, reusing F9's
+`QuestionBankScreen`/`QuestionDetailScreen` verbatim once a real hardcoded-path bug in the former was
+fixed), and the dashboard's pending-review widget. Every currently-open frontend phase is now closed
+out. `B11 — Exam Builder & Readiness` is next on the backend critical path; a future `F11` remains
+open once it ships.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -3565,3 +3570,112 @@ No schema change, no permission-table change, no product-behaviour change beyond
 bugs themselves, no ADR involved, no roadmap phase status changed. Project state remains
 _Implementation (B9 complete)_ — this was a same-phase gap closure, not a new phase. **Next:
 `B11 — Exam Builder & Readiness`**, unchanged.
+
+### 2026-09-03 — `F10` complete: Question Review Workspace
+
+Requested explicitly: start `F10`. Followed the working-rules checklist first: three parallel
+research passes (the F10 roadmap section, its two backend-dependency-map entries, and `04 §28`–`§32`/
+`§70`, `05 §16`, ADR-0001/0012/0017; the real `question-review.v1` contract as `B9` actually shipped
+it — routes, DTOs, permission grants, error codes, deferred items; F9's own existing
+`components/questions/*`/`lib/questions/*` for reuse) then direct verification reads of the live
+source (`QuestionDetailScreen`'s real action-gating, the permission table's full `questionBank.*`
+grants, `nav-model.ts`'s HOD entries, the real DTO field shapes) before writing any code — no gating
+ADR is unresolved; `B9` (F10's backend pair) is complete.
+
+**Routing correction, decided directly against unambiguous evidence, not asked about** (mirrors F1's
+`/reset-password`, F8's `/teacher/question-bank/import` precedent exactly): the roadmap's own route
+table said `/hod/reviews`/`/hod/questions`, but the already-shipped nav model
+(`nav-model.ts`'s HOD `question-review`/`question-bank` items, unbuilt until now) uses
+`/hod/question-review`/`/hod/question-bank` — built there instead, superseding the `[...slug]`
+catch-all for both slugs.
+
+**A genuine modeling correction found only by inspecting the real DTOs, not anticipated in the
+original plan**: the roadmap's named `RevisionTimeline` component is _not_ a reuse of F9's
+`RevisionHistory` — `QuestionReviewWorkspaceResponseDto` embeds `currentRevision` (one revision) plus
+`history` (the **decision** trail: `revisionNumber`/`decision`/`comment`/`reviewerName`/`createdAt`),
+never the full list of past revision _bodies_ `RevisionHistory` expands. Built as a new, small
+`ReviewHistoryTimeline` component instead, matching `04 §31`'s own literal mockup exactly and needing
+only the one workspace fetch already needed for everything else — no second `GET /questions/:id`
+round trip. `RevisionHistory` itself gained a real, separate fix: an optional `reviewHistory` prop
+(matched to each revision by `revisionNumber`) that replaces its own stale "B9 hasn't shipped"
+placeholder with the real decision, wired into the teacher-facing `QuestionDetailScreen` via a new
+`useReviewHistory` call — closing F9's own honestly-flagged partial DoD item for reviewer feedback.
+`RejectedQuestionsScreen`'s equally stale copy was corrected the same way.
+
+**Two real, pre-existing bugs found in F9's own shipped code, not by inspection but by tracing what
+`/hod/question-bank` reuse would actually do**: `QuestionBankScreen`'s Rejected/Import/Create-question
+links were hardcoded to `/teacher/question-bank/...` regardless of the `basePath` prop actually
+passed in (only row links used it) — harmless while its only caller was the teacher route tree, but a
+real, reachable bug the moment this phase reused it at `/hod/question-bank`: HOD genuinely holds
+`questionBank.import` at `DEPARTMENT` scope (confirmed in the permission table), so its Import button
+really does render there. Fixed by making all three links `basePath`-relative; a new `hideImport` prop
+additionally suppresses HOD's Import link specifically, since a real HOD-facing bulk-import screen is
+out of this phase's approved scope (Candidate/Deferred, extending F8's own already-recorded "HOD gets
+no import screen this phase" deferral without closing it). A second, related bug: the teacher
+`rejected/page.tsx` route itself passed its own path (`.../rejected`) as `basePath` instead of the
+bank's own base — meaning any real rejected-question row's link would have resolved to a nonexistent
+`.../rejected/{id}` route. Invisible until this same phase made a real `REJECTED` row possible for the
+first time (nothing could 404 on a link that never appeared before).
+
+**`QuestionDetailScreen` needed zero HOD-specific fork** — reused verbatim at
+`/hod/question-bank/:id`: its Edit/Start-new-revision actions are gated behind
+`questionBank.editOwnDraft` (`denied()` for HOD), so they never render there; its Archive action is
+gated behind `questionBank.archive` (genuinely `granted('DEPARTMENT')` for HOD — real departmental
+oversight authority per B8's own finalization, not a leftover), so it correctly does render.
+
+**Delivered** (`apps/web/lib/question-review/`, `apps/web/components/question-review/`): `ReviewQueue`
+(subject-grouped, plain `Table` primitives — no pagination exists server-side and the queue is
+department-scoped/dozens-not-thousands by design), `ReviewWorkspace` (one fetch renders everything —
+content/options/media/metadata plus `ReviewHistoryTimeline`; queue-order prefetching via
+`queryClient.prefetchQuery` so "Next" resolves from cache), `DecisionPanel` (Approve — no dialog, the
+DTO's note is optional, a single click or the `A` key submits immediately with an optional expandable
+note; Reject/Request Changes — each behind `ReviewDecisionDialog`, a mandatory-reason dialog mirroring
+`ReasonDialog`'s own enforcement pattern, `R`/`C` keys open them; shortcuts inert while any
+input/textarea has focus or a dialog is open), and `ReviewQueueWidget` (the dashboard's real
+pending-review section, `04 §29`). A deliberate, documented interpretation of the roadmap's own
+"optimistic queue advance and rollback on failure" wording: true optimistic UI (navigating before a
+decision resolves) was not built for this class of audited, effectively-irreversible academic action
+(`AGENTS.md` §5/§7) — "instant Next" instead comes from the destination already being prefetched, so
+the only remaining wait is the real mutation round-trip.
+
+**The HOD dashboard (`/hod`) is scoped down to exactly what `B9` supports**, confirmed directly
+against the placeholder page's own pre-existing wording ("the pending-review queue... is a later,
+separately-scoped phase" — this is that phase): the real `ReviewQueueWidget`, plus an honest "not yet
+available" section for the rest of `04 §29`'s stats (teacher/student/class/subject counts, active/
+completed exams, department average) — no single department-stats endpoint exists yet, and
+exams/marking are `B11`/`B15`.
+
+**Testing**: `queue-order.test.ts`/`error-utils.test.tsx` (pure-function unit coverage), one
+`.test.tsx` per new component (`ReviewQueue`/`ReviewWorkspace`/`DecisionPanel`/
+`ReviewDecisionDialog`/`ReviewHistoryTimeline`/`ReviewQueueWidget`) covering loading/error/empty-queue/
+mandatory-reason-blocking/keyboard-shortcut/self-review-banner states, updated tests for
+`RevisionHistory`/`QuestionDetailScreen`/`QuestionBankScreen` (including two new regression cases
+proving the `basePath` fix and `hideImport`) /`RejectedQuestionsScreen`, and
+`question-review-flow.integration.test.tsx` — the real `ReviewQueue`/`ReviewWorkspace`/`DecisionPanel`/
+`ReviewDecisionDialog` component stack against the real `lib/question-review/*` hooks, mocking only
+`apiClient` at the HTTP boundary (`question-editor-flow.integration.test.tsx`'s own established
+technique): the queue's real grouped rendering, a real approve call advancing to the next queued
+question, a full reject flow (blocked client-side on an empty reason, then a real reject call), and a
+cross-department/`NOT_FOUND` case rendering the real error state, never raw JSON.
+
+Full pipeline green: `pnpm --filter @atlas/web {lint,typecheck}`, the full `apps/web` test suite
+(117 test files / 516 tests, all green — the same class of full-suite worker-pool-startup flakiness
+this project has repeatedly documented hit six unrelated files on this run, all reconfirmed passing),
+and `next build --webpack`, which confirmed all five new HOD routes
+(`/hod/question-bank`, `/hod/question-bank/[id]`, `/hod/question-bank/rejected`,
+`/hod/question-review`, `/hod/question-review/[id]`) render correctly, superseding the `[...slug]`
+catch-all as designed. No backend change of any kind — `question-review.v1` was already frozen and
+complete; this phase is a pure frontend build against it.
+
+`docs/roadmaps/frontend-roadmap.md`'s F10 section gained status `COMPLETE`, every DoD item checked
+with detail, a full "Implementation notes" subsection covering the modeling correction and both F9
+bugs found, and an expanded Deferred items list (bulk approve; proactive self-review detection; a
+real HOD bulk-import screen; the full `04 §29` dashboard beyond the pending-review widget).
+`docs/roadmaps/roadmap-index.md`'s version, Current State, and Immediate Next Actions all updated to
+record `F10` complete — every currently-open frontend phase is now closed out.
+
+Project state moves from _Implementation (B9 complete)_ to _Implementation (B9/F10 complete; every
+frontend phase through F10 closed out)_.
+**Next: `B11 — Exam Builder & Readiness`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2
+→ B3 → B5 → B6 → B8 → B9 → B11 → B12 → …`) — a future `F11` (Exam Builder & Readiness UI) remains
+open whenever the frontend/backend phase-pairing default is next prioritized once `B11` ships.

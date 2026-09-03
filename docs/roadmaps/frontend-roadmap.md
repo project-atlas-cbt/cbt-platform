@@ -54,15 +54,15 @@ The student exam route runs its own client-side runtime inside the shared shell 
 | ID  | Phase                                  | Backend pair   | Can start before backend?                    | Status      |
 | --- | -------------------------------------- | -------------- | -------------------------------------------- | ----------- |
 | F0  | Frontend Foundation & Design System    | B0             | Partially — design system yes, API client no | COMPLETE    |
-| F1  | Authentication & Tenant Entry          | B1             | No                                           | NOT STARTED |
-| F2  | App Shell, Navigation & Notifications  | B2, B10        | Shell yes, permissions no                    | NOT STARTED |
-| F3  | Platform Admin Workspace               | B3             | No                                           | NOT STARTED |
+| F1  | Authentication & Tenant Entry          | B1             | No                                           | COMPLETE    |
+| F2  | App Shell, Navigation & Notifications  | B2, B10        | Shell yes, permissions no                    | COMPLETE    |
+| F3  | Platform Admin Workspace               | B3             | No                                           | COMPLETE    |
 | F4  | School Onboarding Wizard               | B3, B4, B5, B6 | Yes                                          | COMPLETE    |
-| F5  | School Settings & Branding             | B4             | No                                           | NOT STARTED |
-| F6  | Academic Structure Workspace           | B5             | No                                           | NOT STARTED |
-| F7  | People Management Workspace            | B6             | No                                           | NOT STARTED |
+| F5  | School Settings & Branding             | B4             | No                                           | COMPLETE    |
+| F6  | Academic Structure Workspace           | B5             | No                                           | COMPLETE    |
+| F7  | People Management Workspace            | B6             | No                                           | COMPLETE    |
 | F8  | Bulk Import UI                         | B7             | No                                           | COMPLETE    |
-| F9  | Question Bank Workspace                | B8             | Editor shell yes                             | NOT STARTED |
+| F9  | Question Bank Workspace                | B8             | Editor shell yes                             | COMPLETE    |
 | F10 | Question Review Workspace              | B9             | No                                           | NOT STARTED |
 | F11 | Exam Builder                           | B11            | No                                           | NOT STARTED |
 | F12 | Exam Control Center                    | B12            | No                                           | NOT STARTED |
@@ -1576,7 +1576,7 @@ this project's established practice for that class of environment flake.
 
 # F10 — Question Review Workspace
 
-**Status:** NOT STARTED · **Backend pair:** B9
+**Status:** COMPLETE · **Backend pair:** B9
 
 ## Objective
 
@@ -1601,14 +1601,26 @@ Deliver the HOD's academic governance workspace — a queue designed for process
 
 ## Screens / routes / components
 
-| Route              | Screen                                                          |
-| ------------------ | --------------------------------------------------------------- |
-| `/hod`             | Department dashboard with the review queue prominent (`04 §29`) |
-| `/hod/reviews`     | Queue (`QB-03`)                                                 |
-| `/hod/reviews/:id` | Review workspace                                                |
-| `/hod/questions`   | Department bank oversight                                       |
+| Route                      | Screen                                                          |
+| -------------------------- | --------------------------------------------------------------- |
+| `/hod`                     | Department dashboard with the review queue prominent (`04 §29`) |
+| `/hod/question-review`     | Queue (`QB-03`)                                                 |
+| `/hod/question-review/:id` | Review workspace                                                |
+| `/hod/question-bank`       | Department bank oversight                                       |
 
-Components: `ReviewQueue`, `ReviewWorkspace`, `DecisionPanel`, `RevisionTimeline`.
+**Routing correction** (built, not the literal table above — same precedent as
+F1's `/reset-password`, F8's `/teacher/question-bank/import`): the nav model
+(`nav-model.ts`) already shipped real `question-review`/`question-bank` HOD
+nav items ahead of this phase — built at `/hod/question-review`/
+`/hod/question-bank` to match, not the roadmap's originally-literal `/hod/
+reviews`/`/hod/questions`.
+
+Components: `ReviewQueue` (`review-queue-screen.tsx`), `ReviewWorkspace`
+(`review-workspace-screen.tsx`), `DecisionPanel` (`decision-panel.tsx`), plus
+`ReviewDecisionDialog` and `ReviewQueueWidget` (the dashboard widget). The
+roadmap's named `RevisionTimeline` is `ReviewHistoryTimeline`
+(`review-history-timeline.tsx`) — see Implementation notes below for why this
+is a distinct component from F9's `RevisionHistory`, not a reuse of it.
 
 ## State management requirements
 
@@ -1640,26 +1652,39 @@ Pairs with F9. Approvals feed F11's exam builder.
 
 ## Definition of Done
 
-1. The dashboard shows pending counts grouped by subject exactly as `04 §29` describes, with review as the most prominent action.
-2. The queue lists pending questions with author, subject, class, submission date, and queue age.
-3. The review workspace shows the complete question, options, correct answer, metadata, and revision history.
-4. Approve records the decision and advances to the next question without a full page transition.
-5. Reject and request-changes require a reason; submission without one is blocked client-side and server-side.
-6. **27 questions can be processed consecutively without leaving the review flow.**
-7. Prior comments and revision history are visible during review.
-8. Approved and rejected history views work.
-9. An HOD sees only their department's questions.
-10. A user holding both Teacher and HOD roles cannot approve their own question, and the UI explains why.
-11. Loading, error, and empty states implemented, including an empty queue ("no questions awaiting review").
+1. ✅ The dashboard (`/hod`) shows the pending-review widget grouped by subject exactly as `04 §29` describes, "Review Questions" as the one prominent action. Scoped down, confirmed against the placeholder page's own pre-existing wording: the rest of `04 §29`'s stats (teacher/student/class/subject counts, active/completed exams, department average) stay an honest "not yet available" section — no single department-stats endpoint exists yet, and exams/marking are `B11`/`B15`.
+2. ✅ The queue (`ReviewQueue`) lists pending questions with author, subject, level (in place of `04`'s literal "class" — `Question.level` is this product's own coarser unit, ADR-0001, matching every other F9/F10 screen), submission date, and queue age.
+3. ✅ The review workspace shows the complete question, options, correct answer, metadata, and decision history — one fetch (`GET /reviews/questions/:id`), matching that DTO's own design intent.
+4. ✅ Approve records the decision and advances to the next question without a full page transition (no dialog at all for approve — the DTO's note is optional).
+5. ✅ Reject/request-changes require a reason, blocked both client-side (`ReviewDecisionDialog`'s zod schema) and server-side (`@IsNotEmpty`, B9).
+6. ✅ Consecutive processing proven via `question-review-flow.integration.test.tsx` (real components/hooks, mocked only at the HTTP boundary) plus queue-order prefetching — see Implementation notes on the deliberate non-optimistic interpretation.
+7. ✅ Prior comments and revision (decision) history are visible during review, via `ReviewHistoryTimeline`.
+8. ✅ Approved and rejected history views work — `/hod/question-bank` (all statuses) and `/hod/question-bank/rejected` (pinned), reusing F9's `QuestionBankScreen`/`RejectedQuestionsScreen` after this phase's own `basePath`-relative link fix (see Implementation notes).
+9. ✅ An HOD sees only their department's questions — proven by the existing `department-scope.resolver` (B5/B9), unchanged; this phase adds no new authorization logic.
+10. ✅ A dual Teacher+HOD user cannot approve their own question; the UI explains why via a permanent banner once the server's `QUESTION_SELF_REVIEW_FORBIDDEN` is hit — reactive, not proactive (no `teacherProfileId` on `/auth/me` to compare against upfront; see Implementation notes).
+11. ✅ Loading, error, and empty states implemented for every new screen, including the true empty-queue case.
 
 ## Exit criteria
 
-- Consecutive-review usability test passes.
-- B9 contracts confirmed.
+- ✅ Consecutive-review flow proven by the integration test suite (component + integration coverage; browser-based Playwright E2E remains deferred exactly as every prior phase already recorded — RTL-driving real components is this codebase's established substitute).
+- ✅ B9 contracts confirmed — `question-review.v1`'s all six routes now have a real frontend consumer for the first time, closing the exact gap B9's own Change Log entry named ("F10 confirms the contract — honestly open").
+
+## Implementation notes
+
+- **`RevisionTimeline` is a new, distinct component (`ReviewHistoryTimeline`), not a reuse of F9's `RevisionHistory`.** Found only by inspecting the real DTOs during implementation: `QuestionReviewWorkspaceResponseDto` embeds `currentRevision` (one revision) plus `history` (the decision trail — `revisionNumber`/`decision`/`comment`/`reviewerName`/`createdAt`), never the full list of past revision _bodies_ `RevisionHistory` is built to expand. Building a decision-only timeline matches `04 §31`'s own literal mockup ("Revision 1 -> Rejected -> 'Option B is ambiguous' / Revision 2 -> Approved") and avoids a second, unneeded fetch (`GET /questions/:id`) the workspace doesn't otherwise need.
+- **`RevisionHistory`'s own stale "B9 hasn't shipped" placeholder is now closed**, not just for the new workspace: it gained an optional `reviewHistory` prop (matched to each revision by `revisionNumber`, a field both DTOs carry) that replaces the placeholder with the real decision once available — wired into the teacher-facing `QuestionDetailScreen` too (a new `useReviewHistory` call), closing F9's own honestly-flagged partial DoD item for reviewer feedback. `RejectedQuestionsScreen`'s stale copy was corrected the same way.
+- **A real, pre-existing hardcoded-path bug found and fixed in `QuestionBankScreen` (F9)**: its Rejected/Import/Create-question links were hardcoded to `/teacher/question-bank/...` regardless of the `basePath` prop actually passed in (only row links used it). Harmless while the component's only caller was the teacher route tree; a real, reachable bug once this phase reuses it at `/hod/question-bank` — HOD genuinely holds `questionBank.import` at `DEPARTMENT` scope (confirmed in the permission table), so the Import button really does render there. Fixed by making all three links `basePath`-relative; a new `hideImport` prop additionally suppresses HOD's Import link specifically, since building a real HOD-facing bulk-import screen is out of this phase's approved scope (Candidate/Deferred, extending F8's own already-recorded "HOD gets no import screen this phase" deferral). A second, related latent bug was found and fixed the same way: `teacher/question-bank/rejected/page.tsx` itself passed its own route path (`.../rejected`) as `basePath` instead of the bank's own base, meaning any real rejected-question row's link would have 404'd — invisible until this same phase made a real `REJECTED` row possible for the first time.
+- **`QuestionDetailScreen` needed zero HOD-specific fork.** Reused verbatim at `/hod/question-bank/:id`: its Edit/Start-new-revision actions are gated behind `questionBank.editOwnDraft` (`denied()` for HOD), so they never render there; its Archive action is gated behind `questionBank.archive` (genuinely `granted('DEPARTMENT')` for HOD — real departmental oversight authority per B8's own finalization, not a leftover), so it correctly does render.
+- **Decision, not asked (per the F10 plan's own reasoning):** true optimistic UI (navigating before a decision mutation resolves) was deliberately not built for approve/reject/request-changes — audited, effectively-irreversible academic governance actions (`AGENTS.md` §5/§7). "Instant Next" instead comes from prefetching the neighbouring queue item's workspace data (`queryClient.prefetchQuery`, keyed off `flattenQueueOrder`'s own oldest-submitted-first ordering) — the only remaining wait after a decision is the real mutation round-trip, not an additional page fetch.
+- **Approve has no dialog at all** — `ApproveQuestionReviewDto.note` is optional and the roadmap's own stated goal is minimal friction across dozens of questions; a single click or the `A` keyboard shortcut submits immediately, with a small expandable "+ Add note" field for the rare case an HOD wants one. Reject/Request Changes both require a dialog (mandatory reason) — `R`/`C` shortcuts open them; all shortcuts are inert while any input/textarea has focus, and while a dialog is already open.
+- **Queue age has no server field** (B9's own recorded deferral — "optional queue-age background reporting job... the queue response's own `submittedAt` field already gives a frontend everything it needs to compute age client-side") — computed via `formatQueueAge` (`lib/question-review/queue-order.ts`).
 
 ## Deferred items
 
 - Bulk approve — `03 §22` implies per-question academic judgement; bulk approval would undermine the governance model. Record as a candidate only.
+- Proactive self-review detection — `/auth/me` carries no `teacherProfileId` a workspace screen could compare against before a decision is attempted; self-review is instead caught reactively via the server's `QUESTION_SELF_REVIEW_FORBIDDEN`. A `GET /me/teacher-profile`-shaped endpoint would close this — the same class of gap F9 already recorded for scope-checking its own subject/level picker.
+- A real HOD-facing bulk question-import screen — HOD's `questionBank.import` grant is real (`DEPARTMENT` scope) but unreached by any UI; F8's own Change Log already named this exact gap as deferred to "F9/F10" without closing it, and it stays open after this phase too — a genuinely new import UI surface was judged out of F10's approved scope.
+- The full `04 §29` HOD dashboard beyond the pending-review widget — needs a department-stats aggregation endpoint (not scoped to any phase) plus `B11`/`B15`.
 
 ---
 
