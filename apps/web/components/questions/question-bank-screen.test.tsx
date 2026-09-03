@@ -100,6 +100,13 @@ describe('QuestionBankScreen', () => {
     render(<QuestionBankScreen basePath="/teacher/question-bank" />);
     expect(screen.getByText('Mathematics')).toBeInTheDocument();
     expect(screen.getByText('Ada Okoye')).toBeInTheDocument();
+    // Gap closure: the Subject cell links to detail too, but there was no
+    // actions menu on this table at all, so it was genuinely the only way
+    // in — and read as plain text. An explicit "View" link fixes it.
+    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute(
+      'href',
+      '/teacher/question-bank/q1',
+    );
   });
 
   it('hides Create/Import/Export for an actor without the grants', () => {

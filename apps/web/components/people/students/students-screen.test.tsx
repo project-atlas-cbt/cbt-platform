@@ -84,6 +84,12 @@ describe('StudentsScreen', () => {
     );
     expect(screen.getByText('SS2A')).toBeInTheDocument();
     expect(screen.getByText('Sciences')).toBeInTheDocument();
+    // Gap closure: the Name cell links to detail too, but there's no
+    // actions menu on this table — an explicit "View" link fixes it.
+    expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute(
+      'href',
+      '/school/people/students/sp1',
+    );
   });
 
   it('searching updates the URL and resets to page 1', async () => {

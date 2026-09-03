@@ -96,6 +96,21 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
     { id: 'staffId', header: 'Staff ID', sortable: true, cell: (row) => row.staffId },
     { id: 'status', header: 'Status', cell: (row) => <UserStatusBadge value={row.userStatus} /> },
     {
+      // Gap closure: this button alone only ever reached Assignments, not
+      // the teacher's own Detail page (Edit/Reset credentials/Deactivate) —
+      // that page was reachable only via the subtle name-link above, the
+      // same discoverability gap found on Classes/Departments/Students/
+      // Question Bank.
+      id: 'view',
+      header: '',
+      align: 'right',
+      cell: (row) => (
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`${basePath}/teachers/${row.teacherProfileId}`}>View</Link>
+        </Button>
+      ),
+    },
+    {
       id: 'assignments',
       header: '',
       align: 'right',

@@ -2157,6 +2157,17 @@ Two scope decisions were confirmed with the project owner before implementation:
 
 Full pipeline green: `pnpm lint && pnpm typecheck && pnpm build` at the monorepo root, the full `apps/api` integration suite (251/251 real assertions across 34 files; 3 pre-existing, unrelated environment-timing flakes in the BullMQ import-commit path — already documented as a known issue in B9's own Change Log entry, predating B10 entirely), `pnpm generate` (`audit.v1`/`notification.v1` — 5 new routes — published in `apps/api/openapi.json`/`packages/contracts`), and `pnpm generate:permission-table-doc` (154 rows, up from 151 — the two new `notification.*` rows).
 
+## Post-completion gap closure (2026-09-03, same day — thorough implementation review)
+
+A requested review of the just-shipped implementation, not new scope, surfaced four real issues:
+
+1. **The `contract-drift` CI job would fail on its next run.** The B10 migration is the first to contain live `GRANT`/`REVOKE` statements against `atlas_app`/`atlas_audit_reader` — that job's Postgres service container never bootstraps either role (GitHub Actions `services:` containers can't mount `infra/postgres/init.sql`, and unlike the `integration` job, this one never ran the by-hand equivalent). Fixed by adding the identical "Bootstrap atlas_app role" step the `integration` job already has.
+2. **The notification bell 401s forever for every Software Admin** — `NotificationPanel` was mounted unconditionally in the shared shell chrome, but only the school-session-scoped `GET /v1/notifications` exists; no platform-scoped notifications concept exists in this schema. The exact bug class already found and fixed once for the sidebar nav, reintroduced here. Fixed by omitting the panel entirely for the platform variant (`ShellChrome`'s new `showNotifications` prop) rather than building a platform-notifications backend concept no DoD item asked for.
+3. **`grantAppRole()` silently undid the new `audit_events` grant-level REVOKE** — its own blanket `GRANT ... ON ALL TABLES` re-grants UPDATE/DELETE on `audit_events` every time it runs (called after every `migrate` command, including by `rls.integration.test.ts`'s own bootstrap, which in CI targets the same database `audit.integration.test.ts` uses, with no ordering guarantee between the two packages' `test:integration` tasks). The exact footgun B2's own migration comment already identified and chose not to fight for this table. Fixed by having `grantAppRole()` re-assert the narrower REVOKE immediately after its own blanket grant; verified live against the real dev database both ways (manual grant restores `atlas_app`'s UPDATE/DELETE; the fixed `grantAppRole()` removes it again). The trigger itself enforced real immutability throughout regardless — this was a test-reliability gap, not a security hole.
+4. Found only while verifying fix 3: `rls.integration.test.ts`'s own original, pre-B10 `audit_events` describe block (distinct from B10's own new one) still had an unguarded `deleteMany` teardown, missed by the ~20-file sweep above. Fixed with the same `.catch(() => undefined)` treatment as every other affected file.
+
+Full detail (including the live `\dp audit_events` verification and the stash-based confirmation that the 5 BullMQ import-commit failures reproduce identically on unmodified code) is in `CLAUDE.md`'s own dated Change Log entry for this gap closure. No schema change, no permission-table change, no ADR involved.
+
 ---
 
 # B11 — Exam Builder & Readiness

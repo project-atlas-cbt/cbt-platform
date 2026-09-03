@@ -121,6 +121,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # B10: the migration applied below is the first to contain real
+      # GRANT/REVOKE statements against atlas_app/atlas_audit_reader (every
+      # earlier migration only mentions those role names in comments) — so,
+      # same as the "integration" job's own "Bootstrap atlas_app role" step,
+      # this job now needs both roles to actually exist first. GitHub
+      # Actions `services:` containers can't mount infra/postgres/init.sql
+      # the way docker-compose does, so this runs the same SQL by hand.
+      - name: Bootstrap atlas_app role
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends postgresql-client
+          PGPASSWORD=atlas_ci_password psql -h localhost -U atlas -d atlas_ci -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE atlas_app WITH LOGIN PASSWORD 'atlas_app_ci_password'" \
+            -c "GRANT USAGE ON SCHEMA public TO atlas_app" \
+            -c "ALTER DEFAULT PRIVILEGES FOR ROLE atlas IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO atlas_app" \
+            -c "ALTER DEFAULT PRIVILEGES FOR ROLE atlas IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO atlas_app" \
+            -c "CREATE ROLE atlas_audit_reader WITH LOGIN PASSWORD 'atlas_audit_reader_ci_password'" \
+            -c "GRANT USAGE ON SCHEMA public TO atlas_audit_reader"
+
       # See the lint-typecheck-unit-build job above for why this must come
       # before db:generate.
       - name: Build @atlas/config

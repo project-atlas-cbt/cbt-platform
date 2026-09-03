@@ -74,6 +74,9 @@ describe('AppShell', () => {
     renderShell(<div>teacher content</div>);
     expect(screen.getByText('teacher content')).toBeInTheDocument();
     expect(screen.getByText('Greenfield College')).toBeInTheDocument();
+    // The school variant does show the notification bell — only the
+    // platform variant omits it (see the regression test below).
+    expect(screen.getByRole('button', { name: /notifications/i })).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument(),
     );
@@ -178,6 +181,12 @@ describe('AppShell (platform variant — Software Admin)', () => {
     // left the sidebar stuck on its loading skeleton.
     expect(mockGet).toHaveBeenCalledWith('/platform/auth/permissions', {});
     expect(mockGet).not.toHaveBeenCalledWith('/me/permissions', {});
+    // Regression (B10 gap closure): NotificationPanel used to render
+    // unconditionally and call the school-only GET /v1/notifications, which
+    // 401s forever for a platform session — omitted entirely for this
+    // variant instead (see app-shell.tsx's showNotifications).
+    expect(screen.queryByRole('button', { name: /notifications/i })).not.toBeInTheDocument();
+    expect(mockGet).not.toHaveBeenCalledWith('/notifications', expect.anything());
   });
 
   it('logging out redirects to /admin/login, not /login', async () => {

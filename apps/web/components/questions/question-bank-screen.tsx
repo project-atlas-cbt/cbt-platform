@@ -189,6 +189,20 @@ export function QuestionBankScreen({
       cell: (row) => <QuestionStatusBadge value={row.currentStatus} />,
     },
     { id: 'author', header: 'Author', cell: (row) => row.authorName },
+    {
+      id: 'view',
+      header: '',
+      align: 'right' as const,
+      // Gap closure: the Subject cell above links to the question detail
+      // page too, but reads as plain text — this table has no actions menu
+      // at all, so there was genuinely no visible way in. Mirrors the same
+      // fix applied to Classes/Departments/Students/Teachers.
+      cell: (row: QuestionRow) => (
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`${basePath}/${row.id}`}>View</Link>
+        </Button>
+      ),
+    },
   ];
 
   const hasFilters = Boolean(subjectId || level || difficulty || (status && !pinnedStatus));

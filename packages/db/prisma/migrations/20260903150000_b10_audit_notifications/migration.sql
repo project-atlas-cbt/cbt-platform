@@ -74,6 +74,15 @@ CREATE TRIGGER audit_events_immutable
 -- roadmap's literal "rejected by trigger or by restricted grants" wording:
 -- atlas_app (the only role that ever writes audit_events as the running
 -- application) never legitimately needs UPDATE/DELETE on this table.
+--
+-- Gap closure: packages/db/src/grants.ts's grantAppRole() (called after
+-- every `migrate deploy`/`migrate reset`, including by every integration
+-- test file that bootstraps its own database) does a blanket
+-- `GRANT ... ON ALL TABLES IN SCHEMA public TO atlas_app` that would
+-- otherwise silently re-grant this exact privilege back — the same footgun
+-- B2's own migration comment already named for this table. grantAppRole()
+-- now re-asserts this REVOKE itself immediately after its own blanket
+-- grant, so the two stay in agreement no matter how many times either runs.
 REVOKE UPDATE, DELETE ON "audit_events" FROM atlas_app;
 
 -- atlas_audit_reader (B10): a narrowly-scoped, read-only role for

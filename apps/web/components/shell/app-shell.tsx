@@ -47,6 +47,17 @@ export interface AppShellProps {
  * session-specific half lives in two small sibling components that each
  * call exactly one auth hook, sharing the actual chrome markup via
  * `ShellChrome`.
+ *
+ * `showNotifications` (B10 gap closure): `<NotificationPanel>` only ever
+ * calls the school-session-scoped `GET /v1/notifications` (`@Authorized`,
+ * the ordinary `AuthGuard`) — there is no platform-scoped notifications
+ * concept anywhere in this schema (`Notification` is school-owned/RLS-
+ * scoped, and no producer ever writes one for a Software Admin). Rendering
+ * it unconditionally reproduced the exact bug this file's own nav split
+ * above was built to fix: a Software Admin session would 401 on every poll.
+ * Omitted entirely for the platform variant instead — the same "don't ship
+ * a control that can't work for this session" doctrine `ProfileMenu`
+ * already applies to self-service password change.
  */
 function ShellChrome({
   role,
@@ -55,6 +66,7 @@ function ShellChrome({
   identity,
   navigation,
   onLogout,
+  showNotifications,
   children,
 }: {
   role: Role;
@@ -63,6 +75,7 @@ function ShellChrome({
   identity: ProfileMenuIdentity | null;
   navigation: NavigationResult;
   onLogout: () => Promise<void>;
+  showNotifications: boolean;
   children: ReactNode;
 }) {
   return (
@@ -82,7 +95,7 @@ function ShellChrome({
           />
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <NotificationPanel />
+          {showNotifications ? <NotificationPanel /> : null}
           <ProfileMenu identity={identity} onLogout={onLogout} />
         </div>
       </header>
@@ -122,6 +135,7 @@ function SchoolAppShell({ role, schoolName, children }: AppShellProps) {
         }
         navigation={navigation}
         onLogout={handleLogout}
+        showNotifications
       >
         {children}
       </ShellChrome>
@@ -152,6 +166,7 @@ function PlatformAppShell({ role, children }: Omit<AppShellProps, 'schoolName'>)
         }
         navigation={navigation}
         onLogout={handleLogout}
+        showNotifications={false}
       >
         {children}
       </ShellChrome>

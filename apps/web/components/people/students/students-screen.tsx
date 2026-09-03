@@ -112,6 +112,20 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
     { id: 'class', header: 'Class', cell: (row) => row.currentClassName ?? '—' },
     { id: 'department', header: 'Department', cell: (row) => row.departmentName ?? '—' },
     { id: 'status', header: 'Status', cell: (row) => <UserStatusBadge value={row.userStatus} /> },
+    {
+      id: 'view',
+      header: '',
+      align: 'right' as const,
+      // Gap closure: the Name cell above links to the student detail page
+      // too, but reads as plain text with no other visible control in the
+      // row. Mirrors the same fix applied to Classes/Departments/Teachers/
+      // Question Bank.
+      cell: (row: StudentRow) => (
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`${basePath}/students/${row.studentProfileId}`}>View</Link>
+        </Button>
+      ),
+    },
   ];
 
   return (

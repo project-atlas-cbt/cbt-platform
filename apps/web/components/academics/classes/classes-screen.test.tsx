@@ -127,6 +127,50 @@ describe('ClassesScreen', () => {
     );
   });
 
+  it('has no "Move students" link when studentAssignmentBasePath is not passed (School Admin/HOD academics)', () => {
+    mockUseClasses.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { classes: CLASSES },
+    } as never);
+    render(<ClassesScreen basePath="/school/academics" />);
+    expect(screen.queryByRole('link', { name: 'Move students' })).not.toBeInTheDocument();
+  });
+
+  it('shows a "Move students" link when studentAssignmentBasePath is passed and granted (gap closure: Moderator Class Assignment had no entry point anywhere)', () => {
+    mockUseClasses.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { classes: CLASSES },
+    } as never);
+    render(
+      <ClassesScreen
+        basePath="/moderator/academics"
+        studentAssignmentBasePath="/moderator/people"
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Move students' })).toHaveAttribute(
+      'href',
+      '/moderator/people/classes/c1/assignment',
+    );
+  });
+
+  it('hides "Move students" when studentAssignmentBasePath is passed but the actor lacks the grant', () => {
+    mockUseHasPermission.mockReturnValue(false);
+    mockUseClasses.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { classes: CLASSES },
+    } as never);
+    render(
+      <ClassesScreen
+        basePath="/moderator/academics"
+        studentAssignmentBasePath="/moderator/people"
+      />,
+    );
+    expect(screen.queryByRole('link', { name: 'Move students' })).not.toBeInTheDocument();
+  });
+
   it('shows the first-run empty state for a session with no classes yet', () => {
     mockUseClasses.mockReturnValue({
       isPending: false,

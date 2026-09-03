@@ -195,9 +195,23 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     });
 
     afterAll(async () => {
-      await owner.auditEvent.deleteMany({ where: { schoolId: { in: [schoolA.id, schoolB.id] } } });
+      // B10 gap closure: audit_events gained an unconditional append-only
+      // trigger this phase (blocking UPDATE/DELETE for every role,
+      // including the schema owner) — this block's own two fixture rows
+      // are therefore genuinely, permanently undeletable, and so, by the
+      // Cascade FK from audit_events to schools, is the school.deleteMany
+      // below. Same best-effort treatment every other affected file in
+      // this codebase already got (see safe-delete-schools.ts's own doc
+      // comment) — this block predates that sweep and was missed by it,
+      // since B10's *own* dedicated audit_events block (further down this
+      // file) was added new rather than found by grepping existing ones.
+      await owner.auditEvent
+        .deleteMany({ where: { schoolId: { in: [schoolA.id, schoolB.id] } } })
+        .catch(() => undefined);
       await owner.user.delete({ where: { id: actor.id } });
-      await owner.school.deleteMany({ where: { id: { in: [schoolA.id, schoolB.id] } } });
+      await owner.school
+        .deleteMany({ where: { id: { in: [schoolA.id, schoolB.id] } } })
+        .catch(() => undefined);
       await owner.$disconnect();
       await app.$disconnect();
     });

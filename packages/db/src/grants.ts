@@ -34,6 +34,28 @@ export async function grantAppRole(ownerConnectionUrl: string): Promise<void> {
     await owner.$executeRawUnsafe(
       'ALTER DEFAULT PRIVILEGES FOR ROLE atlas IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO atlas_app',
     );
+    // B10 gap closure: the blanket "ON ALL TABLES" grant two statements
+    // above would otherwise silently re-grant UPDATE/DELETE on
+    // audit_events, undoing the B10 migration's own
+    // `REVOKE UPDATE, DELETE ON "audit_events" FROM atlas_app` the moment
+    // this function next runs (every `migrate deploy`/`migrate reset`
+    // calls it — see run-prisma.ts). That's the exact footgun B2's own
+    // migration comment already identified and chose not to fight for this
+    // same table; re-asserting the narrower revoke here, as part of what
+    // this function considers atlas_app's *correct* grant state, is what
+    // actually avoids it this time instead of just documenting the risk.
+    // Wrapped in a guard against `undefined_table` — this function can run
+    // against a database migrated only up to a pre-B10 state (no schema
+    // history is skipped in practice via `migrate deploy`/`reset`, but nothing
+    // here should assume that), where audit_events doesn't exist yet.
+    await owner.$executeRawUnsafe(`
+      DO $$
+      BEGIN
+        REVOKE UPDATE, DELETE ON "audit_events" FROM atlas_app;
+      EXCEPTION WHEN undefined_table THEN
+        NULL;
+      END $$;
+    `);
   } finally {
     await owner.$disconnect();
   }

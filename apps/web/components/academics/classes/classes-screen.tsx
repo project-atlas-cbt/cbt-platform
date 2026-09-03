@@ -52,12 +52,29 @@ type ConfirmAction = { type: 'archive' | 'delete'; classGroup: ClassRow };
  * name in two sessions must be clearly distinguished — this screen scopes
  * the list to one selected session at a time (never an unlabeled
  * cross-session flat list) and still shows a session badge chip next to
- * every class name for redundant clarity, per this phase's plan. */
-export function ClassesScreen({ basePath }: { basePath: string }) {
+ * every class name for redundant clarity, per this phase's plan.
+ *
+ * `studentAssignmentBasePath` (gap closure): `04 §24`'s "Moderator → Class
+ * Assignment" screen (`ClassAssignmentScreen`, F7) was built with a route
+ * (`/moderator/people/classes/:id/assignment`) but literally no entry point
+ * anywhere in the app — its own page doc comment says it's "reached from a
+ * class's own context (e.g. the Academics workspace)," but nothing here
+ * ever linked to it. Passed only by the Moderator's classes route (the one
+ * role/route this screen actually exists for today); `undefined` elsewhere
+ * renders nothing extra, matching `hideImport`'s established "the caller
+ * states its own role context" convention. */
+export function ClassesScreen({
+  basePath,
+  studentAssignmentBasePath,
+}: {
+  basePath: string;
+  studentAssignmentBasePath?: string;
+}) {
   const context = useAcademicsContext();
   const sessions = useSessions();
   const departments = useDepartments();
   const canManage = useHasPermission('schoolConfig.class.manage');
+  const canMoveStudents = useHasPermission('assignments.studentToClass');
   const archiveClass = useArchiveClass();
   const deleteClass = useDeleteClass();
 
@@ -132,6 +149,22 @@ export function ClassesScreen({ basePath }: { basePath: string }) {
         </Button>
       ),
     },
+    ...(studentAssignmentBasePath && canMoveStudents
+      ? [
+          {
+            id: 'move-students',
+            header: '',
+            align: 'right' as const,
+            cell: (row: ClassRow) => (
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`${studentAssignmentBasePath}/classes/${row.id}/assignment`}>
+                  Move students
+                </Link>
+              </Button>
+            ),
+          },
+        ]
+      : []),
     ...(canManage
       ? [
           {

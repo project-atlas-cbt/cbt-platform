@@ -4209,3 +4209,72 @@ Project state moves from _Implementation (B11 complete)_ to _Implementation (B10
 **Next: `B12 — Exam Activation & Control`** on the backend critical path — every backend phase up
 to the exam engine itself is now complete. A future `F11` (Exam Builder & Readiness UI) remains
 open whenever the frontend/backend phase-pairing default is next prioritized.
+
+### 2026-09-03 — `B10` gap closure: thorough implementation review, four fixes
+
+Requested explicitly, same day as `B10` itself: a thorough review of the just-shipped implementation
+looking for bugs, not new scope. Four real issues surfaced — three from the review, one more found
+only while verifying the review's own fixes by actually running the affected suites. No product/
+architecture decision needed for any of them.
+
+1. **`contract-drift` CI job would fail on its next run.** The B10 migration is the first in this
+   repo's history to contain live `GRANT`/`REVOKE` statements against `atlas_app`/`atlas_audit_reader`
+   (every earlier migration only named those roles in comments) — but the `contract-drift` job's
+   Postgres service container has no role-bootstrap step at all (GitHub Actions `services:` containers
+   can't mount `infra/postgres/init.sql`, and unlike the `integration` job, this one never ran the
+   by-hand equivalent). `REVOKE UPDATE, DELETE ON "audit_events" FROM atlas_app` would fail with
+   `role "atlas_app" does not exist`. Fixed by adding the identical "Bootstrap atlas_app role" `psql`
+   step the `integration` job already has, before this job's own `db:migrate:deploy`.
+2. **The notification bell 401s forever for every Software Admin.** `NotificationPanel` was mounted
+   unconditionally in `ShellChrome` (shared by `SchoolAppShell` and `PlatformAppShell`), but it only
+   ever calls the school-session-scoped `GET /v1/notifications` — there is no platform-scoped
+   notifications concept anywhere in this schema (`Notification` is school-owned/RLS-scoped, and no
+   producer ever writes one for a Software Admin). This is the exact bug class this same codebase
+   already found and fixed once for the sidebar nav (`usePlatformNavigation`/`GET /platform/auth
+/permissions`), reintroduced here for the bell. Fixed by giving `ShellChrome` a `showNotifications`
+   prop — `true` for the school variant, `false` for the platform one — rather than building a
+   platform-notifications backend concept that doesn't exist and that no DoD item asked for; the same
+   "don't ship a control that can't work for this session" doctrine `ProfileMenu` already applies to
+   self-service password change. New regression assertions in `app-shell.test.tsx` (both variants).
+3. **`grantAppRole()` silently undid the new `audit_events` grant-level REVOKE.** `tests/support
+/run-prisma.ts` calls `grantAppRole()` (a blanket `GRANT ... ON ALL TABLES IN SCHEMA public TO
+atlas_app`) after every `migrate` command — including from `rls.integration.test.ts`'s own
+   `beforeAll` hooks, which in CI's `integration` job run against the exact same database
+   `audit.integration.test.ts` uses (`DATABASE_URL_TEST` == `DATABASE_URL` there), with no ordering
+   constraint between the `apps/api` and `tests` packages' `test:integration` tasks. This is the exact
+   footgun B2's own migration comment already identified and chose not to fight for this same table —
+   B10 reintroduced it. Confirmed live against the real dev database: a manual blanket grant restored
+   `atlas_app`'s UPDATE/DELETE on `audit_events`, and `grantAppRole()` (unfixed) left it restored. Fixed
+   by having `grantAppRole()` itself re-assert `REVOKE UPDATE, DELETE ON "audit_events" FROM atlas_app`
+   immediately after its own blanket grant (wrapped in a `DO $$ ... EXCEPTION WHEN undefined_table`
+   guard, for a database migrated only up to a pre-B10 state) — re-verified live: the same manual grant
+   followed by the real `grantAppRole()` call now leaves `atlas_app` back at `SELECT, INSERT` only. The
+   trigger itself enforced real immutability throughout regardless (defense-in-depth, ADR-0023's own
+   convention) — this was a test-reliability/CI-correctness gap, not a security hole.
+4. **Found only while verifying fix 3, not by the original review**: `tests/tenancy
+/rls.integration.test.ts`'s own original B2-era `audit_events` describe block (predating B10's own
+   _new_, dedicated one) still had an unguarded `owner.auditEvent.deleteMany(...)`/`owner.school
+.deleteMany(...)` teardown — missed by the ~20-file `safeDeleteSchools` sweep because it wasn't
+   found by grepping for the sweep's own pattern; it surfaced immediately the first time the file was
+   actually run end to end after this pass's fixes. Fixed the same way as every other affected file:
+   `.catch(() => undefined)` on both calls.
+
+Verification: `apps/api`'s `audit.integration.test.ts`/`notification.integration.test.ts` (18/18),
+the full `tests/` integration suite including a real `migrate reset` cycle (97/97), the full
+`apps/web` shell test suite plus a full-suite run (561/564 — the 3 failures reconfirmed as this
+project's own already-documented full-suite worker-pool/resource-contention flakiness, passing
+cleanly in isolation, in files this pass never touched), and monorepo-wide `pnpm lint && pnpm
+typecheck && pnpm build` (16/16, 16/16, 9/9). Fix 3 was independently confirmed **live** against the
+real dev Postgres, not just by the test suite: a manual blanket grant followed by a call to the real,
+rebuilt `grantAppRole()` left `atlas_app` at `arwd` → `ar` (UPDATE/DELETE gone) on `audit_events`, per
+`\dp audit_events`. `apps/api`'s own full integration suite was also re-run in full and separately
+confirmed, by temporarily `git stash`ing every fix, that its 5 remaining failures (all in the
+BullMQ-backed import-commit path — `imports.integration.test.ts`, `import-1500-rows
+.integration.test.ts`) reproduce identically on the unmodified, pre-fix code — a pre-existing,
+already-documented environment issue (see B9's and B11's own Change Log entries for the same class),
+not a regression from this pass.
+
+No schema change, no permission-table change, no product-behaviour change beyond correcting the four
+bugs themselves, no ADR involved, no roadmap phase status changed. Project state remains
+_Implementation (B10 complete)_ — this was a same-phase gap closure, not a new phase. **Next:
+`B12 — Exam Activation & Control`**, unchanged.
