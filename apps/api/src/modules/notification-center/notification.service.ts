@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { NotificationType } from '@atlas/domain';
 
@@ -46,6 +46,8 @@ export interface RecordNotificationInput {
  */
 @Injectable()
 export class NotificationService {
+  private readonly logger = new Logger(NotificationService.name);
+
   async record(event: RecordNotificationInput, tx?: Prisma.TransactionClient): Promise<void> {
     const write = (client: Prisma.TransactionClient) =>
       client.notification.create({
@@ -65,11 +67,30 @@ export class NotificationService {
         },
       });
 
-    if (tx) {
-      await write(tx);
-      return;
+    // "Best-effort by design" (this class's own header comment) was
+    // previously only a promise, not an implementation — found in review:
+    // nothing here actually caught a failure, so B12's own new callers (a
+    // per-student loop run strictly after their primary transaction had
+    // already committed) could see a request-level error even though the
+    // real state change had already succeeded. Caught and logged, never
+    // rethrown, matching the documented contract for every caller, present
+    // and future. Note: when a caller passes its own open `tx`, swallowing
+    // here doesn't rescue that transaction if the failure was a genuine SQL
+    // error — Postgres aborts the whole transaction on any statement
+    // error, so a later statement (or the commit itself) will still
+    // surface it; this only prevents record() itself from being the thing
+    // that throws.
+    try {
+      if (tx) {
+        await write(tx);
+        return;
+      }
+      await withTenant(prisma, event.schoolId, (t) => write(t));
+    } catch (error) {
+      this.logger.warn(
+        `Failed to record notification (type=${event.type}, recipient=${event.recipientUserId}, school=${event.schoolId}): ${String(error)}`,
+      );
     }
-    await withTenant(prisma, event.schoolId, (t) => write(t));
   }
 
   /** `GET /v1/notifications` — recipient's own list, newest first, plus

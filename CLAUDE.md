@@ -12,9 +12,12 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 ## Project Status
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
-architecture decisions were completed first (see below); backend phases `B0`–`B6` and frontend
-phases `F0`–`F7` are now complete. See "Implementation Status" and "Change Log" further down in
-this file for what has actually shipped and what's next.
+architecture decisions were completed first (see below); backend phases `B0`–`B12` and every
+frontend phase through `F11` are now complete (this line itself had drifted stale — kept at
+"`B0`–`B6`"/"`F0`–`F7`" long after later phases shipped; corrected 2026-09-04, see "Current Phase"
+below for a note on why this section can lag and the Change Log's own dated entries are the actual
+source of truth). See "Implementation Status" and "Change Log" further down in this file for what
+has actually shipped and what's next.
 
 The planning phase completed:
 
@@ -359,9 +362,27 @@ the ~55 already-shipped action strings, real database-level append-only enforcem
 in-app `Notification` system built from nothing (persisted rows with read state, a real BullMQ
 retry queue for out-of-band dispatch, and a new unassigned-students digest job for Moderator).
 Frontend wiring was included in the same pass — F2's `NotificationPanel` and F3's three audit
-screens now consume real data. See this file's Change Log entry below for full detail. `B12 — Exam
-Activation & Control` is next on the backend critical path; a future `F11` remains open once the
-frontend/backend phase-pairing default reaches it.
+screens now consume real data. See this file's Change Log entry below for full detail.
+**`F11 — Exam Builder`** is complete too (2026-09-04): the Details→Questions→Rules→Review wizard at
+`/teacher/exams/*`, plus confirmed read/administer-only oversight screens for School Admin/
+Moderator/HOD. **`B12 — Exam Activation & Control`** is complete too (2026-09-04): `exam-control.v1`
+— session open/close/reopen at both exam and session level, batch authorize/revoke sharing one
+eligibility predicate across both `access_mode`s, the Control Center, this codebase's first SSE
+implementation, End Examination, and `ExamAdministrator` delegation. Every frontend phase through
+`F11` and every backend phase through `B12` are now closed out — `B13 — Attempt Engine` is next on
+the backend critical path, the highest-integrity phase in the roadmap. See this file's Change Log
+entries below (dated 2026-09-04) for full detail on both.
+
+**Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
+paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
+future phase, even though both `F11` and (now) `B12` are complete and the Change Log below already
+recorded `F11`, the `B12`-adjacent process-management fix, and everything through this entry
+accurately the whole time. This "Current Phase" summary is a hand-maintained rolling status, not
+generated from the Change Log, so it can drift if a completing session updates the Change Log but
+skips back up to refresh this section — exactly what happened here. Flagged so a future session
+doesn't assume this section is authoritative over the Change Log's own dated entries if the two
+ever disagree again; the Change Log is always the source of truth for exactly what shipped and
+when.
 
 B3 delivered: the platform tenant lifecycle end to end — `platform.v1`/`schools.v1`/
 `subscriptions.v1`, all published in `apps/api/openapi.json`/`packages/contracts`. Software Admin
@@ -4511,3 +4532,298 @@ change, no permission-table change, no backend change, no ADR involved, no roadm
 changed. Project state remains _Implementation (F11 complete; every frontend phase through F11
 closed out)_ — this was a same-phase gap closure, not a new phase. **Next: `B12 — Exam Activation &
 Control`**, unchanged.
+
+### 2026-09-04 — `B12` complete: Exam Activation & Control
+
+Requested explicitly: start `B12`. Followed the working-rules checklist: three parallel research
+passes (the full B12 roadmap section, its three gating ADRs — ADR-0006, ADR-0009, ADR-0020 — in
+full, and every B12-assigned audit finding; the product specification for `ExamSession`/
+`ExamSessionParticipant`/the exam and session state machines/Control Center UX across `01`/`03`/
+`05`/`06`/`07`/`02`/`04`; the existing `B11` implementation — schema, permission-table rows, scope
+resolvers, mappers, test-harness conventions) followed by a dedicated Plan agent, per this project's
+own precedent for a phase of this size — then direct verification reads (the permission table,
+`ScopeResolverRegistry`, `auth.guard.ts`'s cookie-based session model) before writing any code, per
+`AGENTS.md`'s working-rules checklist.
+
+**The single most consequential finding, made during planning, not assumed**: the permission
+table's own `awaitingResource: 'ExamParticipation (B12)'` annotations on
+`examAdmin.viewRegisteredStudents`/`.allowStudent`/`.markAbsence` name a table distinct from
+`ExamSessionParticipant` — confirmed by direct read of `permission-table.ts`, not named in the
+roadmap's own original text. This resolves the roadmap's own DB-work bullet
+("`ExamSessionParticipant.status` restricted to authorization semantics only... `COMPLETED` moves
+to participation") concretely: `ExamSessionParticipant` is authorization bookkeeping only
+(AUTHORIZED/REVOKED, never mutated in place); `ExamParticipation` is the final per-student outcome,
+written once, only at End Examination.
+
+**Five decisions confirmed directly with the project owner during planning, not guessed:**
+
+1. **Concurrent sessions are allowed** — multiple `ExamSession` rows may be `OPEN` simultaneously
+   for one exam (parallel labs), matching `04 §27`'s Moderator multi-lab note and the domain
+   model's own batch example.
+2. **`ExamSession.sessionType`** (`STANDARD`/`BATCH`/`MAKEUP`/`SPECIAL`) included now, purely for
+   reporting fidelity — no B12 logic branches on it.
+3. **A genuine exam-level close/reopen**, distinct from session-level close/reopen — two additional
+   endpoints beyond the roadmap's own literal 9-endpoint contract. Exam-level close cascades every
+   currently-`OPEN` session to `CLOSED` in one transaction and blocks any new session from opening;
+   exam-level reopen only lifts that block, deliberately never auto-reopening the sessions the
+   cascade closed, preserving fine-grained operator control over which specific batch resumes.
+4. **`ExamAdministrator` delegate management endpoints built now** (ADR-0012/M-15) — a minimal
+   `POST`/`DELETE` pair and a new `exam.manageAdministrators` permission row, since the table and
+   its `OWNED`-resolver wiring would otherwise have no way to ever be populated.
+5. **A credential-sharing/remote-impersonation integrity risk**, raised by the project owner
+   mid-planning: a student physically present in the exam hall shares login credentials with a
+   remote person who answers on their behalf. Checked against the full spec set (all nine docs, all
+   33 ADRs, the audit, both roadmaps) and found genuinely uncovered anywhere — the closest existing
+   coverage (`03 §78`, ADR-0020) assumes the _same_ physically-present person, just possibly
+   distracted, not identity substitution. Two sub-cases resolved differently: remote screen-share/
+   remote-control of the _same_ device is undetectable by any software measure and is out of scope
+   by design, matching this product's deliberate anti-biometric-proctoring stance (a physical-
+   invigilation responsibility, not a platform gap); a genuinely separate remote device/session is a
+   real candidate for a future mechanism. Resolved to **defer the concrete mechanism to `B13`**
+   (Attempt Engine, which owns `ExamAttempt`/"who is answering right now") rather than address it in
+   `B12` — the full analysis is recorded in `backend-roadmap.md`'s B12 section so B13's planning
+   starts from it rather than re-deriving it.
+
+**`08 §5`'s own bounded-domain map gets `ExecutionModule` populated for the first time here** — its
+original B0-era stub comment named only B13/B14/B16 as populators, an omission found and corrected
+during planning: `ExamSession`/`ExamSessionParticipant` are literally "exam sessions, participants,"
+squarely inside this module's own documented scope. All B12 code lives in
+`apps/api/src/modules/execution/`, replacing the empty stub `AppModule` already imported — no new
+module registration needed. Deliberately not split into a separate `RealtimeModule` as the
+roadmap's own "Domains/modules affected" line suggests: the Control Center aggregate computation
+and the SSE stream service share one aggregate-shape contract and are too tightly coupled to gain
+anything from a cross-module split.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration
+`20260904120000_b12_exam_activation_control`): four new tables — `ExamSession`,
+`ExamSessionParticipant`, `ExamParticipation`, `ExamAdministrator` — all RLS-protected the same way
+every school-owned table has been since B0's bootstrap migration, extending B11's own dedicated
+exam-tables RLS describe block (none of the four carry a delete-blocking trigger, unlike B10's
+`audit_events`, so the "separate block to avoid fighting immutability during cleanup" reason
+doesn't apply). One new hand-written trigger (`exam_sessions_status_transition_guard`, `BEFORE
+UPDATE OF status` only, never on `DELETE`) enforces the session's own state machine even against a
+direct write, mirroring B11's own trigger idiom; B11's existing `Exam` immutability trigger already
+only guards configuration/identity columns, not `status`, so B12's OPEN/CLOSED/COMPLETED
+transitions pass it cleanly with no schema change needed there. `ExamAdministrator` gets a
+hand-written partial unique index (`WHERE status = 'ACTIVE'`) allowing re-delegation after
+revocation, mirroring `HODAssignment`'s own precedent.
+
+**Every "who performed this action" column** (openedByMembershipId, closedByMembershipId,
+authorizedByMembershipId, revokedByMembershipId, markedByMembershipId, assignedByMembershipId) is a
+bare UUID with no Prisma relation — mirrors `Exam.cancelledByMembershipId`'s own B11 precedent
+(a denormalized actor+timestamp pair for cheap display, not a referential-integrity-bearing FK; the
+audit trail of record is `AuditEvent`). Only each row's actual _subject_ gets a real relation:
+`ExamSessionParticipant`/`ExamParticipation.studentProfileId` (matching `StudentEnrollment`'s own
+convention — a student is referenced via `StudentProfile`, never `SchoolMembership`, throughout this
+schema) and `ExamAdministrator.membershipId` (the delegate being granted authority, mirroring
+`HODAssignment`'s own real-relation precedent).
+
+**`ScopeResolverRegistry` has no `registerOverride` method**, despite its own B2-era doc comment
+promising one for this exact phase. Resolved without adding one: `register('OWNED', ...)` already
+is a full replace, which is all "override" needs. `exam-administrator-scope.resolver.ts`'s
+`createExamAdministratorAwareOwnedResolver()` reimplements the plain `OWNED` check inline (four
+lines, already fully visible in `scope-resolvers.ts`) and falls through to an
+`ExamAdministrator{examId, membershipId, status:'ACTIVE'}` lookup only when plain ownership fails
+and a new optional `ResourceContext.examId` field is present, set by every `exam.*`/`examAdmin.*`
+call site in this module.
+
+**A real, if minor, bug found only by the integration tests, not by inspection**:
+`ExamSessionParticipantService.listEligible()` originally built its `ResourceContext` without
+`classSubjectId` — but `examAdmin.viewRegisteredStudents` is graded `ASSIGNED` for `TEACHER` (not
+`OWNED`, unlike every other `examAdmin.*`/`exam.*` action in this module), and the `ASSIGNED`
+resolver denies outright when `resource` is present but `classSubjectId` is missing (it only
+optimistically passes when `resource` is undefined entirely) — meaning the exam's own creating
+teacher was denied `GET /eligible-students` on their own exam. Fixed by resolving the caller's own
+`TeacherAssignment` against any of the exam's targeted classes first, mirroring `ExamService
+.resolveViewResourceContext()`'s own established B11 pattern for the identical shape of problem —
+duplicated locally rather than extracted into a shared cross-module utility, to avoid touching
+already-shipped, already-tested B11 code for a single call site (`AGENTS.md` §15).
+
+**SSE is entirely new to this codebase** — no prior art anywhere. Hand-rolled raw Fastify streaming
+(`reply.raw.writeHead`/`.write`), not a library (`AGENTS.md` §9): the amount of custom
+per-connection logic (per-exam scoping, `Last-Event-ID` replay, heartbeat, disconnect cleanup) is
+the same regardless of framing mechanism. Session-cookie auth (confirmed by reading `auth.guard.ts`
+directly — sessions resolve from a cookie on every request, never a header) means a browser
+`EventSource` with `withCredentials: true` works through the ordinary `@Authorized(...)` +
+`AuthGuard` pipeline with no special-casing. One shared Redis subscriber connection per API process
+(`REDIS_SUBSCRIBER_CLIENT`, a new `.duplicate()` provider in `redis.module.ts` — a client in
+subscribe mode cannot issue ordinary commands) serves every active exam-control channel. Events are
+snapshot-shaped (the full current aggregate, never a delta) specifically so a duplicate delivery in
+the narrow replay-then-subscribe handoff window is harmless to apply twice — an accepted,
+documented small race, not solved with distributed locking.
+
+**The Control Center snapshot-computation logic is deliberately duplicated once, not shared**:
+`apps/api`'s `exam-control-snapshot.util.ts` (the `GET /control` live-compute fallback and every
+mutation's post-commit SSE publish) and `apps/worker`'s new `exam-control-refresh.queue.ts` (a
+5-second default sweep merging the roadmap's two named Background-jobs bullets — aggregate refresh
+and stale-exam detection — into one per-tenant pass, mirroring `subscription-expiry.queue.ts`'s own
+precedent) compute structurally identical snapshots independently, because `apps/worker` cannot
+import from `apps/api` (only `packages/*` are shared across apps — the same constraint B7's own
+`import-worker-bootstrap.ts` doc comment already records). Kept from drifting by both reading the
+same shared `ExamControlCenterSnapshot` type from `packages/domain`, mirroring `platform/
+metrics-cache.ts`'s own B3 precedent. **A real bug found only by the worker's own integration
+tests**: the sweep's "publish/append only on a material change" check originally compared the raw
+JSON snapshot strings directly — but `computedAt` changes every tick regardless of anything else,
+so the comparison always reported a change and defeated the entire point of the check. Fixed by
+comparing both snapshots with `computedAt` stripped first.
+
+**A process-management lesson, not a product bug, worth recording for future sessions**: verifying
+the compiled `apps/api`/`apps/worker` boots via `node dist/main.js &` followed by a bash `kill $!`
+left a real zombie process behind twice during this phase's own verification — Git Bash's reported
+`$!` PID does not reliably map to the actual Windows `node.exe` process id in this environment, so
+`kill` silently no-ops. The zombie API process's own live import-worker consumer then raced against
+— and intermittently defeated — five unrelated `B7`/`B8` integration tests' own direct
+`commit.commit()` calls, at first misread as this codebase's own already-documented pre-existing
+environment flakiness for that exact test file, before being traced to the actual cause and fixed
+by killing the correct PID via PowerShell's `Get-Process`/`Stop-Process` directly.
+
+**Testing**: `apps/api/src/modules/execution/exam-control.integration.test.ts` (9 tests, real HTTP
+via `app.inject()` against a real running `AppModule` and real Postgres) — DoD items 1-8, 12, 14,
+the exam-level cascade-close/reopen behaviour, and `ExamAdministrator` delegation proven end to end
+with a genuinely unauthorized third teacher (not the fixture's own department-privileged HOD, whose
+real `DEPARTMENT`-scoped `examAdmin.controlCenter` grant would have made a "denied" assertion
+against it factually wrong — a real premise error this test's own first run caught, not a product
+bug). `apps/worker/src/queues/exam-control-refresh.integration.test.ts` (4 tests, a small in-memory
+fake Redis rather than a real one — proves the sweep's own aggregate computation, the
+material-change publish/append gate, and staleness flagging directly). `tests/tenancy/rls
+.integration.test.ts` extended B11's own dedicated exam-tables describe block with all four new
+tables (103 tests in that file, up from 87) rather than a fifth describe block.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm build` at the
+monorepo root (16/16 turbo tasks each), the full `apps/api` integration suite (266 tests across 35
+files, zero regressions once the zombie-process interference above was found and eliminated), the
+full `apps/worker` integration suite (22 tests across 5 files), and the extended RLS suite (103
+tests). `pnpm generate` (`exam-control.v1` — 13 routes — published in `apps/api/openapi.json`/
+`packages/contracts`) and `pnpm generate:permission-table-doc` (155 rows — the one new
+`exam.manageAdministrators` row, confirmed via a clean `git diff`, not a miscount). A real `node
+dist/main.js` boot confirmed `PolicyCoverageService` reports 182 routes checked with zero
+violations, and a real `apps/worker` boot confirmed the new `atlas-exam-control-refresh-sweep`
+queue registers at its configured 5-second interval alongside every pre-existing sweep.
+
+**Honestly partial by construction, not a gap**: DoD items 9 (live attempt table), 10 (submit/
+disconnect SSE events specifically — the open/close/authorize/revoke/complete events this phase
+itself produces are real), and 11 (the `last_seen_at`-derived liveness indicator) all need
+`ExamAttempt`, which doesn't exist until `B13`. The Control Center response DTO is additive-only for
+B13 to fill in later: `inProgressCount`/`submittedCount` are always `0`, `liveAttempts` is always
+`[]`, and `attemptDataAvailable: false` lets the frontend distinguish a real zero from "not yet
+real," matching this project's own repeated "build what's real now, flag the rest honestly, next
+phase supersedes" convention. `examAdmin.viewLiveAttempts`/`.seeStarted`/`.seeCompleted`/
+`.endAttempt` stay `awaitingResource` (B13); `.grantMakeup`/`.invalidateAttempt` stay
+`awaitingResource` (B14/B16, ADR-0014). The eligibility predicate's attempt-limit/authorization-
+override clause (ADR-0006's final clause) is an explicit `true` pass-through stub, code-commented
+as B16's job. A real automated SSE reconnect-under-load test (simulating a mid-stream API node
+restart) was not built — the replay mechanism is built and manually verifiable via the design's own
+`Last-Event-ID`/Redis Stream approach, but no automated test forces an actual process restart
+mid-connection; recorded as a Candidate for F12 or a dedicated hardening pass, not silently skipped.
+
+`docs/roadmaps/backend-roadmap.md`'s B12 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-partial-with-reason, a full "Implementation notes" subsection, and
+an expanded Deferred items list. `docs/roadmaps/roadmap-index.md`'s version, Current State, and
+Immediate Next Actions all updated to record `B12` complete and `B13` next on the critical path,
+and the `F12`-readiness gating note updated now that `exam-control.v1` is frozen and published.
+
+Project state moves from _Implementation (F11 complete; every frontend phase through F11 closed
+out)_ to _Implementation (B12 complete)_.
+**Next: `B13 — Attempt Engine`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2 → B3 →
+B5 → B6 → B8 → B9 → B11 → B12 → B13 → …`) — the highest-integrity phase in the entire roadmap
+(`AGENTS.md` §5), gated by six ADRs and concentrating 8 of the 18 BLOCKER audit findings alongside
+`B14`. A future `F12` (Exam Control Center) remains open once the frontend/backend phase-pairing
+default is next prioritized — `exam-control.v1` including the SSE stream is now frozen and ready
+for it to consume.
+
+### 2026-09-04 — `B12` gap closure: thorough implementation review, six fixes
+
+Requested explicitly, same day as `B12` itself: a thorough review of the just-shipped implementation
+looking for bugs, not new scope. Read every execution-module file end to end (schema/migration, all
+services/controllers, the worker sweep, shared cache helpers, permission table, and tests) rather
+than sampling. Six real issues surfaced — a confirmed cross-actor authorization bypass, a cache-
+staleness correctness bug, a privilege-escalation gap, a duplicate-notification/audit-mislabeling
+bug, an unimplemented fault-tolerance contract, and a genuine concurrency race — all fixed and each
+proven by a new regression test:
+
+1. **The Control Center SSE stream skipped resource-scoped authorization** — the controller wrote
+   response headers and attached the stream before any per-exam check beyond the coarse
+   `@Authorized('examAdmin.controlCenter')` guard, so any actor holding that permission id at all
+   (not just one scoped to the specific exam) could stream another exam's live data. Fixed with a
+   new `ExamControlStreamService.assertAccess()`, called before any header is written.
+2. **The Control Center cache could serve a stale snapshot indefinitely** — `publishUpdate()` never
+   set a TTL, and the read path never cross-checked the cached payload's own `examStatus` against
+   the exam's real current status. Fixed three ways: a bounded TTL
+   (`EXAM_CONTROL_CACHE_TTL_SECONDS`, shared via `packages/domain` between `apps/api` and
+   `apps/worker`), write-through caching on every mutation (not just publish/`XADD`), and a
+   defensive `examStatus` mismatch check in `ExamControlCenterService.get()` that falls through to
+   a live recompute rather than trusting a corrupt or stale cache entry.
+3. **An `ExamAdministrator` delegate could manage other delegates** — `exam.manageAdministrators`'s
+   resource context included `examId`, so the delegate-aware `OWNED` override let a delegate pass
+   as if they were the true creator. Fixed by deliberately omitting `examId` from that one specific
+   `evaluate()` call, forcing plain-ownership-only semantics for delegate management specifically
+   (a minimal, considered fix — a `matchedScope`-based check was considered and rejected as fragile
+   against a dual-role actor who is both a delegate-teacher and a department HOD).
+4. **Re-authorizing an already-`AUTHORIZED` participant was double-counted** — every call to
+   `authorize()` credited every id in the request as "newly authorized" regardless of prior status,
+   inflating notification counts and mislabeling audit metadata on a repeat call. Fixed by reading
+   each participant's existing status before crediting it.
+5. **`NotificationService.record()`'s own doc comment promised fault-tolerance it didn't have** —
+   a DB-level failure (e.g., a title exceeding the `VarChar(200)` column) propagated as an unhandled
+   exception instead of being logged and swallowed. Fixed with a try/catch matching the doc
+   comment's original contract.
+6. **A real concurrency race between opening a new session and ending the examination** — both
+   `ExamSessionService.open()` and `ExamCompletionService.complete()` read `Exam.status` and later
+   wrote based on that read, with no lock between the read and the write; two concurrent calls
+   could leave an `OPEN` session under a `COMPLETED` exam. Fixed with a `SELECT ... FOR UPDATE` row
+   lock on the exam row as the first statement in both transactions (ADR-0031's own reserved
+   pattern, precedented in `apps/api/src/spike/run-spike.ts`), fully serializing the two paths.
+
+Six new regression tests added to `exam-control.integration.test.ts` (findings 1, 2, 3, 4, 6 — the
+concurrency test for finding 6 fires both calls via a bare `Promise.all` with no artificial delay
+and asserts an XOR outcome, needing no `pg_sleep`-forced interleave since the row lock itself
+makes the outcome deterministic regardless of scheduling order), one to
+`notification.integration.test.ts` (finding 5), and one TTL assertion added to the worker's
+`exam-control-refresh.integration.test.ts` (finding 2's worker-side write).
+
+Full pipeline reconfirmed green after every fix: `@atlas/domain`/`@atlas/api`/`@atlas/worker`
+build/typecheck/lint all clean; monorepo-wide `pnpm lint` (16/16 turbo tasks) and the schema-tenancy
+lint; `apps/api`'s full integration suite (35 files / 272 tests, including all six new/updated
+regression tests) green on its first full run; `apps/worker`'s full integration suite (5 files / 22
+tests) green in isolation. Two failures surfaced only when multiple heavy integration suites were
+run concurrently against the same local Postgres/Redis (self-inflicted contention, not a product
+regression) — `subscription-expiry.integration.test.ts`'s Redis-outage case and
+`import-1500-rows.integration.test.ts`'s BullMQ commit-timing budget — neither touches any file this
+gap closure changed; the former was reconfirmed passing cleanly in isolation, and the latter is this
+codebase's own long-documented pre-existing flake in this exact file (already recorded in the B9/
+B10/B11 Change Log entries above as background-BullMQ-worker timing sensitivity under system load).
+
+No schema change, no permission-table change beyond the resource-context fix in finding 3 (no row
+added or removed), no ADR involved, no roadmap phase status changed. Project state remains
+_Implementation (B12 complete)_ — this was a same-phase gap closure, not a new phase.
+
+### 2026-09-04 — Documentation: `B13`'s own roadmap section now carries the remote-impersonation integrity-risk analysis directly, not only `B12`'s
+
+Requested explicitly: make sure the credential-sharing/remote-impersonation concern `B12`'s planning
+raised and deferred to `B13` (see `B12`'s own Change Log entry and `backend-roadmap.md`'s B12
+"Implementation notes," decision 5) is documented properly enough that a **new session starting
+`B13` picks it up together with `B13`'s original scope** — not left to be found only by first
+reading `B12`'s notes. Per `AGENTS.md`'s own working-rules checklist ("read the relevant roadmap
+phase"), a session starting `B13` reads `B13`'s own section first; the analysis needed to live
+there directly, not only in `B12`'s.
+
+`docs/roadmaps/backend-roadmap.md`'s `B13` section gained: a new Scope bullet flagging the open
+decision; a full standalone "Carried forward from `B12`" subsection (placed directly after Scope,
+before Specification references) restating the complete analysis — the two sub-cases, which one is
+settled out-of-scope-by-design (remote screen-share/control of the _same_ device — undetectable by
+any software measure, matching this product's standing anti-biometric-proctoring stance) and which
+one is the actual open decision (a genuinely separate remote device/session — candidate mechanism:
+bind an attempt to the device/session/IP that started it at attempt-creation time, flag a mid-
+attempt change as an `AttemptEvent`-shaped signal per `ADR-0020`'s existing "counts, not judgments"
+philosophy, likely an extension of that already-decided ADR rather than a new one — plus a lower-
+priority secondary candidate, a per-school allowed-IP-range check); a matching note under Security/
+authorization work pointing at attempt-creation time as where the binding would be established; and
+a Deferred-items entry explicit that this is an **open decision to resolve**, not an ordinary
+pre-existing deferral — `B13`'s own Change Log entry must record which way it went (built now,
+built as a signal-only MVP, or re-deferred again with a named reason and owner) rather than letting
+it drop silently a second time. `docs/roadmaps/roadmap-index.md`'s Immediate Next Actions entry was
+extended with one clause pointing at `B13`'s own new subsection directly.
+
+No schema, code, ADR, or permission-table change — this is a planning-documentation fidelity fix
+ahead of a new session starting `B13`, per the user's explicit request. No roadmap phase status
+changed; `B13` remains NOT STARTED.

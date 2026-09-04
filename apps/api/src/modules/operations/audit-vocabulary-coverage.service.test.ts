@@ -15,6 +15,8 @@ describe('AuditVocabularyCoverageService', () => {
       'QUESTION_APPROVED',
       'QUESTION_REJECTED',
       'EXAM_READY',
+      'EXAM_OPENED',
+      'EXAM_CLOSED',
       'STUDENT_DEACTIVATED',
       'CLASS_CHANGED',
       'TEACHER_ASSIGNMENTS_REPLACED',
@@ -30,6 +32,8 @@ describe('AuditVocabularyCoverageService', () => {
       'QUESTION_APPROVED',
       'QUESTION_REJECTED',
       'EXAM_READY',
+      'EXAM_OPENED',
+      'EXAM_CLOSED',
       'STUDENT_DEACTIVATED',
       'TEACHER_ASSIGNMENTS_REPLACED',
     ]);
@@ -43,6 +47,8 @@ describe('AuditVocabularyCoverageService', () => {
       'QUESTION_APPROVED',
       'QUESTION_REJECTED',
       'EXAM_READY',
+      'EXAM_OPENED',
+      'EXAM_CLOSED',
       'CLASS_CHANGED',
       'TEACHER_ASSIGNMENTS_REPLACED',
       // Only one of USER_DEACTIVATED's three real aliases — still enough.

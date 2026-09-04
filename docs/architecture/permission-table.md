@@ -245,24 +245,25 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Exam Management
 
-| Action                          | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting                                                       |
-| ------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | -------------------------------------------------------------- |
-| View all exams                  | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | SELF ⚠️ |                                                                |
-| Create exam                     | —              | —            | —         | —          | ASSIGNED | —       |                                                                |
-| Edit draft exam                 | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Delete draft exam               | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Cancel exam                     | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Add questions to exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Use approved questions          | —              | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       |                                                                |
-| Schedule/configure availability | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Configure duration              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Configure randomization         | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Configure attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Publish/activate exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
-| Pause exam                      | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12) — ADR-0009: PAUSED is the UI label for OPEN→CLOSED. |
-| Close new attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12)                                                     |
-| Reopen exam                     | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       | Exam (B12)                                                     |
-| Archive exam                    | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |                                                                |
+| Action                          | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting |
+| ------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | -------- |
+| View all exams                  | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | SELF ⚠️ |          |
+| Create exam                     | —              | —            | —         | —          | ASSIGNED | —       |          |
+| Edit draft exam                 | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Delete draft exam               | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Cancel exam                     | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Add questions to exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Use approved questions          | —              | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       |          |
+| Schedule/configure availability | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Configure duration              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Configure randomization         | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Configure attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Publish/activate exam           | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Pause exam                      | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Close new attempts              | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Reopen exam                     | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Manage exam administrators      | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Archive exam                    | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
 
 <details><summary>Notes</summary>
 
@@ -279,14 +280,14 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 | Action                   | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER    | STUDENT | Awaiting                             |
 | ------------------------ | -------------- | ------------ | --------- | ---------- | ---------- | ------- | ------------------------------------ |
-| Exam Control Center      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | Exam/ExamSession (B12)               |
-| View registered students | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED   | —       | ExamParticipation (B12)              |
+| Exam Control Center      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| View registered students | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED   | —       |                                      |
 | View live attempts       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
 | See who has started      | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
 | See who has completed    | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
-| Manually allow student   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamParticipation (B12)              |
+| Manually allow student   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
 | Grant makeup access      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | AttemptAuthorization (B14, ADR-0014) |
-| Mark/confirm absence     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamParticipation (B12)              |
+| Mark/confirm absence     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
 | End individual attempt   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
 | Invalidate attempt       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | ⏸ DEFERRED | —       | ExamAttempt (B14)                    |
 

@@ -13,6 +13,7 @@ import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
+import { NotificationService } from './notification.service.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -324,5 +325,41 @@ describe('POST /v1/notifications/:id/read and /read-all (B10)', () => {
       }),
     );
     expect(otherUnread).toBe(1);
+  });
+});
+
+describe('NotificationService.record() (B10/B12 gap closure)', () => {
+  it('is fault-tolerant by design: a failed write is logged, not thrown, and never surfaces to the caller', async () => {
+    // Found in review: this class's own header comment already promised
+    // "best-effort... a transient failure must never fail the caller's
+    // primary action," but record() had no try/catch at all — B12's own
+    // new callers (a per-student loop run after their primary transaction
+    // had already committed) would have seen a request-level error even
+    // though the real state change had already succeeded. `title` is
+    // VarChar(200) at the database level, so an over-length value is a
+    // genuine, real write failure, not a validation shortcut.
+    const school = await createSchool();
+    const recipient = await seedUser({
+      schoolId: school.id,
+      loginIdentifier: `n-ft-${RUN}`,
+      password: 'a-real-password-123',
+      role: 'TEACHER',
+    });
+
+    const service = app.get(NotificationService);
+    await expect(
+      service.record({
+        schoolId: school.id,
+        recipientUserId: recipient.user.id,
+        type: 'EXAM_OPENED',
+        title: 'x'.repeat(500),
+        content: 'irrelevant',
+      }),
+    ).resolves.toBeUndefined();
+
+    const count = await withTenant(prisma, school.id, (tx) =>
+      tx.notification.count({ where: { schoolId: school.id, recipientUserId: recipient.user.id } }),
+    );
+    expect(count).toBe(0);
   });
 });

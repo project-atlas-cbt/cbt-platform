@@ -63,16 +63,21 @@ export const CANONICAL_AUDIT_ACTIONS: readonly CanonicalAuditAction[] = [
   {
     id: 'EXAM_OPENED',
     label: 'Exam opened',
-    status: 'DEFERRED',
-    aliases: [],
-    owningPhase: 'B12',
+    status: 'LIVE',
+    // B12: fired once per exam (first session open, READY→OPEN) — a
+    // distinct EXAM_SESSION_OPENED (non-canonical, not in 07 §11.1's list)
+    // fires for every individual session, including the first.
+    aliases: ['EXAM_OPENED'],
   },
   {
     id: 'EXAM_CLOSED',
     label: 'Exam closed',
-    status: 'DEFERRED',
-    aliases: [],
-    owningPhase: 'B12',
+    status: 'LIVE',
+    // B12: the exam-level close (POST /exams/:id/close), which cascades
+    // every OPEN session to CLOSED in one transaction — distinct from the
+    // non-canonical EXAM_SESSION_CLOSED, fired for a single session's own
+    // close.
+    aliases: ['EXAM_CLOSED'],
   },
   {
     id: 'MAKEUP_GRANTED',

@@ -57,3 +57,30 @@ export const EXAM_READINESS_CHECK_CODES = [
   'DETAILS_COMPLETE',
 ] as const;
 export type ExamReadinessCheckCode = (typeof EXAM_READINESS_CHECK_CODES)[number];
+
+/// B12 (Exam Activation & Control) — mirrors schema.prisma's
+/// ExamSessionType/ExamSessionStatus/ExamSessionParticipantStatus/
+/// ExamParticipationStatus/ExamAdministratorStatus enums, same
+/// const-array-plus-derived-type pattern as above.
+
+/// 06 §41's own small, closed reporting taxonomy — confirmed product
+/// decision (2026-09-04) to include even though no B12 logic branches on it.
+export const EXAM_SESSION_TYPES = ['STANDARD', 'BATCH', 'MAKEUP', 'SPECIAL'] as const;
+export type ExamSessionType = (typeof EXAM_SESSION_TYPES)[number];
+
+/// No READY — a session is born OPEN. CANCELLED shipped for 07 §15
+/// vocabulary fidelity though no B12 endpoint reaches it.
+export const EXAM_SESSION_STATUSES = ['OPEN', 'CLOSED', 'COMPLETED', 'CANCELLED'] as const;
+export type ExamSessionStatus = (typeof EXAM_SESSION_STATUSES)[number];
+
+/// D-07: deliberately restricted to authorization semantics only.
+export const EXAM_SESSION_PARTICIPANT_STATUSES = ['AUTHORIZED', 'REVOKED'] as const;
+export type ExamSessionParticipantStatus = (typeof EXAM_SESSION_PARTICIPANT_STATUSES)[number];
+
+/// COMPLETED never written by B12 — no ExamAttempt exists yet to complete;
+/// kept for spec-vocabulary fidelity, mirroring this file's own precedent.
+export const EXAM_PARTICIPATION_STATUSES = ['ABSENT', 'COMPLETED'] as const;
+export type ExamParticipationStatus = (typeof EXAM_PARTICIPATION_STATUSES)[number];
+
+export const EXAM_ADMINISTRATOR_STATUSES = ['ACTIVE', 'REVOKED'] as const;
+export type ExamAdministratorStatus = (typeof EXAM_ADMINISTRATOR_STATUSES)[number];

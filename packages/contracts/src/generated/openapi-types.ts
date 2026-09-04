@@ -2301,6 +2301,227 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exams/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close the whole exam — cascades every OPEN session to CLOSED. ADR-0009: this is "Pause." */
+        post: operations["ExamControlController_closeExam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen the exam so new sessions may be opened again. Does not auto-reopen closed sessions. */
+        post: operations["ExamControlController_reopenExam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a new ExamSession (DoD items 1-4). */
+        post: operations["ExamControlController_openSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Control Center aggregates + session list (DoD items 8-9, 13). */
+        get: operations["ExamControlController_getControl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/control/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SSE live updates — Last-Event-ID reconnection replay (DoD item 10). */
+        get: operations["ExamControlController_streamControl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End Examination — confirm absences (DoD item 12, A-14). */
+        post: operations["ExamControlController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/eligible-students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The exam's full targeted-class roster with live eligibility (A-04). */
+        get: operations["ExamControlController_eligibleStudents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/administrators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delegate exam administration (ADR-0012/M-15). */
+        post: operations["ExamControlController_assignAdministrator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/administrators/{membershipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a delegated administrator. */
+        delete: operations["ExamControlController_revokeAdministrator"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close this session for new starts. Running attempts continue (ADR-0009). */
+        post: operations["ExamSessionController_close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen this session for new starts (ADR-0009). */
+        post: operations["ExamSessionController_reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/participants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Batch-authorize students for this session (DoD items 2/4). */
+        post: operations["ExamSessionController_authorizeParticipants"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/participants/{studentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke access before start — refused after start (DoD item 7, X-13). */
+        delete: operations["ExamSessionController_revokeParticipant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3659,6 +3880,119 @@ export interface components {
             checks: components["schemas"]["ExamReadinessCheckItemDto"][];
         };
         CancelExamDto: {
+            reason: string;
+        };
+        OpenExamSessionDto: {
+            /** @enum {string} */
+            sessionType?: "STANDARD" | "BATCH" | "MAKEUP" | "SPECIAL";
+        };
+        ExamSessionResponseDto: {
+            id: string;
+            examId: string;
+            /** @enum {string} */
+            sessionType: "STANDARD" | "BATCH" | "MAKEUP" | "SPECIAL";
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED" | "COMPLETED" | "CANCELLED";
+            /** Format: date-time */
+            openedAt: string;
+            openedByMembershipId: string;
+            /** Format: date-time */
+            closedAt: string | null;
+            closedByMembershipId: string | null;
+            /** Format: date-time */
+            reopenedAt: string | null;
+            /** Format: date-time */
+            completedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ExamControlCenterAggregateDto: {
+            /** @description AUTHORIZED ExamSessionParticipant count — real. */
+            authorizedCount: number;
+            /** @description Real in B12, but degenerate: always equals authorizedCount (no attempts exist). */
+            notStartedCount: number;
+            /** @description PLACEHOLDER — always 0 until B13 ships ExamAttempt. */
+            inProgressCount: number;
+            /** @description PLACEHOLDER — always 0 until B13 ships ExamAttempt. */
+            submittedCount: number;
+            /** @description Real, but only ever non-zero after End Examination (ExamParticipation). */
+            absentCount: number;
+            /** @description False in B12 — lets the frontend distinguish a real "0" from "not yet real" for inProgressCount/submittedCount/liveAttempts. */
+            attemptDataAvailable: boolean;
+        };
+        ExamLiveAttemptRowDto: {
+            studentProfileId: string;
+            status: string;
+            timeRemainingSeconds: number | null;
+        };
+        ExamControlCenterStalenessDto: {
+            isStale: boolean;
+            /**
+             * Format: date-time
+             * @description The earliest openedAt/reopenedAt across this exam's currently-OPEN sessions.
+             */
+            openSince: string | null;
+            thresholdMs: number;
+        };
+        ExamControlCenterResponseDto: {
+            examId: string;
+            /** @enum {string} */
+            examStatus: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+            sessions: components["schemas"]["ExamSessionResponseDto"][];
+            aggregate: components["schemas"]["ExamControlCenterAggregateDto"];
+            liveAttempts: components["schemas"]["ExamLiveAttemptRowDto"][];
+            staleness: components["schemas"]["ExamControlCenterStalenessDto"];
+            /** Format: date-time */
+            computedAt: string;
+        };
+        CompleteExamDto: {
+            confirmedAbsentStudentProfileIds: string[];
+        };
+        EligibleStudentResponseDto: {
+            studentProfileId: string;
+            studentIdNumber: string;
+            studentName: string;
+            eligible: boolean;
+            failedChecks: string[];
+            /** @enum {string|null} */
+            participantStatus: "AUTHORIZED" | "REVOKED" | null;
+            examSessionId?: string | null;
+        };
+        EligibleStudentsResponseDto: {
+            students: components["schemas"]["EligibleStudentResponseDto"][];
+        };
+        AssignExamAdministratorDto: {
+            /** @description The delegate's SchoolMembership id. */
+            membershipId: string;
+        };
+        ExamAdministratorResponseDto: {
+            id: string;
+            examId: string;
+            membershipId: string;
+            memberName: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            assignedAt: string;
+            assignedByMembershipId: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+        };
+        AuthorizeParticipantsDto: {
+            studentProfileIds: string[];
+        };
+        AuthorizeParticipantResultDto: {
+            studentProfileId: string;
+            authorized: boolean;
+            /** @description Empty when authorized === true. */
+            failedChecks: string[];
+        };
+        AuthorizeParticipantsResponseDto: {
+            results: components["schemas"]["AuthorizeParticipantResultDto"][];
+        };
+        RevokeParticipantDto: {
             reason: string;
         };
         ErrorEnvelopeErrorDto: {
@@ -7432,6 +7766,299 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_closeExam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_reopenExam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_openSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenExamSessionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSessionResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_getControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamControlCenterResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_streamControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExamControlController_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteExamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_eligibleStudents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EligibleStudentsResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_assignAdministrator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignExamAdministratorDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamAdministratorResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_revokeAdministrator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSessionResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_reopen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSessionResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_authorizeParticipants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorizeParticipantsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizeParticipantsResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_revokeParticipant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeParticipantDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
                 };
             };
         };

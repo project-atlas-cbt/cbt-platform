@@ -1671,6 +1671,14 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     },
   },
   {
+    // B12: ADR-0009 — "Pause" and "Close new attempts" are the identical
+    // OPEN→CLOSED transition (no separate PAUSED state exists). Rather than
+    // double-checking two permission ids with structurally identical grants
+    // at every close call site, `exam.closeNewAttempts` is checked as
+    // representative of both — mirrors ExamConfigurationService's own B11
+    // precedent of checking one of several identically-shaped rows as
+    // representative of all. This row itself is never independently
+    // evaluated by any B12 endpoint.
     id: 'exam.pause',
     section: 'Exam Management',
     label: 'Pause exam',
@@ -1683,9 +1691,11 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B12) — ADR-0009: PAUSED is the UI label for OPEN→CLOSED.',
   },
   {
+    // B12: gates both the exam-level close (POST /exams/:id/close, cascades
+    // every OPEN session to CLOSED) and the session-level close
+    // (POST /exam-sessions/:id/close) — see exam.pause's own comment above.
     id: 'exam.closeNewAttempts',
     section: 'Exam Management',
     label: 'Close new attempts',
@@ -1698,9 +1708,10 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B12)',
   },
   {
+    // B12: gates both the exam-level reopen (POST /exams/:id/reopen) and
+    // the session-level reopen (POST /exam-sessions/:id/reopen).
     id: 'exam.reopen',
     section: 'Exam Management',
     label: 'Reopen exam',
@@ -1713,7 +1724,27 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam (B12)',
+  },
+  {
+    // B12 gap-closure: ADR-0012/M-15's ExamAdministrator delegation needs
+    // some way to actually be created — no existing row fits "assign a
+    // delegate" semantically. Grant shape copied verbatim from
+    // exam.publish's, since only the exam's own owner or an equivalently-
+    // scoped admin should be able to delegate operation of it. Confirmed
+    // with the project owner during B12 planning (2026-09-04) as a small,
+    // necessary addition beyond the roadmap's literal endpoint list.
+    id: 'exam.manageAdministrators',
+    section: 'Exam Management',
+    label: 'Manage exam administrators',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: denied(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('DEPARTMENT'),
+      TEACHER: granted('OWNED'),
+      STUDENT: denied(),
+    },
   },
   {
     id: 'exam.archive',
@@ -1734,9 +1765,8 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
 
   // ------------------------------------------------------------------
   // Exam Administration — "own exam" throughout means created_by OR an
-  // active ExamAdministrator delegate (M-15/ADR-0012). The delegation
-  // table itself is deferred to B12 (confirmed 2026-08-26); the OWNED
-  // scope resolver's extension point is what B12 plugs it into.
+  // active ExamAdministrator delegate (M-15/ADR-0012), wired into the
+  // OWNED scope resolver by B12.
   // ------------------------------------------------------------------
   {
     id: 'examAdmin.controlCenter',
@@ -1753,7 +1783,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Exam/ExamSession (B12)',
   },
   {
     id: 'examAdmin.viewRegisteredStudents',
@@ -1768,7 +1797,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ExamParticipation (B12)',
   },
   {
     id: 'examAdmin.viewLiveAttempts',
@@ -1816,6 +1844,8 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     awaitingResource: 'ExamAttempt (B13)',
   },
   {
+    // B12: also gates the inverse action (revoke, DELETE .../participants/
+    // :studentId) — no separate revoke permission id exists.
     id: 'examAdmin.allowStudent',
     section: 'Exam Administration',
     label: 'Manually allow student',
@@ -1828,7 +1858,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ExamParticipation (B12)',
   },
   {
     id: 'examAdmin.grantMakeup',
@@ -1858,7 +1887,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ExamParticipation (B12)',
   },
   {
     id: 'examAdmin.endAttempt',

@@ -5590,6 +5590,442 @@
         "summary": "Archive from DRAFT, READY, or CANCELLED.",
         "tags": ["exams"]
       }
+    },
+    "/exams/{id}/close": {
+      "post": {
+        "operationId": "ExamControlController_closeExam",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Close the whole exam — cascades every OPEN session to CLOSED. ADR-0009: this is \"Pause.\"",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exams/{id}/reopen": {
+      "post": {
+        "operationId": "ExamControlController_reopenExam",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reopen the exam so new sessions may be opened again. Does not auto-reopen closed sessions.",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exams/{id}/sessions": {
+      "post": {
+        "operationId": "ExamControlController_openSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenExamSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Open a new ExamSession (DoD items 1-4).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exams/{id}/control": {
+      "get": {
+        "operationId": "ExamControlController_getControl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamControlCenterResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Control Center aggregates + session list (DoD items 8-9, 13).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exams/{id}/control/stream": {
+      "get": {
+        "operationId": "ExamControlController_streamControl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "SSE live updates — Last-Event-ID reconnection replay (DoD item 10).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exams/{id}/complete": {
+      "post": {
+        "operationId": "ExamControlController_complete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteExamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "End Examination — confirm absences (DoD item 12, A-14).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exams/{id}/eligible-students": {
+      "get": {
+        "operationId": "ExamControlController_eligibleStudents",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EligibleStudentsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The exam's full targeted-class roster with live eligibility (A-04).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exams/{id}/administrators": {
+      "post": {
+        "operationId": "ExamControlController_assignAdministrator",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignExamAdministratorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamAdministratorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delegate exam administration (ADR-0012/M-15).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exams/{id}/administrators/{membershipId}": {
+      "delete": {
+        "operationId": "ExamControlController_revokeAdministrator",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "membershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revoke a delegated administrator.",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exam-sessions/{id}/close": {
+      "post": {
+        "operationId": "ExamSessionController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Close this session for new starts. Running attempts continue (ADR-0009).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exam-sessions/{id}/reopen": {
+      "post": {
+        "operationId": "ExamSessionController_reopen",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reopen this session for new starts (ADR-0009).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exam-sessions/{id}/participants": {
+      "post": {
+        "operationId": "ExamSessionController_authorizeParticipants",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeParticipantsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizeParticipantsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Batch-authorize students for this session (DoD items 2/4).",
+        "tags": ["exam-control"]
+      }
+    },
+    "/exam-sessions/{id}/participants/{studentId}": {
+      "delete": {
+        "operationId": "ExamSessionController_revokeParticipant",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeParticipantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revoke access before start — refused after start (DoD item 7, X-13).",
+        "tags": ["exam-control"]
+      }
     }
   },
   "info": {
@@ -9940,6 +10376,365 @@
         "required": ["examId", "ready", "checks"]
       },
       "CancelExamDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": ["reason"]
+      },
+      "OpenExamSessionDto": {
+        "type": "object",
+        "properties": {
+          "sessionType": {
+            "type": "string",
+            "enum": ["STANDARD", "BATCH", "MAKEUP", "SPECIAL"]
+          }
+        }
+      },
+      "ExamSessionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "sessionType": {
+            "type": "string",
+            "enum": ["STANDARD", "BATCH", "MAKEUP", "SPECIAL"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["OPEN", "CLOSED", "COMPLETED", "CANCELLED"]
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "openedByMembershipId": {
+            "type": "string"
+          },
+          "closedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "closedByMembershipId": {
+            "type": "string",
+            "nullable": true
+          },
+          "reopenedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "sessionType",
+          "status",
+          "openedAt",
+          "openedByMembershipId",
+          "closedAt",
+          "closedByMembershipId",
+          "reopenedAt",
+          "completedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ExamControlCenterAggregateDto": {
+        "type": "object",
+        "properties": {
+          "authorizedCount": {
+            "type": "number",
+            "description": "AUTHORIZED ExamSessionParticipant count — real."
+          },
+          "notStartedCount": {
+            "type": "number",
+            "description": "Real in B12, but degenerate: always equals authorizedCount (no attempts exist)."
+          },
+          "inProgressCount": {
+            "type": "number",
+            "description": "PLACEHOLDER — always 0 until B13 ships ExamAttempt."
+          },
+          "submittedCount": {
+            "type": "number",
+            "description": "PLACEHOLDER — always 0 until B13 ships ExamAttempt."
+          },
+          "absentCount": {
+            "type": "number",
+            "description": "Real, but only ever non-zero after End Examination (ExamParticipation)."
+          },
+          "attemptDataAvailable": {
+            "type": "boolean",
+            "description": "False in B12 — lets the frontend distinguish a real \"0\" from \"not yet real\" for inProgressCount/submittedCount/liveAttempts."
+          }
+        },
+        "required": [
+          "authorizedCount",
+          "notStartedCount",
+          "inProgressCount",
+          "submittedCount",
+          "absentCount",
+          "attemptDataAvailable"
+        ]
+      },
+      "ExamLiveAttemptRowDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "timeRemainingSeconds": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": ["studentProfileId", "status", "timeRemainingSeconds"]
+      },
+      "ExamControlCenterStalenessDto": {
+        "type": "object",
+        "properties": {
+          "isStale": {
+            "type": "boolean"
+          },
+          "openSince": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "The earliest openedAt/reopenedAt across this exam's currently-OPEN sessions."
+          },
+          "thresholdMs": {
+            "type": "number"
+          }
+        },
+        "required": ["isStale", "openSince", "thresholdMs"]
+      },
+      "ExamControlCenterResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "examStatus": {
+            "type": "string",
+            "enum": ["DRAFT", "READY", "OPEN", "CLOSED", "COMPLETED", "ARCHIVED", "CANCELLED"]
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamSessionResponseDto"
+            }
+          },
+          "aggregate": {
+            "$ref": "#/components/schemas/ExamControlCenterAggregateDto"
+          },
+          "liveAttempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamLiveAttemptRowDto"
+            }
+          },
+          "staleness": {
+            "$ref": "#/components/schemas/ExamControlCenterStalenessDto"
+          },
+          "computedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "examId",
+          "examStatus",
+          "sessions",
+          "aggregate",
+          "liveAttempts",
+          "staleness",
+          "computedAt"
+        ]
+      },
+      "CompleteExamDto": {
+        "type": "object",
+        "properties": {
+          "confirmedAbsentStudentProfileIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["confirmedAbsentStudentProfileIds"]
+      },
+      "EligibleStudentResponseDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentIdNumber": {
+            "type": "string"
+          },
+          "studentName": {
+            "type": "string"
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "failedChecks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "participantStatus": {
+            "type": "string",
+            "enum": ["AUTHORIZED", "REVOKED"],
+            "nullable": true
+          },
+          "examSessionId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "studentProfileId",
+          "studentIdNumber",
+          "studentName",
+          "eligible",
+          "failedChecks",
+          "participantStatus"
+        ]
+      },
+      "EligibleStudentsResponseDto": {
+        "type": "object",
+        "properties": {
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EligibleStudentResponseDto"
+            }
+          }
+        },
+        "required": ["students"]
+      },
+      "AssignExamAdministratorDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "description": "The delegate's SchoolMembership id."
+          }
+        },
+        "required": ["membershipId"]
+      },
+      "ExamAdministratorResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "membershipId": {
+            "type": "string"
+          },
+          "memberName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ACTIVE", "REVOKED"]
+          },
+          "assignedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "assignedByMembershipId": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "membershipId",
+          "memberName",
+          "status",
+          "assignedAt",
+          "assignedByMembershipId",
+          "revokedAt"
+        ]
+      },
+      "AuthorizeParticipantsDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["studentProfileIds"]
+      },
+      "AuthorizeParticipantResultDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileId": {
+            "type": "string"
+          },
+          "authorized": {
+            "type": "boolean"
+          },
+          "failedChecks": {
+            "description": "Empty when authorized === true.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["studentProfileId", "authorized", "failedChecks"]
+      },
+      "AuthorizeParticipantsResponseDto": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthorizeParticipantResultDto"
+            }
+          }
+        },
+        "required": ["results"]
+      },
+      "RevokeParticipantDto": {
         "type": "object",
         "properties": {
           "reason": {

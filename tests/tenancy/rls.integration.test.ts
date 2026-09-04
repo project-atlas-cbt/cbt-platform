@@ -1398,9 +1398,19 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
  * A dedicated school pair — mirroring the B3/B4 blocks' own shape exactly —
  * avoids that regression entirely: this block's own best-effort cleanup
  * only ever affects its own two schools.
+ *
+ * B12's four new tables (ExamSession, ExamSessionParticipant,
+ * ExamParticipation, ExamAdministrator) extend this same block rather than
+ * getting a dedicated one of their own — unlike B10's `audit_events`, none
+ * of them carry a delete-blocking trigger (B12's own
+ * `exam_sessions_status_transition_guard` only fires `BEFORE UPDATE OF
+ * status`, never on DELETE), so there is no analogous "shared cleanup
+ * fights an immutability trigger" risk to avoid — this fixture pair's own
+ * already-APPROVED question is the only thing that needed isolating, and
+ * that isolation already exists here.
  */
 describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
-  'Row-Level Security tenant isolation — exams, exam_classes, exam_sections, exam_questions (B11, ADR-0023)',
+  'Row-Level Security tenant isolation — exams, exam_classes, exam_sections, exam_questions, exam_sessions, exam_session_participants, exam_participations, exam_administrators (B11/B12, ADR-0023)',
   () => {
     let owner: PrismaClient;
     let app: PrismaClient;
@@ -1414,6 +1424,14 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let examSectionB: { id: string };
     let examQuestionA: { id: string };
     let examQuestionB: { id: string };
+    let examSessionA: { id: string };
+    let examSessionB: { id: string };
+    let examSessionParticipantA: { id: string };
+    let examSessionParticipantB: { id: string };
+    let examParticipationA: { id: string };
+    let examParticipationB: { id: string };
+    let examAdministratorA: { id: string };
+    let examAdministratorB: { id: string };
 
     async function buildFixture(label: string) {
       const school = await owner.school.create({
@@ -1576,7 +1594,85 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           },
         }),
       );
-      return { school, exam, examSection, examClass, examQuestion };
+
+      // B12 fixtures — a minimal student profile (no real enrollment/
+      // registration needed; RLS isolation doesn't depend on business-rule
+      // validity, only that the row exists and is school-scoped, mirroring
+      // exam_classes/exam_sections' own equally minimal shape above).
+      const studentUser = await owner.user.create({
+        data: { firstName: 'Student', lastName: label, displayName: `Student ${label}` },
+      });
+      const studentMembership = await withTenant(owner, school.id, (tx) =>
+        tx.schoolMembership.create({
+          data: {
+            schoolId: school.id,
+            userId: studentUser.id,
+            loginIdentifier: `exam-rls-student-${label.toLowerCase()}-${Date.now()}`,
+          },
+        }),
+      );
+      await withTenant(owner, school.id, (tx) =>
+        tx.roleAssignment.create({
+          data: { schoolId: school.id, membershipId: studentMembership.id, role: 'STUDENT' },
+        }),
+      );
+      const studentProfile = await withTenant(owner, school.id, (tx) =>
+        tx.studentProfile.create({
+          data: {
+            schoolId: school.id,
+            membershipId: studentMembership.id,
+            studentId: `ST-RLS-${label}-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+
+      const examSession = await withTenant(owner, school.id, (tx) =>
+        tx.examSession.create({
+          data: { schoolId: school.id, examId: exam.id, openedByMembershipId: membership.id },
+        }),
+      );
+      const examSessionParticipant = await withTenant(owner, school.id, (tx) =>
+        tx.examSessionParticipant.create({
+          data: {
+            schoolId: school.id,
+            examSessionId: examSession.id,
+            studentProfileId: studentProfile.id,
+          },
+        }),
+      );
+      const examParticipation = await withTenant(owner, school.id, (tx) =>
+        tx.examParticipation.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            studentProfileId: studentProfile.id,
+            status: 'ABSENT',
+            markedByMembershipId: membership.id,
+          },
+        }),
+      );
+      const examAdministrator = await withTenant(owner, school.id, (tx) =>
+        tx.examAdministrator.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            membershipId: membership.id,
+            assignedByMembershipId: membership.id,
+          },
+        }),
+      );
+
+      return {
+        school,
+        exam,
+        examSection,
+        examClass,
+        examQuestion,
+        examSession,
+        examSessionParticipant,
+        examParticipation,
+        examAdministrator,
+      };
     }
 
     beforeAll(async () => {
@@ -1596,17 +1692,41 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       examClassB = b.examClass;
       examQuestionA = a.examQuestion;
       examQuestionB = b.examQuestion;
+      examSessionA = a.examSession;
+      examSessionB = b.examSession;
+      examSessionParticipantA = a.examSessionParticipant;
+      examSessionParticipantB = b.examSessionParticipant;
+      examParticipationA = a.examParticipation;
+      examParticipationB = b.examParticipation;
+      examAdministratorA = a.examAdministrator;
+      examAdministratorB = b.examAdministrator;
     });
 
     afterAll(async () => {
       const ids = [schoolA.id, schoolB.id];
-      // Exam cascades to ExamQuestion/ExamClass/ExamSection — deleting it
-      // first handles all three. The underlying Question/QuestionRevision
-      // is APPROVED and therefore genuinely, permanently undeletable (same
-      // reasoning as question-lifecycle.integration.test.ts's own afterAll)
-      // — best-effort, harmless (RLS-scoped, uniquely UUID-named, never
-      // reachable outside this deleted school pair).
+      // B12: ExamSession/ExamParticipation both use onDelete: Restrict
+      // against Exam — must be deleted before it, unlike ExamQuestion/
+      // ExamClass/ExamSection/ExamAdministrator, which cascade from it.
+      await owner.examSessionParticipant
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.examParticipation
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.examSession
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      // Exam cascades to ExamQuestion/ExamClass/ExamSection/ExamAdministrator
+      // — deleting it next handles all four. The underlying Question/
+      // QuestionRevision is APPROVED and therefore genuinely, permanently
+      // undeletable (same reasoning as question-lifecycle.integration
+      // .test.ts's own afterAll) — best-effort, harmless (RLS-scoped,
+      // uniquely UUID-named, never reachable outside this deleted school
+      // pair).
       await owner.exam.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.studentProfile
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
       await owner.question.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
       await owner.classSubject
         .deleteMany({ where: { schoolId: { in: ids } } })
@@ -1654,6 +1774,30 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'exam_questions',
         idA: () => examQuestionA.id,
         idB: () => examQuestionB.id,
+      },
+      {
+        label: 'exam_sessions',
+        table: 'exam_sessions',
+        idA: () => examSessionA.id,
+        idB: () => examSessionB.id,
+      },
+      {
+        label: 'exam_session_participants',
+        table: 'exam_session_participants',
+        idA: () => examSessionParticipantA.id,
+        idB: () => examSessionParticipantB.id,
+      },
+      {
+        label: 'exam_participations',
+        table: 'exam_participations',
+        idA: () => examParticipationA.id,
+        idB: () => examParticipationB.id,
+      },
+      {
+        label: 'exam_administrators',
+        table: 'exam_administrators',
+        idA: () => examAdministratorA.id,
+        idB: () => examAdministratorB.id,
       },
     ];
 

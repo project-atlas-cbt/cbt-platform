@@ -39,6 +39,15 @@ export {
   type PlatformMetricsSnapshot,
 } from './platform/metrics-cache.js';
 export {
+  examControlChannel,
+  examControlStreamKey,
+  EXAM_CONTROL_CACHE_TTL_SECONDS,
+  type ExamControlCenterAggregateSnapshot,
+  type ExamControlCenterSessionSnapshot,
+  type ExamControlCenterSnapshot,
+  type ExamControlCenterStalenessSnapshot,
+} from './exam-control/control-cache.js';
+export {
   RESULT_POLICIES,
   RESULT_DETAIL_VISIBILITIES,
   type ResultPolicy,
@@ -110,10 +119,20 @@ export {
   EXAM_ACCESS_MODES,
   EXAM_NAVIGATION_POLICIES,
   EXAM_READINESS_CHECK_CODES,
+  EXAM_SESSION_TYPES,
+  EXAM_SESSION_STATUSES,
+  EXAM_SESSION_PARTICIPANT_STATUSES,
+  EXAM_PARTICIPATION_STATUSES,
+  EXAM_ADMINISTRATOR_STATUSES,
   type ExamStatus,
   type ExamAccessMode,
   type ExamNavigationPolicy,
   type ExamReadinessCheckCode,
+  type ExamSessionType,
+  type ExamSessionStatus,
+  type ExamSessionParticipantStatus,
+  type ExamParticipationStatus,
+  type ExamAdministratorStatus,
 } from './exams/constants.js';
 export {
   CANONICAL_AUDIT_ACTIONS,

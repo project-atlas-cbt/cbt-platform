@@ -299,16 +299,18 @@ model SchoolMembership {
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  school          School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roleAssignments RoleAssignment[]
-  studentProfile  StudentProfile?
-  teacherProfile  TeacherProfile?
-  hodAssignments  HODAssignment[]
+  school              School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleAssignments     RoleAssignment[]
+  studentProfile      StudentProfile?
+  teacherProfile      TeacherProfile?
+  hodAssignments      HODAssignment[]
   // B9: reviews this membership has personally decided, as reviewer.
-  questionReviews QuestionReview[]
+  questionReviews     QuestionReview[]
   // B11: exams this membership has authored (createdByMembershipId).
-  examsCreated    Exam[]           @relation("ExamCreatedBy")
+  examsCreated        Exam[]              @relation("ExamCreatedBy")
+  // B12: exam-administrator delegations held by this membership (ADR-0012/M-15).
+  examAdministrations ExamAdministrator[]
 
   // Composite-FK target for RoleAssignment/StudentProfile/TeacherProfile,
   // matching TenancyProbe's proven (schoolId, id) pattern.
@@ -352,8 +354,11 @@ model StudentProfile {
   createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  membership  SchoolMembership    @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
-  enrollments StudentEnrollment[]
+  membership                SchoolMembership         @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  enrollments               StudentEnrollment[]
+  // B12: this student's session authorizations and final per-exam outcomes.
+  examSessionParticipations ExamSessionParticipant[]
+  examParticipations        ExamParticipation[]
 
   @@unique([schoolId, membershipId])
   @@unique([schoolId, studentId])
@@ -1911,9 +1916,14 @@ model Exam {
   department      Department?      @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
   createdByMember SchoolMembership @relation("ExamCreatedBy", fields: [schoolId, createdByMembershipId], references: [schoolId, id], onDelete: Restrict)
 
-  classes   ExamClass[]
-  sections  ExamSection[]
-  questions ExamQuestion[]
+  classes        ExamClass[]
+  sections       ExamSection[]
+  questions      ExamQuestion[]
+  // B12: activation & control — sessions, delegated administrators, and
+  // final per-student participation outcomes (written at End Examination).
+  examSessions   ExamSession[]
+  administrators ExamAdministrator[]
+  participations ExamParticipation[]
 
   @@unique([schoolId, id])
   @@index([schoolId])
@@ -2018,4 +2028,207 @@ model ExamQuestion {
   @@index([schoolId, examId])
   @@index([schoolId, questionRevisionId])
   @@map("exam_questions")
+}
+
+// ---------------------------------------------------------------------------
+// B12 — Exam Activation & Control (docs/roadmaps/backend-roadmap.md "B12",
+// ADR-0006, ADR-0009, ADR-0020; ADR-0012/M-15's ExamAdministrator clause).
+// Purely additive on top of B11: three plain back-relation arrays added to
+// Exam, one each to StudentProfile (two) and SchoolMembership, the same
+// "didn't need it until this phase gave it a child" precedent every prior
+// additive phase has recorded.
+//
+// Deliberate simplification, documented here rather than only in the
+// roadmap: every "who performed this action" column below
+// (openedByMembershipId, closedByMembershipId, authorizedByMembershipId,
+// revokedByMembershipId, markedByMembershipId, assignedByMembershipId) is a
+// bare UUID with no Prisma @relation — mirrors Exam.cancelledByMembershipId's
+// own B11 precedent exactly (a denormalized actor+timestamp pair kept on the
+// row for cheap display, not a referential-integrity-bearing FK; the actual
+// audit trail of record is AuditEvent). Only the row's actual *subject* gets
+// a real relation: ExamSessionParticipant/ExamParticipation.studentProfileId
+// (matching StudentEnrollment's own studentProfileId convention, not a
+// membershipId — a student is referenced via StudentProfile throughout this
+// schema) and ExamAdministrator.membershipId (the delegate being granted
+// authority, mirroring HODAssignment.membershipId's real-relation precedent).
+// ExamParticipation.examSessionId is likewise a bare, unrelated UUID — which
+// session a student was authorized under at the time they were marked absent
+// is reporting metadata only, never a cascade/integrity concern.
+// ---------------------------------------------------------------------------
+
+/// 06 §41's own small, closed reporting taxonomy — confirmed product
+/// decision (2026-09-04) to include now even though no B12 logic branches
+/// on it, since retrofitting it once B16 (makeup) wants to tag sessions
+/// would mean a migration touching a table already full of live rows.
+enum ExamSessionType {
+  STANDARD
+  BATCH
+  MAKEUP
+  SPECIAL
+}
+
+/// No READY — a session is born OPEN; per the roadmap's own endpoint-1
+/// wording, creating a session IS opening it. CANCELLED is shipped for
+/// 07 §15 vocabulary fidelity even though no B12 endpoint reaches it,
+/// mirroring ExamStatus.ARCHIVED's own "shipped before exercised" precedent
+/// from B11.
+enum ExamSessionStatus {
+  OPEN
+  CLOSED
+  COMPLETED
+  CANCELLED
+}
+
+/// D-07: deliberately restricted to authorization semantics only — a
+/// completed attempt moves to ExamParticipation, not a third value here.
+enum ExamSessionParticipantStatus {
+  AUTHORIZED
+  REVOKED
+}
+
+/// One row per (exam, student) — not per session — since "absence" is an
+/// exam-level outcome even though the student was authorized under a
+/// specific session.
+enum ExamParticipationStatus {
+  ABSENT
+  /// Never written by B12 — no ExamAttempt exists yet to complete. Kept so
+  /// B13 doesn't need a migration just to add a value to a table B12
+  /// already shipped, mirroring this file's own established precedent for
+  /// shipping unused-but-spec-required vocabulary.
+  COMPLETED
+}
+
+enum ExamAdministratorStatus {
+  ACTIVE
+  REVOKED
+}
+
+/// 07 §8.4 — "a physical/operational sitting of an exam, not a different
+/// examination" (06 §40). Multiple sessions may be OPEN simultaneously for
+/// one exam (confirmed product decision, 2026-09-04 — parallel labs, 04
+/// §27's own Moderator multi-lab note); Exam.status reflects "has any
+/// session ever opened / been explicitly closed or completed," never a
+/// single session's own state.
+model ExamSession {
+  id          String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId    String            @map("school_id") @db.Uuid
+  examId      String            @map("exam_id") @db.Uuid
+  sessionType ExamSessionType   @default(STANDARD) @map("session_type")
+  status      ExamSessionStatus @default(OPEN)
+
+  openedAt             DateTime  @default(now()) @map("opened_at") @db.Timestamptz(6)
+  openedByMembershipId String    @map("opened_by_membership_id") @db.Uuid
+  closedAt             DateTime? @map("closed_at") @db.Timestamptz(6)
+  closedByMembershipId String?   @map("closed_by_membership_id") @db.Uuid
+  reopenedAt           DateTime? @map("reopened_at") @db.Timestamptz(6)
+  completedAt          DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Restrict, not Cascade: an exam past READY must never be hard-deletable
+  // while it has sessions — ExamService.deleteDraft() already only permits
+  // DRAFT exams, which structurally can never have one.
+  exam         Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  participants ExamSessionParticipant[]
+
+  // Composite-FK target for ExamSessionParticipant.
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  // Control Center query: "every OPEN/CLOSED session for this exam."
+  @@index([schoolId, examId, status])
+  @@map("exam_sessions")
+}
+
+/// 07 §8.5 — ADR-0006: participant rows are ALWAYS written, in both
+/// OPEN_TO_ELIGIBLE and EXPLICIT_AUTHORIZATION modes, never skipped — this
+/// is what keeps 07 §13's ExamSessionParticipant→Attempt 1:0..N cardinality
+/// honest and preserves the audit trail of who was allowed to sit when,
+/// regardless of access mode.
+model ExamSessionParticipant {
+  id               String                       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId         String                       @map("school_id") @db.Uuid
+  examSessionId    String                       @map("exam_session_id") @db.Uuid
+  studentProfileId String                       @map("student_profile_id") @db.Uuid
+  status           ExamSessionParticipantStatus @default(AUTHORIZED)
+
+  authorizedAt             DateTime  @default(now()) @map("authorized_at") @db.Timestamptz(6)
+  /// NULL when the bulk OPEN_TO_ELIGIBLE sweep created this row on session
+  /// open — no human authorizer; the eligibility predicate itself is the
+  /// authority in that case.
+  authorizedByMembershipId String?   @map("authorized_by_membership_id") @db.Uuid
+  revokedAt                DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedByMembershipId    String?   @map("revoked_by_membership_id") @db.Uuid
+  revokedReason            String?   @map("revoked_reason")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session        ExamSession    @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Cascade)
+  studentProfile StudentProfile @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, examSessionId, studentProfileId])
+  @@index([schoolId])
+  @@index([schoolId, examSessionId])
+  // Control Center aggregate: count by status within a session.
+  @@index([schoolId, examSessionId, status])
+  @@index([schoolId, studentProfileId])
+  @@map("exam_session_participants")
+}
+
+/// The D-07 resolution: final per-student outcome, written only at End
+/// Examination (POST /v1/exams/:id/complete) — distinct from
+/// ExamSessionParticipant, which is authorization bookkeeping only and is
+/// deliberately restricted to AUTHORIZED/REVOKED (never COMPLETED/ABSENT).
+model ExamParticipation {
+  id                   String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId             String                  @map("school_id") @db.Uuid
+  examId               String                  @map("exam_id") @db.Uuid
+  /// Which session this student was authorized under at completion time —
+  /// reporting metadata only, no FK/cascade behaviour attached (see this
+  /// block's header comment).
+  examSessionId        String?                 @map("exam_session_id") @db.Uuid
+  studentProfileId     String                  @map("student_profile_id") @db.Uuid
+  status               ExamParticipationStatus
+  markedAt             DateTime                @default(now()) @map("marked_at") @db.Timestamptz(6)
+  markedByMembershipId String                  @map("marked_by_membership_id") @db.Uuid
+  reason               String?
+
+  exam           Exam           @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  studentProfile StudentProfile @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, examId, studentProfileId])
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  @@index([schoolId, examSessionId])
+  @@map("exam_participations")
+}
+
+/// ADR-0012/M-15: "own exam" in the permission table means created_by OR an
+/// active ExamAdministrator delegate — resolves the documented case of one
+/// teacher (Mr Ade) authoring an exam that another (Mrs Bola) actually
+/// administers (02 §11), without inventing a permanent Invigilator role
+/// (02 §10). No Prisma-level @@unique (mirrors HODAssignment's own
+/// precedent of allowing re-delegation after revocation); "at most one
+/// ACTIVE delegation per (exam, membership)" is a hand-written partial
+/// unique index in this migration's raw SQL instead.
+model ExamAdministrator {
+  id           String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId     String                  @map("school_id") @db.Uuid
+  examId       String                  @map("exam_id") @db.Uuid
+  membershipId String                  @map("membership_id") @db.Uuid
+  status       ExamAdministratorStatus @default(ACTIVE)
+
+  assignedAt             DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  assignedByMembershipId String    @map("assigned_by_membership_id") @db.Uuid
+  revokedAt              DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  exam   Exam             @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Cascade)
+  member SchoolMembership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  @@index([schoolId, membershipId])
+  @@map("exam_administrators")
 }

@@ -8,8 +8,8 @@ import { AuditActionRegistry } from './audit-action.registry.js';
  * loudly (not silently) if that file's set ever drifts from what this
  * service expects to still be missing. */
 const EXPECTED_DEFERRED = [
-  'EXAM_OPENED',
-  'EXAM_CLOSED',
+  // EXAM_OPENED/EXAM_CLOSED flipped to LIVE in B12 (real producers:
+  // ExamSessionService.open()/ExamLifecycleService.closeExam()).
   'MAKEUP_GRANTED',
   'ATTEMPT_INVALIDATED',
   'RESULT_PUBLISHED',

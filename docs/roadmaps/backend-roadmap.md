@@ -2439,7 +2439,7 @@ phase, matching this project's own established "found while building the real co
 
 # B12 — Exam Activation & Control
 
-**Status:** NOT STARTED · **Decided ADRs:** 0006 (authorization mode), 0009 (PAUSED), 0020 (liveness)
+**Status:** COMPLETE (2026-09-04) · **Decided ADRs:** 0006 (authorization mode), 0009 (PAUSED), 0020 (liveness); ADR-0012/M-15's `ExamAdministrator` clause
 
 ## Objective
 
@@ -2471,37 +2471,42 @@ Deliver exam sessions, student authorization, batch control, and the live Exam C
 
 ## Domains / modules affected
 
-`ExecutionModule` (session/participant portion), `RealtimeModule`.
+`ExecutionModule` — `08 §5`'s own bounded domain ("Exam sessions, participants, attempts, snapshots, answers and participation"), populated here for the first time (B0's original stub comment omitted B12 from its populator list — an omission corrected during this phase's planning, not a scope change). No separate `RealtimeModule`: the SSE stream service lives in the same module as the Control Center aggregate service it shares a snapshot contract with — see Implementation notes.
 
 ## API work
 
-**Contract: `exam-control.v1`.**
+**Contract: `exam-control.v1`. 13 routes: the 9 below, plus 4 confirmed additive ones (exam-level close/reopen, `ExamAdministrator` assign/revoke).**
 
-| Endpoint                                               | Purpose                                                      |
-| ------------------------------------------------------ | ------------------------------------------------------------ |
-| `POST /v1/exams/:id/sessions`                          | Open a session (creates `ExamSession`, moves exam to `OPEN`) |
-| `POST /v1/exam-sessions/:id/close`                     | Close for new attempts; running attempts continue            |
-| `POST /v1/exam-sessions/:id/reopen`                    | Reopen for new starts                                        |
-| `POST /v1/exam-sessions/:id/participants`              | Authorize selected students                                  |
-| `DELETE /v1/exam-sessions/:id/participants/:studentId` | Revoke **before start only**                                 |
-| `GET /v1/exams/:id/control`                            | Control Center aggregates + live attempt table               |
-| `GET /v1/exams/:id/control/stream`                     | SSE live updates                                             |
-| `POST /v1/exams/:id/complete`                          | End examination; confirm absences                            |
-| `GET /v1/exams/:id/eligible-students`                  | Roster with eligibility and current state                    |
+| Endpoint                                               | Purpose                                                          |
+| ------------------------------------------------------ | ---------------------------------------------------------------- |
+| `POST /v1/exams/:id/sessions`                          | Open a session (creates `ExamSession`, moves exam to `OPEN`)     |
+| `POST /v1/exam-sessions/:id/close`                     | Close for new attempts; running attempts continue                |
+| `POST /v1/exam-sessions/:id/reopen`                    | Reopen for new starts                                            |
+| `POST /v1/exam-sessions/:id/participants`              | Authorize selected students                                      |
+| `DELETE /v1/exam-sessions/:id/participants/:studentId` | Revoke **before start only**                                     |
+| `GET /v1/exams/:id/control`                            | Control Center aggregates + live attempt table                   |
+| `GET /v1/exams/:id/control/stream`                     | SSE live updates                                                 |
+| `POST /v1/exams/:id/complete`                          | End examination; confirm absences                                |
+| `GET /v1/exams/:id/eligible-students`                  | Roster with eligibility and current state                        |
+| `POST /v1/exams/:id/close`                             | **Additive** — exam-level close, cascades every OPEN session     |
+| `POST /v1/exams/:id/reopen`                            | **Additive** — exam-level reopen (does not auto-reopen sessions) |
+| `POST /v1/exams/:id/administrators`                    | **Additive** — ADR-0012/M-15 delegate assignment                 |
+| `DELETE /v1/exams/:id/administrators/:membershipId`    | **Additive** — revoke a delegation                               |
 
 ## Database work
 
-- `ExamSession` and `ExamSessionParticipant` with school-scoped composite FKs.
-- `ExamSessionParticipant.status` restricted to authorization semantics only — `AUTHORIZED`, `REVOKED` (resolves `D-07`; `COMPLETED` moves to participation).
-- Unique participant per (session, student).
-- `ExamAttempt.last_seen_at` written on a path that does **not** touch the parent attempt row on every answer save (`R-03`).
-- `AttemptEvent` table, written off the critical path.
-- Indexes for the Control Center query: attempts by exam and state, participants by session.
+- `ExamSession` and `ExamSessionParticipant` with school-scoped composite FKs. ✅
+- `ExamSessionParticipant.status` restricted to authorization semantics only — `AUTHORIZED`, `REVOKED` (resolves `D-07`; enforced by the enum itself being closed, no third value exists). ✅
+- Unique participant per (session, student). ✅
+- **`ExamParticipation`** — a fourth new table, found only by reading the permission table's own `awaitingResource: 'ExamParticipation (B12)'` annotations on `examAdmin.viewRegisteredStudents`/`.allowStudent`/`.markAbsence` during planning, not named in this section's original text. Resolves the DB-work bullet above concretely: authorization bookkeeping (`ExamSessionParticipant`) and the final per-student outcome written only at End Examination (`ExamParticipation`) are separate concerns. ✅
+- **`ExamAdministrator`** — a fifth new table (ADR-0012/M-15), with a hand-written partial unique index (`WHERE status = 'ACTIVE'`) allowing re-delegation after revocation. ✅
+- `ExamAttempt.last_seen_at` / `AttemptEvent` — **not built here**; both require the `ExamAttempt` table, which doesn't exist until B13. See Implementation notes and DoD item 11.
+- Indexes for the Control Center query: `exam_sessions(schoolId, examId, status)`, `exam_session_participants(schoolId, examSessionId, status)`. ✅
 
 ## Background jobs
 
-- Control Center aggregate refresh on a short interval, cached in Redis, so live teacher polling never hits attempt tables directly (`R-03`).
-- Stale-exam detection flagging exams left `OPEN` beyond a threshold (`A-14`).
+- Control Center aggregate refresh on a short interval (5s), cached in Redis, so live teacher polling never hits attempt tables directly (`R-03` — structurally inert in B12 since no `ExamAttempt` table exists yet to protect against, but the plumbing is built now). ✅
+- Stale-exam detection flagging exams left `OPEN` beyond a threshold (4h default), merged into the same per-tenant sweep pass as the aggregate refresh above (`apps/worker/src/queues/exam-control-refresh.queue.ts`, mirroring `subscription-expiry.queue.ts`'s own precedent). ✅
 
 ## Security / authorization work
 
@@ -2532,31 +2537,186 @@ B13 creates attempts against sessions authorized here. B16 consumes participatio
 
 ## Definition of Done
 
-1. Opening a session moves a `READY` exam to `OPEN` and creates an `ExamSession`.
-2. Under `OPEN_TO_ELIGIBLE`, every currently eligible student is authorized automatically and sees the assessment.
-3. Under `EXPLICIT_AUTHORIZATION`, no student may start until named; unnamed students see nothing.
-4. Authorizing a second batch after closing the first works without creating a second exam (`03 §39`).
-5. Closing for new attempts stops new starts while running attempts continue to completion, unaffected.
-6. Reopening permits new starts again.
-7. Revoking before start removes access; revoking after start is refused and directs the operator to invalidation.
-8. The Control Center reports registered, not started, in progress, submitted, and absent counts matching a hand-built fixture.
-9. The live table shows per-student status and server-derived time remaining.
-10. SSE pushes start, submit, and disconnect events within an agreed latency budget; a dropped stream reconnects and replays.
-11. `last_seen_at` drives a "disconnected" indicator per `05 §73`.
-12. End Examination requires zero in-progress attempts, prompts to mark non-participants absent, and is audited.
-13. An exam left `OPEN` beyond the staleness threshold is flagged, never auto-closed.
-14. Cross-tenant and cross-teacher access denied.
+1. ✅ Opening a session moves a `READY` exam to `OPEN` and creates an `ExamSession`.
+2. ✅ Under `OPEN_TO_ELIGIBLE`, every currently eligible student is authorized automatically and sees the assessment (proven via `GET /eligible-students` and a real `Notification` row per student — "sees the assessment" itself is B13's `GET /student/assessments`-shaped endpoint, not built yet, but the authorization/notification half this phase owns is real).
+3. ✅ Under `EXPLICIT_AUTHORIZATION`, no student may start until named; unnamed students see nothing (zero `ExamSessionParticipant` rows created on open; `canStudentAccessSession` in `exam-eligibility.util.ts` requires an `AUTHORIZED` row).
+4. ✅ Authorizing a second batch after closing the first works without creating a second exam (`03 §39`).
+5. ✅ Closing for new attempts stops new starts while running attempts continue to completion, unaffected (concurrent sessions proven independent — closing one never touches another).
+6. ✅ Reopening permits new starts again.
+7. ✅ Revoking before start removes access; revoking after start is refused and directs the operator to invalidation — the `true` branch of `hasStartedAttempt()` is a real, tested code path even though currently unreachable (see Implementation notes).
+8. ✅ The Control Center reports registered (`authorizedCount`), not-started, and absent counts matching a hand-built fixture exactly. **Partial by construction**: in-progress/submitted are honest `0`-with-`attemptDataAvailable:false` placeholders — no `ExamAttempt` table exists yet to report real values from (B13's job).
+9. **Partial.** The live table shape is reserved and always `liveAttempts: []` — real per-student status/time-remaining needs `ExamAttempt` (B13).
+10. ✅ SSE pushes a full-snapshot event on every mutation (open/close/reopen at both levels, authorize/revoke, complete) and a 5s worker-driven refresh; a reconnecting client with `Last-Event-ID` replays from a Redis Stream (`MAXLEN ~1000`, 2h TTL) before resubscribing live. "Submit"/"disconnect" events specifically are B13's to emit (no attempt exists to submit or disconnect from yet).
+11. **Deferred to B13 — structurally unsatisfiable in B12.** No `last_seen_at` column or disconnected indicator is built; `attemptDataAvailable: false` is the honest signal. Recorded explicitly, not silently dropped — see Implementation notes.
+12. ✅ End Examination requires zero `OPEN` sessions and zero in-progress attempts (the latter a real, tested, currently-always-passing stub pending B13), requires the confirmed absentee list to exactly match the server's own current pending set, writes `ExamParticipation` rows, and is audited (`EXAM_COMPLETED` + `EXAM_PARTICIPATION_MARKED_ABSENT`).
+13. ✅ An exam with a session `OPEN` beyond the staleness threshold (4h default) is flagged in the Control Center response, never auto-closed.
+14. ✅ Cross-tenant (RLS + guard, proven directly) and cross-teacher (a plain `TEACHER` with no ownership/delegation/department privilege is refused; an `ExamAdministrator` delegate succeeds) access denied.
 
 ## Exit criteria
 
-- ADR-0006, ADR-0009, ADR-0020 decided.
-- Concurrency and realtime tests green.
-- F12 confirms the contract and the SSE reconnection model.
+- ✅ ADR-0006, ADR-0009, ADR-0020 decided (all three were already Accepted before this phase began).
+- ✅ Concurrency tests green (the READY→OPEN race is inherently exercised by the concurrent-sessions test; DoD item 4's batch-after-close is proven directly). Realtime/SSE tests are covered by manual verification and the design's own replay mechanism, not yet by an automated reconnect-under-load test — see Deferred items.
+- **Open.** F12 has not been built in this pass — a future frontend phase confirms the contract and the SSE reconnection model against a real browser `EventSource`, per the frontend/backend phase-pairing default.
 
 ## Deferred items
 
-- Advanced proctoring, webcam, facial recognition (`01 §53`, `CLAUDE.md` deferred list).
-- Automated cheating judgements — signals are recorded as events only (`03 §78`, `08 §17`).
+- Advanced proctoring, webcam, facial recognition (`01 §53`, `CLAUDE.md` deferred list) — unchanged.
+- Automated cheating judgements — signals are recorded as events only (`03 §78`, `08 §17`) — unchanged; no signals exist yet at all (B13's `AttemptEvent`).
+- **DoD item 11 (liveness/disconnected indicator)** — no `last_seen_at` column, no heartbeat, structurally impossible without `ExamAttempt`. B13's job entirely.
+- **`examAdmin.viewLiveAttempts`/`.seeStarted`/`.seeCompleted`/`.endAttempt`** — permission rows stay `awaitingResource` (B13, `ExamAttempt`).
+- **`examAdmin.grantMakeup`/`.invalidateAttempt`** — stay `awaitingResource` (B14/B16, ADR-0014). The revoke-after-start refusal in B12 is a real, tested placeholder for the redirect target, not the invalidation mechanism itself.
+- **The eligibility predicate's attempt-limit/authorization-override clause** (ADR-0006's final clause, ADR-0014) — an explicit `true` pass-through stub in `evaluateExamEligibility`, code-commented as B16's job.
+- **A real automated SSE reconnect-under-load test** (API node restart drops the connection; client reconnects via `Last-Event-ID` and reconciles) — the replay mechanism is built and manually verifiable, but no automated test simulates a mid-stream process restart. Candidate for F12 or a dedicated hardening pass.
+- **`F12` (Exam Control Center UI)** — not built this pass; the next frontend phase to pair with the backend critical path.
+
+## Implementation notes
+
+Followed the working-rules checklist first: three parallel research passes (roadmap/ADR/audit-finding
+coverage; the full product specification for `ExamSession`/`ExamSessionParticipant`/the state
+machines/Control Center UX; the existing `B11` implementation — schema, permission-table rows, scope
+resolvers, mappers, test-harness conventions) followed by a dedicated Plan agent, per this project's
+own precedent for a phase of this size — then direct verification reads (the permission table, the
+`ScopeResolverRegistry`, `auth.guard.ts`'s cookie-based session model) before writing any code.
+
+**The single most consequential finding, made during planning, not assumed**: the permission table's
+own `awaitingResource: 'ExamParticipation (B12)'` annotations on `examAdmin.viewRegisteredStudents`/
+`.allowStudent`/`.markAbsence` name a table distinct from `ExamSessionParticipant` — confirmed by
+direct read of `permission-table.ts`. This resolves this section's own DB-work bullet
+("`ExamSessionParticipant.status` restricted to authorization semantics only... `COMPLETED` moves to
+participation") concretely: `ExamSessionParticipant` is authorization bookkeeping only (AUTHORIZED/
+REVOKED, never mutated in place); `ExamParticipation` is the final per-student outcome, written once,
+only at End Examination.
+
+**Five confirmed decisions, made directly with the project owner during planning, not guessed:**
+
+1. **Concurrent sessions are allowed** — multiple `ExamSession` rows may be `OPEN` simultaneously for
+   one exam (parallel labs), matching `04 §27`'s Moderator multi-lab note and the domain model's own
+   batch example. `Exam.status` reflects "has any session ever opened / been explicitly closed or
+   completed" — never a single session's own state.
+2. **`ExamSession.sessionType`** (`STANDARD`/`BATCH`/`MAKEUP`/`SPECIAL`, `06 §41`'s own small closed
+   taxonomy) is included now, purely for reporting fidelity — no B12 logic branches on it.
+3. **A genuine exam-level close/reopen exists, distinct from session-level close/reopen** — two
+   additional endpoints beyond the roadmap's own literal 9-endpoint contract. Exam-level close
+   cascades every currently-`OPEN` session to `CLOSED` in one transaction and blocks any new session
+   from opening (`EXAM_NOT_OPENABLE`); exam-level reopen only lifts that block — it does **not**
+   auto-reopen the sessions the cascade closed, preserving fine-grained operator control over which
+   specific batch resumes. `exam.pause`/`exam.closeNewAttempts` are checked as representative of the
+   identical ADR-0009 transition (both permission-table rows carry structurally identical grants).
+4. **`ExamAdministrator` delegate management endpoints are built now**, not deferred to a future
+   frontend phase — a minimal `POST`/`DELETE` pair (`exam.manageAdministrators`, a new permission row
+   copied from `exam.publish`'s grant shape), since the table and its `OWNED`-resolver wiring would
+   otherwise have no way to ever be populated.
+5. **A credential-sharing/remote-impersonation integrity risk**, raised by the project owner during
+   planning (a physically-present student's credentials used by a remote person to answer on their
+   behalf) — checked against the full spec set and found genuinely uncovered anywhere. Resolved to
+   **defer the concrete mechanism to B13** (Attempt Engine, which owns `ExamAttempt`/"who is answering
+   right now") rather than address it here. Two sub-cases recorded for B13's own planning to start
+   from: remote screen-share/remote-control of the _same_ device is undetectable by any software
+   measure and is out of scope by design (matching this product's deliberate anti-biometric-
+   proctoring stance); a genuinely separate remote device/session is a real candidate for a B13
+   mechanism (binding an attempt to the session/device/IP that started it, flagging a mid-attempt
+   change as an `AttemptEvent`-shaped signal — counts, never automated judgments, per ADR-0020's own
+   philosophy).
+
+**`08 §5`'s own bounded-domain map gets `ExecutionModule` populated for the first time here** — its
+original B0-era stub comment named only B13/B14/B16 as populators, omitting B12 despite
+`ExamSession`/`ExamSessionParticipant` being literally "exam sessions, participants," the domain's own
+documented scope. Corrected during planning as a documentation-accuracy fix, not a scope change — see
+"Domains / modules affected" above. All B12 code lives in `apps/api/src/modules/execution/`, replacing
+the empty stub `AppModule` already imported (no new module registration needed).
+
+**`ScopeResolverRegistry` has no `registerOverride` method**, despite its own doc comment (written
+during B2) promising one for this exact phase. Resolved without adding one: `register('OWNED', ...)`
+already is a full replace, which is all "override" needs.
+`exam-administrator-scope.resolver.ts`'s `createExamAdministratorAwareOwnedResolver()` reimplements
+the plain `OWNED` check inline (four lines, already fully visible in `scope-resolvers.ts`) and falls
+through to an `ExamAdministrator{examId, membershipId, status:'ACTIVE'}` lookup only when plain
+ownership fails and `resource.examId` is present — a new optional field on `ResourceContext`, set by
+every `exam.*`/`examAdmin.*` call site in this module.
+
+**A real, if minor, bug found only by the integration tests, not by inspection**:
+`ExamSessionParticipantService.listEligible()` originally built its `ResourceContext` without
+`classSubjectId` — but `examAdmin.viewRegisteredStudents` is graded `ASSIGNED` for `TEACHER` (not
+`OWNED`, unlike every other `examAdmin.*`/`exam.*` action in this module), and the `ASSIGNED` resolver
+denies outright when `resource` is present but `classSubjectId` is missing (it only optimistically
+passes when `resource` is undefined entirely). This meant the exam's own creating teacher was denied
+`GET /eligible-students` on their own exam. Fixed by resolving the caller's own `TeacherAssignment`
+against any of the exam's targeted classes first, mirroring `ExamService
+.resolveViewResourceContext()`'s own established B11 pattern for the identical shape of problem —
+duplicated locally rather than extracted into a shared cross-module utility, to avoid touching
+already-shipped, already-tested B11 code for a single call site (AGENTS §15).
+
+**Two real trigger-adjacent findings, resolved cleanly**: `Exam.status`'s existing B11 immutability
+trigger (`enforce_exam_configuration_immutable_after_draft`) only guards configuration/identity
+columns, not `status` itself — so B12's `OPEN`/`CLOSED`/`COMPLETED` transitions pass it cleanly with
+no schema change needed. A new, B12-only trigger (`exam_sessions_status_transition_guard`) enforces
+`ExamSession`'s own state machine is never violated even by a direct write (terminal states
+`COMPLETED`/`CANCELLED` reject any further transition) — fires only `BEFORE UPDATE OF status`, never
+on `DELETE`, so none of B12's four new tables needed the "separate RLS describe block to avoid
+fighting a delete-blocking trigger" treatment `B10`'s `audit_events` required; they extend `B11`'s own
+dedicated exam-tables RLS block instead.
+
+**SSE is entirely new to this codebase** — no prior art. Hand-rolled raw Fastify streaming
+(`reply.raw.writeHead`/`.write`), not a library (AGENTS §9): the amount of custom per-connection logic
+(per-exam scoping, `Last-Event-ID` replay, heartbeat, disconnect cleanup) is the same regardless of
+framing mechanism. Session-cookie auth (confirmed by reading `auth.guard.ts` directly — sessions
+resolve from a cookie on every request, never a header) means a browser `EventSource` with
+`withCredentials: true` works through the ordinary `@Authorized(...)` + `AuthGuard` pipeline with no
+special-casing. One shared Redis subscriber connection per API process (`REDIS_SUBSCRIBER_CLIENT`, a
+new `.duplicate()` provider in `redis.module.ts` — a client in subscribe mode cannot issue ordinary
+commands) serves every active exam-control channel, satisfying R-04's connection-count concern
+directly (one connection per node, never one per SSE client). Events are snapshot-shaped (the full
+current aggregate, never a delta) specifically so a duplicate delivery in the narrow replay-then-
+subscribe handoff window is harmless to apply twice — an accepted, documented small race, not solved
+with distributed locking.
+
+**The Control Center snapshot-computation logic is deliberately duplicated once, not shared**:
+`apps/api`'s `exam-control-snapshot.util.ts` (used by both the `GET /control` live-compute fallback and
+every mutation's post-commit SSE publish) and `apps/worker`'s `exam-control-refresh.queue.ts` compute
+structurally identical snapshots independently, because `apps/worker` cannot import from `apps/api`
+(only `packages/*` are shared across apps — the same constraint B7's own `import-worker-bootstrap.ts`
+doc comment already records). Kept from drifting by both reading the same shared
+`ExamControlCenterSnapshot` type from `packages/domain`, mirroring `platform/metrics-cache.ts`'s own
+B3 precedent for a Redis key/shape two processes must agree on.
+
+**A real bug found only by the integration tests, not by inspection**: the worker sweep's own
+"publish/append only on a material change" check originally compared the raw JSON snapshot strings
+directly — but `computedAt` changes every tick regardless of anything else, so the comparison would
+always report a change and defeat the entire point of the check. Fixed by comparing both snapshots
+with `computedAt` stripped first.
+
+**A process-management lesson, not a product bug**: verifying the compiled `apps/api`/`apps/worker`
+boots via `node dist/main.js &` followed by a bash `kill $!` left a real zombie process behind twice
+during this phase's own verification — Git Bash's reported `$!` PID does not reliably map to the
+actual Windows `node.exe` process id in this environment, so `kill` silently no-ops. The zombie API
+process's own live import-worker consumer then raced against — and intermittently defeated — five
+unrelated `B7`/`B8` integration tests' own direct `commit.commit()` calls, at first misread as
+pre-existing environment flakiness (a class of failure this codebase's own history has repeatedly
+documented for that exact test file) before being traced to the actual cause and fixed by killing the
+correct PID via `Get-Process`/`Stop-Process` on Windows directly. Recorded here so a future session
+recognizes the symptom immediately rather than re-diagnosing it.
+
+**Testing**: `apps/api/src/modules/execution/exam-control.integration.test.ts` (9 tests, real HTTP via
+`app.inject()` against a real running `AppModule` and real Postgres — DoD items 1-8, 12, 14, the
+exam-level cascade-close/reopen behavior, and `ExamAdministrator` delegation proven end to end with a
+genuinely unauthorized third teacher, not the fixture's own department-privileged HOD).
+`apps/worker/src/queues/exam-control-refresh.integration.test.ts` (4 tests, a small in-memory fake
+Redis rather than a real one — proves the sweep's own aggregate computation, the material-change
+publish/append gate, and staleness flagging directly, without racing a real pub/sub subscriber).
+`tests/tenancy/rls.integration.test.ts` extended B11's own dedicated exam-tables describe block with
+all four new tables (103 tests in that file total, up from 87) rather than a fifth describe block —
+none of B12's new tables carry a delete-blocking trigger, so the "avoid fighting immutability during
+cleanup" reason that separates `B10`'s `audit_events` block doesn't apply here.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm build` at the
+monorepo root (16/16 turbo tasks each), the full `apps/api` integration suite (266 tests across 35
+files, zero regressions), the full `apps/worker` integration suite (22 tests across 5 files), and the
+extended RLS suite. `pnpm generate` (`exam-control.v1` — 13 routes — published in `apps/api/openapi
+.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (155 rows — the one new
+`exam.manageAdministrators` row, confirmed via a clean `git diff`). A real `node dist/main.js` boot
+confirmed `PolicyCoverageService` reports 182 routes checked with zero violations, and a real
+`apps/worker` boot confirmed the new `atlas-exam-control-refresh-sweep` queue registers at its
+configured 5-second interval alongside every pre-existing sweep.
 
 ---
 
@@ -2585,6 +2745,68 @@ Deliver the highest-integrity path in the product: attempt creation, immutable q
 - Accommodation resolution frozen at attempt creation (resolves `X-11`).
 - Offline media contract per `ADR-0021` (resolves `X-10`).
 - Invalidation of a running attempt with a distinct non-retryable client error (resolves `X-13`).
+- **A confirmed decision on the remote-impersonation candidate mechanism carried forward from `B12`
+  planning** (device/session binding + a mid-attempt-change `AttemptEvent` signal) — see "Carried
+  forward from `B12`" immediately below. Not yet decided; this phase's planning must resolve it
+  before implementation, not silently skip it a second time.
+
+## Carried forward from `B12` (raised 2026-09-04, deferred here by design — resolve, don't re-derive)
+
+**Read this before touching `AttemptEvent`/attempt-start design.** During `B12`'s planning, the
+project owner raised a real integrity risk with no existing coverage anywhere in the nine
+specifications, the 33 ADRs, or the audit: **a student physically present in the exam hall shares
+their login credentials with a remote person, who answers on their behalf while the student does
+nothing.** `B12` checked this against the full spec set and confirmed it is genuinely uncovered —
+the closest existing text (`03 §78`, `ADR-0020`) assumes the _same_ physically-present person, just
+possibly distracted (tab switches, fullscreen exits), never identity substitution. `B12` deliberately
+did not address it — it has no `ExamAttempt` table to hang any mechanism on — and deferred the whole
+question to this phase by explicit, recorded decision (see `B12`'s own "Implementation notes"
+section above, decision 5, for the original analysis this entry summarizes and extends).
+
+The risk splits into two sub-cases with two different answers, both already decided — **only the
+second sub-case's mechanism is this phase's open decision**:
+
+1. **Remote screen-share/remote-control of the same hall workstation** (the student hands over
+   control, or is dictated answers, while still appearing to sit at their own device). **Decided,
+   out of scope by design, not reopened by this phase**: to the server this is one continuously-
+   authenticated session behaving normally — no software signal distinguishes it from the student
+   typing themselves. This matches the product's own explicit, standing deferral of advanced/
+   biometric proctoring (`01 §41`; this file's "Deferred" list: advanced AI proctoring, facial
+   recognition, advanced remote examination monitoring) — a physical-invigilation responsibility,
+   not a platform gap. Do not build camera/screen-capture/behavioural-biometric detection for this
+   case; it would silently expand approved scope (`AGENTS.md` §17).
+2. **A genuinely separate remote device or session** completes the exam under the student's
+   credentials while the student's own hall device sits idle (or is used only to appear present). A
+   CBT platform can reasonably help surface this without crossing into biometric territory. **Not
+   yet decided — this phase must confirm the approach with the project owner before implementing
+   it, per `AGENTS.md` §3**, using this as the starting analysis rather than re-deriving it:
+   - **Candidate mechanism**: bind an attempt to the session/device/IP that started it at attempt
+     creation (fits naturally into this phase's own attempt-creation transaction — DoD item 1
+     already makes that transaction the one place server-authoritative facts get fixed). A
+     mid-attempt change to that binding (different IP, different device fingerprint, a second
+     concurrent connection attempting to act on the same attempt) is recorded as an
+     `AttemptEvent`-shaped **signal**, never an automated block or judgment — this is the same
+     "counts, not judgments" philosophy `ADR-0020` already establishes for tab-switch/fullscreen-
+     exit signals, so this candidate is very likely an **extension of `ADR-0020`'s existing decided
+     scope, not a new ADR** — confirm this reading during planning rather than assuming it; open a
+     new ADR only if the resolved design turns out to need policy this codebase hasn't already
+     decided (e.g., an automated hard-block rather than a flagged signal, which would be a real
+     product-policy change, not an engineering extension).
+   - **A secondary candidate, lower priority**: an optional per-school allowed-network-range
+     configuration checked at attempt start — useful for a school running all exams from a known
+     lab IP block, of little use for BYOD/remote settings. Worth naming as a possibility during
+     planning, not a commitment either way.
+   - **What this phase must NOT do**: silently build nothing and let this drop a second time
+     (`AGENTS.md` §17 — deferred features must not be dropped, but also must not stay silently
+     deferred forever with no owning decision), and must not silently build an automated block
+     without confirming that's the intended policy (an automated block on a device/IP change has
+     real false-positive risk — a legitimate network failover, a school's own NAT/DHCP churn, or a
+     student switching from Wi-Fi to a mobile hotspot mid-attempt are all real, non-malicious causes
+     of the identical signal).
+   - **Record the outcome explicitly** in this phase's own Change Log entry once decided, the same
+     way `B12`'s decision to defer this here was recorded — whichever way it resolves (built now,
+     built partially as a signal-only MVP, or explicitly re-deferred again with a named reason and a
+     named future owner) must be stated, not left implicit.
 
 ## Specification references
 
@@ -2639,6 +2861,11 @@ Deliver the highest-integrity path in the product: attempt creation, immutable q
 - Client-supplied `expires_at`, duration, marks, or scores are never accepted.
 - Answers are rejected once the attempt is not writable, with a distinct non-retryable error code.
 - Rate limiting sized so legitimate answer traffic is never throttled but abuse is bounded.
+- **Remote-impersonation / credential-sharing risk (carried forward from `B12`, see "Carried
+  forward from `B12`" above)** — attempt-creation time is where a device/session binding (the
+  candidate mechanism) would be established, since that transaction is already the one place this
+  phase fixes server-authoritative facts about an attempt. Confirm the approach before
+  implementing it; do not implement an unconfirmed guess.
 
 ## Testing requirements
 
@@ -2700,6 +2927,12 @@ B14 finalises attempts created here. B12's Control Center reflects attempt state
 
 - Question pools — pending `ADR-0002`; if approved, the start transaction gains a draw step and this phase's scope grows.
 - Advanced anti-cheating enforcement — signals recorded only.
+- **Remote-impersonation/credential-sharing mechanism (sub-case 2, "Carried forward from `B12`"
+  above) — not a pre-existing deferral, an open decision this phase must actually resolve.** Do not
+  list this as simply "deferred" without recording which way it went (built now / built as a
+  signal-only MVP / re-deferred with a named reason and owner) in this phase's own Change Log entry.
+  The remote-control-of-the-same-device sub-case (sub-case 1) stays genuinely out of scope by
+  design, unchanged — that part is settled, not open.
 
 ---
 

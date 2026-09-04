@@ -53,6 +53,12 @@ export interface ResourceContext {
    * is correct and registered, reachable only once a later phase's
    * controller passes it. */
   classSubjectId?: string;
+  /** OWNED (B12): the exam an `ExamAdministrator`-delegation-aware OWNED
+   * check needs, alongside ownerMembershipId — see
+   * exam-control/exam-administrator-scope-resolver.provider.ts. Every
+   * `exam.*`/`examAdmin.*` call site constructing a ResourceContext should
+   * include it so a delegate (not just the original author) is granted. */
+  examId?: string;
 }
 
 export type AuthorizationOutcome = 'ALLOWED' | 'FORBIDDEN' | 'NOT_FOUND';

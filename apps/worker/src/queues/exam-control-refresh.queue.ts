@@ -1,0 +1,208 @@
+import { Worker, type ConnectionOptions, type Job, type Queue } from 'bullmq';
+import type { Redis } from 'ioredis';
+import { prisma, withTenant } from '@atlas/db';
+import {
+  EXAM_CONTROL_CACHE_TTL_SECONDS,
+  examControlChannel,
+  examControlStreamKey,
+  type ExamControlCenterSnapshot,
+} from '@atlas/domain';
+
+export const EXAM_CONTROL_REFRESH_QUEUE_NAME = 'atlas-exam-control-refresh-sweep';
+// A stable jobId so re-scheduling on every process restart doesn't pile up
+// duplicate repeatable jobs — same idiom as every other sweep in this file.
+const SWEEP_JOB_ID = 'sweep';
+
+const STREAM_MAXLEN = 1000;
+const STREAM_TTL_SECONDS = 2 * 60 * 60;
+
+export interface ExamControlRefreshSweepDeps {
+  // `xadd`'s real ioredis type is a complex overloaded variadic signature —
+  // `Pick` off the real client type rather than hand-rolling an interface
+  // that can never quite match it (found by `tsc`, not by inspection).
+  redis: Pick<Redis, 'get' | 'set' | 'publish' | 'xadd' | 'expire'>;
+  staleThresholdMs: number;
+  now?: () => Date;
+}
+
+/**
+ * B12: merges the roadmap's two named Background-jobs bullets ("Control
+ * Center aggregate refresh" and "stale-exam detection") into one per-tenant
+ * pass — both need to iterate the identical "exams currently OPEN or
+ * CLOSED" set — mirroring `subscription-expiry.queue.ts`'s own precedent of
+ * combining related per-tenant work exactly.
+ *
+ * A plain async function (not a class, no Nest DI), directly unit/
+ * integration-testable without standing up BullMQ, matching every sweep in
+ * this file. Iterates schools one at a time via `withTenant` — RLS blocks
+ * any unscoped cross-school query, the same real constraint every prior
+ * sweep in this file already documents.
+ *
+ * This is a SEPARATE, independent computation from `apps/api`'s own
+ * `exam-control-snapshot.util.ts` (the live-compute fallback `GET
+ * .../control` uses on a cache miss, and what every mutation's own SSE
+ * publish call recomputes from) — `apps/worker` cannot import from
+ * `apps/api` (only `packages/*` are shared across apps, the same
+ * constraint `import-worker-bootstrap.ts`'s own doc comment already
+ * records for B7). Kept structurally identical by both reading from
+ * `packages/domain`'s shared `ExamControlCenterSnapshot` shape rather than
+ * duplicating that type definition too.
+ */
+export async function runExamControlRefreshSweep(deps: ExamControlRefreshSweepDeps): Promise<void> {
+  const now = deps.now?.() ?? new Date();
+  const schools = await prisma.school.findMany({ select: { id: true } });
+
+  for (const school of schools) {
+    // One school's failure must never abort the sweep for every other
+    // school — the same log-and-continue idiom every sweep in this file
+    // already uses.
+    try {
+      const exams = await withTenant(prisma, school.id, (tx) =>
+        tx.exam.findMany({
+          where: { schoolId: school.id, status: { in: ['OPEN', 'CLOSED'] } },
+          select: { id: true, status: true },
+        }),
+      );
+
+      for (const exam of exams) {
+        const snapshot = await computeSnapshot(
+          school.id,
+          exam.id,
+          exam.status,
+          deps.staleThresholdMs,
+          now,
+        );
+        const key = examControlChannel(school.id, exam.id);
+        const payload = JSON.stringify(snapshot);
+
+        const prior = await deps.redis.get(key);
+        // A TTL, not a plain SET: this sweep only ever iterates exams
+        // currently OPEN/CLOSED, so once an exam moves to
+        // COMPLETED/CANCELLED/ARCHIVED nothing touches this key again — a
+        // plain SET would leave that exam's last snapshot in Redis forever,
+        // served by GET /control indefinitely (found in review). The TTL
+        // is refreshed on every tick this sweep still considers the exam
+        // live, and matches the write-through TTL apps/api's own
+        // publishUpdate() uses for the same key.
+        await deps.redis.set(key, payload, 'EX', EXAM_CONTROL_CACHE_TTL_SECONDS);
+
+        // Publish/append only on a MATERIAL change — `computedAt` alone
+        // changes every tick regardless, so comparing the raw JSON would
+        // always differ and defeat the point of this check entirely.
+        if (!snapshotsEqualIgnoringComputedAt(prior, payload)) {
+          const streamKey = examControlStreamKey(school.id, exam.id);
+          await deps.redis.publish(key, payload);
+          await deps.redis.xadd(streamKey, 'MAXLEN', '~', STREAM_MAXLEN, '*', 'event', payload);
+          await deps.redis.expire(streamKey, STREAM_TTL_SECONDS);
+        }
+      }
+    } catch (err) {
+      console.error(`[worker] exam-control-refresh sweep failed for school ${school.id}:`, err);
+    }
+  }
+}
+
+function snapshotsEqualIgnoringComputedAt(priorRaw: string | null, currentRaw: string): boolean {
+  if (priorRaw === null) return false;
+  try {
+    const prior = JSON.parse(priorRaw) as Record<string, unknown>;
+    const current = JSON.parse(currentRaw) as Record<string, unknown>;
+    delete prior.computedAt;
+    delete current.computedAt;
+    return JSON.stringify(prior) === JSON.stringify(current);
+  } catch {
+    return false;
+  }
+}
+
+async function computeSnapshot(
+  schoolId: string,
+  examId: string,
+  examStatus: string,
+  staleThresholdMs: number,
+  now: Date,
+): Promise<ExamControlCenterSnapshot> {
+  return withTenant(prisma, schoolId, async (tx) => {
+    const sessions = await tx.examSession.findMany({
+      where: { schoolId, examId },
+      orderBy: { openedAt: 'asc' },
+    });
+    const sessionIds = sessions.map((s) => s.id);
+
+    const authorizedCount =
+      sessionIds.length === 0
+        ? 0
+        : await tx.examSessionParticipant.count({
+            where: { schoolId, examSessionId: { in: sessionIds }, status: 'AUTHORIZED' },
+          });
+    const absentCount = await tx.examParticipation.count({
+      where: { schoolId, examId, status: 'ABSENT' },
+    });
+
+    let openSince: Date | null = null;
+    for (const session of sessions) {
+      if (session.status !== 'OPEN') continue;
+      const openedFrom = session.reopenedAt ?? session.openedAt;
+      if (openSince === null || openedFrom < openSince) openSince = openedFrom;
+    }
+    const isStale = openSince !== null && now.getTime() - openSince.getTime() > staleThresholdMs;
+
+    return {
+      examId,
+      examStatus: examStatus as ExamControlCenterSnapshot['examStatus'],
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        examId: s.examId,
+        sessionType: s.sessionType,
+        status: s.status,
+        openedAt: s.openedAt.toISOString(),
+        openedByMembershipId: s.openedByMembershipId,
+        closedAt: s.closedAt?.toISOString() ?? null,
+        closedByMembershipId: s.closedByMembershipId,
+        reopenedAt: s.reopenedAt?.toISOString() ?? null,
+        completedAt: s.completedAt?.toISOString() ?? null,
+        createdAt: s.createdAt.toISOString(),
+        updatedAt: s.updatedAt.toISOString(),
+      })),
+      aggregate: {
+        authorizedCount,
+        notStartedCount: authorizedCount,
+        inProgressCount: 0,
+        submittedCount: 0,
+        absentCount,
+        attemptDataAvailable: false,
+      },
+      liveAttempts: [],
+      staleness: {
+        isStale,
+        openSince: openSince?.toISOString() ?? null,
+        thresholdMs: staleThresholdMs,
+      },
+      computedAt: now.toISOString(),
+    };
+  });
+}
+
+export function createExamControlRefreshWorker(
+  connection: ConnectionOptions,
+  deps: ExamControlRefreshSweepDeps,
+): Worker {
+  return new Worker(
+    EXAM_CONTROL_REFRESH_QUEUE_NAME,
+    async (_job: Job) => {
+      await runExamControlRefreshSweep(deps);
+    },
+    { connection },
+  );
+}
+
+export async function scheduleExamControlRefreshSweep(
+  queue: Queue,
+  everyMs: number,
+): Promise<void> {
+  await queue.upsertJobScheduler(
+    SWEEP_JOB_ID,
+    { every: everyMs },
+    { opts: { removeOnComplete: true, removeOnFail: 10 } },
+  );
+}

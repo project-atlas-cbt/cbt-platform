@@ -264,6 +264,67 @@ export const BASE_ERROR_CODES = {
   // one; DRAFT/READY/CANCELLED/ARCHIVED are all archivable, matching this
   // codebase's general "archival always allowed" convention.
   EXAM_NOT_ARCHIVABLE: { httpStatus: 409, retryable: false },
+
+  // B12 (Exam Activation & Control).
+  // EXAM_NOT_OPEN: POST .../exams/:id/close attempted while the exam is not
+  // currently OPEN.
+  EXAM_NOT_OPEN: { httpStatus: 409, retryable: false },
+  // EXAM_NOT_CLOSED: POST .../exams/:id/reopen attempted while the exam is
+  // not currently CLOSED.
+  EXAM_NOT_CLOSED: { httpStatus: 409, retryable: false },
+  // EXAM_NOT_OPENABLE: POST .../exams/:id/sessions attempted against an
+  // exam not in READY or OPEN (e.g. still DRAFT, or CLOSED/COMPLETED/
+  // CANCELLED/ARCHIVED — reopen the exam first if it's CLOSED).
+  EXAM_NOT_OPENABLE: { httpStatus: 409, retryable: false },
+  // EXAM_SESSION_NOT_OPEN: POST .../exam-sessions/:id/close attempted on a
+  // session that is not currently OPEN.
+  EXAM_SESSION_NOT_OPEN: { httpStatus: 409, retryable: false },
+  // EXAM_SESSION_NOT_CLOSED: POST .../exam-sessions/:id/reopen attempted on
+  // a session that is not currently CLOSED.
+  EXAM_SESSION_NOT_CLOSED: { httpStatus: 409, retryable: false },
+  // EXAM_SESSION_NOT_AUTHORIZABLE: POST .../participants attempted against
+  // a COMPLETED or CANCELLED session — authorization bookkeeping is
+  // allowed while OPEN or CLOSED only (DoD item 4: a second batch after
+  // closing the first needs no new exam).
+  EXAM_SESSION_NOT_AUTHORIZABLE: { httpStatus: 409, retryable: false },
+  // EXAM_SESSION_PARTICIPANT_NOT_AUTHORIZED: DELETE .../participants/
+  // :studentId attempted against a participant who is not currently
+  // AUTHORIZED (already revoked, or never authorized).
+  EXAM_SESSION_PARTICIPANT_NOT_AUTHORIZED: { httpStatus: 409, retryable: false },
+  // REVOKE_AFTER_START_REFUSED: X-13/this phase's own Security section —
+  // revoking access is permitted only before an attempt starts; afterwards
+  // the correct action is invalidation (B13), never a plain revoke. B12's
+  // own hasStartedAttempt() stub always returns false (no ExamAttempt
+  // exists yet), so this branch is currently unreachable — kept real and
+  // tested regardless, since B13 supersedes the stub without needing to
+  // add this code retroactively.
+  REVOKE_AFTER_START_REFUSED: { httpStatus: 409, retryable: false },
+  // EXAM_SESSIONS_STILL_OPEN: POST .../exams/:id/complete attempted while
+  // at least one ExamSession is still OPEN (A-14: End Examination is a
+  // deliberate, explicit action, never automatic).
+  EXAM_SESSIONS_STILL_OPEN: { httpStatus: 409, retryable: false },
+  // EXAM_HAS_IN_PROGRESS_ATTEMPTS: End Examination's other A-14 precondition
+  // — zero IN_PROGRESS attempts. B12's own countInProgressAttempts() stub
+  // always returns 0 (no ExamAttempt exists yet), so unreachable until B13
+  // supersedes it; kept real for the same reason as REVOKE_AFTER_START_
+  // REFUSED above.
+  EXAM_HAS_IN_PROGRESS_ATTEMPTS: { httpStatus: 409, retryable: false },
+  // EXAM_NOT_COMPLETABLE: the exam's own status no longer permits
+  // completion at all (e.g. a second POST .../complete call against an
+  // exam already COMPLETED) — the conditional-updateMany idiom's own
+  // count===0 fallback, distinct from the two named preconditions above.
+  EXAM_NOT_COMPLETABLE: { httpStatus: 409, retryable: false },
+  // STALE_ABSENTEE_LIST: the confirmedAbsentStudentMembershipIds submitted
+  // to POST .../complete doesn't exactly match the server's own current
+  // pending-absentee set — forces the client to have called GET .../control
+  // first rather than confirming a list computed from stale data.
+  STALE_ABSENTEE_LIST: { httpStatus: 409, retryable: false },
+  // EXAM_ADMINISTRATOR_REQUIRES_ACTIVE_MEMBERSHIP: POST .../administrators
+  // named a membershipId with no active SchoolMembership at this school —
+  // mirrors HOD_PROMOTION_REQUIRES_ACTIVE_TEACHER_ROLE's own B6 naming
+  // precedent for this class of "the target doesn't structurally qualify"
+  // check.
+  EXAM_ADMINISTRATOR_REQUIRES_ACTIVE_MEMBERSHIP: { httpStatus: 400, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

@@ -27,6 +27,11 @@ import {
   createUnassignedStudentsDigestWorker,
   scheduleUnassignedStudentsDigest,
 } from './queues/unassigned-students-digest.queue.js';
+import {
+  EXAM_CONTROL_REFRESH_QUEUE_NAME,
+  createExamControlRefreshWorker,
+  scheduleExamControlRefreshSweep,
+} from './queues/exam-control-refresh.queue.js';
 
 async function main() {
   loadRootEnv();
@@ -100,6 +105,18 @@ async function main() {
   const importExpiryQueue = new Queue(IMPORT_EXPIRY_QUEUE_NAME, { connection });
   await scheduleImportExpirySweep(importExpiryQueue, env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS);
 
+  // B12: Exam Control Center aggregate refresh + stale-exam detection,
+  // merged into one per-tenant pass (see this job's own doc comment).
+  const examControlRefreshWorker = createExamControlRefreshWorker(connection, {
+    redis,
+    staleThresholdMs: env.EXAM_STALENESS_THRESHOLD_MS,
+  });
+  const examControlRefreshQueue = new Queue(EXAM_CONTROL_REFRESH_QUEUE_NAME, { connection });
+  await scheduleExamControlRefreshSweep(
+    examControlRefreshQueue,
+    env.EXAM_CONTROL_REFRESH_INTERVAL_MS,
+  );
+
   // Same 'error'-event risk as the Workers below, for the Queue (enqueue)
   // side of each connection.
   for (const queue of [
@@ -107,6 +124,7 @@ async function main() {
     orphanMediaReportQueue,
     importExpiryQueue,
     unassignedStudentsDigestQueue,
+    examControlRefreshQueue,
     notificationDispatchQueue,
   ]) {
     queue.on('error', (err) => {
@@ -120,6 +138,7 @@ async function main() {
     orphanMediaReportWorker,
     importExpiryWorker,
     unassignedStudentsDigestWorker,
+    examControlRefreshWorker,
   ]) {
     worker.on('completed', (job) => {
       console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
@@ -138,7 +157,7 @@ async function main() {
   }
 
   console.log(
-    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
+    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), "${examControlRefreshWorker.name}" (sweep every ${env.EXAM_CONTROL_REFRESH_INTERVAL_MS}ms), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
   );
 
   const shutdown = async () => {
@@ -149,11 +168,13 @@ async function main() {
       orphanMediaReportWorker.close(),
       importExpiryWorker.close(),
       unassignedStudentsDigestWorker.close(),
+      examControlRefreshWorker.close(),
     ]);
     await subscriptionExpiryQueue.close();
     await orphanMediaReportQueue.close();
     await importExpiryQueue.close();
     await unassignedStudentsDigestQueue.close();
+    await examControlRefreshQueue.close();
     await notificationDispatchQueue.close();
     redis.disconnect();
     await prisma.$disconnect();

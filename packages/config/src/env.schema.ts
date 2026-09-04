@@ -136,6 +136,31 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(12 * 60 * 60 * 1000),
+
+  // B12: apps/worker's Exam Control Center aggregate-refresh + stale-exam
+  // detection sweep — merges the roadmap's two named jobs into one
+  // per-tenant pass (both iterate the identical "exams currently OPEN or
+  // CLOSED" set), mirroring subscription-expiry.queue.ts's own precedent
+  // of combining related per-tenant work. Short by this file's own
+  // standards — a live exam's Control Center should feel near-real-time
+  // even for a client that only ever polls GET .../control (SSE is the
+  // enhancement, not the only path — R-04). Default: 5 seconds.
+  EXAM_CONTROL_REFRESH_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5 * 1000),
+
+  // B12: how long an exam may sit OPEN with no session activity before the
+  // Control Center flags it as stale (A-14) — never auto-closed, only
+  // surfaced. An engineering default: long enough that a normal lab-to-lab
+  // gap between batches never falsely triggers, short enough that a
+  // genuinely forgotten exam is caught same-day. Default: 4 hours.
+  EXAM_STALENESS_THRESHOLD_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(4 * 60 * 60 * 1000),
 });
 
 export type Env = z.infer<typeof envSchema>;

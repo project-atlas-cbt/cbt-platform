@@ -57,7 +57,12 @@ function unregisteredResolver(predicate: ScopePredicate): ScopeResolverFn {
  * and B6 (TeacherAssignment/Enrollment) register real resolvers here
  * instead of this module growing a hard dependency on tables that don't
  * exist yet. B12 does the same for OWNED's ExamAdministrator-delegation
- * extension (M-15/ADR-0012) via `registerOverride`.
+ * extension (M-15/ADR-0012) — not via a distinct `registerOverride` method
+ * (this registry never grew one; `register()` is already a full replace,
+ * which is all "override" needs), but by calling `register('OWNED', ...)`
+ * with a resolver that reimplements the plain `OWNED` check inline (see
+ * `exam-control/exam-administrator-scope.resolver.ts`) and falls through to
+ * an `ExamAdministrator` lookup only when plain ownership fails.
  */
 @Injectable()
 export class ScopeResolverRegistry {
