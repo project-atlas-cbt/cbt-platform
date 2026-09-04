@@ -2525,6 +2525,26 @@
         "tags": ["people"]
       }
     },
+    "/teachers/me/assignments": {
+      "get": {
+        "operationId": "TeacherAssignmentController_myAssignments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTeacherAssignmentsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own active class×subject assignments (F11 gap-closure) — the data source for the exam builder's class/subject pickers.",
+        "tags": ["people"]
+      }
+    },
     "/teachers/{id}/assignments": {
       "get": {
         "operationId": "TeacherAssignmentController_list",
@@ -5277,6 +5297,78 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "level",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            }
+          },
+          {
+            "name": "topicId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "difficulty",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["EASY", "MEDIUM", "HARD"]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "SUBMITTED",
+                "UNDER_REVIEW",
+                "APPROVED",
+                "REJECTED",
+                "ARCHIVED",
+                "ARCHIVED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
           }
         ],
         "responses": {
@@ -7405,6 +7497,57 @@
         },
         "required": ["students"]
       },
+      "MyTeacherAssignmentEntryDto": {
+        "type": "object",
+        "properties": {
+          "classSubjectId": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "arm": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "classSubjectId",
+          "academicSessionId",
+          "classId",
+          "className",
+          "level",
+          "arm",
+          "subjectId",
+          "subjectName"
+        ]
+      },
+      "MyTeacherAssignmentsResponseDto": {
+        "type": "object",
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyTeacherAssignmentEntryDto"
+            }
+          }
+        },
+        "required": ["assignments"]
+      },
       "TeacherAssignmentResponseDto": {
         "type": "object",
         "properties": {
@@ -8584,6 +8727,10 @@
             "type": "string",
             "nullable": true
           },
+          "currentRevisionId": {
+            "type": "string",
+            "nullable": true
+          },
           "difficulty": {
             "type": "string",
             "enum": ["EASY", "MEDIUM", "HARD"]
@@ -8640,6 +8787,7 @@
           "level",
           "topicId",
           "topicName",
+          "currentRevisionId",
           "difficulty",
           "marks",
           "questionType",
@@ -8700,6 +8848,10 @@
             "type": "string",
             "nullable": true
           },
+          "currentRevisionId": {
+            "type": "string",
+            "nullable": true
+          },
           "difficulty": {
             "type": "string",
             "enum": ["EASY", "MEDIUM", "HARD"]
@@ -8745,6 +8897,7 @@
           "level",
           "topicId",
           "topicName",
+          "currentRevisionId",
           "difficulty",
           "marks",
           "questionType",

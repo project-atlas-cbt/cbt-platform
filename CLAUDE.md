@@ -4278,3 +4278,236 @@ No schema change, no permission-table change, no product-behaviour change beyond
 bugs themselves, no ADR involved, no roadmap phase status changed. Project state remains
 _Implementation (B10 complete)_ — this was a same-phase gap closure, not a new phase. **Next:
 `B12 — Exam Activation & Control`**, unchanged.
+
+### 2026-09-04 — `F11` complete: Exam Builder
+
+Requested explicitly: start `F11`. Followed the working-rules checklist: three parallel research
+passes (F11's own roadmap/spec/ADR coverage — `04 §41`–`§44`, `05 §19`–`§24`/`§71`–`§72`, ADR-0006/
+ADR-0013/ADR-0029's exact "Required changes" text for this phase; the real, as-shipped B11
+`exams.v1` contract — routes, DTOs, permission grants, error codes, not just the originally-planned
+shape; existing frontend conventions to reuse — F9's create-then-patch autosave engine, F6/F9's
+`basePath`-prop multi-role-root pattern, F10's mandatory-reason dialog), then a Plan agent, then
+direct verification reads (the permission table's `assignments.view`/`exam.*` rows, `nav-model.ts`'s
+current per-role entries, `GET /academics/context`'s response shape) before writing any code — per
+this project's own precedent for a phase of this size.
+
+**Confirmed scope extension, put to the project owner rather than assumed, per `AGENTS.md` §3.**
+F11's own literal roadmap route table is Teacher-only, but School Admin (`04 §16`), Moderator
+(`04 §27`), and HOD (`04 §33`) each have a spec'd exam-oversight screen, and B11's permission table
+already grants all three full SCHOOL/DEPARTMENT-scoped rights (view, cancel, archive, delete-draft)
+over an existing exam — with no future frontend phase named to close this gap later, unlike F9's
+identical situation, where F10 was already planned to pick it up. **Confirmed: build the oversight
+screens now**, reusing `ExamListScreen`/`ExamDetailScreen` via the established `basePath` prop
+(F6/F9's own precedent) rather than four separate implementations. A second decision, made directly
+rather than asked, mirroring `hideImport`/`assignedSubjectsOnly`'s own precedent for this class of
+deliberate narrowing: oversight roles get view + Cancel/Archive/Delete-draft only, **never** the
+wizard's Details/Questions/Rules edit surfaces, even though the permission table's grants technically
+cover those too — co-authoring another teacher's in-progress draft through a UI built around one
+author's autosave/local-draft-state assumptions is a materially different, unbuilt feature, not a
+permission-gating nuance.
+
+**Delivered** (`apps/web/components/exams/*`, `apps/web/lib/exams/{queries,mutations,validation,
+navigation,error-utils}.ts`): a multi-route wizard (`ExamWizardShell` + one component per step —
+`ExamDetailsForm`/`ClassPicker`, `ExamQuestionSelector`, `RulesForm`, `ExamReviewScreen`) at
+`/teacher/exams/{new,:id/edit,:id/questions,:id/rules,:id/review}`, plus `ExamListScreen`
+(7-status-tab + 6-filter list, `DataTable`-backed) and `ExamDetailScreen` (the oversight read view)
+mounted at all four role roots — `/teacher/exams`, `/school/exams`, `/moderator/exams` (a new
+`nav-model.ts` entry — Moderator held real `exam.*` grants with no nav item pointing at them, the
+identical gap F6 already closed for HOD's `schoolConfig.*`), `/hod/exams`. `ExamDetailsForm` ports
+`QuestionEditorScreen`'s (F9) create-then-patch autosave engine wholesale — `POST /exams` needs every
+field at once, so the Details step buffers client-side (localStorage resilience net) until
+`computeExamCreateGate` passes, then debounces `PATCH /exams/:id` — first save redirects into
+`/questions`, not `/edit` (the roadmap's own step order). `ExamQuestionSelector` is a two-pane
+picker: a paginated approved-only pool (`GET /exams/:id/available-questions`, `DataTable`) and a
+locally-buffered selected list (add/remove/up-down-reorder — no drag-and-drop library, per
+`AGENTS.md` §9 — marks editable per row, defaulted from the revision per ADR-0029), saved via one
+full-replace `PUT /exams/:id/questions`. `ReadinessChecklist` is genuinely new — no prior art existed
+anywhere in this codebase for an itemised pass/fail checklist UI — rendering all 15
+`ExamReadinessCheckCode` values with a static `READINESS_CHECK_STEP` code→step resolution-link map
+(DoD item 7); `SCHOOL_ACTIVE`/`SESSION_ACTIVE`/`TERM_ACTIVE` deliberately show no link (no
+in-builder resolution exists for platform/academic-structure state). A failed "Save as Ready"
+repaints the checklist directly from the `409 EXAM_NOT_READY` response's own `error.details.checks`
+rather than a second `GET /readiness` — satisfying the roadmap's "never cached stale" requirement on
+the failure path without an extra round trip; `useExamReadiness` itself pins `staleTime: 0` +
+`refetchOnMount: 'always'` for the success path. `ExamCancelDialog` forks F10's
+`ReviewDecisionDialog` (mandatory non-empty reason, matching `CancelExamDto`); Archive/Delete-draft
+reuse `ConfirmActionDialog` directly, which gained one new optional `describeError` prop (defaulting
+to its existing `describeAcademicsError`) so a non-academics domain can plug in its own error
+renderer without forking the component.
+
+**ADR-0006 compliance, a real addition beyond `04 §43`'s own literal Rules mockup**: `RulesForm`
+exposes `accessMode` (OPEN_TO_ELIGIBLE / EXPLICIT_AUTHORIZATION) in plain language — "Open to every
+eligible student in the targeted classes automatically" / "Only students explicitly authorized for
+this exam (set up later)" — never the raw enum tokens, per that ADR's own "Required changes: F11:
+access-mode selection in exam rules, explained in plain language" line. `navigationPolicy` renders
+as the confirmed single three-value enum (FREE/SEQUENTIAL_NO_REVISIT/SEQUENTIAL_WITH_REVISIT), not
+`04`'s literal binary "Allow Navigation" toggle. `examType` is a free-text input with a `<datalist>`
+of common suggestions (CA/Test/Mid-Term/Examination/Mock), matching the confirmed product decision
+already on record.
+
+**Session/term are auto-populated from the caller's current academic context, never a free
+picker** — `schoolConfig.session.view`/`.term.view` are both `denied()` for TEACHER (the same class
+of gap F6 found for class/subject), and the readiness checklist's own `SESSION_ACTIVE`/
+`TERM_ACTIVE` checks require UPCOMING or CURRENT regardless, so a free historical pick could only
+ever fail readiness. `GET /academics/context` (already `SELF`-graded for every role since B5)
+supplies the CURRENT session/term at creation; in edit mode the exam's own already-set values are
+shown from the loaded exam and never resent in a `PATCH`. Honestly recorded limitation: a teacher
+cannot build ahead for an UPCOMING term in this pass, only the CURRENT one.
+
+**Two small, confirmed additive backend gap-closures, both found only by building the real frontend
+consumer against B11's already-complete, already-frozen contract — not anticipated in the original
+plan, mirroring F3/F6/F7/F9's own precedent for this class of discovery:**
+
+1. **`GET /v1/teachers/me/assignments`** (`apps/api/src/modules/academics/teacher-assignment
+.{controller,service}.ts`) — the Details step's `ClassPicker`/subject picker had no data source:
+   `schoolConfig.class.view`/`.subject.view` are both `denied()` for TEACHER, and no endpoint let a
+   teacher self-discover their own `TeacherAssignment` rows without already knowing their own
+   `teacherProfileId`. Closed by resolving the caller's profile from `req.user.membershipId`
+   server-side, returning `{classSubjectId, academicSessionId, classId, className, level, arm,
+subjectId, subjectName}[]` for their `ACTIVE` assignments — no pagination, reuses the already-
+   `SELF`-graded `assignments.view` permission, zero new permission rows. Retires the exact
+   Candidate/Deferred note the 2026-09-03 gap-closure entry (during F9's Subject-picker fix) left
+   open: "a narrow `GET /me/teacher-assignments`-style route."
+2. **`QuestionListItemResponseDto` gained `currentRevisionId: string | null`**
+   (`apps/api/src/modules/questions/{dto/question.dto.ts,question-mappers.ts}`) — `GET /exams/:id/
+available-questions` returns this DTO, but its own `id` field is the parent `Question`'s id, not
+   the revision id `ExamQuestionInputDto.questionRevisionId` actually needs to bind a question. The
+   Prisma query already fetched it (`currentRevision: { include: QUESTION_REVISION_INCLUDE }`, a
+   full `include` that already returns every revision scalar including `id`) — only the mapper and
+   the `QuestionForListItem` projection type were missing the field. Purely additive: no schema
+   change, no permission-table change, F9's own already-shipped Question Bank consumers of this same
+   DTO are unaffected. A dedicated regression test in `exam-builder.integration.test.ts` proves the
+   real round trip (browse → bind by `currentRevisionId` → confirm the bound `ExamQuestion
+.questionRevisionId` matches) — deliberately self-contained (authors its own fresh approved
+   question) after an initial version relying on the suite's shared `approvedRevisionId` fixture
+   failed for an instructive, non-bug reason: a _different_, legitimate test elsewhere in the same
+   file advances that shared question to a second approved revision, correctly making the original
+   revision id no longer the Question's _current_ one (and therefore invisible to
+   `available-questions`, which only ever surfaces the current revision) — real product behaviour,
+   not something worth fighting in a test fixture.
+
+**A real stale-closure hazard found and fixed during implementation, not by a separate review
+pass**: the first draft of `useUpdateExam(id)` baked the exam id in at hook-creation time. Since
+`ExamDetailsForm`'s autosave engine transitions from "no exam yet" to "a real exam id" within one
+component lifetime — the exact shape of hazard F9's `useUpdateRevisionMutation` was already built
+call-time-parameterized to avoid — a stale render's closure could keep targeting a placeholder id
+after the real one existed. Fixed by making `useUpdateExam()` call-time-parameterized
+(`mutate({id, body})`), matching F9's own established precedent exactly, before it ever shipped.
+Separately, `ExamQuestionSelector`'s initial design called `setState` synchronously inside a
+load-effect (a real `react-hooks/set-state-in-effect` lint error, not a warning) — fixed by
+splitting into an outer loading/error gate and an inner, `key`-remounted child whose `useState` lazy
+initializer captures the loaded exam's selection exactly once, with no effect at all, rather than
+suppressing the rule.
+
+**Two real, pre-existing gaps not fixed opportunistically, recorded as Candidate/Deferred instead
+(`AGENTS.md` §14):** `ExamWizardShell`'s step-progress nav links live in a sibling component with no
+visibility into a step's own live dirty state, so clicking Details/Questions/Rules/Review from the
+step strip while something is unsaved does not intercept the way an explicit navigation elsewhere on
+the same step does (browser refresh/close is still guarded) — would need dirty-state lifted into a
+shared context across every step. `ExamStatusTabs` shows no per-tab count, unlike
+`QuestionStatusTabs`'s real ones — no `exam` counts endpoint exists; not blocking any DoD item.
+
+**Testing**: 16 new component tests across 4 files — `exam-cancel-dialog` (forked from
+`review-decision-dialog.test.tsx`'s own cases), `exam-readiness-checklist` (the phase's highest-value
+test given no prior art existed for this UI shape: mixed pass/fail rendering, resolution links
+present only where `READINESS_CHECK_STEP` maps one, never for the three platform/structure codes,
+none at all when `interactive={false}`), `exam-detail-screen` (proving the oversight scoping decision
+directly — mocked grants show only Cancel/Archive, never a wizard-edit control), `exam-list-screen`
+(proving one `ExamListScreen` correctly varies its Teacher column and "New exam" affordance by
+`scope`/`basePath` across role roots). One pre-existing `nav-model.test.ts` case (pinning Moderator's
+nav labels literally against `04 §20`) was updated with an inline comment recording the intentional
+deviation, mirroring HOD's own identical F6-era precedent in the same file. Backend: one new
+integration test in `exam-builder.integration.test.ts` (the `currentRevisionId` round trip) and one
+new case in `teacher-assignment.integration.test.ts` (`GET /teachers/me/assignments`).
+
+Full pipeline green throughout, run in full after every fix: `apps/api` — `pnpm lint && pnpm
+typecheck`, the full integration suite (`teacher-assignment`, `question-lifecycle`, `exam-builder`,
+all re-confirmed with zero regression), `pnpm generate` (openapi.json + `@atlas/contracts`
+regenerated for both the new route and the new field before any frontend code was written against
+them), `pnpm generate:permission-table-doc` (152 rows, confirmed unchanged — both gap-closures reuse
+existing grants). `apps/web` — `pnpm lint && pnpm typecheck && pnpm test` (586/586, up from 570) and
+`pnpm build` (`next build --webpack`, confirming the full intended 14-new-route table across all four
+role roots — no conflict between `/teacher/exams/new` and `/teacher/exams/[id]`). Monorepo-root
+`pnpm lint && pnpm typecheck && pnpm build` (16/16 turbo tasks each).
+
+`docs/roadmaps/frontend-roadmap.md`'s F11 section gained status `COMPLETE`, every DoD item annotated
+with what's real and file references, a full "Implementation notes" subsection covering the scope
+extension and every decision above, and an expanded Deferred items list. Its own phase-tracker tables
+(two, both already stale for F5–F10 before this pass) were corrected to `COMPLETE` for F5 through
+F11 while in the area, a pure documentation-accuracy fix mirroring B9's own precedent for the
+identical class of staleness. `docs/roadmaps/backend-roadmap.md`'s B11 section gained a
+"Post-completion gap closure" note for both additive backend changes. `docs/roadmaps/
+roadmap-index.md`'s version, Current State, and Immediate Next Actions were all updated to record
+`F11` complete — every frontend phase through `F11` is now closed out.
+
+Project state moves from _Implementation (B10 complete)_ to _Implementation (F11 complete; every
+frontend phase through F11 closed out)_.
+**Next: `B12 — Exam Activation & Control`** on the backend critical path (`Gate 1 ADRs → B0 → B1 →
+B2 → B3 → B5 → B6 → B8 → B9 → B11 → B12 → B13 → …`) — the phase this session's own earlier research
+already flagged as entering the roadmap's highest-risk segment (`B13`/`B14` carry 8 of the 18
+BLOCKER audit findings and six gating ADRs). A future `F12` (Exam Control Center) remains open once
+`B12` ships and the frontend/backend phase-pairing default is next prioritized.
+
+### 2026-09-04 — `F11` gap closure: thorough implementation review, four fixes
+
+Requested explicitly, same day as `F11` itself: a thorough review of the just-shipped implementation
+looking for bugs, not new scope. Read every F11 file end to end rather than sampling. Two real,
+substantive issues surfaced, plus two smaller ones found while fixing them — no product/architecture
+decision needed for any of them; no schema, permission-table, or backend change.
+
+1. **The class/subject pickers never filtered by academic session — `MyTeacherAssignmentEntryDto
+.academicSessionId` (added specifically for this same phase's own backend gap-closure) was never
+   actually used.** `ClassPicker`/`ExamDetailsForm`'s Subject dropdown filtered only by
+   `subjectId`, not `academicSessionId` — and since session-rollover automation (`B19`) doesn't
+   exist yet, an `ACTIVE` `TeacherAssignment` from a prior academic session never automatically
+   ends. A teacher holding one could see and select a stale-session subject/class, discovering the
+   problem only via a dead-end `EXAM_CLASS_SESSION_MISMATCH`/`EXAM_TERM_SESSION_MISMATCH` rejection
+   at save time — precisely the class of bug this gap-closure's own doc comment said it existed to
+   prevent, just not fully closed. Fixed: `ClassPicker` gained a required `academicSessionId` prop,
+   filtering its options (and the Subject dropdown's `dedupeSubjects` input, sourced from
+   `values.academicSessionId` — correct in both create mode, populated from `GET /academics
+/context`, and edit mode, loaded from the exam itself) to assignments in that session only. A new
+   `class-picker.test.tsx` (6 tests) proves the filter directly, including the "only a stale-session
+   assignment exists" empty-state case and the "session not yet known" loading case.
+2. **A successful save's own cache invalidation could silently discard in-progress edits.**
+   `ExamDetailsForm` (edit mode) and `RulesForm` both hydrated their form via `useEffect(() => {...
+form.reset(loaded)}, [exam.data])` — but every mutation in `lib/exams/mutations.ts` invalidates
+   the whole `['exams']` query key, including the same `useExam(examId)` query these forms read
+   from, and TanStack Query v5's default `refetchType: 'active'` immediately refetches it. The
+   resulting reference change re-fired the effect, unconditionally calling `form.reset()` again —
+   discarding whatever the user had typed in the interim. In `ExamDetailsForm` this was a live risk
+   on every 800ms autosave cycle while editing an existing draft; in `RulesForm`, a narrower window
+   between clicking "Save rules" and the refetch resolving. This pattern was not invented here — F9's
+   `QuestionEditorScreen` has the structurally identical `useEffect([isEditMode, question.data])` +
+   broad `invalidateQuestions()` shape, so it's a pre-existing latent defect this phase's own
+   "ported wholesale" autosave design carried forward, now also freshly present in the F11-original
+   `RulesForm`. Fixed in both: a `loadedExamIdRef` guards the reset to run exactly once per exam id,
+   not on every `exam.data` reference change — a genuinely different exam id (or, in
+   `ExamDetailsForm`, a transition to non-DRAFT) still hydrates/freezes correctly; a background
+   refetch of the same id no longer does. (`ExamQuestionSelector` already used the correct pattern —
+   a `key`-remounted child with a lazy `useState` initializer — and was not affected.) **Not
+   back-ported to F9 in this pass** — recorded as a Candidate for whoever next touches
+   `QuestionEditorScreen`, out of scope for an F11-scoped review.
+3. **A secondary instance of the same class of bug, found while fixing #2**: `ExamDetailsForm`'s
+   create-mode "restore the local resilience buffer" effect ran on every `context.data` reference
+   change, including the ordinary undefined-then-resolved transition every mount goes through as
+   `GET /academics/context` settles — a second, unguarded `form.reset()` on that second pass could
+   discard whatever the user typed in the (narrow but real) window between the two passes. Fixed
+   with a second guard (`bufferRestoreAttemptedRef`) scoped to just the buffer-restore call itself,
+   not the session/term auto-population above it in the same effect (which stays intentionally
+   unguarded — idempotent, and correctly keeps the session/term fields in sync if the effect ever
+   re-runs for an unrelated reason).
+4. **A minor, redundant double-navigation**: `ExamDetailsForm.handleContinue`, on a first-ever save
+   via the "Continue to Questions" button, called `router.push()` to the same destination
+   `performAutosave`'s own create-success path had just `router.replace()`'d to. Fixed by only
+   navigating from `handleContinue` when the exam already existed _before_ the flush it triggered
+   (edit mode, or an earlier autosave already created it) — the one case `performAutosave` itself
+   doesn't handle.
+
+Verification: the new `class-picker.test.tsx` (6/6), the full `apps/web` test suite (136 files / 592
+tests, up from 586 — all green), `tsc --noEmit` clean, `eslint --no-cache` clean (0 errors) on every
+touched file, and `next build --webpack` green with the full route table unchanged. No schema
+change, no permission-table change, no backend change, no ADR involved, no roadmap phase status
+changed. Project state remains _Implementation (F11 complete; every frontend phase through F11
+closed out)_ — this was a same-phase gap closure, not a new phase. **Next: `B12 — Exam Activation &
+Control`**, unchanged.

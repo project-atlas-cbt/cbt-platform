@@ -82,3 +82,42 @@ export class ClassTeachersResponseDto {
   @ApiProperty({ type: ClassTeacherEntryDto, isArray: true })
   teachers!: ClassTeacherEntryDto[];
 }
+
+/** `GET /v1/teachers/me/assignments` — F11 gap-closure (2026-09-03): the
+ * caller's own active class×subject assignments, self-resolved from the
+ * session (no `teacherProfileId` needed in the URL, unlike the sibling
+ * per-teacher route above) — the data source the exam builder's class/
+ * subject pickers need, since `schoolConfig.class.view`/`.subject.view` are
+ * both denied to TEACHER (F6 precedent). Deliberately more enriched than
+ * `TeacherAssignmentResponseDto` (class/subject names, level, arm) since a
+ * picker needs to render these directly, not chase a second lookup per row. */
+export class MyTeacherAssignmentEntryDto {
+  @ApiProperty({ type: String })
+  classSubjectId!: string;
+
+  @ApiProperty({ type: String })
+  academicSessionId!: string;
+
+  @ApiProperty({ type: String })
+  classId!: string;
+
+  @ApiProperty({ type: String })
+  className!: string;
+
+  @ApiProperty({ type: String })
+  level!: string;
+
+  @ApiProperty({ type: String })
+  arm!: string;
+
+  @ApiProperty({ type: String })
+  subjectId!: string;
+
+  @ApiProperty({ type: String })
+  subjectName!: string;
+}
+
+export class MyTeacherAssignmentsResponseDto {
+  @ApiProperty({ type: MyTeacherAssignmentEntryDto, isArray: true })
+  assignments!: MyTeacherAssignmentEntryDto[];
+}

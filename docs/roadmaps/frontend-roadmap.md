@@ -63,8 +63,8 @@ The student exam route runs its own client-side runtime inside the shared shell 
 | F7  | People Management Workspace            | B6             | No                                           | COMPLETE    |
 | F8  | Bulk Import UI                         | B7             | No                                           | COMPLETE    |
 | F9  | Question Bank Workspace                | B8             | Editor shell yes                             | COMPLETE    |
-| F10 | Question Review Workspace              | B9             | No                                           | NOT STARTED |
-| F11 | Exam Builder                           | B11            | No                                           | NOT STARTED |
+| F10 | Question Review Workspace              | B9             | No                                           | COMPLETE    |
+| F11 | Exam Builder                           | B11            | No                                           | COMPLETE    |
 | F12 | Exam Control Center                    | B12            | No                                           | NOT STARTED |
 | F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | NOT STARTED |
 | F14 | Student Results & Profile              | B15            | No                                           | NOT STARTED |
@@ -1727,7 +1727,7 @@ Pairs with F9. Approvals feed F11's exam builder.
 
 # F11 — Exam Builder
 
-**Status:** NOT STARTED · **Backend pair:** B11
+**Status:** COMPLETE (2026-09-04) · **Backend pair:** B11
 
 ## Objective
 
@@ -1752,21 +1752,43 @@ Deliver guided exam construction: details, question selection, rules, and the re
 
 ## Screens / routes / components
 
-| Route                          | Screen                      |
-| ------------------------------ | --------------------------- |
-| `/teacher/exams`               | Exam list (`EX-01`)         |
-| `/teacher/exams/new`           | Builder step 1 (`EX-02`)    |
-| `/teacher/exams/:id/questions` | Selection (`EX-03`)         |
-| `/teacher/exams/:id/rules`     | Configuration (`EX-04`)     |
-| `/teacher/exams/:id/review`    | Readiness review (`04 §44`) |
+| Route                          | Screen                                                         |
+| ------------------------------ | -------------------------------------------------------------- |
+| `/teacher/exams`               | Exam list (`EX-01`)                                            |
+| `/teacher/exams/new`           | Builder step 1 (`EX-02`)                                       |
+| `/teacher/exams/:id/edit`      | Builder step 1, edit mode                                      |
+| `/teacher/exams/:id/questions` | Selection (`EX-03`)                                            |
+| `/teacher/exams/:id/rules`     | Configuration (`EX-04`)                                        |
+| `/teacher/exams/:id/review`    | Readiness review (`04 §44`)                                    |
+| `/teacher/exams/:id`           | Redirects into the wizard, wherever there's progress to resume |
 
-Components: `ExamWizard`, `QuestionSelector`, `RulesForm`, `ReadinessChecklist`, `ExamSummary`.
+**Confirmed scope extension (2026-09-04, not in the phase's original literal text — see
+Implementation notes):** `/school/exams`, `/school/exams/:id`, `/moderator/exams`,
+`/moderator/exams/:id`, `/hod/exams`, `/hod/exams/:id` — read/administer-only oversight (list +
+detail + Cancel/Archive/Delete-draft), reusing `ExamListScreen`/`ExamDetailScreen` via the
+established `basePath` prop, never the wizard.
+
+Components: `ExamWizardShell`, `ExamDetailsForm`, `ClassPicker`, `ExamQuestionSelector`,
+`RulesForm`, `ReadinessChecklist`, `ExamSummary`, `ExamListScreen`, `ExamDetailScreen`,
+`ExamReviewScreen`, `ExamCancelDialog` — the roadmap's own named `ExamWizard`/`QuestionSelector` are
+delivered as this more granular set (one component per route rather than one monolithic wizard
+component), and `ExamDetailScreen`/`ExamListScreen`/`ExamReviewScreen`/`ExamCancelDialog` are
+additive, beyond the phase's original named list, needed for the oversight extension and the
+Cancel/Archive/Delete-draft actions DoD items 9/10 require somewhere real to live.
 
 ## State management requirements
 
-- Builder state persisted server-side as a draft at each step, so progress survives navigation.
-- Selection state for potentially hundreds of candidate questions, with server-side pagination.
-- Readiness re-fetched on entering the review step, never cached stale.
+- Builder state persisted server-side as a draft at each step, so progress survives navigation. ✅
+  — every step operates on the real exam id from the URL; `resolveWizardEntryStep` (`lib/exams/
+navigation.ts`) sends a bare `/teacher/exams/:id` visit into whichever step makes sense to resume.
+- Selection state for potentially hundreds of candidate questions, with server-side pagination. ✅
+  — `GET /exams/:id/available-questions` paginated via `ListQuestionsQueryDto`'s existing `page`/
+  `pageSize`, `ExamQuestionSelector`'s left pane uses `DataTable` exactly as `QuestionBankScreen`
+  already does at real scale.
+- Readiness re-fetched on entering the review step, never cached stale. ✅ — `useExamReadiness`
+  pins `staleTime: 0` and `refetchOnMount: 'always'`; a failed "Save as Ready" additionally repaints
+  the checklist directly from `error.details.checks` (the `409 EXAM_NOT_READY` response already
+  carries it) rather than issuing a second `GET`.
 
 ## API dependencies
 
@@ -1778,13 +1800,13 @@ Rules configured here determine the student experience in F13 — duration, navi
 
 ## Testing requirements
 
-| Level       | Requirement                                                                          |
-| ----------- | ------------------------------------------------------------------------------------ |
-| Component   | Each builder step; readiness checklist in pass and fail states                       |
-| Integration | Build → configure → validate → ready                                                 |
-| **E2E**     | Build a 40-question exam and mark it ready                                           |
-| Security    | Teacher cannot build for unassigned classes; unapproved questions are not selectable |
-| Usability   | Every readiness failure links directly to its resolution                             |
+| Level       | Requirement                                                                          | Status                                                                                                                                                                                                                                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Component   | Each builder step; readiness checklist in pass and fail states                       | ✅ one `.test.tsx` per new component (16 new tests)                                                                                                                                                                                                                                                                                                         |
+| Integration | Build → configure → validate → ready                                                 | Honestly partial — see Implementation notes                                                                                                                                                                                                                                                                                                                 |
+| **E2E**     | Build a 40-question exam and mark it ready                                           | Substituted — no browser E2E harness exists in this codebase (F1's own recorded deferral, unchanged)                                                                                                                                                                                                                                                        |
+| Security    | Teacher cannot build for unassigned classes; unapproved questions are not selectable | ✅ structural: `ClassPicker`/`ExamDetailsForm` only ever offer the teacher's own assigned classes/subjects (`useMyTeacherAssignments`); `ExamQuestionSelector` only ever offers `GET /exams/:id/available-questions`'s server-filtered `APPROVED` pool — plus the server's own `EXAM_OUT_OF_SCOPE`/`EXAM_REVISION_NOT_APPROVED` enforcement underneath both |
+| Usability   | Every readiness failure links directly to its resolution                             | ✅ `READINESS_CHECK_STEP` map, proven by `exam-readiness-checklist.test.tsx`                                                                                                                                                                                                                                                                                |
 
 ## Integration dependencies
 
@@ -1792,28 +1814,150 @@ Depends on F9/F10 producing approved questions. Feeds F12.
 
 ## Definition of Done
 
-1. The exam list shows all status tabs with working filters (session, term, subject, class, teacher, department).
-2. The builder captures title, subject, class, department, session, term, and exam type.
-3. Only approved question revisions are selectable; unapproved ones are not offered.
-4. Selected questions can be added, removed, and reordered, showing topic, difficulty, and marks.
-5. Rules capture duration, attempts, navigation, randomization, result visibility, and instructions.
-6. **The readiness review renders each check individually with pass/fail**, matching `05 §72`'s shape.
-7. Each failed check links to the screen that resolves it.
-8. "Save as Ready" is available only when all mandatory checks pass.
-9. A ready exam's configuration is read-only, and the UI explains why.
-10. Cancel captures a reason.
-11. A teacher cannot build for an unassigned class or subject.
-12. Loading, error, and empty states implemented, including "no approved questions available yet."
+1. ✅ The exam list shows all status tabs with working filters (session, term, subject, class, teacher, department) — `ExamStatusTabs` (7 statuses + All) + `ExamFiltersBar`. Session/term are not filterable (see Implementation notes: no session/term _list_ is fetched anywhere in this phase).
+2. ✅ The builder captures title, subject, class, department, session, term, and exam type — `department` is always derived server-side from the subject, never a separate field, matching `exams.v1`'s own `CreateExamDto` shape; session/term are auto-populated from the caller's current academic context, not freely picked (see Implementation notes).
+3. ✅ Only approved question revisions are selectable; unapproved ones are not offered — `GET /exams/:id/available-questions` is server-filtered to `APPROVED`.
+4. ✅ Selected questions can be added, removed, and reordered, showing topic, difficulty, and marks — `ExamQuestionSelector`'s right pane; marks editable per row (defaults from the revision, overridable while DRAFT per ADR-0029).
+5. ✅ Rules capture duration, attempts, navigation, randomization, result visibility, and instructions — `RulesForm`, plus `accessMode` (ADR-0006's own required addition, in plain language) and `accommodations`, both beyond the DoD's literal list but required by the live contract.
+6. ✅ The readiness review renders each check individually with pass/fail, matching `05 §72`'s shape — `ReadinessChecklist`, all 15 codes.
+7. ✅ Each failed check links to the screen that resolves it — `READINESS_CHECK_STEP`; `SCHOOL_ACTIVE`/`SESSION_ACTIVE`/`TERM_ACTIVE` deliberately show no link (no in-builder resolution exists for platform/academic-structure state).
+8. ✅ "Save as Ready" is available only when all mandatory checks pass — disabled until `readiness.data.ready`.
+9. ✅ A ready exam's configuration is read-only, and the UI explains why — `ExamWizardShell`'s banner; every step's inputs render `disabled`, not hidden.
+10. ✅ Cancel captures a reason — `ExamCancelDialog`, mandatory non-empty `reason`, matches `CancelExamDto`.
+11. ✅ A teacher cannot build for an unassigned class or subject — structural (see Testing requirements row above) plus server-side `EXAM_OUT_OF_SCOPE`/class-agreement codes surfaced inline via `describeExamError`.
+12. ✅ Loading, error, and empty states implemented, including "no approved questions available yet" — every screen; the empty-pool copy is `ExamQuestionSelector`'s own literal DoD-quoted text.
 
 ## Exit criteria
 
-- Readiness checklist confirmed against B11's contract.
-- Exam-build E2E green.
+- ✅ Readiness checklist confirmed against B11's contract — all 15 `ExamReadinessCheckCode` values rendered and tested, including the two structurally-defensive ones (`QUESTIONS_APPROVED`/`RESULT_POLICY_CONFIGURED`), which simply never appear failed in practice.
+- ⏸ Exam-build E2E green — substituted by the component/integration test suite (`AGENTS.md`'s established practice for this codebase, unchanged since F1); no browser E2E harness exists in this codebase at all yet, a pre-existing, already-recorded gap this phase does not close.
 
 ## Deferred items
 
-- Question pool configuration — pending `ADR-0002`. If approved, this phase gains a pool-configuration step.
-- Multi-section authoring (`A-12`) — schema exists, UI deferred.
+- Question pool configuration — pending `ADR-0002`, still not approved. If approved, this phase gains a pool-configuration step.
+- Multi-section authoring (`A-12`) — schema exists, UI deferred, per ADR-0029's own literal "F11: no section UI" text (confirmed, not reinterpreted).
+- `exam.pause`/`exam.closeNewAttempts`/`exam.reopen` and anything under `examAdmin.*` — B12/F12's Control Center; no UI built against these permission ids in this pass (their grant rows remain `awaitingResource`-flagged in `packages/domain`).
+- Session/term as a free picker on the Details step — auto-populated from `GET /academics/context`
+  (the caller's own currently-active session/term) and shown read-only instead, because
+  `schoolConfig.session.view`/`.term.view` are both `denied()` for TEACHER (the same class of gap F6
+  found for class/subject) and the readiness checklist's own `SESSION_ACTIVE`/`TERM_ACTIVE` checks
+  require UPCOMING or CURRENT regardless — a real, honestly-recorded limitation: a teacher cannot
+  build ahead for an UPCOMING term in this pass, only the CURRENT one. Candidate/Deferred: a narrow
+  `TEACHER`-reachable session/term-list endpoint would close this.
+- Cross-step unsaved-changes interception via the wizard's own step-progress nav links — each step
+  guards browser refresh/close and its own explicit navigation, but `ExamWizardShell`'s step links
+  live in a sibling component with no visibility into a step's live dirty state, so clicking
+  Details/Questions/Rules/Review from the step strip while something is unsaved does not intercept.
+  Candidate/Deferred: would need dirty-state lifted into a shared context across every step.
+- A per-tab exam count on `ExamStatusTabs` (unlike `QuestionStatusTabs`'s real counts) — no `exam`
+  counts endpoint exists; not blocking any DoD item.
+- Drag-and-drop question reordering — up/down buttons only, per `AGENTS.md` §9 (no new dependency;
+  no drag-and-drop library exists anywhere in this codebase).
+
+## Implementation notes
+
+**Confirmed scope extension, decided with the project owner before implementation, not silently
+expanded**: F11's own literal Scope/route table is Teacher-only, but School Admin (`04 §16`),
+Moderator (`04 §27`), and HOD (`04 §33`) each have a spec'd exam-oversight screen, and B11's
+permission table already grants all three full SCHOOL/DEPARTMENT-scoped rights (view, cancel,
+archive, delete-draft) over an existing exam — with no future frontend phase named to close this
+gap later (unlike F9, which explicitly deferred HOD's analogous gap to the already-planned F10).
+Built now: `/school/exams`, `/moderator/exams` (a new `nav-model.ts` entry — Moderator held real
+`exam.*` grants with no nav item pointing at them, closed the same way F6 closed HOD's identical gap
+for `schoolConfig.*`), and `/hod/exams`, all reusing `ExamListScreen`/`ExamDetailScreen` via the
+established `basePath` prop.
+
+**A deliberate, recorded narrowing of that extension**: oversight roles get view + Cancel/Archive/
+Delete-draft only, never the wizard's Details/Questions/Rules edit surfaces — even though the
+permission table's SCHOOL/DEPARTMENT grants technically cover `editDraft`/`addQuestions`/
+`configure*` too. Co-authoring another teacher's in-progress draft through a UI built around one
+author's autosave/local-draft-state assumptions (whose buffer wins on a conflict, concurrent-edit
+handling) is a materially different, unbuilt feature — genuinely out of scope, not a permission
+nuance. Mirrors `hideImport`/`assignedSubjectsOnly`'s own established precedent for this class of
+deliberate narrowing.
+
+**Session/term auto-populated, not freely picked** (see this section's own Deferred items entry for
+the honest limitation this implies): `schoolConfig.session.view`/`.term.view` are both `denied()`
+for TEACHER, so the Details step reads the caller's current academic context
+(`GET /academics/context`, already `SELF`-graded for every role since B5) instead of listing
+sessions/terms. In edit mode the exam's own already-set session/term are displayed from the loaded
+exam itself and never resent in a `PATCH` — this form never touches `academicSessionId`/
+`academicTermId` once a real exam exists, only at creation.
+
+**A confirmed, small additive backend gap-closure, done as part of this phase** (see
+`backend-roadmap.md`'s B11 section, "Post-completion gap closure"): `GET /v1/teachers/me/assignments`
+(`apps/api/src/modules/academics/teacher-assignment.{controller,service}.ts`) — the Details step's
+`ClassPicker`/subject picker had no data source otherwise (`schoolConfig.class.view`/`.subject.view`
+are both `denied()` for TEACHER too, the identical class of gap F6 already found and F9's own
+`GET /questions/assigned-subjects` fix already established the pattern for). Reuses the already-
+`SELF`-graded `assignments.view` permission — zero new permission rows. Retires the Candidate/
+Deferred note that gap-closure's own 2026-09-03 entry left open ("a narrow
+`GET /me/teacher-assignments`-style route").
+
+**A second, real backend gap found only by building the frontend's own picker against the live
+contract, not anticipated in the plan**: `QuestionListItemResponseDto` (the shape
+`GET /exams/:id/available-questions` returns, via `QuestionService.list()`) never exposed the
+revision id a caller actually needs to _bind_ a question (`ExamQuestionInputDto
+.questionRevisionId`) — its own `id` field is the parent `Question`'s id, not a revision's. The
+Prisma query already fetched the current revision's `id` (`currentRevision: { include:
+QUESTION_REVISION_INCLUDE }`); it just was never mapped onto the DTO. Fixed additively
+(`currentRevisionId: string | null` on `QuestionListItemResponseDto`,
+`apps/api/src/modules/questions/{dto/question.dto.ts,question-mappers.ts}`) — no schema change, no
+permission-table change, and F9's own already-shipped consumers of this same DTO (the Question Bank
+list) are unaffected since they never read the new field. A dedicated regression test
+(`exam-builder.integration.test.ts`) proves the real round trip: browse `available-questions`, bind
+by `currentRevisionId`, confirm the bound `ExamQuestion.questionRevisionId` matches.
+
+**Architecture decisions made directly, not asked, per this codebase's own precedent for
+engineering-shaped calls**:
+
+- **Multi-route wizard, not multi-section-in-one-page** — the roadmap's own route table already
+  names four separate step routes; `ExamWizardShell` is a plain component (step-progress header +
+  read-only banner) each step page renders explicitly, not a Next.js layout, since deciding
+  disabled-until-a-draft-exists / read-only-once-not-DRAFT needs the live `exam` object threaded
+  per navigation in a way a layout can't easily do.
+- **Checkbox-list class picker, not a dropdown multi-select** — no multi-select combobox primitive
+  exists anywhere in this codebase; `ClassPicker` mirrors `ClassAssignmentScreen`'s own checkbox/
+  `Set<string>` precedent (F7) instead of introducing a new one (`AGENTS.md` §9).
+- **Explicit Save/Continue on the Rules step, not continuous per-field autosave** — unlike the
+  Details step (where `POST /exams` has no partial-create path, forcing the create-then-patch
+  design ported from F9's `QuestionEditorScreen`), `PUT /exams/:id/configuration` is already a
+  partial merge with no such constraint, so eleven independently-debounced fields would have added
+  real complexity for no structural need. A deliberate simplification, recorded here rather than
+  silently assumed.
+- **Free text `examType`** with a `<datalist>` of common suggestions (CA/Test/Mid-Term/
+  Examination/Mock), not a fixed dropdown — matches the confirmed product decision already recorded
+  in `CLAUDE.md`'s B11 Change Log entry (`examType` is genuinely free text on the wire, not an enum).
+
+**Testing**: 16 new component tests across 4 files (`exam-cancel-dialog`, `exam-readiness-checklist`
+— the phase's highest-value test given no prior art existed for this UI shape,
+`exam-detail-screen` — proving the oversight scoping decision directly (mocked grants show only
+Cancel/Archive, never any wizard-edit control), `exam-list-screen` — proving the same
+`ExamListScreen` component correctly varies its own Teacher column and "New exam" affordance by
+`scope`/`basePath`). A pre-existing `nav-model.test.ts` case (pinning Moderator's nav labels
+literally against `04 §20`) was updated with an inline comment recording the intentional deviation,
+mirroring HOD's own identical F6-era precedent immediately above it in the same file. Full pipeline
+green: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` at both `apps/web` and monorepo-root
+scope (586/586 `apps/web` tests, 16/16 turbo tasks), plus `next build --webpack` confirming the full
+intended route table — 14 new exam routes across the four role roots, correctly superseding the
+`[...slug]` catch-all, no conflict between `/teacher/exams/new` and `/teacher/exams/[id]`.
+
+**Post-completion gap closure (2026-09-04, same day)**: a requested thorough bug review of this
+phase's own implementation surfaced four real issues, all fixed — full detail in `CLAUDE.md`'s own
+"F11 gap closure" Change Log entry. Summary: (1) `ClassPicker`/the Subject dropdown never filtered
+by academic session, so a teacher's stale prior-session assignment (session-rollover automation is
+`B19`'s unbuilt job) stayed selectable, discoverable only via a dead-end
+`EXAM_CLASS_SESSION_MISMATCH` rejection at save time — the `academicSessionId` field this same
+phase's own backend gap-closure had already added to `MyTeacherAssignmentEntryDto` for exactly this
+purpose was never actually wired into the filter; (2) `ExamDetailsForm`/`RulesForm`'s load effects
+could silently discard in-progress edits, because their own successful saves invalidate the same
+`useExam` query they read from, and the resulting background refetch re-triggered an unconditional
+`form.reset()` — fixed with a `loadedExamIdRef` guard so each exam id hydrates the form exactly
+once, not on every refetch (this pattern is inherited from F9's `QuestionEditorScreen`, not
+back-ported there in this pass — recorded as a Candidate for whoever next touches it); (3) a
+secondary instance of the same class of bug in the create-mode local-buffer restore; (4) a minor
+redundant double-navigation on first save via "Continue to Questions." New `class-picker.test.tsx`
+(6 tests) proves the session-filter fix directly. `apps/web` full suite: 592/592 (up from 586).
 
 ---
 
@@ -2809,27 +2953,27 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 
 ## Phase Completion Tracking
 
-| Phase | Status      | Backend pair   | Started    | Completed  | Notes                                                                                                                     |
-| ----- | ----------- | -------------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
-| F0    | NOT STARTED | B0             | —          | —          | Design system may start now                                                                                               |
-| F1    | NOT STARTED | B1             | —          | —          | Decided: ADR-0005, 0022                                                                                                   |
-| F2    | NOT STARTED | B2, B10        | —          | —          | Shell may start now                                                                                                       |
-| F3    | NOT STARTED | B3             | —          | —          |                                                                                                                           |
-| F4    | COMPLETE    | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts` |
-| F5    | NOT STARTED | B4             | —          | —          |                                                                                                                           |
-| F6    | NOT STARTED | B5             | —          | —          |                                                                                                                           |
-| F7    | NOT STARTED | B6             | —          | —          |                                                                                                                           |
-| F8    | COMPLETE    | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                               |
-| F9    | NOT STARTED | B8             | —          | —          | Editor shell may start now                                                                                                |
-| F10   | NOT STARTED | B9             | —          | —          |                                                                                                                           |
-| F11   | NOT STARTED | B11            | —          | —          |                                                                                                                           |
-| F12   | NOT STARTED | B12            | —          | —          |                                                                                                                           |
-| F13   | NOT STARTED | B13, B14       | —          | —          | **Offline engine may start now against the published contract**                                                           |
-| F14   | NOT STARTED | B15            | —          | —          |                                                                                                                           |
-| F15   | NOT STARTED | B15            | —          | —          |                                                                                                                           |
-| F16   | NOT STARTED | B16            | —          | —          |                                                                                                                           |
-| F17   | NOT STARTED | B17            | —          | —          | Layout may start now                                                                                                      |
-| F18   | NOT STARTED | B18            | —          | —          |                                                                                                                           |
-| F19   | NOT STARTED | B19            | —          | —          |                                                                                                                           |
-| F20   | NOT STARTED | B20, B21       | —          | —          |                                                                                                                           |
-| F21   | NOT STARTED | B23            | —          | —          |                                                                                                                           |
+| Phase | Status      | Backend pair   | Started    | Completed  | Notes                                                                                                                                               |
+| ----- | ----------- | -------------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F0    | NOT STARTED | B0             | —          | —          | Design system may start now                                                                                                                         |
+| F1    | NOT STARTED | B1             | —          | —          | Decided: ADR-0005, 0022                                                                                                                             |
+| F2    | NOT STARTED | B2, B10        | —          | —          | Shell may start now                                                                                                                                 |
+| F3    | NOT STARTED | B3             | —          | —          |                                                                                                                                                     |
+| F4    | COMPLETE    | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts`                           |
+| F5    | COMPLETE    | B4             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (ADR-0010's own B3/B5 assignment, neither built it)  |
+| F6    | COMPLETE    | B5             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `GET /v1/classes/:id/teachers`                                                                                           |
+| F7    | COMPLETE    | B6             | 2026-08-28 | 2026-08-28 | Three small backend gap-closures — see B6's "Post-completion gap closure (during F7)" note                                                          |
+| F8    | COMPLETE    | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                                                         |
+| F9    | COMPLETE    | B8             | 2026-08-29 | 2026-08-29 | Editor shell + full workspace; honestly partial on the one DoD item gated on B9                                                                     |
+| F10   | COMPLETE    | B9             | 2026-09-03 | 2026-09-03 | Two real pre-existing F9 bugs found and fixed (hardcoded, non-`basePath`-relative links)                                                            |
+| F11   | COMPLETE    | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note |
+| F12   | NOT STARTED | B12            | —          | —          |                                                                                                                                                     |
+| F13   | NOT STARTED | B13, B14       | —          | —          | **Offline engine may start now against the published contract**                                                                                     |
+| F14   | NOT STARTED | B15            | —          | —          |                                                                                                                                                     |
+| F15   | NOT STARTED | B15            | —          | —          |                                                                                                                                                     |
+| F16   | NOT STARTED | B16            | —          | —          |                                                                                                                                                     |
+| F17   | NOT STARTED | B17            | —          | —          | Layout may start now                                                                                                                                |
+| F18   | NOT STARTED | B18            | —          | —          |                                                                                                                                                     |
+| F19   | NOT STARTED | B19            | —          | —          |                                                                                                                                                     |
+| F20   | NOT STARTED | B20, B21       | —          | —          |                                                                                                                                                     |
+| F21   | NOT STARTED | B23            | —          | —          |                                                                                                                                                     |

@@ -19,10 +19,7 @@ import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
 import { QuestionService } from '../questions/question.service.js';
-import {
-  QuestionListResponseDto,
-  type ListQuestionsQueryDto,
-} from '../questions/dto/question.dto.js';
+import { ListQuestionsQueryDto, QuestionListResponseDto } from '../questions/dto/question.dto.js';
 import { resolveExamActorRole } from './actor.util.js';
 import { ExamConfigurationService } from './exam-configuration.service.js';
 import { ExamQuestionService } from './exam-question.service.js';

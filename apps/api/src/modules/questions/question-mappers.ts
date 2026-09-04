@@ -112,6 +112,7 @@ interface QuestionForListItem {
   createdAt: Date;
   updatedAt: Date;
   currentRevision: {
+    id: string;
     status: string;
     difficulty: string;
     marks: number;
@@ -129,6 +130,7 @@ export function toQuestionListItemDto(question: QuestionForListItem): QuestionLi
     level: question.level as QuestionListItemResponseDto['level'],
     topicId: question.currentRevision?.topicId ?? null,
     topicName: question.currentRevision?.topic?.name ?? null,
+    currentRevisionId: question.currentRevision?.id ?? null,
     difficulty:
       (question.currentRevision?.difficulty as QuestionListItemResponseDto['difficulty']) ??
       'MEDIUM',

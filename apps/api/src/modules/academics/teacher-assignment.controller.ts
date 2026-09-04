@@ -6,6 +6,7 @@ import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { resolveActorRole } from './actor.util.js';
 import {
   ClassTeachersResponseDto,
+  MyTeacherAssignmentsResponseDto,
   ReplaceTeacherAssignmentsDto,
   TeacherAssignmentListResponseDto,
 } from './dto/teacher-assignment.dto.js';
@@ -22,6 +23,28 @@ function currentUser(req: FastifyRequest): AuthenticatedUser {
 @Controller()
 export class TeacherAssignmentController {
   constructor(private readonly assignments: TeacherAssignmentService) {}
+
+  // F11 gap-closure (2026-09-03): must be declared before `teachers/:id/
+  // assignments` below — Nest matches routes in registration order, and
+  // `:id` would otherwise swallow the literal `me` segment. Reuses
+  // `assignments.view`'s existing SELF grant for TEACHER ("their own
+  // assignment records") — no new permission row.
+  @Get('teachers/me/assignments')
+  @Authorized('assignments.view')
+  @ApiOperation({
+    summary:
+      "The caller's own active class×subject assignments (F11 gap-closure) — " +
+      "the data source for the exam builder's class/subject pickers.",
+  })
+  @ApiOkResponse({ type: MyTeacherAssignmentsResponseDto })
+  async myAssignments(@Req() req: FastifyRequest): Promise<MyTeacherAssignmentsResponseDto> {
+    const user = currentUser(req);
+    const assignments = await this.assignments.listForCurrentTeacher(
+      user.schoolId,
+      user.membershipId,
+    );
+    return { assignments };
+  }
 
   @Get('teachers/:id/assignments')
   @Authorized('assignments.view')

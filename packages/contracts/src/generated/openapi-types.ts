@@ -1113,6 +1113,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/teachers/me/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own active class×subject assignments (F11 gap-closure) — the data source for the exam builder's class/subject pickers. */
+        get: operations["TeacherAssignmentController_myAssignments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teachers/{id}/assignments": {
         parameters: {
             query?: never;
@@ -2926,6 +2943,19 @@ export interface components {
         ClassRosterResponseDto: {
             students: components["schemas"]["ClassRosterEntryDto"][];
         };
+        MyTeacherAssignmentEntryDto: {
+            classSubjectId: string;
+            academicSessionId: string;
+            classId: string;
+            className: string;
+            level: string;
+            arm: string;
+            subjectId: string;
+            subjectName: string;
+        };
+        MyTeacherAssignmentsResponseDto: {
+            assignments: components["schemas"]["MyTeacherAssignmentEntryDto"][];
+        };
         TeacherAssignmentResponseDto: {
             id: string;
             teacherProfileId: string;
@@ -3270,6 +3300,7 @@ export interface components {
             level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
             topicId: string | null;
             topicName: string | null;
+            currentRevisionId: string | null;
             /** @enum {string} */
             difficulty: "EASY" | "MEDIUM" | "HARD";
             marks: number;
@@ -3303,6 +3334,7 @@ export interface components {
             level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
             topicId: string | null;
             topicName: string | null;
+            currentRevisionId: string | null;
             /** @enum {string} */
             difficulty: "EASY" | "MEDIUM" | "HARD";
             marks: number;
@@ -5504,6 +5536,25 @@ export interface operations {
             };
         };
     };
+    TeacherAssignmentController_myAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTeacherAssignmentsResponseDto"];
+                };
+            };
+        };
+    };
     TeacherAssignmentController_list: {
         parameters: {
             query?: never;
@@ -7220,7 +7271,15 @@ export interface operations {
     };
     ExamController_availableQuestions: {
         parameters: {
-            query?: never;
+            query?: {
+                subjectId?: string;
+                level?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+                topicId?: string;
+                difficulty?: "EASY" | "MEDIUM" | "HARD";
+                status?: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED" | "ARCHIVED";
+                page?: number;
+                pageSize?: number;
+            };
             header?: never;
             path: {
                 id: string;

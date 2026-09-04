@@ -183,6 +183,13 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
           'schoolConfig.term',
         ],
       },
+      // F11 gap closure: Moderator holds real `exam.*` SCHOOL-scoped grants
+      // (view/edit/cancel/archive an existing exam) since B11 shipped, but
+      // had no nav item pointing at them — every other role holding such a
+      // grant already did. `match: ['exam.']` (this phase's oversight
+      // screens) is deliberately distinct from `examAdmin.` below (B12's
+      // Control Center) so the two never double-highlight.
+      { id: 'exams', label: 'Exams', href: 'exams', icon: ClipboardList, match: ['exam.'] },
       {
         id: 'exam-operations',
         label: 'Exam Operations',

@@ -961,6 +961,78 @@ describe('B11 Exam Builder & Readiness', () => {
     expect(availableRes.statusCode).toBe(200);
   });
 
+  it('F11 gap-closure: available-questions rows carry currentRevisionId, and it round-trips through a real bind', async () => {
+    // `QuestionListItemResponseDto.id` is the parent Question's id, not a
+    // revision id — `ExamQuestionInputDto.questionRevisionId` needs the
+    // latter. Found only by building the frontend's own picker against this
+    // route: the field the picker actually needs to bind a question was
+    // never mapped onto the DTO, even though the Prisma query already
+    // fetched it (`currentRevision: { include: ... }`).
+    //
+    // Deliberately authors and approves its own fresh question rather than
+    // reusing the describe block's shared `approvedRevisionId` fixture — a
+    // later test in this same file advances that Question to a second
+    // approved revision (a real, legitimate B8 flow), which correctly makes
+    // the *original* revision id no longer the Question's *current* one and
+    // therefore invisible to `available-questions` (which surfaces only the
+    // current revision). That's expected product behaviour, not something
+    // this test should fight; a self-contained fixture avoids the ordering
+    // dependency entirely.
+    const own = (
+      await post(teacher, '/questions', {
+        subjectId: mathSubjectId,
+        level: 'SS2',
+        questionType: 'SINGLE_CHOICE',
+        content: 'currentRevisionId round-trip question',
+        difficulty: 'EASY',
+        marks: 3,
+        options: [
+          { content: 'A', correctFlag: true },
+          { content: 'B', correctFlag: false },
+        ],
+      })
+    ).json<{ id: string; revisions: { id: string }[] }>();
+    const ownRevisionId = own.revisions[0]!.id;
+    const ownSubmit = await post(teacher, `/questions/${own.id}/revisions/${ownRevisionId}/submit`);
+    expect(ownSubmit.statusCode).toBe(200);
+    const ownApprove = await post(hod, `/reviews/questions/${own.id}/approve`, {});
+    expect(ownApprove.statusCode).toBe(200);
+
+    const draft = (
+      await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'currentRevisionId round-trip',
+        examType: 'Test',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>();
+
+    // pageSize pinned well above this suite's own accumulated fixture count
+    // (many earlier tests in this file create their own Math/SS2 approved
+    // questions) — otherwise the target row can land past the default
+    // 25-row page, unrelated to the fix this test actually proves.
+    const availableRes = await get(teacher, `/exams/${draft.id}/available-questions?pageSize=100`);
+    expect(availableRes.statusCode).toBe(200);
+    const available = availableRes.json<{
+      questions: { id: string; currentRevisionId: string | null }[];
+    }>().questions;
+    const row = available.find((q) => q.id === own.id);
+    expect(row).toBeDefined();
+    expect(row?.currentRevisionId).toBe(ownRevisionId);
+    expect(row?.id).not.toBe(ownRevisionId); // the Question id, deliberately distinct
+
+    const bindRes = await put(teacher, `/exams/${draft.id}/questions`, {
+      questions: [{ questionRevisionId: row!.currentRevisionId! }],
+    });
+    expect(bindRes.statusCode).toBe(200);
+    const bound = bindRes.json<{
+      sections: { questions: { questionRevisionId: string }[] }[];
+    }>();
+    expect(bound.sections[0]?.questions[0]?.questionRevisionId).toBe(ownRevisionId);
+  });
+
   it('review fix: exam.create on a TEACHER-role actor with no TeacherProfile row is refused with an exam-specific code', async () => {
     const passwordHash = await passwords.hash('a-real-password-123');
     const user = await prisma.user.create({

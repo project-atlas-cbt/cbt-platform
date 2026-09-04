@@ -480,6 +480,70 @@ describe('B6 TeacherAssignment', () => {
     expect(stray).toBeNull();
   });
 
+  it("F11 gap-closure: GET /teachers/me/assignments returns only the caller's own active rows, self-resolved with no id in the URL", async () => {
+    const { user, membership } = await seedUser({
+      schoolId,
+      loginIdentifier: 'me-teacher',
+      password: 'a-real-password-123',
+      role: 'TEACHER',
+    });
+    createdUserIds.push(user.id);
+    const selfTeacherProfile = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherProfile.create({
+        data: {
+          schoolId,
+          membershipId: membership.id,
+          staffId: `STF-ME-${randomUUID().slice(0, 6)}`,
+        },
+      }),
+    );
+    const meCtx = await freshCtx(host, `10.${RUN}.4.3`);
+    await login(meCtx, 'me-teacher', 'a-real-password-123');
+
+    // No assignments yet — an existing TeacherProfile with zero ACTIVE rows
+    // is a real, empty (not erroring) list.
+    const emptyRes = await get(meCtx, '/teachers/me/assignments');
+    expect(emptyRes.statusCode).toBe(200);
+    expect(emptyRes.json<{ assignments: unknown[] }>().assignments).toHaveLength(0);
+
+    await put(admin, `/teachers/${selfTeacherProfile.id}/assignments`, {
+      academicSessionId: sessionId,
+      classSubjectIds: [mathOfferingId],
+    });
+
+    const res = await get(meCtx, '/teachers/me/assignments');
+    expect(res.statusCode).toBe(200);
+    const assignments = res.json<{
+      assignments: {
+        classSubjectId: string;
+        academicSessionId: string;
+        classId: string;
+        className: string;
+        level: string;
+        arm: string;
+        subjectId: string;
+        subjectName: string;
+      }[];
+    }>().assignments;
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]).toMatchObject({
+      classSubjectId: mathOfferingId,
+      academicSessionId: sessionId,
+      classId: classAId,
+      className: 'SS2A',
+      level: 'SS2',
+      arm: 'A',
+      subjectId: mathSubjectId,
+      subjectName: 'Mathematics',
+    });
+
+    // A caller with no TeacherProfile at all (the School Admin) — empty
+    // list, never an error, never another actor's rows.
+    const adminSelfRes = await get(admin, '/teachers/me/assignments');
+    expect(adminSelfRes.statusCode).toBe(200);
+    expect(adminSelfRes.json<{ assignments: unknown[] }>().assignments).toHaveLength(0);
+  });
+
   it('cross-tenant: another school cannot see or modify this assignment set', async () => {
     const otherSchool = await createSchool();
     createdSchoolIds.push(otherSchool.id);

@@ -306,6 +306,16 @@ export class QuestionListItemResponseDto {
   @ApiProperty({ type: String, nullable: true })
   topicName!: string | null;
 
+  /** F11 gap-closure: the id a caller actually needs to *bind* this question
+   * to an exam (`ExamQuestionInputDto.questionRevisionId`) — the list item's
+   * own `id` above is the parent `Question`'s id, not a revision's. Always
+   * present in practice for anything returned by `GET /exams/:id/
+   * available-questions` (server-filtered to `status: 'APPROVED'`, so
+   * `currentRevision` is always the approved one there); nullable in
+   * general since a question can exist with no revision at all in principle. */
+  @ApiProperty({ type: String, nullable: true })
+  currentRevisionId!: string | null;
+
   @ApiProperty({ type: String, enum: QUESTION_DIFFICULTIES })
   difficulty!: QuestionDifficulty;
 

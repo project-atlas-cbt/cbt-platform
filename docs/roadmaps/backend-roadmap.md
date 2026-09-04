@@ -2395,6 +2395,46 @@ same way in isolation"); `B11` touches zero files in `ImportsModule` and did not
   exercises every _reachable_ check directly; recorded as Candidate/Deferred rather than built, given
   effort budget for this pass.
 
+## Post-completion gap closure (during F11, 2026-09-04)
+
+Two small, additive backend changes, both found only by building F11's real frontend consumer
+against this already-complete phase's contract, not anticipated in B11's own original plan:
+
+1. **`GET /v1/teachers/me/assignments`** (`apps/api/src/modules/academics/teacher-assignment.
+{controller,service}.ts`) — F11's Details-step class/subject picker had no data source: `schoolConfig
+.class.view`/`.subject.view` are both `denied()` for TEACHER (F6's own precedent), and no endpoint
+   let a teacher self-discover their own `TeacherAssignment` rows without already knowing their own
+   `teacherProfileId`. Closed by resolving the caller's profile from `req.user.membershipId` server-
+   side and returning their `ACTIVE` assignments as `{classSubjectId, academicSessionId, classId,
+className, level, arm, subjectId, subjectName}[]` — no pagination (always small), reuses the
+   already-`SELF`-graded `assignments.view` permission, zero new permission rows. Retires the
+   Candidate/Deferred note left by the 2026-09-03 gap-closure entry that first named this exact gap
+   ("a narrow `GET /me/teacher-assignments`-style route").
+2. **`QuestionListItemResponseDto` gained `currentRevisionId: string | null`**
+   (`apps/api/src/modules/questions/{dto/question.dto.ts,question-mappers.ts}`) — `GET /exams/:id/
+available-questions` (this phase's own route, delegating to `QuestionService.list()`) returns this
+   DTO, but it only ever carried the parent `Question`'s id, never the specific revision id
+   `ExamQuestionInputDto.questionRevisionId` actually needs to bind a question to an exam. The Prisma
+   query already fetched it (`currentRevision: { include: QUESTION_REVISION_INCLUDE }` — a full
+   `include`, not a `select`, already returns every scalar including `id`); only the mapper and the
+   `QuestionForListItem` projection type were missing the field. Additive only — no schema change, no
+   permission-table change, F9's own already-shipped Question Bank consumers of this same DTO are
+   unaffected (they never read the new field). New regression test in `exam-builder.integration
+.test.ts` proves the real round trip: browse `available-questions`, bind by the returned
+   `currentRevisionId`, confirm the bound `ExamQuestion.questionRevisionId` matches — deliberately
+   self-contained (creates its own fresh approved question) rather than reusing the describe block's
+   shared `approvedRevisionId` fixture, which a _different_, legitimate test elsewhere in the same
+   file advances to a second approved revision, making the original revision id no longer the
+   Question's _current_ one (correct product behaviour, not a bug — `available-questions` only ever
+   surfaces a question's current revision).
+
+Both verified via the full `apps/api` pipeline (`pnpm lint && pnpm typecheck`, the full `apps/api`
+integration suite — including every B7–B10 suite re-confirmed with zero regression — `pnpm generate`,
+`pnpm generate:permission-table-doc`, 152 rows confirmed unchanged). No roadmap phase status changed
+— B11 remains complete; this is a same-phase-family gap closure surfaced by the paired frontend
+phase, matching this project's own established "found while building the real consumer" pattern
+(F3/F6/F7/F9's own precedent for this class of discovery).
+
 ---
 
 # B12 — Exam Activation & Control

@@ -29,6 +29,7 @@ export function ConfirmActionDialog({
   confirmLabel,
   destructive = false,
   onConfirm,
+  describeError = describeAcademicsError,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,6 +38,10 @@ export function ConfirmActionDialog({
   confirmLabel: string;
   destructive?: boolean;
   onConfirm: () => Promise<void>;
+  /** Overrides the error renderer for a non-academics domain reusing this
+   * dialog (F11: exam archive/delete-draft) — defaults to
+   * `describeAcademicsError` so every existing call site is unaffected. */
+  describeError?: (error: unknown) => ReactNode;
 }) {
   const [error, setError] = useState<ReactNode | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,7 +53,7 @@ export function ConfirmActionDialog({
       await onConfirm();
       onOpenChange(false);
     } catch (err) {
-      setError(describeAcademicsError(err));
+      setError(describeError(err));
     } finally {
       setIsSubmitting(false);
     }

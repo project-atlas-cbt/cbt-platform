@@ -34,11 +34,20 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
     ]);
   });
 
-  it('Moderator: Dashboard, People, Academics, Exam Operations, Reports (04 §20)', () => {
+  it('Moderator: Dashboard, People, Academics, Exams, Exam Operations, Reports (04 §20 + F11 gap closure)', () => {
+    // `04 §20`'s own list doesn't name "Exams" — Moderator's real `exam.*`
+    // SCHOOL-scoped grants (view/edit/cancel/archive an existing exam,
+    // packages/domain's permission table) had no nav item to reach them
+    // from before F11, unlike School Admin/HOD/Teacher, who all already had
+    // one. Added as a confirmed, documented gap closure (CLAUDE.md's F11
+    // Change Log entry), not a silent spec deviation — mirrors HOD's own
+    // F6 precedent immediately below. Distinct from "Exam Operations"
+    // (`examAdmin.*`, B12's Control Center), which Moderator already had.
     expect(ROLE_WORKSPACES.MODERATOR.items.map((i) => i.label)).toEqual([
       'Dashboard',
       'People',
       'Academics',
+      'Exams',
       'Exam Operations',
       'Reports',
     ]);

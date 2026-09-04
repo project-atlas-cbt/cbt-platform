@@ -56,10 +56,13 @@ export function useTerms(sessionId: string | undefined) {
   });
 }
 
-export function useDepartments() {
+/** `options.enabled` (F11): same precedent as `useClasses` above —
+ * `schoolConfig.department.view` is `denied()` for TEACHER too. */
+export function useDepartments(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['academics', 'departments'],
     queryFn: () => unwrap(apiClient.GET('/academics/departments', {})),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -74,7 +77,11 @@ export function useDepartment(id: string | undefined) {
   });
 }
 
-export function useClasses(academicSessionId: string | undefined) {
+/** `options.enabled` (F11): mirrors `useSubjects`'s own precedent — a caller
+ * reachable by TEACHER (`schoolConfig.class.view` is `denied()` there, the
+ * same gap F6 already found for subjects) must pass `enabled: false` and
+ * source classes from elsewhere instead (F11's `useMyTeacherAssignments`). */
+export function useClasses(academicSessionId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['academics', 'classes', academicSessionId ?? 'all'],
     queryFn: () =>
@@ -83,6 +90,7 @@ export function useClasses(academicSessionId: string | undefined) {
           params: { query: academicSessionId ? { academicSessionId } : {} },
         }),
       ),
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -177,10 +185,13 @@ export function useClassTeachers(classId: string | undefined) {
   });
 }
 
-export function useTeachers() {
+/** `options.enabled` (F11): `users.teacher.view` is `denied()` for TEACHER
+ * itself — same precedent as `useHods`'s own `enabled` option below. */
+export function useTeachers(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['people', 'teachers'],
     queryFn: () => unwrap(apiClient.GET('/teachers', {})),
+    enabled: options?.enabled ?? true,
   });
 }
 

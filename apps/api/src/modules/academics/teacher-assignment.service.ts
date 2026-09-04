@@ -6,6 +6,7 @@ import { AuditService } from '../operations/audit-event.service.js';
 import { runUniqueGuarded } from './prisma-error.util.js';
 import type {
   ClassTeacherEntryDto,
+  MyTeacherAssignmentEntryDto,
   ReplaceTeacherAssignmentsDto,
   TeacherAssignmentResponseDto,
 } from './dto/teacher-assignment.dto.js';
@@ -164,6 +165,45 @@ export class TeacherAssignmentService {
     });
 
     return this.listForTeacher(schoolId, teacherProfileId);
+  }
+
+  /** `GET /v1/teachers/me/assignments` — F11 gap-closure (2026-09-03): the
+   * caller's own active class×subject assignments, self-resolved from the
+   * session — closes the exam builder's class/subject-picker data-source
+   * gap (`schoolConfig.class.view`/`.subject.view` are both denied to
+   * TEACHER, so no other endpoint can supply this). Returns an empty list,
+   * not an error, when the caller has no `TeacherProfile` yet — the caller
+   * (a picker component) renders its own empty state rather than a raw
+   * failure. */
+  async listForCurrentTeacher(
+    schoolId: string,
+    membershipId: string,
+  ): Promise<MyTeacherAssignmentEntryDto[]> {
+    return withTenant(prisma, schoolId, async (tx) => {
+      const profile = await tx.teacherProfile.findUnique({
+        where: { schoolId_membershipId: { schoolId, membershipId } },
+      });
+      if (!profile) {
+        return [];
+      }
+      const assignments = await tx.teacherAssignment.findMany({
+        where: { schoolId, teacherProfileId: profile.id, status: 'ACTIVE' },
+        include: {
+          classSubject: { include: { classGroupSession: true, subject: true } },
+        },
+        orderBy: [{ classSubject: { subject: { name: 'asc' } } }],
+      });
+      return assignments.map((assignment) => ({
+        classSubjectId: assignment.classSubjectId,
+        academicSessionId: assignment.academicSessionId,
+        classId: assignment.classSubject.classId,
+        className: assignment.classSubject.classGroupSession.name,
+        level: assignment.classSubject.classGroupSession.level,
+        arm: assignment.classSubject.classGroupSession.arm,
+        subjectId: assignment.classSubject.subjectId,
+        subjectName: assignment.classSubject.subject.name,
+      }));
+    });
   }
 
   /** `GET /v1/classes/:id/teachers` — F6 gap-closure (2026-08-28): the class
