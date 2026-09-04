@@ -35,8 +35,16 @@ vi.mock('@/lib/exam-control/sse-client', () => ({ useExamControlStream: vi.fn() 
 // Isolates this screen's own orchestration (button visibility, dialog
 // wiring, connection-state disabling) from `SessionsTable`'s/
 // `DelegatesSection`'s own already-covered internals.
-vi.mock('./sessions-table', () => ({ SessionsTable: () => <div data-testid="sessions-table" /> }));
-vi.mock('./delegates-section', () => ({ DelegatesSection: () => <div data-testid="delegates" /> }));
+vi.mock('./sessions-table', () => ({
+  SessionsTable: ({ disabled }: { disabled?: boolean }) => (
+    <div data-testid="sessions-table" data-disabled={String(Boolean(disabled))} />
+  ),
+}));
+vi.mock('./delegates-section', () => ({
+  DelegatesSection: ({ disabled }: { disabled?: boolean }) => (
+    <div data-testid="delegates" data-disabled={String(Boolean(disabled))} />
+  ),
+}));
 
 const mockUseHasPermission = vi.mocked(useHasPermission);
 const mockUseExam = vi.mocked(useExam);
@@ -145,6 +153,36 @@ describe('ExamControlCenterScreen', () => {
     expect(screen.getByRole('button', { name: /close exam to new attempts/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /end examination/i })).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveTextContent(/connection lost/i);
+    // Bug fix: `isBlocked` must reach the row-level/delegate mutating
+    // controls too, not just the four primary action-bar buttons — this
+    // screen's own doc comment claims "every mutating control" disables.
+    expect(screen.getByTestId('sessions-table')).toHaveAttribute('data-disabled', 'true');
+    expect(screen.getByTestId('delegates')).toHaveAttribute('data-disabled', 'true');
+  });
+
+  it('bug fix: does not disable SessionsTable/DelegatesSection while merely reconnecting', () => {
+    mockUseExamControlStream.mockReturnValue({ status: 'reconnecting' });
+    mockUseExamControl.mockReturnValue({
+      data: snapshot({ examStatus: 'OPEN' }),
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    render(<ExamControlCenterScreen basePath="/teacher/exam-control" examId="e1" />);
+    expect(screen.getByTestId('sessions-table')).toHaveAttribute('data-disabled', 'false');
+    expect(screen.getByTestId('delegates')).toHaveAttribute('data-disabled', 'false');
+  });
+
+  it('bug fix: End Examination visibility is gated by examAdmin.controlCenter, matching the real server gate on POST .../complete — not examAdmin.markAbsence', () => {
+    mockUseExamControl.mockReturnValue({
+      data: snapshot({ examStatus: 'OPEN' }),
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    render(<ExamControlCenterScreen basePath="/teacher/exam-control" examId="e1" />);
+    expect(mockUseHasPermission).toHaveBeenCalledWith('examAdmin.controlCenter');
+    expect(mockUseHasPermission).not.toHaveBeenCalledWith('examAdmin.markAbsence');
   });
 
   it('does not disable controls while merely reconnecting — a REST call can still succeed', () => {

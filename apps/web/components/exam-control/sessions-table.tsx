@@ -24,6 +24,7 @@ export function SessionsTable({
   basePath,
   onRequestClose,
   onRequestReopen,
+  disabled = false,
 }: {
   examId: string;
   examStatus: string;
@@ -31,6 +32,11 @@ export function SessionsTable({
   basePath: string;
   onRequestClose: (sessionId: string) => void;
   onRequestReopen: (sessionId: string) => void;
+  /** Bug fix: the parent screen's `'closed-permanent'` SSE state — every
+   * mutating control here (Close/Reopen) must disable too, matching
+   * `ExamControlCenterScreen`'s own doc comment. "Manage students" stays
+   * enabled — it only navigates, it doesn't mutate. */
+  disabled?: boolean;
 }) {
   const canClose = useHasPermission('exam.closeNewAttempts');
   const canReopen = useHasPermission('exam.reopen');
@@ -45,11 +51,21 @@ export function SessionsTable({
     {
       id: 'opened',
       header: 'Opened',
-      cell: (row) => (
-        <span title={formatDateTime(row.openedAt)}>
-          {formatDateTime(row.reopenedAt ?? row.openedAt)} by {row.openedByName}
-        </span>
-      ),
+      cell: (row) =>
+        // Bug fix: there is no `reopenedByMembershipId` column in the
+        // schema — a reopened session's `openedByName` is the *original*
+        // opener, not necessarily whoever reopened it. Attributing the
+        // reopen timestamp to that name was misleading; show the reopen
+        // with no by-whom claim instead of a wrong one.
+        row.reopenedAt ? (
+          <span title={`Originally opened ${formatDateTime(row.openedAt)} by ${row.openedByName}`}>
+            Reopened {formatDateTime(row.reopenedAt)}
+          </span>
+        ) : (
+          <span>
+            {formatDateTime(row.openedAt)} by {row.openedByName}
+          </span>
+        ),
     },
     {
       id: 'closed',
@@ -69,13 +85,24 @@ export function SessionsTable({
       align: 'right' as const,
       cell: (row) => (
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={`${examControlStudentsPath(basePath, examId)}?sessionId=${row.id}`}>
-              Manage students
-            </Link>
-          </Button>
+          {row.status === 'OPEN' ? (
+            // Bug fix: shown only for an OPEN session — `ExamRosterScreen`'s
+            // own session resolution only ever accepts an OPEN session id,
+            // so a link to any other status silently dropped the id and
+            // landed on a confusing "open a session first" empty state.
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`${examControlStudentsPath(basePath, examId)}?sessionId=${row.id}`}>
+                Manage students
+              </Link>
+            </Button>
+          ) : null}
           {canClose && row.status === 'OPEN' ? (
-            <Button variant="secondary" size="sm" onClick={() => onRequestClose(row.id)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={disabled}
+              onClick={() => onRequestClose(row.id)}
+            >
               Close
             </Button>
           ) : null}
@@ -83,7 +110,7 @@ export function SessionsTable({
             <Button
               variant="secondary"
               size="sm"
-              disabled={examStatus !== 'OPEN'}
+              disabled={disabled || examStatus !== 'OPEN'}
               title={examStatus !== 'OPEN' ? 'Reopen the exam itself first.' : undefined}
               onClick={() => onRequestReopen(row.id)}
             >

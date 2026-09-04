@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Users } from 'lucide-react';
@@ -47,6 +47,28 @@ export function ExamRosterScreen({ basePath, examId }: { basePath: string; examI
   const selectedSession = sessionIdParam
     ? sessions.find((s) => s.id === sessionIdParam && s.status === 'OPEN')
     : defaultOpenSession(sessions);
+
+  // Bug fix: `GET /exams/:id/eligible-students` reports each student's
+  // most-recently-touched participant status *across every session of this
+  // exam*, not scoped to the one being managed here — real under the
+  // confirmed B12 design that allows multiple concurrently-OPEN sessions.
+  // Left as-is, a student authorized in a different session would show
+  // (and be filtered/counted) as "Authorized" while viewing this session's
+  // roster, even though they were never authorized for *this* session.
+  // Rescope: a student's status only counts here when it actually came
+  // from the session currently selected; otherwise treat them as not yet
+  // touched for this session, same as an eligible student with no
+  // participant row at all.
+  const rawEligibleStudents = eligible.data?.students ?? [];
+  const eligibleStudents = useMemo(() => {
+    if (!selectedSession) return rawEligibleStudents;
+    return rawEligibleStudents.map((student) =>
+      student.examSessionId === selectedSession.id
+        ? student
+        : { ...student, participantStatus: null, examSessionId: null },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rawEligibleStudents is a fresh array each render; keying off the query's own data + the selected session id is the real identity
+  }, [eligible.data, selectedSession?.id]);
 
   useEffect(() => {
     if (!sessionIdParam && selectedSession) {
@@ -131,12 +153,12 @@ export function ExamRosterScreen({ basePath, examId }: { basePath: string; examI
               examId={examId}
               sessionId={selectedSession.id}
               accessMode={exam.data.accessMode}
-              students={eligible.data.students}
+              students={eligibleStudents}
             />
           ) : null}
           <DataTable
             columns={columns}
-            rows={eligible.data.students}
+            rows={eligibleStudents}
             getRowId={(row) => row.studentProfileId}
             caption="Roster"
             emptyState={

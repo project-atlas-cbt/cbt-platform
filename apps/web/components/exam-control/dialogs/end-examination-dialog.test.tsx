@@ -151,4 +151,67 @@ describe('EndExaminationDialog', () => {
     // Never auto-resubmits — the mutation was called exactly once so far.
     expect(complete).toHaveBeenCalledTimes(1);
   });
+
+  it('bug fix: a server-side EXAM_SESSIONS_STILL_OPEN race blocks confirming, but the block lifts once the parent reports zero open sessions again — never requiring a page reload', async () => {
+    mockUseEligibleStudents.mockReturnValue({
+      data: { students: [student({ studentProfileId: 'sp1', participantStatus: 'AUTHORIZED' })] },
+      isPending: false,
+      isError: false,
+      refetch,
+    } as never);
+    complete.mockRejectedValueOnce(
+      new ApiError({
+        code: 'EXAM_SESSIONS_STILL_OPEN',
+        message: 'Close every open session before ending the examination.',
+        retryable: false,
+        correlationId: 'corr-2',
+      }),
+    );
+    const { rerender } = render(
+      <EndExaminationDialog
+        examId="e1"
+        open
+        onOpenChange={vi.fn()}
+        openSessions={[]}
+        onRequestCloseSession={vi.fn()}
+        onCompleted={vi.fn()}
+      />,
+    );
+
+    // The client's own `openSessions` prop was stale (empty) at click time —
+    // the server's own re-check caught a session the client didn't know
+    // about yet.
+    await userEvent.click(screen.getByRole('button', { name: /end examination/i }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /end examination/i })).toBeDisabled(),
+    );
+
+    // The parent's live (SSE/polling-refreshed) data now reflects the real
+    // session opening, then closing again.
+    rerender(
+      <EndExaminationDialog
+        examId="e1"
+        open
+        onOpenChange={vi.fn()}
+        openSessions={[{ id: 's1', sessionType: 'STANDARD' } as never]}
+        onRequestCloseSession={vi.fn()}
+        onCompleted={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /end examination/i })).toBeDisabled();
+
+    rerender(
+      <EndExaminationDialog
+        examId="e1"
+        open
+        onOpenChange={vi.fn()}
+        openSessions={[]}
+        onRequestCloseSession={vi.fn()}
+        onCompleted={vi.fn()}
+      />,
+    );
+    // Bug fix: without the reset, this stayed disabled forever — the only
+    // recovery was a full page reload.
+    expect(screen.getByRole('button', { name: /end examination/i })).not.toBeDisabled();
+  });
 });

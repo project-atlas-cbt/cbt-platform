@@ -56,7 +56,13 @@ export function ExamControlCenterScreen({
   const canClose = useHasPermission('exam.closeNewAttempts');
   const canReopen = useHasPermission('exam.reopen');
   const canCloseReopen = canClose || canReopen;
-  const canEnd = useHasPermission('examAdmin.markAbsence');
+  // Bug fix: `POST /exams/:id/complete` is actually gated by
+  // `examAdmin.controlCenter` (see `exam-control.controller.ts`'s
+  // `complete()` route), not `examAdmin.markAbsence` — the two grants are
+  // identical for every school-side role today, but checking the id the
+  // backend doesn't actually enforce here risked silently desyncing this
+  // button's visibility from the real server gate if the two ever diverge.
+  const canEnd = useHasPermission('examAdmin.controlCenter');
 
   const openSession = useOpenExamSession(examId);
   const closeExam = useCloseExam(examId);
@@ -172,6 +178,7 @@ export function ExamControlCenterScreen({
           basePath={basePath}
           onRequestClose={setCloseSessionTarget}
           onRequestReopen={setReopenSessionTarget}
+          disabled={isBlocked}
         />
       </div>
 
@@ -184,7 +191,7 @@ export function ExamControlCenterScreen({
         />
       </div>
 
-      <DelegatesSection examId={examId} />
+      <DelegatesSection examId={examId} disabled={isBlocked} />
 
       <OpenSessionDialog
         open={openSessionDialogOpen}

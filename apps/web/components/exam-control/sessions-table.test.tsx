@@ -108,6 +108,59 @@ describe('SessionsTable', () => {
     );
   });
 
+  it('bug fix: hides "Manage students" for a non-OPEN session — the roster only ever resolves an OPEN session id, so the link was dead for CLOSED/COMPLETED/CANCELLED rows', () => {
+    render(
+      <SessionsTable
+        examId="e1"
+        examStatus="CLOSED"
+        sessions={[session({ id: 's1', status: 'CLOSED' })]}
+        basePath="/teacher/exam-control"
+        onRequestClose={vi.fn()}
+        onRequestReopen={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('link', { name: /manage students/i })).not.toBeInTheDocument();
+  });
+
+  it('bug fix: disables Close/Reopen when the connection is permanently lost, without hiding the (non-mutating) Manage students link', () => {
+    render(
+      <SessionsTable
+        examId="e1"
+        examStatus="OPEN"
+        sessions={[session({ id: 's1', status: 'OPEN' }), session({ id: 's2', status: 'CLOSED' })]}
+        basePath="/teacher/exam-control"
+        onRequestClose={vi.fn()}
+        onRequestReopen={vi.fn()}
+        disabled
+      />,
+    );
+    expect(screen.getByRole('button', { name: /^close$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /reopen/i })).toBeDisabled();
+    expect(screen.getByRole('link', { name: /manage students/i })).toBeInTheDocument();
+  });
+
+  it("bug fix: a reopened session's timestamp is never attributed to the original opener — no reopenedByMembershipId exists to attribute it correctly", () => {
+    render(
+      <SessionsTable
+        examId="e1"
+        examStatus="OPEN"
+        sessions={[
+          session({
+            id: 's1',
+            status: 'OPEN',
+            openedByName: 'Ade Ola',
+            reopenedAt: '2026-01-02T00:00:00Z',
+          }),
+        ]}
+        basePath="/teacher/exam-control"
+        onRequestClose={vi.fn()}
+        onRequestReopen={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/^reopened/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ade ola/i)).not.toBeInTheDocument();
+  });
+
   it('shows an empty state with no sessions', () => {
     render(
       <SessionsTable

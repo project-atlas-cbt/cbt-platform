@@ -73,6 +73,22 @@ describe('DelegatesSection', () => {
     expect(screen.queryByRole('button', { name: /^revoke$/i })).not.toBeInTheDocument();
   });
 
+  it('bug fix: disables Add/Revoke when the connection is permanently lost', () => {
+    mockUseHasPermission.mockReturnValue(true);
+    mockUseExamAdministrators.mockReturnValue({
+      data: {
+        administrators: [
+          { id: 'a1', membershipId: 'm2', memberName: 'Bola Ige', status: 'ACTIVE' },
+        ],
+      },
+      isPending: false,
+      isError: false,
+    } as never);
+    render(<DelegatesSection examId="e1" disabled />);
+    expect(screen.getByRole('button', { name: /add delegate/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /revoke/i })).toBeDisabled();
+  });
+
   it('opens the assign dialog and submits a new delegate', async () => {
     mockUseHasPermission.mockReturnValue(true);
     mockUseExamAdministrators.mockReturnValue({

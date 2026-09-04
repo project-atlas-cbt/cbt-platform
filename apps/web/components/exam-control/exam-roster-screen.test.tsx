@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { useHasPermission } from '@/lib/nav';
 import { useExam } from '@/lib/exams/queries';
 import { useExamControl, useEligibleStudents } from '@/lib/exam-control/queries';
@@ -114,6 +114,53 @@ describe('ExamRosterScreen', () => {
     render(<ExamRosterScreen basePath="/teacher/exam-control" examId="e1" />);
     expect(screen.getByTestId('batch-authorizer')).toBeInTheDocument();
     expect(screen.getByText('Tunde Bello')).toBeInTheDocument();
+  });
+
+  it('bug fix: a student authorized in a *different* session shows as not-yet-authorized here — the eligible-students endpoint reports the most recent status across every session of the exam, not scoped to the one selected', () => {
+    searchParams = new URLSearchParams('sessionId=s1');
+    mockUseExamControl.mockReturnValue({
+      data: { sessions: [OPEN_SESSION] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    mockUseEligibleStudents.mockReturnValue({
+      data: {
+        students: [
+          {
+            studentProfileId: 'sp1',
+            studentIdNumber: 'ST-001',
+            studentName: 'Tunde Bello',
+            eligible: true,
+            failedChecks: [],
+            participantStatus: 'AUTHORIZED',
+            // Authorized for a different, concurrently-open session — not s1.
+            examSessionId: 's2-other-session',
+          },
+          {
+            studentProfileId: 'sp2',
+            studentIdNumber: 'ST-002',
+            studentName: 'Ada Okoye',
+            eligible: true,
+            failedChecks: [],
+            participantStatus: 'AUTHORIZED',
+            examSessionId: 's1',
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    render(<ExamRosterScreen basePath="/teacher/exam-control" examId="e1" />);
+    const tundeRow = screen.getByText('Tunde Bello').closest('tr');
+    const adaRow = screen.getByText('Ada Okoye').closest('tr');
+    expect(tundeRow).not.toBeNull();
+    expect(adaRow).not.toBeNull();
+    expect(within(tundeRow!).getByText(/not yet authorized/i)).toBeInTheDocument();
+    expect(within(tundeRow!).queryByRole('button', { name: /revoke/i })).not.toBeInTheDocument();
+    expect(within(adaRow!).getByText(/^authorized$/i)).toBeInTheDocument();
+    expect(within(adaRow!).getByRole('button', { name: /revoke/i })).toBeInTheDocument();
   });
 
   it('shows a loading state', () => {

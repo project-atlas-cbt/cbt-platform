@@ -21,7 +21,16 @@ import { RevokeDelegateDialog } from './dialogs/revoke-delegate-dialog';
  * section is correctly invisible to a delegate viewing "their own" exam,
  * not merely read-only for them.
  */
-export function DelegatesSection({ examId }: { examId: string }) {
+export function DelegatesSection({
+  examId,
+  disabled = false,
+}: {
+  examId: string;
+  /** Bug fix: `ExamControlCenterScreen`'s `'closed-permanent'` SSE state —
+   * Add/Revoke are mutations and must disable too, matching that screen's
+   * own doc comment ("disables every mutating control outright"). */
+  disabled?: boolean;
+}) {
   const canManage = useHasPermission('exam.manageAdministrators');
   const administrators = useExamAdministrators(examId);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -35,7 +44,12 @@ export function DelegatesSection({ examId }: { examId: string }) {
     <section className="space-y-3 rounded-md border border-border bg-surface p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-text-primary">Delegated administrators</h2>
-        <Button variant="secondary" size="sm" onClick={() => setAssignOpen(true)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={disabled}
+          onClick={() => setAssignOpen(true)}
+        >
           <UserPlus aria-hidden /> Add delegate
         </Button>
       </div>
@@ -63,6 +77,7 @@ export function DelegatesSection({ examId }: { examId: string }) {
                   <Button
                     variant="ghost"
                     size="sm"
+                    disabled={disabled}
                     onClick={() =>
                       setRevokeTarget({ membershipId: admin.membershipId, name: admin.memberName })
                     }

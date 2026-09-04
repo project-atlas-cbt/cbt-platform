@@ -70,6 +70,22 @@ export function EndExaminationDialog({
     [eligible.data],
   );
 
+  // Bug fix: `serverBlockedBySessions` is set from a genuine server-side
+  // race (the parent's own `openSessions` prop was stale at click time) —
+  // without a reset, the flag never cleared again and the Confirm button
+  // stayed disabled forever, since the disabled button itself prevented
+  // ever retrying `handleConfirm` to clear it. Adjusts state during render
+  // (React's own documented pattern for "reset state when a prop changes",
+  // not a `useEffect` — this codebase's own `react-hooks/set-state-in-effect`
+  // rule rejects a synchronous `setState` inside an effect body): once the
+  // parent's live (SSE/polling-refreshed) `openSessions` genuinely reports
+  // zero open sessions, the stale block lifts on the very next render.
+  const [lastSeenOpenSessionsLength, setLastSeenOpenSessionsLength] = useState(openSessions.length);
+  if (openSessions.length !== lastSeenOpenSessionsLength) {
+    setLastSeenOpenSessionsLength(openSessions.length);
+    if (openSessions.length === 0) setServerBlockedBySessions(false);
+  }
+
   async function handleConfirm() {
     setError(null);
     setStaleNotice(false);
@@ -100,6 +116,7 @@ export function EndExaminationDialog({
         if (complete.isPending) return;
         setError(null);
         setStaleNotice(false);
+        if (!next) setServerBlockedBySessions(false);
         onOpenChange(next);
       }}
     >
