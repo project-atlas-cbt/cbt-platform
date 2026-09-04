@@ -76,11 +76,17 @@ export class ExamSessionResponseDto {
   @ApiProperty({ type: String })
   openedByMembershipId!: string;
 
+  @ApiProperty({ type: String, description: "The opener's display name." })
+  openedByName!: string;
+
   @ApiProperty({ type: String, nullable: true, format: 'date-time' })
   closedAt!: string | null;
 
   @ApiProperty({ type: String, nullable: true })
   closedByMembershipId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: "The closer's display name." })
+  closedByName!: string | null;
 
   @ApiProperty({ type: String, nullable: true, format: 'date-time' })
   reopenedAt!: string | null;
@@ -178,6 +184,15 @@ export class ExamAdministratorResponseDto {
 
   @ApiProperty({ type: String, nullable: true, format: 'date-time' })
   revokedAt!: string | null;
+}
+
+/** `GET /v1/exams/:id/administrators` — F12 gap closure: without a list
+ * route, the assign/revoke pair is write-only — a delegate-management panel
+ * has no way to render "who is currently delegated" after a page reload.
+ * Confirmed necessary during F12 planning (2026-09-04), no schema change. */
+export class ExamAdministratorListResponseDto {
+  @ApiProperty({ type: ExamAdministratorResponseDto, isArray: true })
+  administrators!: ExamAdministratorResponseDto[];
 }
 
 /** `GET /v1/exams/:id/eligible-students` — the exam's full targeted-class

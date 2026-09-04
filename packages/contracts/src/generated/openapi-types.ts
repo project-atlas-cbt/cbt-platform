@@ -2427,7 +2427,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List every delegation (any status) for this exam — F12 gap closure. */
+        get: operations["ExamControlController_listAdministrators"];
         put?: never;
         /** Delegate exam administration (ADR-0012/M-15). */
         post: operations["ExamControlController_assignAdministrator"];
@@ -3896,9 +3897,13 @@ export interface components {
             /** Format: date-time */
             openedAt: string;
             openedByMembershipId: string;
+            /** @description The opener's display name. */
+            openedByName: string;
             /** Format: date-time */
             closedAt: string | null;
             closedByMembershipId: string | null;
+            /** @description The closer's display name. */
+            closedByName: string | null;
             /** Format: date-time */
             reopenedAt: string | null;
             /** Format: date-time */
@@ -3963,10 +3968,6 @@ export interface components {
         EligibleStudentsResponseDto: {
             students: components["schemas"]["EligibleStudentResponseDto"][];
         };
-        AssignExamAdministratorDto: {
-            /** @description The delegate's SchoolMembership id. */
-            membershipId: string;
-        };
         ExamAdministratorResponseDto: {
             id: string;
             examId: string;
@@ -3979,6 +3980,13 @@ export interface components {
             assignedByMembershipId: string;
             /** Format: date-time */
             revokedAt: string | null;
+        };
+        ExamAdministratorListResponseDto: {
+            administrators: components["schemas"]["ExamAdministratorResponseDto"][];
+        };
+        AssignExamAdministratorDto: {
+            /** @description The delegate's SchoolMembership id. */
+            membershipId: string;
         };
         AuthorizeParticipantsDto: {
             studentProfileIds: string[];
@@ -7919,6 +7927,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EligibleStudentsResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_listAdministrators: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamAdministratorListResponseDto"];
                 };
             };
         };

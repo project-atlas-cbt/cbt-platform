@@ -65,7 +65,7 @@ The student exam route runs its own client-side runtime inside the shared shell 
 | F9  | Question Bank Workspace                | B8             | Editor shell yes                             | COMPLETE    |
 | F10 | Question Review Workspace              | B9             | No                                           | COMPLETE    |
 | F11 | Exam Builder                           | B11            | No                                           | COMPLETE    |
-| F12 | Exam Control Center                    | B12            | No                                           | NOT STARTED |
+| F12 | Exam Control Center                    | B12            | No                                           | COMPLETE    |
 | F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | NOT STARTED |
 | F14 | Student Results & Profile              | B15            | No                                           | NOT STARTED |
 | F15 | Staff Results & Publication            | B15            | No                                           | NOT STARTED |
@@ -1963,7 +1963,7 @@ redundant double-navigation on first save via "Continue to Questions." New `clas
 
 # F12 — Exam Control Center
 
-**Status:** NOT STARTED · **Backend pair:** B12
+**Status:** COMPLETE (2026-09-04) · **Backend pair:** B12
 
 ## Objective
 
@@ -1990,15 +1990,38 @@ Deliver the live invigilation interface — the screen `04 §69` singles out for
 
 ## Screens / routes / components
 
-| Route                                 | Screen                   |
-| ------------------------------------- | ------------------------ |
-| `/teacher/exams/:id/control`          | Control Center (`EX-05`) |
-| `/teacher/exams/:id/control/students` | Student authorization    |
-| `/teacher/exams/:id/sessions`         | Session history          |
+**As built** (confirmed decision, 2026-09-04: extended to all four school-side roles — the
+permission table already granted School Admin/Moderator/HOD live, non-deferred access to every
+Control Center action, the identical shape of gap F11 found and closed for exam oversight):
 
-Mirrored under `/moderator/exam-operations` (`04 §27`).
+| Route                                        | Screen                                                                |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| `/teacher/exam-control`                      | Active-exams landing (supersedes the existing nav placeholder)        |
+| `/teacher/exam-control/:id`                  | Control Center                                                        |
+| `/teacher/exam-control/:id/students`         | Student roster / batch authorization                                  |
+| `/teacher/exam-control/:id/history`          | Session history                                                       |
+| `/hod/exam-control` (+ same four sub-routes) | Same screens, DEPARTMENT-scoped oversight (new nav item, gap closure) |
+| `/moderator/exam-operations` (+ same four)   | Same screens, SCHOOL-scoped oversight (existing nav item)             |
+| `/school/exam-operations` (+ same four)      | Same screens, SCHOOL-scoped oversight (new nav item, gap closure)     |
+| `/moderator/exam-operations/makeup-access`   | Honest placeholder (F16)                                              |
+| `/school/exam-operations/makeup-access`      | Honest placeholder (F16)                                              |
 
-Components: `ControlSummary`, `LiveAttemptTable`, `BatchAuthorizer`, `SessionControls`, `OperationalAlerts`.
+Corrected from the roadmap's own literal `/teacher/exams/:id/control` — nested under the
+already-shipped, distinct `exam-control`/`exam-operations` nav destinations instead, matching this
+project's established practice of resolving a routing mismatch against the real, already-shipped
+nav model rather than the roadmap's literal text (F1's `/reset-password`, F8's
+`/teacher/question-bank/import` precedent).
+
+Components delivered (`apps/web/components/exam-control/`): `ActiveExamsScreen` (the landing page,
+not separately named in the roadmap's own list — collapses "Active Exams"/"Scheduled-Ready Exams"
+into one filtered view), `ExamControlCenterScreen` (composes everything below —
+`ControlSummary`'s role is `AggregateSummaryCards`), `ConnectionStatusBanner`, `StalenessIndicator`,
+`SessionsTable` (`SessionControls`'s real name — also the multi-session UX itself, see Implementation
+notes), `ExamSessionStatusBadge`, `ParticipantStatusBadge`, `DelegatesSection` (confirmed addition,
+not originally named — see Implementation notes), `ExamRosterScreen` + `BatchAuthorizer` (the
+roadmap's own named component) + `SessionPicker`, `SessionHistoryScreen`, `FeatureNotYetAvailable`.
+`LiveAttemptTable`/`OperationalAlerts` are **not built** — see Definition of Done items 2/8/9/10
+below for exactly why and what renders in their place.
 
 ## State management requirements
 
@@ -2032,30 +2055,118 @@ The teacher's own connection may drop in the same lab conditions as the students
 
 ## Definition of Done
 
-1. Summary counts match the Control Center shape in `04 §45` and update live.
-2. The live attempt table shows student, status, start time, and server-derived time remaining (`04 §46`).
-3. Opening for students makes the exam available to eligible students.
-4. Closing new attempts stops new starts while running attempts continue — and the UI states this clearly, since it is the behaviour most likely to be misunderstood under pressure.
-5. Reopening works.
-6. Selecting and authorizing a second batch works without creating a second exam.
-7. Revoke before start works; after start the UI offers invalidation with a mandatory reason instead.
-8. **SSE delivers start, submit, and disconnect events within budget; a dropped stream reconnects and reconciles without a manual refresh.**
-9. A disconnected teacher sees a clear stale indicator and disabled controls.
-10. Operational alerts surface: not started, disconnected, low time remaining (`05 §73`).
-11. End Examination prompts to confirm absences and is blocked while attempts are in progress.
-12. The teacher can identify the next batch at a glance (`04 §46`).
-13. Loading, error, and empty states implemented.
+1. ✅ Summary counts match the Control Center shape in `04 §45` and update live —
+   `AggregateSummaryCards`, driven by the same cache entry SSE writes into.
+2. ⚠️ **Honestly partial by construction, not a gap.** No `LiveAttemptTable` was built —
+   `liveAttempts` is permanently `[]` in B12 (no `ExamAttempt` exists until B13). The screen reserves
+   the layout slot via `FeatureNotYetAvailable` (explicit "B13" reference) rather than fabricate
+   rows or omit the section silently.
+3. ✅ Opening for students makes the exam available to eligible students — `OpenSessionDialog` →
+   `POST /exams/:id/sessions`, explains the `OPEN_TO_ELIGIBLE` auto-authorize behaviour up front.
+4. ✅ Closing new attempts stops new starts while running attempts continue — `CloseExamDialog`'s
+   copy states this literally and unmistakably (ADR-0009), asserted by a direct text-content test.
+5. ✅ Reopening works — both exam-level (`ReopenExamDialog`) and session-level
+   (`ReopenSessionDialog`, which proactively disables itself unless the parent exam is already OPEN).
+6. ✅ Selecting and authorizing a second batch works without creating a second exam —
+   `BatchAuthorizer`, `POST /exam-sessions/:id/participants`; multiple concurrent OPEN sessions are
+   represented as separate `SessionsTable` rows, each with its own inline actions (the confirmed
+   multi-session UX — see Implementation notes).
+7. ✅/⚠️ Revoke before start works (`RevokeParticipantDialog`, mandatory reason). Invalidation
+   after start is **not built** — `examAdmin.invalidateAttempt` has no live route in B12
+   (`AttemptAuthorization`, ADR-0014, is B14/B16's job); no disabled button was added either, since
+   that would imply "coming very soon" more strongly than warranted this far out.
+8. ⚠️ **Honestly partial by construction.** SSE delivers open/close/reopen/authorize/revoke/complete
+   events for real, with native `Last-Event-ID` reconnection replay (no custom protocol needed —
+   the browser's own `EventSource` auto-reconnect already sends it, and the backend already replays
+   from its Redis Stream). Submit/disconnect events specifically cannot exist — no `ExamAttempt` to
+   submit or disconnect from until B13.
+9. ✅ A disconnected teacher sees a clear stale indicator (`ConnectionStatusBanner`) and every
+   mutating control disables itself once the stream is `'closed-permanent'` (a transient
+   `'reconnecting'` state does not disable controls — a REST call can still succeed mid-reconnect).
+10. ⚠️ **Deferred, not built.** No operational alerts (not-started/disconnected/low-time-remaining)
+    — none of the underlying signals exist until B13 (no per-student liveness, no attempt timer).
+    No placeholder slot was invented for this, unlike item 2, since `04`/`05` don't name it as a
+    standing nav destination the way the live-attempts table's own slot is implied by the Control
+    Center's own layout.
+11. ✅ End Examination (`EndExaminationDialog`) fetches and shows the real pending-absentee list
+    (verified directly against `ExamCompletionService.complete()`'s own server-side computation to
+    ensure the two never disagree), handles `STALE_ABSENTEE_LIST` (stays open, refetches, requires
+    re-confirm) and `EXAM_SESSIONS_STILL_OPEN` (blocks confirming, lists the open sessions, delegates
+    the actual close back to the parent screen) as distinct, named recoveries. "Blocked while
+    attempts are in progress" is a real, tested backend precondition — currently always-passing
+    since no attempt can exist yet (B12's own honestly-recorded stub, unaffected by F12).
+12. ✅ The teacher can identify the next batch at a glance — `BatchAuthorizer`'s "Not yet authorized"
+    filter, defaulting active in `EXPLICIT_AUTHORIZATION` mode (ADR-0006's own named requirement).
+13. ✅ Loading, error, and empty states implemented across every screen and dialog.
+
+Additional, not originally DoD-numbered: a minimal `ExamAdministrator` delegate-management panel
+(`DelegatesSection`) was built — confirmed in scope during planning even though not among this
+phase's five named components, since B12 shipped assign/revoke with no other consumer.
 
 ## Exit criteria
 
-- Batch-scenario E2E green.
-- Realtime reconnection verified under induced disconnection.
-- B12 contracts confirmed.
+- ✅ B12 contracts confirmed — every route consumed matches the frozen `exam-control.v1` contract
+  exactly (verified by reading the controller/DTOs directly before building against them).
+- ✅ Realtime reconnection verified — `ExamControlStreamConnection`'s unit tests exercise every
+  `readyState` transition against an injected fake `EventSourceLike` (jsdom has no native
+  `EventSource`); live-verified manually against a real running API (two browser tabs, one opens a
+  session, the other's Control Center updates with no manual refresh; a brief API-process restart
+  showed `'reconnecting'` then recovered via native `Last-Event-ID` replay).
+- ⚠️ **Batch-scenario E2E**: substituted, as every prior frontend phase in this project has, with
+  RTL component/integration tests (this codebase has never had browser E2E infrastructure) —
+  `exam-control-center-screen.test.tsx`, `batch-authorizer.test.tsx`,
+  `end-examination-dialog.test.tsx` cover the open→authorize→close→end sequence at the component
+  level, not as one literal 40-student browser run.
 
 ## Deferred items
 
 - Proctoring video or screen monitoring (`01 §53`).
-- Automated cheating judgements — signals display as counts only (`03 §78`).
+- Automated cheating judgements — signals display as counts only (`03 §78`); moot in this phase
+  specifically, since no signal exists yet to display.
+- Live attempt table, operational alerts, invalidate-attempt — all B13 (`ExamAttempt`); grant-makeup
+  — B14/B16 (`AttemptAuthorization`, ADR-0014). Every one is named and reasoned individually in the
+  Definition of Done above, not silently dropped.
+- Makeup Access — `FeatureNotYetAvailable` placeholder at the one nav destination that names it
+  (`04 §27`/`§47`); F16's job.
+- A real automated SSE reconnect-under-load test (a scripted mid-stream API-process restart) — B12's
+  own Change Log entry already recorded this as a Candidate for F12 or a dedicated hardening pass;
+  not built here either. The unit-level `readyState`-transition coverage plus one manual live
+  verification (Exit criteria above) stand in for it.
+
+## Implementation notes
+
+Two confirmed scope decisions, put to the project owner before design (mirroring F11's own
+precedent of asking rather than guessing when the permission table already grants more than the
+roadmap's literal text): (1) build real Control Center access for **all four** school-side roles,
+not just Teacher+Moderator — School Admin and HOD both already held live SCHOOL/DEPARTMENT-scoped
+grants for every action with no future phase named to close the gap; (2) build the
+`DelegatesSection` (`ExamAdministrator`/ADR-0012/M-15) now, even though it isn't among the roadmap's
+five named components.
+
+**Two small, additive backend gap-closures**, found only by building the real frontend consumer
+against B12's already-frozen contract (mirroring F3/F6/F7/F9/F11's own precedent for this class of
+discovery) — full detail in `backend-roadmap.md`'s B12 section: `GET /v1/exams/:id/administrators`
+(the assign/revoke pair was write-only without it) and `openedByName`/`closedByName` on
+`ExamSessionResponseDto` (every sibling actor-facing DTO in this module already resolves a display
+name; resolved via a batched `SchoolMembership` lookup, no schema/migration change, duplicated once
+more into `apps/worker`'s own independent snapshot computation for the identical
+cross-app-import-boundary reason B12 itself already documents for the rest of that function).
+
+**The multi-session UX** (DoD item 6): no global session picker gates every action. Each session is
+its own `SessionsTable` row with its own inline Close/Reopen/Manage-students actions —
+disambiguation is structural, not modal-before-a-modal. A `SessionPicker` appears only on the
+roster route when reached with no `sessionId` already resolved (a deep link/bookmark, never a
+session row's own link, which always arrives with the id already in the URL) — defaults to the
+most-recently-opened OPEN session.
+
+**SSE**: genuinely new to this frontend (mirrors the backend's own "SSE is entirely new to this
+codebase" note, B12). An injectable `EventSourceLike` interface lets `ExamControlStreamConnection`'s
+`readyState`-to-status mapping be tested deterministically without a real network — production
+wraps the native browser `EventSource`. Every frame is a full snapshot (never a delta, per the
+backend's own design), so `useExamControlStream` writes it directly into the exact
+`['exam-control', examId]` TanStack Query cache entry `useExamControl`'s own poll reads —
+`useExamControl`'s `refetchInterval` is `false` whenever the stream reports `'live'` and only
+becomes the R-04 polling fallback once it isn't, so the two mechanisms never race.
 
 ---
 
@@ -2953,27 +3064,27 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 
 ## Phase Completion Tracking
 
-| Phase | Status      | Backend pair   | Started    | Completed  | Notes                                                                                                                                               |
-| ----- | ----------- | -------------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F0    | NOT STARTED | B0             | —          | —          | Design system may start now                                                                                                                         |
-| F1    | NOT STARTED | B1             | —          | —          | Decided: ADR-0005, 0022                                                                                                                             |
-| F2    | NOT STARTED | B2, B10        | —          | —          | Shell may start now                                                                                                                                 |
-| F3    | NOT STARTED | B3             | —          | —          |                                                                                                                                                     |
-| F4    | COMPLETE    | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts`                           |
-| F5    | COMPLETE    | B4             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (ADR-0010's own B3/B5 assignment, neither built it)  |
-| F6    | COMPLETE    | B5             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `GET /v1/classes/:id/teachers`                                                                                           |
-| F7    | COMPLETE    | B6             | 2026-08-28 | 2026-08-28 | Three small backend gap-closures — see B6's "Post-completion gap closure (during F7)" note                                                          |
-| F8    | COMPLETE    | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                                                         |
-| F9    | COMPLETE    | B8             | 2026-08-29 | 2026-08-29 | Editor shell + full workspace; honestly partial on the one DoD item gated on B9                                                                     |
-| F10   | COMPLETE    | B9             | 2026-09-03 | 2026-09-03 | Two real pre-existing F9 bugs found and fixed (hardcoded, non-`basePath`-relative links)                                                            |
-| F11   | COMPLETE    | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note |
-| F12   | NOT STARTED | B12            | —          | —          |                                                                                                                                                     |
-| F13   | NOT STARTED | B13, B14       | —          | —          | **Offline engine may start now against the published contract**                                                                                     |
-| F14   | NOT STARTED | B15            | —          | —          |                                                                                                                                                     |
-| F15   | NOT STARTED | B15            | —          | —          |                                                                                                                                                     |
-| F16   | NOT STARTED | B16            | —          | —          |                                                                                                                                                     |
-| F17   | NOT STARTED | B17            | —          | —          | Layout may start now                                                                                                                                |
-| F18   | NOT STARTED | B18            | —          | —          |                                                                                                                                                     |
-| F19   | NOT STARTED | B19            | —          | —          |                                                                                                                                                     |
-| F20   | NOT STARTED | B20, B21       | —          | —          |                                                                                                                                                     |
-| F21   | NOT STARTED | B23            | —          | —          |                                                                                                                                                     |
+| Phase | Status      | Backend pair   | Started    | Completed  | Notes                                                                                                                                                    |
+| ----- | ----------- | -------------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F0    | NOT STARTED | B0             | —          | —          | Design system may start now                                                                                                                              |
+| F1    | NOT STARTED | B1             | —          | —          | Decided: ADR-0005, 0022                                                                                                                                  |
+| F2    | NOT STARTED | B2, B10        | —          | —          | Shell may start now                                                                                                                                      |
+| F3    | NOT STARTED | B3             | —          | —          |                                                                                                                                                          |
+| F4    | COMPLETE    | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts`                                |
+| F5    | COMPLETE    | B4             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (ADR-0010's own B3/B5 assignment, neither built it)       |
+| F6    | COMPLETE    | B5             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `GET /v1/classes/:id/teachers`                                                                                                |
+| F7    | COMPLETE    | B6             | 2026-08-28 | 2026-08-28 | Three small backend gap-closures — see B6's "Post-completion gap closure (during F7)" note                                                               |
+| F8    | COMPLETE    | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                                                              |
+| F9    | COMPLETE    | B8             | 2026-08-29 | 2026-08-29 | Editor shell + full workspace; honestly partial on the one DoD item gated on B9                                                                          |
+| F10   | COMPLETE    | B9             | 2026-09-03 | 2026-09-03 | Two real pre-existing F9 bugs found and fixed (hardcoded, non-`basePath`-relative links)                                                                 |
+| F11   | COMPLETE    | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note      |
+| F12   | COMPLETE    | B12            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (Control Center for all four school-side roles); two small backend gap-closures — see B12's "Post-completion gap closure" note |
+| F13   | NOT STARTED | B13, B14       | —          | —          | **Offline engine may start now against the published contract**                                                                                          |
+| F14   | NOT STARTED | B15            | —          | —          |                                                                                                                                                          |
+| F15   | NOT STARTED | B15            | —          | —          |                                                                                                                                                          |
+| F16   | NOT STARTED | B16            | —          | —          |                                                                                                                                                          |
+| F17   | NOT STARTED | B17            | —          | —          | Layout may start now                                                                                                                                     |
+| F18   | NOT STARTED | B18            | —          | —          |                                                                                                                                                          |
+| F19   | NOT STARTED | B19            | —          | —          |                                                                                                                                                          |
+| F20   | NOT STARTED | B20, B21       | —          | —          |                                                                                                                                                          |
+| F21   | NOT STARTED | B23            | —          | —          |                                                                                                                                                          |

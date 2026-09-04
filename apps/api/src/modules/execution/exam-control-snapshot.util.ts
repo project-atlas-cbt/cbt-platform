@@ -1,6 +1,6 @@
 import { prisma, withTenant } from '@atlas/db';
 import type { ExamControlCenterSnapshot } from '@atlas/domain';
-import { toExamSessionResponseDto } from './exam-control-mappers.js';
+import { resolveMembershipDisplayNames, toExamSessionResponseDto } from './exam-control-mappers.js';
 
 /**
  * The one place `GET /v1/exams/:id/control` (`ExamControlCenterService`'s
@@ -37,6 +37,10 @@ export async function computeExamControlSnapshot(
     const absentCount = await tx.examParticipation.count({
       where: { schoolId, examId, status: 'ABSENT' },
     });
+    const names = await resolveMembershipDisplayNames(
+      schoolId,
+      sessions.flatMap((s) => [s.openedByMembershipId, s.closedByMembershipId]),
+    );
 
     let openSince: Date | null = null;
     for (const session of sessions) {
@@ -49,7 +53,7 @@ export async function computeExamControlSnapshot(
     return {
       examId,
       examStatus: examStatus as ExamControlCenterSnapshot['examStatus'],
-      sessions: sessions.map((s) => toExamSessionResponseDto(s)),
+      sessions: sessions.map((s) => toExamSessionResponseDto(s, names)),
       aggregate: {
         authorizedCount,
         notStartedCount: authorizedCount,

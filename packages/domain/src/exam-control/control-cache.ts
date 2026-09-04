@@ -41,8 +41,17 @@ export interface ExamControlCenterSessionSnapshot {
   status: ExamSessionStatus;
   openedAt: string;
   openedByMembershipId: string;
+  /** F12 gap closure: every sibling actor-facing DTO in this module already
+   * resolves a display name (`Exam.createdByName`, `ExamAdministrator
+   * .memberName`) — a raw membership id here would be the one regression
+   * against that established convention. Resolved the same way, via a
+   * batched `SchoolMembership` lookup (no schema/migration change; these
+   * columns stay bare UUIDs by design, mirroring `Exam
+   * .cancelledByMembershipId`'s own B11 precedent). */
+  openedByName: string;
   closedAt: string | null;
   closedByMembershipId: string | null;
+  closedByName: string | null;
   reopenedAt: string | null;
   completedAt: string | null;
   createdAt: string;

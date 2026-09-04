@@ -139,6 +139,28 @@ async function computeSnapshot(
       where: { schoolId, examId, status: 'ABSENT' },
     });
 
+    // F12 gap closure: resolved the same way `apps/api`'s own
+    // `exam-control-mappers.ts::resolveMembershipDisplayNames` resolves it —
+    // duplicated, not shared, since this worker cannot import `apps/api`
+    // code (only `packages/*` crosses that boundary, the same constraint
+    // this function's own doc comment already records for the rest of this
+    // computation).
+    const membershipIds = [
+      ...new Set(
+        sessions
+          .flatMap((s) => [s.openedByMembershipId, s.closedByMembershipId])
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const nameRows =
+      membershipIds.length === 0
+        ? []
+        : await tx.schoolMembership.findMany({
+            where: { schoolId, id: { in: membershipIds } },
+            select: { id: true, user: { select: { displayName: true } } },
+          });
+    const names = new Map(nameRows.map((row) => [row.id, row.user.displayName]));
+
     let openSince: Date | null = null;
     for (const session of sessions) {
       if (session.status !== 'OPEN') continue;
@@ -157,8 +179,12 @@ async function computeSnapshot(
         status: s.status,
         openedAt: s.openedAt.toISOString(),
         openedByMembershipId: s.openedByMembershipId,
+        openedByName: names.get(s.openedByMembershipId) ?? 'Unknown',
         closedAt: s.closedAt?.toISOString() ?? null,
         closedByMembershipId: s.closedByMembershipId,
+        closedByName: s.closedByMembershipId
+          ? (names.get(s.closedByMembershipId) ?? 'Unknown')
+          : null,
         reopenedAt: s.reopenedAt?.toISOString() ?? null,
         completedAt: s.completedAt?.toISOString() ?? null,
         createdAt: s.createdAt.toISOString(),

@@ -2718,6 +2718,39 @@ confirmed `PolicyCoverageService` reports 182 routes checked with zero violation
 `apps/worker` boot confirmed the new `atlas-exam-control-refresh-sweep` queue registers at its
 configured 5-second interval alongside every pre-existing sweep.
 
+### Post-completion gap closure (2026-09-04, found while building F12)
+
+Two small, additive gaps found only by building the real frontend consumer against this
+already-frozen contract — the same class of discovery F3/F6/F7/F9/F11 each recorded once in their
+own phase. No schema/migration change in either case; both confirmed in scope during F12 planning
+before implementation.
+
+1. **`GET /v1/exams/:id/administrators`** — only `POST` (assign) and `DELETE` (revoke) existed.
+   Without a list route, a delegate-management panel (F12's own confirmed additional scope) would
+   be write-only — no way to render who is currently delegated after a page reload. Added
+   `ExamAdministratorService.list()` (gated by the same `exam.manageAdministrators` check as
+   assign/revoke, including its deliberate exclusion of an active delegate's own session) and the
+   matching controller route + `ExamAdministratorListResponseDto`. Returns every status, not just
+   `ACTIVE`, so a revoked delegation stays visible rather than silently disappearing.
+2. **`ExamSessionResponseDto` carried only bare `openedByMembershipId`/`closedByMembershipId`** —
+   every sibling actor-facing DTO in this module already resolves a display name
+   (`ExamResponseDto.createdByName`, `ExamAdministratorResponseDto.memberName`); a session-history
+   screen showing raw UUIDs would have been the one regression against that established convention.
+   Added `openedByName`/`closedByName`, resolved via a new batched
+   `resolveMembershipDisplayNames()` helper (`exam-control-mappers.ts`) rather than a schema
+   relation — these columns stay bare UUIDs by design, mirroring `Exam.cancelledByMembershipId`'s
+   own B11 precedent. Duplicated once more into `apps/worker`'s own independent
+   `exam-control-refresh.queue.ts` snapshot computation, for the identical cross-app-import-boundary
+   reason (`apps/worker` cannot import `apps/api` code) that function's own doc comment already
+   records for the rest of its logic — kept from drifting only by both reading from
+   `packages/domain`'s shared `ExamControlCenterSessionSnapshot` type, which gained the two new
+   fields.
+
+Two new integration test cases in `exam-control.integration.test.ts` (now 15 tests, up from 9): the
+new list route (empty → assigned → revoked-but-still-listed → denied to the delegate itself), and
+`openedByName`/`closedByName` resolving to the real seeded name. `pnpm generate:permission-table-doc`
+reconfirmed 155 rows, unchanged (both closures reuse `exam.manageAdministrators`).
+
 ---
 
 # B13 — Attempt Engine

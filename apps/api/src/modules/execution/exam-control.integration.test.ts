@@ -530,9 +530,20 @@ describe('B12 Exam Activation & Control', () => {
     const examId = await buildReadyExam('OPEN_TO_ELIGIBLE');
     const openRes = await post(teacher, `/exams/${examId}/sessions`, {});
     expect(openRes.statusCode).toBe(201);
-    const session = openRes.json<{ id: string; status: string; sessionType: string }>();
+    const session = openRes.json<{
+      id: string;
+      status: string;
+      sessionType: string;
+      openedByName: string;
+      closedByName: string | null;
+    }>();
     expect(session.status).toBe('OPEN');
     expect(session.sessionType).toBe('STANDARD');
+    // F12 gap closure: every sibling actor-facing DTO already resolves a
+    // display name — a raw membership id here would regress against that.
+    // `teacher` was seeded as firstName 'Ade' lastName 'Ola' (beforeAll).
+    expect(session.openedByName).toBe('Ade Ola');
+    expect(session.closedByName).toBeNull();
 
     const examRes = await get(teacher, `/exams/${examId}`);
     expect(examRes.json<{ status: string }>().status).toBe('OPEN');
@@ -785,6 +796,43 @@ describe('B12 Exam Activation & Control', () => {
     expect(afterRevoke.statusCode).toBe(200);
     const deniedAgain = await post(plainTeacher, `/exams/${examId}/reopen`, {});
     expect(deniedAgain.statusCode).toBe(403);
+  });
+
+  it('F12 gap closure: GET /exams/:id/administrators lists every delegation, including revoked ones, name-resolved', async () => {
+    const examId = await buildReadyExam('EXPLICIT_AUTHORIZATION');
+
+    const emptyList = await get(teacher, `/exams/${examId}/administrators`);
+    expect(emptyList.statusCode).toBe(200);
+    expect(emptyList.json<{ administrators: unknown[] }>().administrators).toEqual([]);
+
+    await post(teacher, `/exams/${examId}/administrators`, {
+      membershipId: plainTeacherMembershipId,
+    });
+    const afterAssign = await get(teacher, `/exams/${examId}/administrators`);
+    const assigned = afterAssign.json<{
+      administrators: { membershipId: string; memberName: string; status: string }[];
+    }>().administrators;
+    expect(assigned).toHaveLength(1);
+    expect(assigned[0]?.membershipId).toBe(plainTeacherMembershipId);
+    expect(assigned[0]?.memberName).toBe('Chidi Eze');
+    expect(assigned[0]?.status).toBe('ACTIVE');
+
+    await del(teacher, `/exams/${examId}/administrators/${plainTeacherMembershipId}`);
+    const afterRevokeList = await get(teacher, `/exams/${examId}/administrators`);
+    const revoked = afterRevokeList.json<{ administrators: { status: string }[] }>().administrators;
+    // Still listed (never dropped), just REVOKED — a delegate-management
+    // panel needs to show a revoked delegation, not silently disappear it.
+    expect(revoked).toHaveLength(1);
+    expect(revoked[0]?.status).toBe('REVOKED');
+
+    // A delegate excluded from `exam.manageAdministrators` themselves
+    // (per that check's own deliberate `examId`-omission) cannot list
+    // administrators either — same boundary as assign/revoke.
+    await post(teacher, `/exams/${examId}/administrators`, {
+      membershipId: plainTeacherMembershipId,
+    });
+    const listAsDelegate = await get(plainTeacher, `/exams/${examId}/administrators`);
+    expect(listAsDelegate.statusCode).toBe(403);
   });
 
   it('cross-tenant: another school cannot see or act on this exam', async () => {

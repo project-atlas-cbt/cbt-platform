@@ -368,15 +368,21 @@ screens now consume real data. See this file's Change Log entry below for full d
 Moderator/HOD. **`B12 — Exam Activation & Control`** is complete too (2026-09-04): `exam-control.v1`
 — session open/close/reopen at both exam and session level, batch authorize/revoke sharing one
 eligibility predicate across both `access_mode`s, the Control Center, this codebase's first SSE
-implementation, End Examination, and `ExamAdministrator` delegation. Every frontend phase through
-`F11` and every backend phase through `B12` are now closed out — `B13 — Attempt Engine` is next on
-the backend critical path, the highest-integrity phase in the roadmap. See this file's Change Log
-entries below (dated 2026-09-04) for full detail on both.
+implementation, End Examination, and `ExamAdministrator` delegation. **`F12 — Exam Control Center`**
+is complete too (2026-09-04), built the same day as `B12` at explicit project-owner instruction — a
+deliberate deviation from the frontend/backend phase-pairing default (which had named `B13` "next"),
+the same shape as the earlier B5-before-F5 precedent. Delivers the live invigilation console for all
+four school-side roles (a confirmed scope extension beyond Teacher+Moderator, mirroring F11's own
+precedent), the delegate-management panel, and SSE consumed end to end with an injectable,
+unit-tested connection-status mapping. Every frontend phase through `F12` and every backend phase
+through `B12` are now closed out — `B13 — Attempt Engine` is next on the backend critical path, the
+highest-integrity phase in the roadmap. See this file's Change Log entries below (dated 2026-09-04)
+for full detail on all three.
 
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
-future phase, even though both `F11` and (now) `B12` are complete and the Change Log below already
-recorded `F11`, the `B12`-adjacent process-management fix, and everything through this entry
+future phase, even though both `F11` and (now) `B12`/`F12` are complete and the Change Log below
+already recorded `F11`, the `B12`-adjacent process-management fix, and everything through this entry
 accurately the whole time. This "Current Phase" summary is a hand-maintained rolling status, not
 generated from the Change Log, so it can drift if a completing session updates the Change Log but
 skips back up to refresh this section — exactly what happened here. Flagged so a future session
@@ -4827,3 +4833,170 @@ extended with one clause pointing at `B13`'s own new subsection directly.
 No schema, code, ADR, or permission-table change — this is a planning-documentation fidelity fix
 ahead of a new session starting `B13`, per the user's explicit request. No roadmap phase status
 changed; `B13` remains NOT STARTED.
+
+### 2026-09-04 — `F12` complete: Exam Control Center, built the same day as `B12`
+
+Requested explicitly: start `F12`. This is a deliberate deviation from the documented
+frontend/backend phase-pairing default — `roadmap-index.md`'s own text named `B13 — Attempt Engine`
+as "next" at the time, with F12 recorded as "remaining open... once B13 is far enough along, or
+sooner if the project owner prioritizes it." The project owner prioritized it. The same shape of
+stated deviation as B5-before-F5 earlier in this project, not an oversight.
+
+Followed the working-rules checklist: three parallel research passes (F12's own roadmap/spec/ADR
+text across `04 §45`–`§47`/`§69`, `05 §28`–`§30`/`§42`/`§73`, ADR-0006/0009/0012/0020; the complete,
+already-frozen `exam-control.v1` backend contract — every route, DTO field, and permission grant
+read directly from source, not inferred; existing frontend conventions to reuse from F11/F9/F2),
+then a dedicated Plan agent, then direct verification reads of the live source
+(`exam-control.controller.ts`, `nav-model.ts`, `exam-list-screen.tsx`, `offline-indicator.tsx`,
+`resolve-origin.ts`) before writing any code — per this project's own precedent for a phase of this
+size and novelty (this is the frontend's first-ever SSE consumer).
+
+**Two scope questions confirmed with the project owner before design**, mirroring F11's own
+precedent of asking rather than guessing when the permission table already grants more than a
+roadmap's literal text:
+
+1. **Build real Control Center access for all four school-side roles** (Teacher, School Admin,
+   Moderator, HOD), not just Teacher+Moderator per the roadmap's literal route table — the
+   permission table already granted School Admin (SCHOOL) and HOD (DEPARTMENT) live, non-deferred
+   access to every Control Center action, with no future phase named to close the gap, the identical
+   shape of decision F11 made for exam oversight screens.
+2. **Build a minimal `ExamAdministrator` delegate-management panel** now, even though it isn't
+   among F12's five named components — B12 shipped assign/revoke with no other consumer, and
+   ADR-0012/M-15's spec basis calls for exactly this.
+
+**A routing correction, resolved directly against unambiguous evidence, not asked about** (mirrors
+F1's `/reset-password`, F8's `/teacher/question-bank/import` precedent exactly): the roadmap's own
+literal route table said `/teacher/exams/:id/control`, but the already-shipped nav model carries
+distinct `exam-control` (Teacher)/`exam-operations` (Moderator) destinations, unbuilt until now.
+Built there instead — `/teacher/exam-control/:id`, `/moderator/exam-operations/:id`, and two new
+mirrors, `/hod/exam-control/:id`/`/school/exam-operations/:id` (closing decision 1 above), each with
+`/students` and `/history` sub-routes, plus one new `ActiveExamsScreen` landing page per role
+superseding the dangling nav placeholder (collapses `04 §27`'s separate "Active Exams"/
+"Scheduled-Ready Exams" into one status-filtered view — no new endpoint needed, `useExamsPaginated`
+already supports the filter). `nav-model.ts` gained two new entries (HOD `exam-control`, School
+Admin `exam-operations`) — `nav-model.test.ts`'s own per-role literal-label assertions were updated
+with inline comments recording both as confirmed extensions, mirroring this file's own established
+convention for this class of gap closure (F6/F11's identical precedent).
+
+**Two small, additive backend gap-closures**, found only by building the real frontend consumer
+against the already-frozen contract (the same discovery pattern every prior paired phase has hit):
+
+1. **`GET /v1/exams/:id/administrators`** — only `POST`/`DELETE` existed; without a list route the
+   delegate panel would be write-only. Added `ExamAdministratorService.list()` (same
+   `exam.manageAdministrators` gate as assign/revoke, including its deliberate exclusion of an
+   active delegate's own session) and the matching route/DTO. Returns every status, including
+   `REVOKED`, so a revoked delegation stays visible rather than disappearing.
+2. **`ExamSessionResponseDto` had no `openedByName`/`closedByName`** — every sibling DTO in this
+   module already resolves a display name; a session-history screen showing raw UUIDs would have
+   regressed against that convention. Added both fields via a new batched
+   `resolveMembershipDisplayNames()` helper (no schema change — these columns stay bare UUIDs by
+   design, mirroring `Exam.cancelledByMembershipId`'s own B11 precedent), duplicated once more into
+   `apps/worker`'s own independent `exam-control-refresh.queue.ts` snapshot computation for the
+   identical cross-app-import-boundary reason that function's own doc comment already records for
+   the rest of its logic. Two new integration tests (`exam-control.integration.test.ts`, now 15,
+   up from 9). See `backend-roadmap.md`'s B12 "Post-completion gap closure" note for full detail.
+
+**The core frontend design decision — how SSE and the R-04 polling fallback cooperate rather than
+race**: `useExamControlStream` (new `lib/exam-control/sse-client.ts`) writes every real SSE frame
+directly into the exact same `['exam-control', examId]` TanStack Query cache entry
+`useExamControl`'s own poll reads (`queryClient.setQueryData` — safe because every frame is a full
+snapshot, never a delta, per the backend's own design). `useExamControl`'s `refetchInterval` is
+`false` whenever the stream reports `'live'` and only becomes the 5s R-04 fallback once it isn't —
+the two mechanisms are never both active at once. An injectable `EventSourceLike` interface (jsdom
+has no native `EventSource`) lets `ExamControlStreamConnection`'s `readyState`-to-status mapping
+(`'connecting'|'live'|'reconnecting'|'closed-permanent'`) be tested deterministically against a fake
+in `sse-client.test.ts`; production wraps the real browser `EventSource`. Native `Last-Event-ID`
+reconnection needed no custom protocol on the frontend at all — the browser already sends it
+automatically on reconnect, and the backend already replays from its Redis Stream. `'closed-
+permanent'` (the case where a 403/404 was returned before SSE headers were ever written — the exact
+security fix B12's own gap-closure pass made) is the one state that disables every mutating control
+(doctrine: never show stale data as live); a merely `'reconnecting'` stream leaves controls enabled,
+since a REST call can still succeed mid-reconnect.
+
+**The multi-concurrent-open-sessions UX** (a confirmed B12 product decision this phase had to
+represent): no global session picker gates every action. Each session is its own `SessionsTable` row
+with its own inline Close/Reopen/Manage-students actions — disambiguation is structural. A
+`SessionPicker` appears only on the roster route when reached with no `sessionId` already resolved
+(a deep link/bookmark; a session row's own link always arrives with the id already in the URL) —
+defaults to the most-recently-opened OPEN session.
+
+**Honest partial surfaces, built as a real reserved layout slot rather than fabricated or omitted**
+(the established "build what's real now, name what supersedes it" pattern): `AggregateSummaryCards`
+renders `—` (never a fabricated `0`) for In Progress/Submitted whenever `attemptDataAvailable` is
+`false` (always true in B12); the live-attempts table slot renders `FeatureNotYetAvailable`
+(explicit "B13" reference) rather than an empty or fake table; invalidate-attempt has no UI
+anywhere, not even a disabled button (`examAdmin.invalidateAttempt` has no live route — B14/B16);
+operational alerts (not-started/disconnected/low-time-remaining) were omitted entirely, since no
+underlying signal exists yet and no spec section names a standing nav destination for them the way
+the live-attempts slot is implied; Makeup Access is a `FeatureNotYetAvailable` placeholder at the
+one nav destination that names it (`04 §27`/`§47`, Moderator/School Admin only — F16's job).
+
+**`EndExaminationDialog`'s pending-absentee computation was verified directly against the server's
+own logic before being built**, not assumed: read `ExamCompletionService.complete()`'s source
+directly and confirmed the client-computable set (`GET /eligible-students` rows where
+`participantStatus === 'AUTHORIZED'`) exactly matches the server's own pending-set query, so the
+dialog's list and the server's acceptance criteria can never legitimately disagree except through
+the one real race `STALE_ABSENTEE_LIST` exists to catch (handled: stays open, refetches, requires an
+explicit re-confirm, never silently resubmits). `EXAM_SESSIONS_STILL_OPEN` is handled as a second,
+distinct recovery — blocks confirming, lists the open sessions by name, and delegates the actual
+close action back to the parent screen's own `SessionsTable`/`CloseSessionDialog` rather than
+duplicating a second close-session mutation wiring inside the dialog.
+
+**ADR-0009's own named requirement** — that "Close new attempts" must state unmistakably, at the
+point of action, that already-running attempts are unaffected — is carried by `CloseExamDialog`'s
+copy specifically, verified by a literal text-content assertion in its own test file, matching this
+project's established practice for a named Definition-of-Done copy requirement.
+
+**Testing**: 16 new test files / 72 tests in `apps/web` — `sse-client.test.ts` and
+`use-exam-control-stream.test.tsx` (every `readyState` transition against an injected fake, plus the
+query-cache-write behavior), `navigation.test.ts` (`defaultOpenSession`'s tie-breaking), component
+tests per new component/dialog (`session-picker`, `aggregate-summary-cards`,
+`connection-status-banner`, `sessions-table`, `active-exams-screen`, `batch-authorizer`,
+`delegates-section`, `exam-roster-screen`, `session-history-screen`, `close-exam-dialog`,
+`revoke-participant-dialog`, `end-examination-dialog`), and one composite
+`exam-control-center-screen.test.tsx` mocking every hook module directly (mirroring
+`exam-detail-screen.test.tsx`'s own established convention for a screen this size) with
+`SessionsTable`/`DelegatesSection` themselves mocked out to isolate the parent screen's own
+orchestration logic, already covered independently by their own dedicated test files. One real
+component bug the tests caught before shipping: the lifecycle-action-button gating originally read
+`useExam`'s own `status` field, but the test fixture (and, on reflection, the live data too) makes
+`snapshot.examStatus` — the Control Center's own field, kept fresh by SSE/polling — the more
+correct single source of truth for this screen's own already-displayed status badge; fixed to read
+consistently from `snapshot.examStatus` throughout.
+
+Full pipeline green, run in full after every fix: `apps/api` — `pnpm lint && pnpm typecheck`, the
+extended `exam-control.integration.test.ts` (15/15). `apps/web` — `pnpm lint && pnpm typecheck &&
+pnpm test -- --run` (664 tests, 663 passed; the one failure,
+`components/imports/error-table.performance.test.tsx`, is a pre-existing, unrelated F8-era
+performance-timing assertion this session never touched, reconfirmed passing cleanly in isolation —
+this environment's own long-documented full-suite-parallel-load timing flakiness, not a regression)
+and `pnpm build` (`next build --webpack`), confirming all 18 new routes across all four role roots
+render correctly, superseding the `[...slug]` catch-alls as designed. `pnpm generate` and `pnpm
+generate:permission-table-doc` (155 rows, confirmed unchanged — both gap-closures reuse
+`exam.manageAdministrators`). Live-verified beyond the automated suite: two browser tabs against a
+real running API — one opens a session, the other's Control Center updates with no manual refresh;
+a brief API-process restart showed the `'reconnecting'` banner, then recovered via native
+`Last-Event-ID` replay with no data loss.
+
+**Honestly deferred, not silently dropped** (full list in `frontend-roadmap.md`'s F12 section): live
+attempt table, operational alerts, invalidate-attempt (all `B13`/`ExamAttempt`); grant-makeup
+(`B14`/`B16`, `AttemptAuthorization`); a real automated SSE reconnect-under-load test (a scripted
+mid-stream API-process restart) — B12's own Change Log entry already recorded this as a Candidate
+for F12 or a dedicated hardening pass; the unit-level `readyState`-transition coverage plus the one
+manual live verification above stand in for it, not a literal browser E2E (this codebase has never
+had that infrastructure, for any phase).
+
+`docs/roadmaps/frontend-roadmap.md`'s F12 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-partial-with-reason, a corrected routes/components table, a full
+"Implementation notes" subsection, and an expanded Deferred items list.
+`docs/roadmaps/backend-roadmap.md`'s B12 section gained a "Post-completion gap closure" note for
+both additive backend changes. `docs/roadmaps/roadmap-index.md`'s version (1.23), Current State, and
+Immediate Next Actions all updated to record `F12` complete.
+
+Project state moves from _Implementation (B12 complete)_ to _Implementation (B12/F12 complete)_.
+**Next: `B13 — Attempt Engine`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2 → B3 →
+B5 → B6 → B8 → B9 → B11 → B12 → B13 → B14 → B15 → …`) — the highest-integrity phase in the entire
+roadmap, gated by six ADRs and concentrating 8 of the 18 BLOCKER audit findings alongside `B14`, and
+carrying forward the credential-sharing/remote-impersonation integrity-risk analysis `B12`'s own
+planning raised (already forwarded into `B13`'s own roadmap section directly, per this file's
+immediately preceding Change Log entry).

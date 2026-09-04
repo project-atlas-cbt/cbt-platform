@@ -28,6 +28,7 @@ import { ExamSessionService } from './exam-session.service.js';
 import {
   AssignExamAdministratorDto,
   EligibleStudentsResponseDto,
+  ExamAdministratorListResponseDto,
   ExamAdministratorResponseDto,
   ExamSessionResponseDto,
   OpenExamSessionDto,
@@ -179,6 +180,18 @@ export class ExamControlController {
   ): Promise<EligibleStudentsResponseDto> {
     const user = currentUser(req);
     return this.participants.listEligible(user.schoolId, actorFromAuthenticatedUser(user), id);
+  }
+
+  @Get(':id/administrators')
+  @Authorized('exam.manageAdministrators')
+  @ApiOperation({ summary: 'List every delegation (any status) for this exam — F12 gap closure.' })
+  @ApiOkResponse({ type: ExamAdministratorListResponseDto })
+  async listAdministrators(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+  ): Promise<ExamAdministratorListResponseDto> {
+    const user = currentUser(req);
+    return this.administrators.list(user.schoolId, actorFromAuthenticatedUser(user), id);
   }
 
   @Post(':id/administrators')

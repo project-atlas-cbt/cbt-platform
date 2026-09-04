@@ -90,20 +90,48 @@ export async function loadExamSessionOrThrow(
   return session;
 }
 
-export function toExamSessionResponseDto(session: {
-  id: string;
-  examId: string;
-  sessionType: string;
-  status: string;
-  openedAt: Date;
-  openedByMembershipId: string;
-  closedAt: Date | null;
-  closedByMembershipId: string | null;
-  reopenedAt: Date | null;
-  completedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): ExamSessionResponseDto {
+/** F12 gap closure: `openedByMembershipId`/`closedByMembershipId` are bare
+ * UUIDs with no Prisma relation (mirrors `Exam.cancelledByMembershipId`'s own
+ * B11 precedent) — resolved to a display name via one batched
+ * `SchoolMembership` lookup rather than a relation/schema change, and rather
+ * than one query per session (which every call site here would otherwise
+ * need in a loop). Callers pass every distinct membership id they need
+ * resolved; a name missing from the result (a membership deleted since —
+ * structurally near-impossible, `SchoolMembership` is never hard-deleted,
+ * but not provably impossible) falls back to a labelled placeholder rather
+ * than throwing. */
+export async function resolveMembershipDisplayNames(
+  schoolId: string,
+  membershipIds: readonly (string | null)[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(membershipIds.filter((id): id is string => id !== null))];
+  if (ids.length === 0) return new Map();
+  const rows = await withTenant(prisma, schoolId, (tx) =>
+    tx.schoolMembership.findMany({
+      where: { schoolId, id: { in: ids } },
+      select: { id: true, user: { select: { displayName: true } } },
+    }),
+  );
+  return new Map(rows.map((row) => [row.id, row.user.displayName]));
+}
+
+export function toExamSessionResponseDto(
+  session: {
+    id: string;
+    examId: string;
+    sessionType: string;
+    status: string;
+    openedAt: Date;
+    openedByMembershipId: string;
+    closedAt: Date | null;
+    closedByMembershipId: string | null;
+    reopenedAt: Date | null;
+    completedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  names: Map<string, string>,
+): ExamSessionResponseDto {
   return {
     id: session.id,
     examId: session.examId,
@@ -111,8 +139,12 @@ export function toExamSessionResponseDto(session: {
     status: session.status as ExamSessionResponseDto['status'],
     openedAt: session.openedAt.toISOString(),
     openedByMembershipId: session.openedByMembershipId,
+    openedByName: names.get(session.openedByMembershipId) ?? 'Unknown',
     closedAt: session.closedAt?.toISOString() ?? null,
     closedByMembershipId: session.closedByMembershipId,
+    closedByName: session.closedByMembershipId
+      ? (names.get(session.closedByMembershipId) ?? 'Unknown')
+      : null,
     reopenedAt: session.reopenedAt?.toISOString() ?? null,
     completedAt: session.completedAt?.toISOString() ?? null,
     createdAt: session.createdAt.toISOString(),

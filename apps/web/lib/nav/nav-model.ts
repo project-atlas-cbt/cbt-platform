@@ -141,6 +141,19 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
         match: ['questionBank.'],
       },
       { id: 'exams', label: 'Exams', href: 'exams', icon: ClipboardList, match: ['exam.'] },
+      // F12 gap closure: School Admin holds SCHOOL-scoped `examAdmin.*`
+      // grants identical in shape to Moderator's own `exam-operations` item
+      // below, but had no nav item pointing at them — confirmed decision
+      // (2026-09-04) to extend Control Center access to all four
+      // school-side roles, not just Teacher/Moderator per the roadmap's own
+      // literal route table. Copied verbatim from MODERATOR's entry.
+      {
+        id: 'exam-operations',
+        label: 'Exam Operations',
+        href: 'exam-operations',
+        icon: Monitor,
+        match: ['examAdmin.'],
+      },
       { id: 'results', label: 'Results', href: 'results', icon: BarChart3, match: ['results.'] },
       { id: 'reports', label: 'Reports', href: 'reports', icon: FileText, match: ['reporting.'] },
       {
@@ -247,6 +260,21 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
         match: ['questionBank.'],
       },
       { id: 'exams', label: 'Exams', href: 'exams', icon: ClipboardList, match: ['exam.'] },
+      // F12 gap closure: HOD holds real DEPARTMENT-scoped `examAdmin.*`
+      // grants (control center, roster, allow-student, mark-absence) since
+      // B12 shipped, but `04 §28`'s literal nav list has no "Exam Control"
+      // item — the same shape as this file's own HOD `academics` extension
+      // (F6). `match` copied from TEACHER's `exam-control` item (not
+      // MODERATOR's broader `'examAdmin.'`), since HOD's DEPARTMENT-scoped
+      // reach is structurally closer to TEACHER's OWNED reach than to
+      // MODERATOR's/SCHOOL_ADMIN's SCHOOL-wide one.
+      {
+        id: 'exam-control',
+        label: 'Exam Control',
+        href: 'exam-control',
+        icon: Monitor,
+        match: ['examAdmin.controlCenter'],
+      },
       { id: 'results', label: 'Results', href: 'results', icon: BarChart3, match: ['results.'] },
       {
         id: 'department-analytics',

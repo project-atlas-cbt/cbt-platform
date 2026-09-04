@@ -21,13 +21,21 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
     ]);
   });
 
-  it('School Admin: Dashboard, People, Academics, Questions, Exams, Results, Reports, School Settings (04 §11)', () => {
+  it('School Admin: Dashboard, People, Academics, Questions, Exams, Exam Operations, Results, Reports, School Settings (04 §11 + F12 gap closure)', () => {
+    // `04 §11`'s own list doesn't name "Exam Operations" — School Admin's
+    // real SCHOOL-scoped `examAdmin.*` grants (B12's Control Center) had no
+    // nav item to reach them from before F12, even though Moderator's
+    // identically-shaped grant already had one (F11's own precedent).
+    // Confirmed decision (2026-09-04): extend Control Center access to all
+    // four school-side roles, not just Teacher/Moderator per the roadmap's
+    // literal route table — see CLAUDE.md's F12 Change Log entry.
     expect(ROLE_WORKSPACES.SCHOOL_ADMIN.items.map((i) => i.label)).toEqual([
       'Dashboard',
       'People',
       'Academics',
       'Questions',
       'Exams',
+      'Exam Operations',
       'Results',
       'Reports',
       'School Settings',
@@ -53,19 +61,22 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
     ]);
   });
 
-  it('HOD: Dashboard, Academics, Question Review, Question Bank, Exams, Results, Department Analytics, Reports (04 §28 + F6 gap closure)', () => {
-    // `04 §28`'s own list doesn't name "Academics" — HOD's real
-    // `schoolConfig.{department,class,subject,session,term}.view` grants
-    // (packages/domain's permission table) had no nav item to reach them
-    // from before F6, unlike every other role holding such a grant. Added
-    // as a confirmed, documented gap closure (CLAUDE.md's F6 Change Log
-    // entry), not a silent spec deviation.
+  it('HOD: Dashboard, Academics, Question Review, Question Bank, Exams, Exam Control, Results, Department Analytics, Reports (04 §28 + F6/F12 gap closures)', () => {
+    // `04 §28`'s own list doesn't name "Academics" (F6 gap closure) or
+    // "Exam Control" (F12 gap closure) — HOD's real
+    // `schoolConfig.{department,class,subject,session,term}.view` and
+    // `examAdmin.*` DEPARTMENT-scoped grants (packages/domain's permission
+    // table) had no nav item to reach them from, unlike every other role
+    // holding an equivalent grant. Both added as confirmed, documented gap
+    // closures (CLAUDE.md's F6/F12 Change Log entries), not silent spec
+    // deviations.
     expect(ROLE_WORKSPACES.HOD.items.map((i) => i.label)).toEqual([
       'Dashboard',
       'Academics',
       'Question Review',
       'Question Bank',
       'Exams',
+      'Exam Control',
       'Results',
       'Department Analytics',
       'Reports',

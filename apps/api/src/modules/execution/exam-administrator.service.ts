@@ -14,6 +14,7 @@ import {
 } from './exam-control-mappers.js';
 import type {
   AssignExamAdministratorDto,
+  ExamAdministratorListResponseDto,
   ExamAdministratorResponseDto,
 } from './dto/exam-session.dto.js';
 
@@ -66,6 +67,33 @@ export class ExamAdministratorService {
       });
     }
     return exam;
+  }
+
+  /** `GET /v1/exams/:id/administrators` — F12 gap closure (confirmed
+   * necessary during F12 planning, 2026-09-04): without this, `assign`/
+   * `revoke` are write-only — a delegate-management panel has no way to
+   * render who is currently delegated after a page reload. Gated by the
+   * same `exam.manageAdministrators` check as assign/revoke (deliberately
+   * excludes an active delegate's own session, per that check's own
+   * comment) — so the panel this backs is correctly invisible to a
+   * delegate viewing "their own" exam, not merely read-only. Returns every
+   * status, not just ACTIVE, so a revoked delegation still explains itself
+   * in the UI rather than silently disappearing. */
+  async list(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examId: string,
+  ): Promise<ExamAdministratorListResponseDto> {
+    await this.assertCanManage(schoolId, actor, examId);
+
+    const rows = await withTenant(prisma, schoolId, (tx) =>
+      tx.examAdministrator.findMany({
+        where: { schoolId, examId },
+        include: EXAM_ADMINISTRATOR_INCLUDE,
+        orderBy: { assignedAt: 'asc' },
+      }),
+    );
+    return { administrators: rows.map(toExamAdministratorResponseDto) };
   }
 
   async assign(

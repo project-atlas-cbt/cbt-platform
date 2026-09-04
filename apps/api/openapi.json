@@ -5808,6 +5808,33 @@
       }
     },
     "/exams/{id}/administrators": {
+      "get": {
+        "operationId": "ExamControlController_listAdministrators",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamAdministratorListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List every delegation (any status) for this exam — F12 gap closure.",
+        "tags": ["exam-control"]
+      },
       "post": {
         "operationId": "ExamControlController_assignAdministrator",
         "parameters": [
@@ -10417,6 +10444,10 @@
           "openedByMembershipId": {
             "type": "string"
           },
+          "openedByName": {
+            "type": "string",
+            "description": "The opener's display name."
+          },
           "closedAt": {
             "type": "string",
             "nullable": true,
@@ -10425,6 +10456,11 @@
           "closedByMembershipId": {
             "type": "string",
             "nullable": true
+          },
+          "closedByName": {
+            "type": "string",
+            "nullable": true,
+            "description": "The closer's display name."
           },
           "reopenedAt": {
             "type": "string",
@@ -10452,8 +10488,10 @@
           "status",
           "openedAt",
           "openedByMembershipId",
+          "openedByName",
           "closedAt",
           "closedByMembershipId",
+          "closedByName",
           "reopenedAt",
           "completedAt",
           "createdAt",
@@ -10638,16 +10676,6 @@
         },
         "required": ["students"]
       },
-      "AssignExamAdministratorDto": {
-        "type": "object",
-        "properties": {
-          "membershipId": {
-            "type": "string",
-            "description": "The delegate's SchoolMembership id."
-          }
-        },
-        "required": ["membershipId"]
-      },
       "ExamAdministratorResponseDto": {
         "type": "object",
         "properties": {
@@ -10690,6 +10718,28 @@
           "assignedByMembershipId",
           "revokedAt"
         ]
+      },
+      "ExamAdministratorListResponseDto": {
+        "type": "object",
+        "properties": {
+          "administrators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamAdministratorResponseDto"
+            }
+          }
+        },
+        "required": ["administrators"]
+      },
+      "AssignExamAdministratorDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "description": "The delegate's SchoolMembership id."
+          }
+        },
+        "required": ["membershipId"]
       },
       "AuthorizeParticipantsDto": {
         "type": "object",

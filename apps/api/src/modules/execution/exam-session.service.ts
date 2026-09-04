@@ -11,6 +11,7 @@ import {
   EXAM_SESSION_WITH_EXAM_INCLUDE,
   loadExamSessionOrThrow,
   loadParentExamOrThrow,
+  resolveMembershipDisplayNames,
   toExamSessionResponseDto,
 } from './exam-control-mappers.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
@@ -240,7 +241,11 @@ export class ExamSessionService {
         include: EXAM_SESSION_WITH_EXAM_INCLUDE,
       }),
     );
-    return toExamSessionResponseDto(created);
+    const names = await resolveMembershipDisplayNames(schoolId, [
+      created.openedByMembershipId,
+      created.closedByMembershipId,
+    ]);
+    return toExamSessionResponseDto(created, names);
   }
 
   /** ADR-0009: the entirety of "Pause" — stops new starts, running attempts
@@ -301,7 +306,11 @@ export class ExamSessionService {
         include: EXAM_SESSION_WITH_EXAM_INCLUDE,
       }),
     );
-    return toExamSessionResponseDto(updated);
+    const names = await resolveMembershipDisplayNames(schoolId, [
+      updated.openedByMembershipId,
+      updated.closedByMembershipId,
+    ]);
+    return toExamSessionResponseDto(updated, names);
   }
 
   /** ADR-0009: "Resume" — the only way a CLOSED session accepts new starts
@@ -363,6 +372,10 @@ export class ExamSessionService {
         include: EXAM_SESSION_WITH_EXAM_INCLUDE,
       }),
     );
-    return toExamSessionResponseDto(updated);
+    const names = await resolveMembershipDisplayNames(schoolId, [
+      updated.openedByMembershipId,
+      updated.closedByMembershipId,
+    ]);
+    return toExamSessionResponseDto(updated, names);
   }
 }
