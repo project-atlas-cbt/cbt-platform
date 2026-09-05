@@ -139,6 +139,21 @@ async function computeSnapshot(
       where: { schoolId, examId, status: 'ABSENT' },
     });
 
+    // B13: real ExamAttempt data — duplicated (not shared) against
+    // apps/api's own identical `exam-control-snapshot.util.ts` computation,
+    // same cross-app-boundary constraint as the display-name resolution
+    // just below. Independent counts, never derived by subtraction.
+    const inProgressCount = await tx.examAttempt.count({
+      where: { schoolId, examId, state: 'IN_PROGRESS' },
+    });
+    const submittedCount = await tx.examAttempt.count({
+      where: { schoolId, examId, state: { in: ['SUBMITTED', 'AUTO_SUBMITTED'] } },
+    });
+    const liveAttempts = await tx.examAttempt.findMany({
+      where: { schoolId, examId, state: 'IN_PROGRESS' },
+      select: { studentProfileId: true, state: true, expiresAt: true },
+    });
+
     // F12 gap closure: resolved the same way `apps/api`'s own
     // `exam-control-mappers.ts::resolveMembershipDisplayNames` resolves it —
     // duplicated, not shared, since this worker cannot import `apps/api`
@@ -192,13 +207,20 @@ async function computeSnapshot(
       })),
       aggregate: {
         authorizedCount,
-        notStartedCount: authorizedCount,
-        inProgressCount: 0,
-        submittedCount: 0,
+        notStartedCount: Math.max(0, authorizedCount - inProgressCount - submittedCount),
+        inProgressCount,
+        submittedCount,
         absentCount,
-        attemptDataAvailable: false,
+        attemptDataAvailable: true,
       },
-      liveAttempts: [],
+      liveAttempts: liveAttempts.map((a) => ({
+        studentProfileId: a.studentProfileId,
+        status: a.state,
+        timeRemainingSeconds: Math.max(
+          0,
+          Math.floor((a.expiresAt.getTime() - now.getTime()) / 1000),
+        ),
+      })),
       staleness: {
         isStale,
         openSince: openSince?.toISOString() ?? null,

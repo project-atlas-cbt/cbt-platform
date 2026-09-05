@@ -1811,7 +1811,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ExamAttempt (B13)',
   },
   {
     id: 'examAdmin.seeStarted',
@@ -1826,7 +1825,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ExamAttempt (B13)',
   },
   {
     id: 'examAdmin.seeCompleted',
@@ -1841,7 +1839,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ExamAttempt (B13)',
   },
   {
     // B12: also gates the inverse action (revoke, DELETE .../participants/
@@ -1901,7 +1898,25 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ExamAttempt (B13)',
+  },
+  {
+    // B13 (decision 2, confirmed this planning session): resolves the
+    // ExamSessionParticipant.extraTimeSeconds accommodation gap — graded
+    // identically to examAdmin.allowStudent's own shape, its closest
+    // conceptual sibling (an administrative action on a specific student's
+    // participation row).
+    id: 'examAdmin.grantExtraTime',
+    section: 'Exam Administration',
+    label: 'Grant extra time (accommodation)',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: breakGlassWrite(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('DEPARTMENT'),
+      TEACHER: granted('OWNED'),
+      STUDENT: denied(),
+    },
   },
   {
     id: 'examAdmin.invalidateAttempt',
@@ -1938,7 +1953,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'Exam/ExamAttempt (B11–B13)',
   },
   {
     id: 'studentCbt.start',
@@ -1953,7 +1967,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'ExamAttempt (B13)',
   },
   {
     id: 'studentCbt.answer',
@@ -1968,7 +1981,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'AttemptAnswer (B13)',
   },
   {
     id: 'studentCbt.navigate',
@@ -1983,7 +1995,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'AttemptQuestionSnapshot (B13)',
   },
   {
     id: 'studentCbt.submit',
@@ -1998,7 +2009,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'ExamAttempt (B13/B14)',
+    // B13 fully implements the EXECUTE action (state transition + answer
+    // freeze) — only marking (a distinct, later concern) is B14's, and
+    // marking is not what this permission id gates.
   },
   {
     id: 'studentCbt.autoSubmit',
@@ -2013,7 +2026,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: system(),
       STUDENT: system(),
     },
-    awaitingResource: 'ExamAttempt sweeper (B13/B14, ADR-0004)',
+    awaitingResource: 'ExamAttempt sweeper (B14, ADR-0004)',
   },
   {
     id: 'studentCbt.resume',
@@ -2028,7 +2041,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'ExamAttempt (B13)',
   },
   {
     id: 'studentCbt.viewPreviousResults',

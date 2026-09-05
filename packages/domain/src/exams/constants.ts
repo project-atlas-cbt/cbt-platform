@@ -84,3 +84,54 @@ export type ExamParticipationStatus = (typeof EXAM_PARTICIPATION_STATUSES)[numbe
 
 export const EXAM_ADMINISTRATOR_STATUSES = ['ACTIVE', 'REVOKED'] as const;
 export type ExamAdministratorStatus = (typeof EXAM_ADMINISTRATOR_STATUSES)[number];
+
+/// B13 (Attempt Engine) — mirrors schema.prisma's AttemptState/AttemptType/
+/// AttemptParticipationStatus/AttemptAnswerState/AttemptEventType enums,
+/// same const-array-plus-derived-type pattern as above.
+
+/// 07 §9.1's full six-state vocabulary carried in full. NOT_STARTED is
+/// never written — a row is created already IN_PROGRESS (07 §23) — kept
+/// for spec-vocabulary fidelity, mirroring EXAM_STATUSES' own precedent.
+export const ATTEMPT_STATES = [
+  'NOT_STARTED',
+  'IN_PROGRESS',
+  'SUBMITTED',
+  'AUTO_SUBMITTED',
+  'INVALIDATED',
+  'CANCELLED',
+] as const;
+export type AttemptState = (typeof ATTEMPT_STATES)[number];
+
+/// MAKEUP/RETRY/SPECIAL are unreachable in B13 — AttemptAuthorization
+/// (ADR-0014) is B14's job — shipped in full for spec fidelity.
+export const ATTEMPT_TYPES = ['STANDARD', 'MAKEUP', 'RETRY', 'SPECIAL'] as const;
+export type AttemptType = (typeof ATTEMPT_TYPES)[number];
+
+/// Reporting-only (06 §47) — distinct from AttemptState, and distinct from
+/// EXAM_PARTICIPATION_STATUSES (which lives on ExamParticipation, not
+/// ExamAttempt, and only has ABSENT/COMPLETED). Do not conflate the two.
+export const ATTEMPT_PARTICIPATION_STATUSES = [
+  'PENDING',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'ABSENT',
+  'EXCUSED',
+] as const;
+export type AttemptParticipationStatus = (typeof ATTEMPT_PARTICIPATION_STATUSES)[number];
+
+export const ATTEMPT_ANSWER_STATES = ['UNANSWERED', 'ANSWERED'] as const;
+export type AttemptAnswerState = (typeof ATTEMPT_ANSWER_STATES)[number];
+
+/// ADR-0020's five decided types plus BINDING_MISMATCH — the device/
+/// session-binding extension confirmed during B13's planning session (no
+/// new ADR; extends ADR-0020's already-decided "counts, not judgements"
+/// scope).
+export const ATTEMPT_EVENT_TYPES = [
+  'WINDOW_BLUR',
+  'FULLSCREEN_EXIT',
+  'TAB_HIDDEN',
+  'RECONNECTED',
+  'RESUMED',
+  'BINDING_MISMATCH',
+] as const;
+export type AttemptEventType = (typeof ATTEMPT_EVENT_TYPES)[number];

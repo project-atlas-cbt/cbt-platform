@@ -2301,6 +2301,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exams/{id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start (or idempotently resume) this student's attempt — the highest-integrity transaction in the product (07 §23-24, 09 §47). */
+        post: operations["ExamControlController_startAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exams/{id}/close": {
         parameters: {
             query?: never;
@@ -2518,6 +2535,176 @@ export interface paths {
         post?: never;
         /** Revoke access before start — refused after start (DoD item 7, X-13). */
         delete: operations["ExamSessionController_revokeParticipant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/participants/{studentId}/extra-time": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant a per-student accommodation (extra time) — B13 decision 2, X-11. Frozen into ExamAttempt.durationGrantedSeconds at attempt creation. */
+        post: operations["ExamSessionController_grantExtraTime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume: full state, projected snapshot, saved answers, server-computed remaining time (DoD item 5). */
+        get: operations["AttemptController_resume"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/answers/{questionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save one answer — idempotent, sequenced (ADR-0003/ADR-0007). */
+        put: operations["AttemptController_saveAnswer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/answers/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Flush an offline answer queue — never all-or-nothing. */
+        post: operations["AttemptController_saveAnswerBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Liveness only (ADR-0020) — never blocks or delays answering. */
+        post: operations["AttemptController_heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Integrity signals (ADR-0020) — counts, never judgements. Off the critical path. */
+        post: operations["AttemptController_recordEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Normal submission — state transition and answer freeze only, never marking (B14). */
+        post: operations["AttemptController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Staff-initiated end of a running attempt. */
+        post: operations["AttemptController_end"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student/assessment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The single available assessment for the caller, or none. */
+        get: operations["StudentAssessmentController_getActive"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student/assessment/{examId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instructions and rules before starting (03 §32-36). */
+        get: operations["StudentAssessmentController_getPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3883,6 +4070,57 @@ export interface components {
         CancelExamDto: {
             reason: string;
         };
+        StudentAttemptOptionDto: {
+            optionId: string;
+            content: string;
+            /** @description Materialised display position, 1-indexed. */
+            displayPosition: number;
+        };
+        StudentAttemptMediaDto: {
+            mediaAssetId: string;
+            displayOrder: number;
+            mediaType: string;
+            /** @description A freshly-signed download URL, generated at read time (never stored — ADR-0021 only requires it to outlive the initial download window). */
+            url: string;
+            /** Format: date-time */
+            urlExpiresAt: string;
+        };
+        StudentAttemptQuestionDto: {
+            examQuestionId: string;
+            /** @description Materialised display order, 1-indexed. */
+            displaySequence: number;
+            marks: number;
+            questionType: string;
+            /** @description Sanitized rich-text HTML. */
+            content: string;
+            options: components["schemas"]["StudentAttemptOptionDto"][];
+            media: components["schemas"]["StudentAttemptMediaDto"][];
+            /** @description This attempt's currently-saved selection for this question, if any. */
+            selectedOptionId?: string | null;
+            /** @description This question's own current answer sequence number, for the client's offline queue to continue from. */
+            answerSequenceNumber?: number;
+        };
+        AttemptPackageResponseDto: {
+            attemptId: string;
+            examId: string;
+            examSessionId: string;
+            /** @enum {string} */
+            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /**
+             * Format: date-time
+             * @description The server's own current clock, alongside `expiresAt` — the client derives remaining time from the DIFFERENCE between the two, never from its own local clock alone (08 §11.4: the client displays the timer but never defines the authoritative deadline).
+             */
+            serverTime: string;
+            /** @enum {string} */
+            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            generalInstructions?: string | null;
+            navigationInstructions?: string | null;
+            questions: components["schemas"]["StudentAttemptQuestionDto"][];
+        };
         OpenExamSessionDto: {
             /** @enum {string} */
             sessionType?: "STANDARD" | "BATCH" | "MAKEUP" | "SPECIAL";
@@ -4002,6 +4240,95 @@ export interface components {
         };
         RevokeParticipantDto: {
             reason: string;
+        };
+        GrantExtraTimeDto: {
+            /** @description Additional seconds granted, added to Exam.durationSeconds at attempt creation. */
+            extraTimeSeconds: number;
+        };
+        SaveAnswerDto: {
+            selectedOptionId?: string | null;
+            /** @description Client-assigned, monotonic per (attempt, question) — ADR-0007. A write whose sequence is <= the currently stored value is rejected. */
+            sequenceNumber: number;
+            /**
+             * @description Client-reported, informational only — never used for admissibility.
+             * @enum {string}
+             */
+            source?: "online" | "offline-replay";
+        };
+        SaveAnswerResponseDto: {
+            examQuestionId: string;
+            accepted: boolean;
+            sequenceNumber: number;
+            /** @description True when this write landed inside the ADR-0003 post-expiry grace window. */
+            gradeWindowFlag: boolean;
+            /** Format: date-time */
+            answeredAt: string;
+        };
+        BatchAnswerItemDto: {
+            examQuestionId: string;
+            selectedOptionId?: string | null;
+            sequenceNumber: number;
+            /** @enum {string} */
+            source?: "online" | "offline-replay";
+        };
+        SaveAnswerBatchDto: {
+            answers: components["schemas"]["BatchAnswerItemDto"][];
+        };
+        BatchAnswerResultDto: {
+            examQuestionId: string;
+            accepted: boolean;
+            /** @description The rejection error code, if not accepted. */
+            rejectionCode?: string;
+            gradeWindowFlag: boolean;
+        };
+        SaveAnswerBatchResponseDto: {
+            results: components["schemas"]["BatchAnswerResultDto"][];
+        };
+        RecordAttemptEventDto: {
+            /** @enum {string} */
+            type: "WINDOW_BLUR" | "FULLSCREEN_EXIT" | "TAB_HIDDEN" | "RECONNECTED" | "RESUMED" | "BINDING_MISMATCH";
+            /** Format: date-time */
+            occurredAt: string;
+            /** @description Client-reported, untrusted metadata. */
+            metadata?: Record<string, never>;
+        };
+        AttemptStateResponseDto: {
+            attemptId: string;
+            examId: string;
+            examSessionId: string;
+            /** @enum {string} */
+            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            invalidationReason: string | null;
+        };
+        ActiveAssessmentResponseDto: {
+            examId: string | null;
+            examTitle: string | null;
+            examSessionId: string | null;
+            /** @description Set only when an attempt is already IN_PROGRESS — the client should resume, not start. */
+            attemptId: string | null;
+            /** @enum {string|null} */
+            state: "NOT_STARTED" | "IN_PROGRESS" | null;
+        };
+        AttemptPreviewResponseDto: {
+            examId: string;
+            title: string;
+            examType: string;
+            durationSeconds: number;
+            attemptLimit: number;
+            /** @enum {string} */
+            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            generalInstructions?: string | null;
+            navigationInstructions?: string | null;
+            submissionInstructions?: string | null;
+            accommodations?: string | null;
+            questionCount: number;
+            totalMarks: number;
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -7778,6 +8105,27 @@ export interface operations {
             };
         };
     };
+    ExamControlController_startAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptPackageResponseDto"];
+                };
+            };
+        };
+    };
     ExamControlController_closeExam: {
         parameters: {
             query?: never;
@@ -8088,6 +8436,232 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_grantExtraTime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantExtraTimeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_resume: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptPackageResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_saveAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAnswerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveAnswerResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_saveAnswerBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAnswerBatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveAnswerBatchResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_heartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_recordEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordAttemptEventDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptStateResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_end: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptStateResponseDto"];
+                };
+            };
+        };
+    };
+    StudentAssessmentController_getActive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveAssessmentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentAssessmentController_getPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                examId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptPreviewResponseDto"];
                 };
             };
         };

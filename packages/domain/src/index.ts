@@ -133,6 +133,16 @@ export {
   type ExamSessionParticipantStatus,
   type ExamParticipationStatus,
   type ExamAdministratorStatus,
+  ATTEMPT_STATES,
+  ATTEMPT_TYPES,
+  ATTEMPT_PARTICIPATION_STATUSES,
+  ATTEMPT_ANSWER_STATES,
+  ATTEMPT_EVENT_TYPES,
+  type AttemptState,
+  type AttemptType,
+  type AttemptParticipationStatus,
+  type AttemptAnswerState,
+  type AttemptEventType,
 } from './exams/constants.js';
 export {
   CANONICAL_AUDIT_ACTIONS,

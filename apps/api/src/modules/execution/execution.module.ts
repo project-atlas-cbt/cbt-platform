@@ -13,6 +13,13 @@ import { ExamLifecycleService } from './exam-lifecycle.service.js';
 import { ExamSessionParticipantService } from './exam-session-participant.service.js';
 import { ExamSessionController } from './exam-session.controller.js';
 import { ExamSessionService } from './exam-session.service.js';
+import { AttemptAnswerService } from './attempt-answer.service.js';
+import { AttemptAuditActionRegistrationProvider } from './attempt-audit-action-registration.provider.js';
+import { AttemptController } from './attempt.controller.js';
+import { AttemptEventService } from './attempt-event.service.js';
+import { AttemptLifecycleService } from './attempt-lifecycle.service.js';
+import { StudentAssessmentController } from './student-assessment.controller.js';
+import { StudentAssessmentService } from './student-assessment.service.js';
 
 /**
  * `exam-control.v1` (B12 — Exam Activation & Control; ADR-0006, ADR-0009,
@@ -51,7 +58,12 @@ import { ExamSessionService } from './exam-session.service.js';
  */
 @Module({
   imports: [IdentityModule, OperationsModule, NotificationCenterModule],
-  controllers: [ExamControlController, ExamSessionController],
+  controllers: [
+    ExamControlController,
+    ExamSessionController,
+    AttemptController,
+    StudentAssessmentController,
+  ],
   providers: [
     ExamLifecycleService,
     ExamSessionService,
@@ -62,6 +74,14 @@ import { ExamSessionService } from './exam-session.service.js';
     ExamCompletionService,
     ExamControlAuditActionRegistrationProvider,
     ExamAdministratorScopeResolverProvider,
+    // B13 — Attempt Engine. ObjectStorageService (AttemptLifecycleService's
+    // media-manifest dependency) is provided by the @Global() StorageModule
+    // — no import needed here, same as MediaService's own precedent.
+    AttemptLifecycleService,
+    AttemptAnswerService,
+    AttemptEventService,
+    StudentAssessmentService,
+    AttemptAuditActionRegistrationProvider,
   ],
 })
 export class ExecutionModule {}

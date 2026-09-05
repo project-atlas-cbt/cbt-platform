@@ -1996,3 +1996,473 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     });
   },
 );
+
+/**
+ * B13's five new tables (ExamAttempt, AttemptQuestionSnapshot,
+ * AttemptAnswer, AttemptAnswerEvent, AttemptEvent) — a deliberately
+ * SEPARATE describe block, mirroring the B11/B12 block's own precedent
+ * (and its reasoning) exactly: `attempt_question_snapshots` carries an
+ * UNCONDITIONAL immutability trigger (no parent-status gate at all — every
+ * row is undeletable the instant it's written, ADR-0008), and
+ * `attempt_answer_events` carries the identical unconditional shape
+ * (ADR-0007). Mixing either into the shared B5-B9 block, or even the B11/
+ * B12 block above (whose own APPROVED-revision fixture already needs
+ * isolating for the *same* class of reason), would make that block's own
+ * multi-row `deleteMany` cleanup abort entirely on the first blocked row.
+ * `attempt_answers` itself is only CONDITIONALLY immutable (blocked only
+ * once its parent `exam_attempts.state` leaves `IN_PROGRESS`) — this
+ * fixture's own attempt is deliberately left `IN_PROGRESS` throughout, so
+ * that row alone deletes cleanly; `exam_attempts` itself still can't be
+ * deleted while its `Restrict`-FK'd `attempt_question_snapshots`/
+ * `attempt_answer_events` children remain, cascading the same "genuinely,
+ * permanently undeletable, best-effort, harmless" pattern up through
+ * `exam_sessions`/`exams` exactly as the B11/B12 block's own teardown
+ * already documents for its APPROVED question.
+ */
+describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
+  'Row-Level Security tenant isolation — exam_attempts, attempt_question_snapshots, attempt_answers, attempt_answer_events, attempt_events (B13, ADR-0023)',
+  () => {
+    let owner: PrismaClient;
+    let app: PrismaClient;
+    let schoolA: { id: string };
+    let schoolB: { id: string };
+    let attemptA: { id: string };
+    let attemptB: { id: string };
+    let snapshotA: { id: string };
+    let snapshotB: { id: string };
+    let answerA: { id: string };
+    let answerB: { id: string };
+    let answerEventA: { id: string };
+    let answerEventB: { id: string };
+    let eventA: { id: string };
+    let eventB: { id: string };
+
+    async function buildFixture(label: string) {
+      const school = await owner.school.create({
+        data: {
+          name: `Attempt RLS School ${label} ${randomUUID()}`,
+          subdomain: `attempt-rls-${label.toLowerCase()}-${Date.now()}`,
+        },
+      });
+      const teacherUser = await owner.user.create({
+        data: { firstName: 'Teacher', lastName: label, displayName: `Teacher ${label}` },
+      });
+      const teacherMembership = await withTenant(owner, school.id, (tx) =>
+        tx.schoolMembership.create({
+          data: {
+            schoolId: school.id,
+            userId: teacherUser.id,
+            loginIdentifier: `attempt-rls-teacher-${label.toLowerCase()}-${Date.now()}`,
+          },
+        }),
+      );
+      await withTenant(owner, school.id, (tx) =>
+        tx.roleAssignment.create({
+          data: { schoolId: school.id, membershipId: teacherMembership.id, role: 'TEACHER' },
+        }),
+      );
+      const start = new Date('2026-09-01');
+      const end = new Date('2027-07-31');
+      const session = await withTenant(owner, school.id, (tx) =>
+        tx.academicSession.create({
+          data: {
+            schoolId: school.id,
+            name: `Attempt-RLS-${label}-${randomUUID().slice(0, 8)}`,
+            startDate: start,
+            endDate: end,
+          },
+        }),
+      );
+      const term = await withTenant(owner, school.id, (tx) =>
+        tx.academicTerm.create({
+          data: {
+            schoolId: school.id,
+            academicSessionId: session.id,
+            name: 'First Term',
+            sequence: 1,
+            startDate: start,
+            endDate: end,
+          },
+        }),
+      );
+      const classGroup = await withTenant(owner, school.id, (tx) =>
+        tx.classGroup.create({
+          data: {
+            schoolId: school.id,
+            academicSessionId: session.id,
+            name: 'SS2A',
+            level: 'SS2',
+            arm: 'A',
+          },
+        }),
+      );
+      const subject = await withTenant(owner, school.id, (tx) =>
+        tx.subject.create({
+          data: {
+            schoolId: school.id,
+            name: 'Mathematics',
+            code: `MTH-${label}-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+      const classSubject = await withTenant(owner, school.id, (tx) =>
+        tx.classSubject.create({
+          data: {
+            schoolId: school.id,
+            classId: classGroup.id,
+            subjectId: subject.id,
+            academicSessionId: session.id,
+          },
+        }),
+      );
+      const teacherProfile = await withTenant(owner, school.id, (tx) =>
+        tx.teacherProfile.create({
+          data: {
+            schoolId: school.id,
+            membershipId: teacherMembership.id,
+            staffId: `STF-${label}-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+      const question = await withTenant(owner, school.id, (tx) =>
+        tx.question.create({
+          data: {
+            schoolId: school.id,
+            subjectId: subject.id,
+            level: 'SS2',
+            authorTeacherProfileId: teacherProfile.id,
+          },
+        }),
+      );
+      const revision = await withTenant(owner, school.id, (tx) =>
+        tx.questionRevision.create({
+          data: {
+            schoolId: school.id,
+            questionId: question.id,
+            revisionNumber: 1,
+            questionType: 'SINGLE_CHOICE',
+            content: `Attempt RLS question ${label}`,
+            difficulty: 'EASY',
+            marks: 2,
+            createdByMembershipId: teacherMembership.id,
+            status: 'DRAFT',
+          },
+        }),
+      );
+      await withTenant(owner, school.id, (tx) =>
+        tx.question.update({
+          where: { id: question.id },
+          data: { currentRevisionId: revision.id },
+        }),
+      );
+      // The one status transition INTO APPROVED — allowed (OLD.status is
+      // DRAFT here, not APPROVED yet).
+      await withTenant(owner, school.id, (tx) =>
+        tx.questionRevision.update({ where: { id: revision.id }, data: { status: 'APPROVED' } }),
+      );
+
+      const exam = await withTenant(owner, school.id, (tx) =>
+        tx.exam.create({
+          data: {
+            schoolId: school.id,
+            academicSessionId: session.id,
+            academicTermId: term.id,
+            subjectId: subject.id,
+            title: `Attempt RLS Exam ${label}`,
+            examType: 'Mock Examination',
+            durationSeconds: 3600,
+            resultPolicy: 'TEACHER',
+            resultDetailVisibility: 'SCORE_ONLY',
+            createdByMembershipId: teacherMembership.id,
+          },
+        }),
+      );
+      const examSection = await withTenant(owner, school.id, (tx) =>
+        tx.examSection.create({ data: { schoolId: school.id, examId: exam.id } }),
+      );
+      await withTenant(owner, school.id, (tx) =>
+        tx.examClass.create({
+          data: { schoolId: school.id, examId: exam.id, classSubjectId: classSubject.id },
+        }),
+      );
+      const examQuestion = await withTenant(owner, school.id, (tx) =>
+        tx.examQuestion.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            examSectionId: examSection.id,
+            questionRevisionId: revision.id,
+            sequence: 1,
+            marks: 2,
+          },
+        }),
+      );
+
+      const studentUser = await owner.user.create({
+        data: { firstName: 'Student', lastName: label, displayName: `Student ${label}` },
+      });
+      const studentMembership = await withTenant(owner, school.id, (tx) =>
+        tx.schoolMembership.create({
+          data: {
+            schoolId: school.id,
+            userId: studentUser.id,
+            loginIdentifier: `attempt-rls-student-${label.toLowerCase()}-${Date.now()}`,
+          },
+        }),
+      );
+      await withTenant(owner, school.id, (tx) =>
+        tx.roleAssignment.create({
+          data: { schoolId: school.id, membershipId: studentMembership.id, role: 'STUDENT' },
+        }),
+      );
+      const studentProfile = await withTenant(owner, school.id, (tx) =>
+        tx.studentProfile.create({
+          data: {
+            schoolId: school.id,
+            membershipId: studentMembership.id,
+            studentId: `ST-RLS-${label}-${randomUUID().slice(0, 6)}`,
+          },
+        }),
+      );
+
+      const examSession = await withTenant(owner, school.id, (tx) =>
+        tx.examSession.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            openedByMembershipId: teacherMembership.id,
+          },
+        }),
+      );
+      await withTenant(owner, school.id, (tx) =>
+        tx.examSessionParticipant.create({
+          data: {
+            schoolId: school.id,
+            examSessionId: examSession.id,
+            studentProfileId: studentProfile.id,
+          },
+        }),
+      );
+
+      // Deliberately left IN_PROGRESS — see this block's own header comment
+      // on why (keeps attempt_answers cleanly deletable in teardown).
+      const attempt = await withTenant(owner, school.id, (tx) =>
+        tx.examAttempt.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            examSessionId: examSession.id,
+            studentProfileId: studentProfile.id,
+            attemptNumber: 1,
+            durationGrantedSeconds: 3600,
+            expiresAt: new Date(Date.now() + 3600 * 1000),
+          },
+        }),
+      );
+      const snapshot = await withTenant(owner, school.id, (tx) =>
+        tx.attemptQuestionSnapshot.create({
+          data: {
+            schoolId: school.id,
+            attemptId: attempt.id,
+            seed: `rls-${label}`,
+            document: { version: 1, seed: `rls-${label}`, questions: [] },
+          },
+        }),
+      );
+      const answer = await withTenant(owner, school.id, (tx) =>
+        tx.attemptAnswer.create({
+          data: {
+            schoolId: school.id,
+            attemptId: attempt.id,
+            examQuestionId: examQuestion.id,
+            sequenceNumber: 1,
+          },
+        }),
+      );
+      const answerEvent = await withTenant(owner, school.id, (tx) =>
+        tx.attemptAnswerEvent.create({
+          data: {
+            schoolId: school.id,
+            attemptId: attempt.id,
+            examQuestionId: examQuestion.id,
+            sequenceNumber: 1,
+            source: 'online',
+          },
+        }),
+      );
+      const event = await withTenant(owner, school.id, (tx) =>
+        tx.attemptEvent.create({
+          data: {
+            schoolId: school.id,
+            attemptId: attempt.id,
+            type: 'RESUMED',
+            occurredAt: new Date(),
+          },
+        }),
+      );
+
+      return { school, attempt, snapshot, answer, answerEvent, event };
+    }
+
+    beforeAll(async () => {
+      await runPrisma(['migrate', 'deploy'], ownerDatabaseUrl);
+      owner = createPrismaClient(ownerDatabaseUrl);
+      app = createPrismaClient(appDatabaseUrl);
+
+      const a = await buildFixture('A');
+      const b = await buildFixture('B');
+      schoolA = a.school;
+      schoolB = b.school;
+      attemptA = a.attempt;
+      attemptB = b.attempt;
+      snapshotA = a.snapshot;
+      snapshotB = b.snapshot;
+      answerA = a.answer;
+      answerB = b.answer;
+      answerEventA = a.answerEvent;
+      answerEventB = b.answerEvent;
+      eventA = a.event;
+      eventB = b.event;
+    });
+
+    afterAll(async () => {
+      const ids = [schoolA.id, schoolB.id];
+      // attempt_events carries no immutability trigger — deletes cleanly.
+      await owner.attemptEvent
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      // attempt_answers is only conditionally immutable (blocked once its
+      // parent leaves IN_PROGRESS) — this fixture's attempt never left it,
+      // so this deletes cleanly too.
+      await owner.attemptAnswer
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      // attempt_answer_events and attempt_question_snapshots are BOTH
+      // unconditionally immutable — genuinely, permanently undeletable,
+      // exactly like the B11/B12 block's own APPROVED question. Best-
+      // effort only; harmless (RLS-scoped, uniquely UUID-named, never
+      // reachable outside this deleted school pair).
+      await owner.attemptAnswerEvent
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.attemptQuestionSnapshot
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      // exam_attempts is Restrict-FK'd by both of the tables above — stays
+      // undeletable in practice while either survives, cascading the same
+      // best-effort pattern up through every table below it.
+      await owner.examAttempt
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.examSessionParticipant
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.examSession
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.exam.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.studentProfile
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.question.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.classSubject
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.classGroup
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.subject.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.academicTerm
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.academicSession
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.teacherProfile
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.roleAssignment
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.schoolMembership
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.school.deleteMany({ where: { id: { in: ids } } }).catch(() => undefined);
+      await owner.$disconnect();
+      await app.$disconnect();
+    });
+
+    const tables: Array<{ label: string; table: string; idA: () => string; idB: () => string }> = [
+      {
+        label: 'exam_attempts',
+        table: 'exam_attempts',
+        idA: () => attemptA.id,
+        idB: () => attemptB.id,
+      },
+      {
+        label: 'attempt_question_snapshots',
+        table: 'attempt_question_snapshots',
+        idA: () => snapshotA.id,
+        idB: () => snapshotB.id,
+      },
+      {
+        label: 'attempt_answers',
+        table: 'attempt_answers',
+        idA: () => answerA.id,
+        idB: () => answerB.id,
+      },
+      {
+        label: 'attempt_answer_events',
+        table: 'attempt_answer_events',
+        idA: () => answerEventA.id,
+        idB: () => answerEventB.id,
+      },
+      {
+        label: 'attempt_events',
+        table: 'attempt_events',
+        idA: () => eventA.id,
+        idB: () => eventB.id,
+      },
+    ];
+
+    it.each(tables)(
+      '$label: with no tenant context set, RLS blocks all rows (fails closed)',
+      async ({ table, idA, idB }) => {
+        const rows = await app.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM ${table} WHERE id IN ($1::uuid, $2::uuid)`,
+          idA(),
+          idB(),
+        );
+        expect(rows).toHaveLength(0);
+      },
+    );
+
+    it.each(tables)(
+      "$label: scoped to school A, only school A's row is visible",
+      async ({ table, idA, idB }) => {
+        const rows = await withTenant(app, schoolA.id, (tx) =>
+          tx.$queryRawUnsafe<Array<{ school_id: string }>>(
+            `SELECT school_id FROM ${table} WHERE id IN ($1::uuid, $2::uuid)`,
+            idA(),
+            idB(),
+          ),
+        );
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.school_id).toBe(schoolA.id);
+      },
+    );
+
+    it.each(tables)(
+      '$label: an explicit cross-tenant read by id returns nothing, even by primary key',
+      async ({ table, idB }) => {
+        const rows = await withTenant(app, schoolA.id, (tx) =>
+          tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id FROM ${table} WHERE id = $1::uuid`,
+            idB(),
+          ),
+        );
+        expect(rows).toHaveLength(0);
+      },
+    );
+  },
+);

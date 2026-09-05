@@ -17,6 +17,7 @@ import type {
   EligibleStudentsResponseDto,
   RevokeParticipantDto,
 } from './dto/exam-session.dto.js';
+import type { GrantExtraTimeDto } from './dto/attempt.dto.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -26,14 +27,22 @@ interface ActorContext {
 /**
  * X-13/this phase's own Security section: revoking access is permitted only
  * before an attempt starts; afterwards the operator is directed to
- * invalidation (B13's mechanism). No `ExamAttempt` exists yet, so this stub
- * unconditionally returns `false` — every revoke in B12 is, by construction,
- * always "before start." B13 supersedes this by querying `ExamAttempt`
- * directly once it exists; the `REVOKE_AFTER_START_REFUSED` response path
- * below is real and tested even though currently unreachable.
+ * invalidation (B14's mechanism — `examAdmin.invalidateAttempt` stays
+ * `awaitingResource` there). B13 supersedes the B12-era stub (which always
+ * returned `false`, no `ExamAttempt` existing yet) with the real check —
+ * any attempt at all for this (session, student), regardless of its
+ * current state: even a since-`SUBMITTED`/`INVALIDATED` attempt means the
+ * student genuinely started, so a plain revoke is still the wrong tool.
  */
-function hasStartedAttempt(): Promise<boolean> {
-  return Promise.resolve(false);
+async function hasStartedAttempt(
+  schoolId: string,
+  examSessionId: string,
+  studentProfileId: string,
+): Promise<boolean> {
+  const count = await withTenant(prisma, schoolId, (tx) =>
+    tx.examAttempt.count({ where: { schoolId, examSessionId, studentProfileId } }),
+  );
+  return count > 0;
 }
 
 /** Batch authorization/revocation (DoD items 2/3/4/7) and the eligible-
@@ -192,7 +201,7 @@ export class ExamSessionParticipantService {
       });
     }
 
-    if (await hasStartedAttempt()) {
+    if (await hasStartedAttempt(schoolId, examSessionId, studentProfileId)) {
       throw new AppHttpException({
         code: 'REVOKE_AFTER_START_REFUSED',
         message:
@@ -230,6 +239,63 @@ export class ExamSessionParticipantService {
       metadata: { studentProfileId },
     });
     await this.stream.publishUpdate(schoolId, session.examId);
+  }
+
+  /** `POST /v1/exam-sessions/:id/participants/:studentId/extra-time` — B13
+   * decision 2 (accommodations, X-11). Applies regardless of the
+   * participant's current AUTHORIZED/REVOKED status (the grant freezes
+   * into `ExamAttempt.durationGrantedSeconds` at a FUTURE attempt-creation
+   * time, not at grant time — a currently-revoked student who is later
+   * re-authorized still benefits from an earlier grant). */
+  async grantExtraTime(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examSessionId: string,
+    studentProfileId: string,
+    dto: GrantExtraTimeDto,
+    auditCtx: ActorContext,
+  ): Promise<void> {
+    const session = await loadExamSessionOrThrow(schoolId, examSessionId);
+    const decision = await this.authz.evaluate(actor, 'examAdmin.grantExtraTime', {
+      schoolId,
+      ownerMembershipId: session.exam.createdByMembershipId,
+      examId: session.exam.id,
+      ...(session.exam.departmentId !== null && { departmentId: session.exam.departmentId }),
+    });
+    if (!decision.allowed) {
+      throw new AppHttpException({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to grant extra time for this session.',
+      });
+    }
+
+    const schoolActor = requireSchoolActor(actor);
+    const { count } = await withTenant(prisma, schoolId, (tx) =>
+      tx.examSessionParticipant.updateMany({
+        where: { schoolId, examSessionId, studentProfileId },
+        data: {
+          extraTimeSeconds: dto.extraTimeSeconds,
+          extraTimeGrantedByMembershipId: schoolActor.membershipId,
+          extraTimeGrantedAt: new Date(),
+        },
+      }),
+    );
+    if (count === 0) {
+      throw new AppHttpException({
+        code: 'EXAM_SESSION_PARTICIPANT_NOT_FOUND',
+        message: 'This student has no participant row for this session.',
+      });
+    }
+
+    await this.audit.record({
+      schoolId,
+      actorUserId: auditCtx.actorUserId,
+      actorRole: auditCtx.actorRole,
+      action: 'ATTEMPT_EXTRA_TIME_GRANTED',
+      entityType: 'ExamSessionParticipant',
+      entityId: examSessionId,
+      metadata: { studentProfileId, extraTimeSeconds: dto.extraTimeSeconds },
+    });
   }
 
   /** `GET /v1/exams/:id/eligible-students` — the exam's full targeted-class

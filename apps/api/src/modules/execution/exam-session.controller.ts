@@ -14,6 +14,7 @@ import {
   ExamSessionResponseDto,
   RevokeParticipantDto,
 } from './dto/exam-session.dto.js';
+import { GrantExtraTimeDto } from './dto/attempt.dto.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
@@ -98,6 +99,35 @@ export class ExamSessionController {
   ): Promise<StatusResponseDto> {
     const user = currentUser(req);
     await this.participants.revoke(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      id,
+      studentId,
+      body,
+      {
+        actorUserId: user.userId,
+        actorRole: resolveExamActorRole(user),
+      },
+    );
+    return { status: 'ok' };
+  }
+
+  @Post(':id/participants/:studentId/extra-time')
+  @HttpCode(HttpStatus.OK)
+  @Authorized('examAdmin.grantExtraTime')
+  @ApiOperation({
+    summary:
+      'Grant a per-student accommodation (extra time) — B13 decision 2, X-11. Frozen into ExamAttempt.durationGrantedSeconds at attempt creation.',
+  })
+  @ApiOkResponse({ type: StatusResponseDto })
+  async grantExtraTime(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Param('studentId') studentId: string,
+    @Body() body: GrantExtraTimeDto,
+  ): Promise<StatusResponseDto> {
+    const user = currentUser(req);
+    await this.participants.grantExtraTime(
       user.schoolId,
       actorFromAuthenticatedUser(user),
       id,

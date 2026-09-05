@@ -5591,6 +5591,35 @@
         "tags": ["exams"]
       }
     },
+    "/exams/{id}/attempts": {
+      "post": {
+        "operationId": "ExamControlController_startAttempt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptPackageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start (or idempotently resume) this student's attempt — the highest-integrity transaction in the product (07 §23-24, 09 §47).",
+        "tags": ["exam-control"]
+      }
+    },
     "/exams/{id}/close": {
       "post": {
         "operationId": "ExamControlController_closeExam",
@@ -6052,6 +6081,343 @@
         },
         "summary": "Revoke access before start — refused after start (DoD item 7, X-13).",
         "tags": ["exam-control"]
+      }
+    },
+    "/exam-sessions/{id}/participants/{studentId}/extra-time": {
+      "post": {
+        "operationId": "ExamSessionController_grantExtraTime",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantExtraTimeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Grant a per-student accommodation (extra time) — B13 decision 2, X-11. Frozen into ExamAttempt.durationGrantedSeconds at attempt creation.",
+        "tags": ["exam-control"]
+      }
+    },
+    "/attempts/{id}": {
+      "get": {
+        "operationId": "AttemptController_resume",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptPackageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Resume: full state, projected snapshot, saved answers, server-computed remaining time (DoD item 5).",
+        "tags": ["attempts"]
+      }
+    },
+    "/attempts/{id}/answers/{questionId}": {
+      "put": {
+        "operationId": "AttemptController_saveAnswer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveAnswerResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save one answer — idempotent, sequenced (ADR-0003/ADR-0007).",
+        "tags": ["attempts"]
+      }
+    },
+    "/attempts/{id}/answers/batch": {
+      "post": {
+        "operationId": "AttemptController_saveAnswerBatch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAnswerBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveAnswerBatchResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Flush an offline answer queue — never all-or-nothing.",
+        "tags": ["attempts"]
+      }
+    },
+    "/attempts/{id}/heartbeat": {
+      "post": {
+        "operationId": "AttemptController_heartbeat",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness only (ADR-0020) — never blocks or delays answering.",
+        "tags": ["attempts"]
+      }
+    },
+    "/attempts/{id}/events": {
+      "post": {
+        "operationId": "AttemptController_recordEvent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordAttemptEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Integrity signals (ADR-0020) — counts, never judgements. Off the critical path.",
+        "tags": ["attempts"]
+      }
+    },
+    "/attempts/{id}/submit": {
+      "post": {
+        "operationId": "AttemptController_submit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptStateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Normal submission — state transition and answer freeze only, never marking (B14).",
+        "tags": ["attempts"]
+      }
+    },
+    "/attempts/{id}/end": {
+      "post": {
+        "operationId": "AttemptController_end",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptStateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Staff-initiated end of a running attempt.",
+        "tags": ["attempts"]
+      }
+    },
+    "/student/assessment": {
+      "get": {
+        "operationId": "StudentAssessmentController_getActive",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveAssessmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The single available assessment for the caller, or none.",
+        "tags": ["attempts"]
+      }
+    },
+    "/student/assessment/{examId}/preview": {
+      "get": {
+        "operationId": "StudentAssessmentController_getPreview",
+        "parameters": [
+          {
+            "name": "examId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptPreviewResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Instructions and rules before starting (03 §32-36).",
+        "tags": ["attempts"]
       }
     }
   },
@@ -10411,6 +10777,164 @@
         },
         "required": ["reason"]
       },
+      "StudentAttemptOptionDto": {
+        "type": "object",
+        "properties": {
+          "optionId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "displayPosition": {
+            "type": "number",
+            "description": "Materialised display position, 1-indexed."
+          }
+        },
+        "required": ["optionId", "content", "displayPosition"]
+      },
+      "StudentAttemptMediaDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string"
+          },
+          "displayOrder": {
+            "type": "number"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "A freshly-signed download URL, generated at read time (never stored — ADR-0021 only requires it to outlive the initial download window)."
+          },
+          "urlExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["mediaAssetId", "displayOrder", "mediaType", "url", "urlExpiresAt"]
+      },
+      "StudentAttemptQuestionDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "displaySequence": {
+            "type": "number",
+            "description": "Materialised display order, 1-indexed."
+          },
+          "marks": {
+            "type": "number"
+          },
+          "questionType": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string",
+            "description": "Sanitized rich-text HTML."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentAttemptOptionDto"
+            }
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentAttemptMediaDto"
+            }
+          },
+          "selectedOptionId": {
+            "type": "string",
+            "nullable": true,
+            "description": "This attempt's currently-saved selection for this question, if any."
+          },
+          "answerSequenceNumber": {
+            "type": "number",
+            "description": "This question's own current answer sequence number, for the client's offline queue to continue from."
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "displaySequence",
+          "marks",
+          "questionType",
+          "content",
+          "options",
+          "media"
+        ]
+      },
+      "AttemptPackageResponseDto": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examSessionId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "AUTO_SUBMITTED",
+              "INVALIDATED",
+              "CANCELLED"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The server's own current clock, alongside `expiresAt` — the client derives remaining time from the DIFFERENCE between the two, never from its own local clock alone (08 §11.4: the client displays the timer but never defines the authoritative deadline)."
+          },
+          "navigationPolicy": {
+            "type": "string",
+            "enum": ["FREE", "SEQUENTIAL_NO_REVISIT", "SEQUENTIAL_WITH_REVISIT"]
+          },
+          "generalInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "navigationInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentAttemptQuestionDto"
+            }
+          }
+        },
+        "required": [
+          "attemptId",
+          "examId",
+          "examSessionId",
+          "state",
+          "startedAt",
+          "expiresAt",
+          "serverTime",
+          "navigationPolicy",
+          "questions"
+        ]
+      },
       "OpenExamSessionDto": {
         "type": "object",
         "properties": {
@@ -10792,6 +11316,288 @@
           }
         },
         "required": ["reason"]
+      },
+      "GrantExtraTimeDto": {
+        "type": "object",
+        "properties": {
+          "extraTimeSeconds": {
+            "type": "number",
+            "description": "Additional seconds granted, added to Exam.durationSeconds at attempt creation."
+          }
+        },
+        "required": ["extraTimeSeconds"]
+      },
+      "SaveAnswerDto": {
+        "type": "object",
+        "properties": {
+          "selectedOptionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequenceNumber": {
+            "type": "number",
+            "description": "Client-assigned, monotonic per (attempt, question) — ADR-0007. A write whose sequence is <= the currently stored value is rejected."
+          },
+          "source": {
+            "type": "string",
+            "enum": ["online", "offline-replay"],
+            "description": "Client-reported, informational only — never used for admissibility."
+          }
+        },
+        "required": ["sequenceNumber"]
+      },
+      "SaveAnswerResponseDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "sequenceNumber": {
+            "type": "number"
+          },
+          "gradeWindowFlag": {
+            "type": "boolean",
+            "description": "True when this write landed inside the ADR-0003 post-expiry grace window."
+          },
+          "answeredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "accepted",
+          "sequenceNumber",
+          "gradeWindowFlag",
+          "answeredAt"
+        ]
+      },
+      "BatchAnswerItemDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "selectedOptionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequenceNumber": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["online", "offline-replay"]
+          }
+        },
+        "required": ["examQuestionId", "sequenceNumber"]
+      },
+      "SaveAnswerBatchDto": {
+        "type": "object",
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchAnswerItemDto"
+            }
+          }
+        },
+        "required": ["answers"]
+      },
+      "BatchAnswerResultDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "rejectionCode": {
+            "type": "string",
+            "description": "The rejection error code, if not accepted."
+          },
+          "gradeWindowFlag": {
+            "type": "boolean"
+          }
+        },
+        "required": ["examQuestionId", "accepted", "gradeWindowFlag"]
+      },
+      "SaveAnswerBatchResponseDto": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchAnswerResultDto"
+            }
+          }
+        },
+        "required": ["results"]
+      },
+      "RecordAttemptEventDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "WINDOW_BLUR",
+              "FULLSCREEN_EXIT",
+              "TAB_HIDDEN",
+              "RECONNECTED",
+              "RESUMED",
+              "BINDING_MISMATCH"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Client-reported, untrusted metadata."
+          }
+        },
+        "required": ["type", "occurredAt"]
+      },
+      "AttemptStateResponseDto": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examSessionId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "AUTO_SUBMITTED",
+              "INVALIDATED",
+              "CANCELLED"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "submittedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "invalidationReason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "attemptId",
+          "examId",
+          "examSessionId",
+          "state",
+          "startedAt",
+          "expiresAt",
+          "submittedAt",
+          "invalidationReason"
+        ]
+      },
+      "ActiveAssessmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string",
+            "nullable": true
+          },
+          "examTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "examSessionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "attemptId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set only when an attempt is already IN_PROGRESS — the client should resume, not start."
+          },
+          "state": {
+            "type": "string",
+            "enum": ["NOT_STARTED", "IN_PROGRESS"],
+            "nullable": true
+          }
+        },
+        "required": ["examId", "examTitle", "examSessionId", "attemptId", "state"]
+      },
+      "AttemptPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "examType": {
+            "type": "string"
+          },
+          "durationSeconds": {
+            "type": "number"
+          },
+          "attemptLimit": {
+            "type": "number"
+          },
+          "navigationPolicy": {
+            "type": "string",
+            "enum": ["FREE", "SEQUENTIAL_NO_REVISIT", "SEQUENTIAL_WITH_REVISIT"]
+          },
+          "generalInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "navigationInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "submissionInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "accommodations": {
+            "type": "string",
+            "nullable": true
+          },
+          "questionCount": {
+            "type": "number"
+          },
+          "totalMarks": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "examId",
+          "title",
+          "examType",
+          "durationSeconds",
+          "attemptLimit",
+          "navigationPolicy",
+          "questionCount",
+          "totalMarks"
+        ]
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

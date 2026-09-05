@@ -359,6 +359,8 @@ model StudentProfile {
   // B12: this student's session authorizations and final per-exam outcomes.
   examSessionParticipations ExamSessionParticipant[]
   examParticipations        ExamParticipation[]
+  // B13: this student's actual attempts.
+  examAttempts              ExamAttempt[]
 
   @@unique([schoolId, membershipId])
   @@unique([schoolId, studentId])
@@ -1924,6 +1926,8 @@ model Exam {
   examSessions   ExamSession[]
   administrators ExamAdministrator[]
   participations ExamParticipation[]
+  // B13: the actual student attempts taken against this exam.
+  attempts       ExamAttempt[]
 
   @@unique([schoolId, id])
   @@index([schoolId])
@@ -2131,6 +2135,8 @@ model ExamSession {
   // DRAFT exams, which structurally can never have one.
   exam         Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
   participants ExamSessionParticipant[]
+  // B13: attempts started under this specific session.
+  attempts     ExamAttempt[]
 
   // Composite-FK target for ExamSessionParticipant.
   @@unique([schoolId, id])
@@ -2161,6 +2167,19 @@ model ExamSessionParticipant {
   revokedAt                DateTime? @map("revoked_at") @db.Timestamptz(6)
   revokedByMembershipId    String?   @map("revoked_by_membership_id") @db.Uuid
   revokedReason            String?   @map("revoked_reason")
+
+  /// B13/X-11: per-student accommodation, resolved and frozen into
+  /// ExamAttempt.durationGrantedSeconds at attempt creation
+  /// (exam.durationSeconds + extraTimeSeconds). This is the confirmed
+  /// resolution of the genuine StudentAssessmentAccommodation (07 §9.7)
+  /// gap B11's own comment flagged as "Candidate/Deferred to B12/B13's
+  /// ExamSessionParticipant" — no separate approval-workflow entity is
+  /// built; this field plus AttemptLifecycleService.start()'s freeze IS
+  /// the whole mechanism. Never mutated after the attempt it applied to
+  /// has started (freezing happens by read-then-copy, not by reference).
+  extraTimeSeconds               Int?      @map("extra_time_seconds")
+  extraTimeGrantedByMembershipId String?   @map("extra_time_granted_by_membership_id") @db.Uuid
+  extraTimeGrantedAt             DateTime? @map("extra_time_granted_at") @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -2231,4 +2250,333 @@ model ExamAdministrator {
   @@index([schoolId, examId])
   @@index([schoolId, membershipId])
   @@map("exam_administrators")
+}
+
+// ---------------------------------------------------------------------------
+// B13 — Attempt Engine (docs/roadmaps/backend-roadmap.md "B13", ADR-0002,
+// ADR-0003, ADR-0007, ADR-0008, ADR-0020, ADR-0021). The highest-integrity
+// subsystem in the product (AGENTS.md §5) — attempt creation, immutable
+// question snapshots, resilient answer persistence, server-authoritative
+// throughout. Purely additive on top of B11/B12: three plain back-relation
+// arrays added above (Exam.attempts, ExamSession.attempts,
+// StudentProfile.examAttempts) and three nullable columns added to the
+// already-shipped ExamSessionParticipant (extraTimeSeconds and its
+// actor/timestamp pair), the same "didn't need it until this phase gave it
+// a child" precedent every prior additive phase has recorded.
+//
+// Two decisions confirmed with the project owner during planning (not
+// guessed, per AGENTS.md §3 — see CLAUDE.md's B13 Change Log entry for the
+// full reasoning):
+//
+// 1. Remote-impersonation signal (carried forward from B12's own planning,
+//    which found this gap uncovered anywhere in the spec/ADR corpus): each
+//    attempt is bound to a device/session/IP fingerprint at creation
+//    (ExamAttempt.startIpAddress/startUserAgent/startDeviceId/
+//    startSessionId). A mid-attempt request bearing a materially different
+//    fingerprint is recorded as AttemptEventType.BINDING_MISMATCH — a
+//    neutral, off-critical-path signal only, extending ADR-0020's already-
+//    decided "counts, not judgements" vocabulary. Never an automatic block.
+// 2. Accommodations (X-11): StudentAssessmentAccommodation (07 §9.7) as a
+//    standalone approval-workflow entity is a genuine, confirmed spec gap
+//    with no phase ever scoped to build it — resolved instead by the
+//    ExamSessionParticipant.extraTimeSeconds extension above, resolved and
+//    frozen into ExamAttempt.durationGrantedSeconds at attempt creation.
+//
+// Deliberate schema shape decisions, documented here rather than only in
+// the plan: AttemptQuestionSnapshot is ADR-0008's one-JSONB-document-per-
+// attempt design as its OWN dedicated 1:1 table (not a column on
+// ExamAttempt) — every named ERD entity in this schema gets its own table
+// even at 1:1 cardinality (ExamSection is the existing precedent), and
+// collapsing it onto ExamAttempt would force the row read on every answer
+// save and heartbeat to carry a large JSONB blob unnecessarily. The
+// duplicate-start partial unique index (this migration's raw SQL) is
+// scoped per (school, exam, student) — not per session — because
+// Exam.attemptLimit is exam-scoped and B12's confirmed "multiple
+// concurrent OPEN sessions per exam" design would otherwise let a student
+// authorized under two sessions of the same exam start two attempts at
+// once. AttemptAnswerEvent's immutability is an unconditional trigger
+// mirroring B9's question_reviews shape, not B10's audit_events grant-
+// REVOKE treatment — that table's belt-and-suspenders exists specifically
+// because of a second cross-school-reading Postgres role this table has no
+// analog of.
+// ---------------------------------------------------------------------------
+
+/// 07 §9.1's full six-state vocabulary carried in full. NOT_STARTED is
+/// never written — 07 §23: a row is created already IN_PROGRESS — kept
+/// only for spec-vocabulary fidelity, mirroring ExamStatus.ARCHIVED's own
+/// "shipped before exercised" precedent. IN_PROGRESS is the only state
+/// anything transitions FROM (07 §16); SUBMITTED/AUTO_SUBMITTED/
+/// INVALIDATED/CANCELLED are all terminal — enforced by this migration's
+/// exam_attempts_status_transition_guard trigger, not by the enum alone.
+enum AttemptState {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_SUBMITTED
+  INVALIDATED
+  CANCELLED
+}
+
+/// MAKEUP/RETRY/SPECIAL are unreachable in B13 — AttemptAuthorization
+/// (ADR-0014) is B14's job — shipped in full for spec fidelity, same
+/// precedent as AttemptState.NOT_STARTED above.
+enum AttemptType {
+  STANDARD
+  MAKEUP
+  RETRY
+  SPECIAL
+}
+
+/// Reporting-only (06 §47) — a distinct field from AttemptState, and a
+/// distinct table/enum from B12's own ExamParticipationStatus (which lives
+/// on ExamParticipation, not ExamAttempt, and only has ABSENT/COMPLETED).
+/// Do not conflate the two.
+enum AttemptParticipationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  ABSENT
+  EXCUSED
+}
+
+enum AttemptAnswerState {
+  UNANSWERED
+  ANSWERED
+}
+
+/// ADR-0020's five decided types plus BINDING_MISMATCH — the device/
+/// session-binding extension confirmed this planning session (no new ADR;
+/// see this block's header comment, decision 1).
+enum AttemptEventType {
+  WINDOW_BLUR
+  FULLSCREEN_EXIT
+  TAB_HIDDEN
+  RECONNECTED
+  RESUMED
+  BINDING_MISMATCH
+}
+
+/// 07 §9.1/§23 — the actual student execution of an exam, distinct from
+/// ExamSessionParticipant (B12, authorization-only bookkeeping). Every
+/// parent FK is Restrict: an attempt is the most evidentiary row in the
+/// system and must never be cascade-deleted out from under its parent
+/// exam/session/student. studentProfileId (not membershipId) matches
+/// ExamSessionParticipant's own convention — students are referenced via
+/// StudentProfile throughout this schema.
+model ExamAttempt {
+  id               String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId         String @map("school_id") @db.Uuid
+  examId           String @map("exam_id") @db.Uuid
+  examSessionId    String @map("exam_session_id") @db.Uuid
+  studentProfileId String @map("student_profile_id") @db.Uuid
+
+  attemptNumber       Int                        @map("attempt_number")
+  attemptType         AttemptType                @default(STANDARD) @map("attempt_type")
+  state               AttemptState               @default(IN_PROGRESS)
+  participationStatus AttemptParticipationStatus @default(IN_PROGRESS) @map("participation_status")
+
+  startedAt              DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  /// Frozen at creation from Exam.durationSeconds +
+  /// (ExamSessionParticipant.extraTimeSeconds ?? 0) — never re-read or
+  /// re-derived afterward (07 §42 invariant 7: attempt duration cannot be
+  /// extended by reconnecting, and this schema gives no ordinary write
+  /// path back to this column at all after INSERT).
+  durationGrantedSeconds Int       @map("duration_granted_seconds")
+  expiresAt              DateTime  @map("expires_at") @db.Timestamptz(6)
+  submittedAt            DateTime? @map("submitted_at") @db.Timestamptz(6)
+
+  invalidationReason        String?   @map("invalidation_reason")
+  invalidatedAt             DateTime? @map("invalidated_at") @db.Timestamptz(6)
+  /// Bare UUID, no relation — mirrors Exam.cancelledByMembershipId's own
+  /// B11 precedent (denormalized actor+timestamp for cheap display; the
+  /// real audit trail of record is AuditEvent). Written only by B14
+  /// (examAdmin.invalidateAttempt stays awaitingResource in B13).
+  invalidatedByMembershipId String?   @map("invalidated_by_membership_id") @db.Uuid
+
+  /// ADR-0020: updated by answer saves (via a separate, lightweight,
+  /// fire-and-forget path — NEVER inside the answer-save transaction, per
+  /// R-03) and by the heartbeat endpoint. "Disconnected" is derived by
+  /// staleness threshold, not stored as a boolean.
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+
+  /// Decision 1 (confirmed this planning session): device/session binding
+  /// captured at creation. Not new fingerprinting — the same signal
+  /// Session.ipAddress/Session.userAgent already capture at login (B1),
+  /// captured again at attempt start. startDeviceId is nullable: a client
+  /// that never sends X-Device-Id degrades to IP+session-only comparison,
+  /// never blocks the attempt. startSessionId is the Session.id that
+  /// authenticated the request which created this attempt.
+  startIpAddress String? @map("start_ip_address") @db.VarChar(64)
+  startUserAgent String? @map("start_user_agent")
+  startDeviceId  String? @map("start_device_id") @db.Uuid
+  startSessionId String? @map("start_session_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam           Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  examSession    ExamSession              @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
+  studentProfile StudentProfile           @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Restrict)
+  snapshot       AttemptQuestionSnapshot?
+  answers        AttemptAnswer[]
+  answerEvents   AttemptAnswerEvent[]
+  events         AttemptEvent[]
+
+  // Composite-FK target for every child table below.
+  @@unique([schoolId, id])
+  @@unique([schoolId, examId, studentProfileId, attemptNumber])
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  @@index([schoolId, examSessionId])
+  // Control Center aggregate + live-attempts query.
+  @@index([schoolId, examId, state])
+  @@index([schoolId, studentProfileId])
+  @@map("exam_attempts")
+}
+
+/// ADR-0008: one JSONB document per attempt (not per-question rows) — see
+/// this block's header comment for why this is its own table rather than a
+/// column on ExamAttempt. Both question order and option order are
+/// materialised into `document` at attempt start and never recomputed at
+/// read time (a refresh must be byte-identical). `document`'s shape is
+/// AttemptSnapshotDocumentV1 (apps/api/src/modules/execution/
+/// attempt-snapshot.types.ts) — not enforced by Postgres beyond `jsonb`,
+/// matching this codebase's established "cast, don't validate via a
+/// library" JSON convention (ImportRow.rawData, AuditEvent.metadata).
+/// Immutable once written — enforced unconditionally by this migration's
+/// attempt_question_snapshots_immutable trigger (ADR-0008: "the document
+/// is immutable once written"). The client-facing projection strips
+/// `document.questions[].options[].correctFlag` entirely — see
+/// attempt-snapshot-projection.mapper.ts, the sole permitted place that
+/// happens (resolves X-05, release-blocking).
+model AttemptQuestionSnapshot {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String @map("school_id") @db.Uuid
+  attemptId String @map("attempt_id") @db.Uuid
+
+  /// Schema-evolution version for `document` (ADR-0008's required field) —
+  /// bump whenever the JSON shape changes; old attempts stay readable by
+  /// branching the reader on this field, never by migrating historical
+  /// (immutable) documents in place.
+  documentVersion Int    @default(1) @map("document_version")
+  /// Forensic reproducibility (ADR-0008/A-08) — the seed the
+  /// question-order/option-order randomisation was derived from.
+  seed            String @db.VarChar(64)
+  document        Json
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  attempt ExamAttempt @relation(fields: [schoolId, attemptId], references: [schoolId, id], onDelete: Restrict)
+
+  // The 1:1 relation's defining-side uniqueness — one snapshot per attempt.
+  @@unique([schoolId, attemptId])
+  @@index([schoolId])
+  @@map("attempt_question_snapshots")
+}
+
+/// ADR-0007's mutable half — one row per (attempt, question), the hot
+/// read/write path, a single indexed upsert (the @@unique below IS that
+/// index). examQuestionId references the snapshot document's own question
+/// id, not a live FK — no per-question relational table exists under the
+/// ADR-0008 one-JSONB-document decision, so it's validated in the service
+/// layer against the loaded AttemptQuestionSnapshot.document, not by a
+/// database foreign key. Immutable once the parent attempt is no longer
+/// IN_PROGRESS — this migration's attempt_answers_immutable_when_attempt_
+/// not_in_progress trigger, which is the actual DB-level enforcement of
+/// "answers become immutable after submission" (ADR-0007); the service-
+/// layer admissibility/ordering checks in front of it are the fast-fail UX
+/// layer, matching this codebase's universal service-check +
+/// trigger-backstop pattern.
+model AttemptAnswer {
+  id             String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId       String @map("school_id") @db.Uuid
+  attemptId      String @map("attempt_id") @db.Uuid
+  examQuestionId String @map("exam_question_id") @db.Uuid
+
+  selectedOptionId String?            @map("selected_option_id") @db.Uuid
+  /// Reserved for a future non-option-based answer shape; null for the
+  /// SINGLE_CHOICE/TRUE_FALSE question types this codebase supports today.
+  answerValue      Json?              @map("answer_value")
+  state            AttemptAnswerState @default(UNANSWERED)
+
+  /// Client-assigned, monotonic per (attempt, examQuestionId) — ADR-0007's
+  /// ordering protection (resolves X-04). The server rejects any write
+  /// whose sequence is <= the stored value; used ONLY for ordering, never
+  /// for admissibility (that stays server receipt time, ADR-0003).
+  sequenceNumber  Int      @map("sequence_number")
+  /// Server receipt time (ADR-0003) — a client-supplied timestamp is never
+  /// used to decide admissibility.
+  answeredAt      DateTime @default(now()) @map("answered_at") @db.Timestamptz(6)
+  lastSavedAt     DateTime @updatedAt @map("last_saved_at") @db.Timestamptz(6)
+  /// ADR-0003: true when this write landed inside the post-expiry grace
+  /// window — visible in any dispute, never silently indistinguishable
+  /// from an on-time answer.
+  gradeWindowFlag Boolean  @default(false) @map("grade_window_flag")
+
+  attempt ExamAttempt @relation(fields: [schoolId, attemptId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, attemptId, examQuestionId])
+  @@index([schoolId])
+  @@index([schoolId, attemptId])
+  @@map("attempt_answers")
+}
+
+/// ADR-0007's append-only half — written in the SAME transaction as the
+/// AttemptAnswer upsert it accompanies (both accepted and rejected writes
+/// are captured, the latter via `accepted: false` + `rejectionReason`, for
+/// real X-04 dispute-resolution evidence). Immutable unconditionally —
+/// this migration's attempt_answer_events_immutable trigger, mirroring B9's
+/// question_reviews shape (see this block's header comment for why this
+/// table does NOT need B10's audit_events grant-REVOKE treatment).
+model AttemptAnswerEvent {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId         String   @map("school_id") @db.Uuid
+  attemptId        String   @map("attempt_id") @db.Uuid
+  examQuestionId   String   @map("exam_question_id") @db.Uuid
+  sequenceNumber   Int      @map("sequence_number")
+  selectedOptionId String?  @map("selected_option_id") @db.Uuid
+  answerValue      Json?    @map("answer_value")
+  receivedAt       DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  /// "online" | "offline-replay" — client-reported, informational only,
+  /// never used for admissibility (that's server receipt time + the
+  /// grade window regardless of this field's value).
+  source           String   @db.VarChar(32)
+  gradeWindowFlag  Boolean  @default(false) @map("grade_window_flag")
+  accepted         Boolean  @default(true)
+  rejectionReason  String?  @map("rejection_reason")
+
+  attempt ExamAttempt @relation(fields: [schoolId, attemptId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([schoolId, attemptId, examQuestionId])
+  @@map("attempt_answer_events")
+}
+
+/// ADR-0020: integrity signals and liveness. Written OFF the critical path
+/// — never inside the answer-save transaction, never blocking or delaying
+/// it. Explicitly client-reported and therefore untrusted; surfaced as
+/// "counts, not judgements" — the system never labels a student as
+/// cheating. No immutability trigger: unlike AttemptAnswerEvent, nothing
+/// here carries dispute-resolution evidentiary weight, and no code path
+/// ever mutates a written row — a lock trigger would be dead code,
+/// mirroring ExamSection's own "nothing ever UPDATEs this row" precedent.
+model AttemptEvent {
+  id         String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId   String           @map("school_id") @db.Uuid
+  attemptId  String           @map("attempt_id") @db.Uuid
+  type       AttemptEventType
+  /// Client-reported, ordering-only — never used for admissibility.
+  occurredAt DateTime         @map("occurred_at") @db.Timestamptz(6)
+  /// Client-reported, untrusted — e.g. fromIp/toIp fields for
+  /// BINDING_MISMATCH.
+  metadata   Json?
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  attempt ExamAttempt @relation(fields: [schoolId, attemptId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([schoolId, attemptId])
+  // Control Center's "counts, not judgements" aggregate by type.
+  @@index([schoolId, attemptId, type])
+  @@map("attempt_events")
 }

@@ -707,7 +707,7 @@ describe('B12 Exam Activation & Control', () => {
     expect(sessionsAfterExamReopen.every((s) => s.status === 'CLOSED')).toBe(true);
   });
 
-  it('DoD 8: Control Center aggregate matches a hand-built fixture; inProgress/submitted are honest placeholders', async () => {
+  it('DoD 8: Control Center aggregate matches a hand-built fixture; inProgress/submitted are real (B13) zero counts, not fabricated', async () => {
     const examId = await buildReadyExam('OPEN_TO_ELIGIBLE');
     await post(teacher, `/exams/${examId}/sessions`, {});
 
@@ -729,7 +729,12 @@ describe('B12 Exam Activation & Control', () => {
     expect(body.aggregate.inProgressCount).toBe(0);
     expect(body.aggregate.submittedCount).toBe(0);
     expect(body.aggregate.absentCount).toBe(0);
-    expect(body.aggregate.attemptDataAvailable).toBe(false);
+    // B13 gap closure: this was the honest B12-era placeholder (`false`,
+    // no ExamAttempt existing yet) — now that B13 ships ExamAttempt, the
+    // Control Center genuinely computes this data, so a school with zero
+    // actual attempts correctly reports `true` alongside real zero counts,
+    // not a fabricated placeholder.
+    expect(body.aggregate.attemptDataAvailable).toBe(true);
     expect(body.liveAttempts).toEqual([]);
   });
 

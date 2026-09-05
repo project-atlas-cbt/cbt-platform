@@ -375,9 +375,21 @@ the same shape as the earlier B5-before-F5 precedent. Delivers the live invigila
 four school-side roles (a confirmed scope extension beyond Teacher+Moderator, mirroring F11's own
 precedent), the delegate-management panel, and SSE consumed end to end with an injectable,
 unit-tested connection-status mapping. Every frontend phase through `F12` and every backend phase
-through `B12` are now closed out — `B13 — Attempt Engine` is next on the backend critical path, the
-highest-integrity phase in the roadmap. See this file's Change Log entries below (dated 2026-09-04)
-for full detail on all three.
+through `B12` are now closed out. **`B13 — Attempt Engine`** is complete too (2026-09-05): `attempt.v1`
+— attempt creation under a `pg_advisory_xact_lock` with a partial-unique-index backstop, the
+ADR-0008 JSONB snapshot (immutable, materialised order), ADR-0007 answer persistence via one atomic
+`INSERT ... ON CONFLICT ... WHERE` upsert, the structural X-05 guarantee (no `correctFlag` field
+exists anywhere in the student-facing DTO type), heartbeat/integrity-event signals, submit, and
+staff-initiated end. Both decisions the roadmap flagged as needing resolution during this phase's
+planning were confirmed with the project owner and built, not left open: the `B12`-carried-forward
+remote-impersonation signal (device/session-binding fields + a `BINDING_MISMATCH` `AttemptEvent`,
+detected via the heartbeat endpoint, never a block) and the `StudentAssessmentAccommodation` gap
+(resolved by extending `ExamSessionParticipant` with `extraTimeSeconds` rather than a new entity).
+Un-stubs both of `B12`'s own honest Control Center placeholders in both independent implementations.
+Every frontend phase through `F12` and every backend phase through `B13` are now closed out —
+`B14 — Submission & Marking` is next on the backend critical path, continuing the highest-risk
+segment of the roadmap alongside `B13`. See this file's Change Log entries below (dated 2026-09-04
+and 2026-09-05) for full detail on all four phases.
 
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
@@ -5000,3 +5012,215 @@ roadmap, gated by six ADRs and concentrating 8 of the 18 BLOCKER audit findings 
 carrying forward the credential-sharing/remote-impersonation integrity-risk analysis `B12`'s own
 planning raised (already forwarded into `B13`'s own roadmap section directly, per this file's
 immediately preceding Change Log entry).
+
+### 2026-09-05 — `B13` complete: Attempt Engine
+
+Requested explicitly: start `B13`. Followed the working-rules checklist via three parallel research
+passes (the full B13 roadmap section, its six gating ADRs in full, and every B13-assigned audit
+finding; the complete domain-model/ERD/functional-requirements/technical-architecture text for the
+attempt entity, snapshot, and answer persistence; the existing B11/B12 implementation conventions —
+schema/migration idioms, module structure, concurrency patterns, SSE wiring, permission-table shape,
+testing harness), then a dedicated Plan agent, then direct verification reads of the live source
+(the permission table's `studentCbt.*`/`examAdmin.*` rows, `AuthorizationService`'s `SELF` resolver,
+the exam-eligibility utility, the B12 migration's exact trigger/RLS SQL, `QUESTION_REVISION_INCLUDE`)
+before writing any code — per this project's own precedent for a phase of this size and risk.
+
+**Two genuine open decisions, confirmed with the project owner during planning before any code was
+written (`AGENTS.md` §3), not guessed:**
+
+1. **The remote-impersonation signal carried forward from `B12`'s own planning** (a student sharing
+   credentials with a remote person completing the exam from a separate device) — build the primary
+   candidate now, as a signal-only MVP extending `ADR-0020`'s existing "counts, not judgements"
+   scope (no new ADR needed), rather than defer it again or build an automated block.
+2. **The `StudentAssessmentAccommodation` gap** (`07 §9.7` — a genuine spec gap with no phase ever
+   scoped to build the full approval-workflow entity B11 had flagged it as needing) — resolve by
+   extending the already-shipped `ExamSessionParticipant` (B12) with a nullable `extraTimeSeconds`
+   column plus one small grant endpoint, rather than inventing a new entity.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260904210945_b13_attempt_engine`):
+five new tables — `ExamAttempt` (the core row: timing columns, `state`/`attemptType`/
+`participationStatus`, and decision 1's `startIpAddress`/`startUserAgent`/`startDeviceId`/
+`startSessionId`/`lastSeenAt`), `AttemptQuestionSnapshot` (ADR-0008's one-JSONB-document shape, its
+own dedicated 1:1 table rather than a column on `ExamAttempt` — every named ERD entity in this
+schema gets its own table even at 1:1 cardinality, and collapsing it would force the row read on
+every answer save/heartbeat to carry a large JSONB blob unnecessarily), `AttemptAnswer` (ADR-0007's
+mutable half — the `(schoolId, attemptId, examQuestionId)` unique index IS the single indexed
+upsert), `AttemptAnswerEvent` (ADR-0007's append-only half, written in the same transaction),
+`AttemptEvent` (ADR-0020, extended with a sixth type, `BINDING_MISMATCH`, for decision 1) — plus a
+purely additive `ExamSessionParticipant.extraTimeSeconds` (+ grantor/timestamp) extension for
+decision 2. Six hand-written migration additions mirroring established precedent exactly: RLS
+bootstrap for all five new tables; the `exam_attempts_active_unique` partial index (at most one
+`IN_PROGRESS` attempt per **(school, exam, student)** — scoped per-exam, not per-session, since
+`Exam.attemptLimit` is exam-scoped and B12's confirmed "multiple concurrent OPEN sessions per exam"
+design would otherwise let a student bypass it via a second session); a state-transition-guard
+trigger mirroring `exam_sessions_status_transition_guard`'s own B12 shape; an unconditional
+immutability trigger for `attempt_question_snapshots` (mirroring B9's `question_reviews` shape, not
+B10's `audit_events` grant-REVOKE treatment — no second Postgres role reads this table, so the
+simpler trigger is sufficient); a parent-status-gated trigger for `attempt_answers` (mirroring B8's
+`question_options` shape — this is the actual DB-level enforcement of "answers become immutable
+after submission," with the service-layer check as the fast-fail UX layer in front of it); and an
+unconditional trigger for `attempt_answer_events` (B9 shape again).
+
+**API** (`apps/api/src/modules/execution/`, the same module B12 lives in — no new module, per that
+module's own doc comment anticipating this): `attempt.v1`, 11 routes (the 8 originally planned, plus
+3 confirmed additive ones — `submit`, staff-initiated `end`, and decision 2's accommodation grant).
+`AttemptLifecycleService.start()` is the highest-integrity transaction in the product: a
+`pg_advisory_xact_lock` keyed on (school, exam, student) serializes every concurrent first-time
+start for that exact tuple (a row lock has nothing to attach to when no row exists yet — the actual
+answer to "20 simultaneous starts create exactly one attempt"), re-validates eligibility under that
+lock via a new `evaluateAttemptStartEligibility()` (layering attempt-limit headroom on top of the
+already-shared `evaluateExamEligibility`/`canStudentAccessSession` predicate from B12), and creates
+the attempt + its one JSONB snapshot in the same transaction — an existing `IN_PROGRESS` attempt is
+returned idempotently (200, not an error) rather than treated as a conflict. `submit()`/`end()` own
+only the state transition and answer freeze — explicitly, by the method's own doc comment, never
+invoking marking (`AttemptQuestionResult`/`Result` don't exist until B14). The snapshot-builder
+(`attempt-snapshot-builder.ts`) is a pure, zero-DB-dependency function using a small seeded PRNG
+(mulberry32, FNV-1a-hashed seed) — Node's `Math.random()` can't be seeded, and ADR-0008 requires the
+materialised order to be reproducible from the stored seed alone.
+
+**X-05 (BLOCKER, release-blocking) resolved structurally, not just by convention**:
+`StudentAttemptOptionDto` has no `correctFlag` field declared anywhere in its type at all, and
+`attempt-snapshot-projection.mapper.ts`'s `toStudentAttemptQuestions()` — the one function anywhere
+in the codebase permitted to build a student-facing payload from the stored snapshot — constructs
+every option by an explicit allow-list object literal, never a spread of the internal document
+shape (which does carry `correctFlag`). No `toMarkingAttemptPackage()` was written in this phase at
+all — nothing in B13 needs to read `correctFlag` outside the snapshot builder's own write path; that
+extension point is B14's to add when it has a real caller. Proven at both the unit level
+(`attempt-snapshot-projection.mapper.test.ts`, asserting the serialized output never contains the
+substring `correctFlag`) and the integration level (a dedicated `'security regression'` test doing
+the identical raw-JSON-string assertion against a real HTTP response).
+
+**Answer persistence (ADR-0007) — a real design refinement found during implementation, improving
+on the phase's own plan**: out-of-order replay protection was originally planned as a `SELECT
+sequenceNumber ... FOR UPDATE` read followed by a conditional upsert — correct once a row already
+exists (the lock serializes concurrent writers), but leaves a real race on a question's very first
+write, where two concurrent writers could both read "no existing row," both decide "not stale," and
+then race on the upsert itself with the actual stored outcome decided by commit order, not sequence
+order. Replaced with one atomic `INSERT ... ON CONFLICT (school_id, attempt_id, exam_question_id) DO
+UPDATE ... WHERE attempt_answers.sequence_number <= EXCLUDED.sequence_number` — Postgres's own atomic
+"keep only the highest-or-equal-sequence write" idiom (`<=`, not `<`, so a genuine retry of the same
+sequence number is accepted as an idempotent no-op-equivalent success, DoD item 9, rather than
+rejected as stale), correct under concurrency with no additional lock needed, and a direct instance
+of audit finding R-07's own "confine raw SQL to a small, explicitly-named set of exam-engine
+repository methods" guidance. `AttemptAnswerService.writeAnswer()` never touches the parent
+`exam_attempts` row (R-03) — `last_seen_at` updates via a separate, best-effort, error-swallowed call
+to `AttemptEventService.touchLastSeen()`, matching ADR-0020's own explicit requirement.
+
+**ADR-0003's grace window** (`ATTEMPT_GRACE_WINDOW_SECONDS`, default 60s, env-configurable, never
+per-school): `evaluateWriteAdmissibility()` compares server receipt time (never a client-supplied
+timestamp) against `expiresAt`; a write inside the window is accepted and flagged
+(`gradeWindowFlag`), a write beyond it is rejected with a new, non-retryable `ATTEMPT_WRITE_WINDOW_
+CLOSED` — and still recorded as a rejected `AttemptAnswerEvent`, since "final submitted state must
+remain reconstructable" (ADR-0007) extends to what a client attempted and was refused, not only what
+succeeded.
+
+**Decision 1, built**: `AttemptEventService.detectBindingMismatch()`, called from the heartbeat
+endpoint (the natural off-critical-path carrier — already periodic, already outside the answer-save
+transaction) — compares the current request's IP/device id against the attempt's own stored starting
+values and, on a material difference, records a neutral `BINDING_MISMATCH` `AttemptEvent`. Never
+blocks: the heartbeat still succeeds, and the attempt remains fully writable, regardless of a
+detected mismatch, matching every other ADR-0020 signal's "counts, not judgements" treatment exactly.
+A missing client field (no `X-Device-Id` header sent) degrades to whatever comparison is still
+possible rather than firing a false positive.
+
+**Decision 2, built**: `ExamSessionParticipantService.grantExtraTime()` (`POST /v1/exam-sessions/:id/
+participants/:studentId/extra-time`), gated by a new permission row (`examAdmin.grantExtraTime`,
+graded identically to `examAdmin.allowStudent`'s own shape — 156 rows, up from 155). Applies
+regardless of the participant's current AUTHORIZED/REVOKED status, since the grant only takes effect
+at a future attempt-creation time, never at grant time. `AttemptLifecycleService.start()` resolves
+`durationGrantedSeconds = exam.durationSeconds + (participant.extraTimeSeconds ?? 0)` inside the same
+locked transaction and never re-reads it afterward — frozen for the attempt's life, per DoD item 14.
+
+**Control Center un-stubbing**: both of B12's own honest placeholders
+(`inProgressCount`/`submittedCount`/`liveAttempts`/`attemptDataAvailable`) now compute real values —
+independent `count()`/`findMany()` queries, never derived by subtraction — in both of the two
+independent implementations that cannot share code across the app/worker process boundary
+(`apps/api/src/modules/execution/exam-control-snapshot.util.ts` and `apps/worker/src/queues/exam-
+control-refresh.queue.ts`). Also un-stubbed two real, previously-dead B12 functions whose own doc
+comments named B13 as the phase that would supersede them:
+`ExamCompletionService`'s `countInProgressAttempts()` (End Examination's own zero-in-progress-
+attempts precondition, A-14) and `ExamSessionParticipantService`'s `hasStartedAttempt()`
+(`REVOKE_AFTER_START_REFUSED`'s own precondition, X-13) — both previously hardcoded to always return
+"no attempts exist," now real queries.
+
+**Two real bugs found only by running the integration tests, not by inspection:**
+
+1. `pg_advisory_xact_lock()` returns `void`, which Prisma's `$queryRaw` cannot deserialize ("Failed
+   to deserialize column of type 'void'") — invisible until the very first concurrency test actually
+   ran. Fixed by switching to `$executeRaw`, which only needs a row count and never attempts to
+   deserialize a typed result — the correct, more idiomatic choice regardless, for a statement whose
+   return value is never consumed.
+2. A doc comment on `AttemptEvent.metadata` originally illustrated its shape with literal `{ fromIp,
+toIp }` braces, which broke `scripts/lint-schema-tenancy.mjs`'s own naive brace-matching regex —
+   a verbatim recurrence of the identical false positive B7's own Change Log entry already
+   documented once. Reworded to avoid literal braces, the same fix.
+
+**One real cross-cutting fixture gap found only by writing the tests, not a product bug**: this is
+the first phase in the codebase's history needing a STUDENT actor to complete a real login and then
+call further routes (every prior phase's tests either never logged in as a student or only checked
+the login response itself) — `POST /students/:id/reset-credentials` issues a real password but
+leaves `credentialState: 'MUST_CHANGE_PASSWORD'`, which `AuthGuard`'s forced-password-change gate
+blocks every other route behind. Fixed by setting `passwordHash`/`credentialState: 'OK'` directly via
+Prisma in the test fixture, the exact same convention every prior phase's teacher/HOD/admin fixtures
+already use to bypass this identical gate.
+
+**Testing**: `attempt.integration.test.ts` (25 tests, real HTTP via `app.inject()` against a real
+running `AppModule` and real Postgres, mirroring `exam-control.integration.test.ts`'s own harness) —
+every DoD item, both immutability triggers proven directly via raw SQL bypassing the service layer
+entirely, a 20-way concurrent-start race, out-of-order replay, the grace window's exact boundary,
+cross-student and cross-tenant denial, and the release-blocking X-05 contract test. Three pure-unit
+test files with zero DB dependency: `attempt-snapshot-builder.test.ts` (seeded-determinism and
+randomization proofs), `attempt-snapshot-projection.mapper.test.ts` (the X-05 allow-list guarantee
+at the unit level too), `attempt-admissibility.util.test.ts` (the grace-window boundary arithmetic).
+`tests/tenancy/rls.integration.test.ts` gained a **new, dedicated** describe block for all five new
+tables (not an extension of the shared B5-B9 or B11/B12 blocks) — required, not optional:
+`attempt_question_snapshots`/`attempt_answer_events` both carry unconditional immutability triggers,
+which would abort a shared multi-row `deleteMany` cleanup on the first blocked row, exactly the
+reasoning that already forced the B11/B12 block to stay separate from the shared one. One
+pre-existing B12 test (`exam-control.integration.test.ts`'s own "DoD 8" case) asserted the old
+`attemptDataAvailable: false` placeholder and was updated to assert the new, real `true` — the one
+required, narrowly-scoped consequence of un-stubbing, not a silent behavior change.
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm test && pnpm
+build` at the monorepo root (16/16 turbo tasks, including the schema-tenancy lint), the full
+`apps/api` integration suite (298/298, every pre-existing B0–B12 test re-confirmed with zero
+regression beyond the one intentional B12 assertion update), the full `apps/worker` integration
+suite (22/22), and the full RLS suite (118/118, up from 103). `pnpm generate` (`attempt.v1` published
+in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (156 rows).
+A real `node dist/main.js` boot confirmed `PolicyCoverageService` reports 194 routes checked (up from 182) with zero violations. One genuinely destructive step this phase required — `prisma migrate
+reset --force` against the local `atlas_dev` database, to resolve two out-of-sync migrations blocking
+the new one — was run only after explicit user confirmation, per Prisma's own AI-agent safety guard
+and this project's standing default-behaviour rule; the post-reset `grantAppRole()`/
+`grantAuditReaderRole()` re-assertion (this codebase's own documented `migrate reset` gotcha) was
+re-run immediately after.
+
+**Honestly out of scope, per `AGENTS.md` §14 — not built opportunistically**: marking and
+`AttemptQuestionResult`/`Result` (B14's entire scope); the `ADR-0004` auto-submission sweeper (B14;
+this phase ships the writable window and terminal states the sweeper will transition into, not the
+sweeper itself); `examAdmin.invalidateAttempt`/`.grantMakeup` (`AttemptAuthorization`, `ADR-0014` —
+both stay `awaitingResource`, tagged B14, unchanged); mid-attempt time extension by an administrator
+(distinct from decision 2's freeze-at-creation grant — not trivially cheap, named as a B14/follow-up
+candidate); the secondary remote-impersonation candidate (an optional per-school allowed-network-
+range check — named, not built, no owner assigned); question pools (`ADR-0002`, confirmed deferred);
+the full 500/1,000-concurrent-client load test against a real latency budget (`B21`'s job — this
+phase proves correctness at 20-way concurrency and proves the write path has no lock contention on
+the parent row, but no latency budget exists yet to test against).
+
+`docs/roadmaps/backend-roadmap.md`'s B13 section gained status `COMPLETE`, every DoD item checked
+with detail, a full "Implementation notes" subsection, a corrected 11-route API table, and an
+expanded Deferred items list recording exactly how both carried-forward decisions resolved (not left
+implicit, per the roadmap's own explicit instruction not to let this drop a second time). Its own
+"Carried forward from B12" subsection was updated in place to record the resolution rather than
+restate the open question. `docs/roadmaps/backend-roadmap.md`'s Phase Completion Tracking table also
+had its B10/B11/B12 rows corrected from a stale NOT STARTED placeholder (the identical class of
+staleness this table's own header note already recorded fixing once for B0–B9) while updating B13's
+own row. `docs/roadmaps/roadmap-index.md`'s version (1.24), Current State, and Immediate Next Actions
+all updated to record `B13` complete and `B14` next on the critical path.
+
+Project state moves from _Implementation (B12/F12 complete)_ to _Implementation (B13 complete)_.
+**Next: `B14 — Submission & Marking`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2 →
+B3 → B5 → B6 → B8 → B9 → B11 → B12 → B13 → B14 → B15 → …`) — the roadmap's own explicit instruction
+is that `B13` and `B14` must not be parallelised with each other (B14's submission/auto-submission
+logic depends on B13's attempt state machine being settled), so this is the natural, required next
+step, not merely the next-numbered one. A future `F13` (the offline exam engine) remains open and
+buildable immediately against the now-frozen `attempt.v1` contract, independent of `B14`.

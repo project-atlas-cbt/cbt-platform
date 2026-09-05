@@ -278,18 +278,19 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Exam Administration
 
-| Action                   | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER    | STUDENT | Awaiting                             |
-| ------------------------ | -------------- | ------------ | --------- | ---------- | ---------- | ------- | ------------------------------------ |
-| Exam Control Center      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| View registered students | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED   | —       |                                      |
-| View live attempts       | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
-| See who has started      | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
-| See who has completed    | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
-| Manually allow student   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Grant makeup access      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | AttemptAuthorization (B14, ADR-0014) |
-| Mark/confirm absence     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| End individual attempt   | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | ExamAttempt (B13)                    |
-| Invalidate attempt       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | ⏸ DEFERRED | —       | ExamAttempt (B14)                    |
+| Action                           | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER    | STUDENT | Awaiting                             |
+| -------------------------------- | -------------- | ------------ | --------- | ---------- | ---------- | ------- | ------------------------------------ |
+| Exam Control Center              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| View registered students         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED   | —       |                                      |
+| View live attempts               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| See who has started              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| See who has completed            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| Manually allow student           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| Grant makeup access              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | AttemptAuthorization (B14, ADR-0014) |
+| Mark/confirm absence             | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| End individual attempt           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| Grant extra time (accommodation) | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
+| Invalidate attempt               | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | ⏸ DEFERRED | —       | ExamAttempt (B14)                    |
 
 <details><summary>Notes</summary>
 
@@ -302,6 +303,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Grant makeup access / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
 - **Mark/confirm absence / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **End individual attempt / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Grant extra time (accommodation) / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Invalidate attempt / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
 - **Invalidate attempt / TEACHER:** "Request/limited" names no actual mechanism in any document — not covered by ADR-0017 either. DENIED, fail-closed, pending explicit product clarification.
 
@@ -309,16 +311,16 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Student CBT
 
-| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER | STUDENT | Awaiting                                |
-| -------------------------- | -------------- | ------------ | --------- | ------ | ------- | ------- | --------------------------------------- |
-| View active assessment     | —              | —            | —         | —      | —       | SELF    | Exam/ExamAttempt (B11–B13)              |
-| Start exam                 | —              | —            | —         | —      | —       | SELF    | ExamAttempt (B13)                       |
-| Answer questions           | —              | —            | —         | —      | —       | SELF    | AttemptAnswer (B13)                     |
-| Navigate questions         | —              | —            | —         | —      | —       | SELF    | AttemptQuestionSnapshot (B13)           |
-| Submit exam                | —              | —            | —         | —      | —       | SELF    | ExamAttempt (B13/B14)                   |
-| Auto-submit on timeout     | SYSTEM         | SYSTEM       | SYSTEM    | SYSTEM | SYSTEM  | SYSTEM  | ExamAttempt sweeper (B13/B14, ADR-0004) |
-| Resume interrupted attempt | —              | —            | —         | —      | —       | SELF    | ExamAttempt (B13)                       |
-| View previous results      | —              | —            | —         | —      | —       | SELF ⚠️ | Result (B15), school setting (B17)      |
+| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER | STUDENT | Awaiting                            |
+| -------------------------- | -------------- | ------------ | --------- | ------ | ------- | ------- | ----------------------------------- |
+| View active assessment     | —              | —            | —         | —      | —       | SELF    |                                     |
+| Start exam                 | —              | —            | —         | —      | —       | SELF    |                                     |
+| Answer questions           | —              | —            | —         | —      | —       | SELF    |                                     |
+| Navigate questions         | —              | —            | —         | —      | —       | SELF    |                                     |
+| Submit exam                | —              | —            | —         | —      | —       | SELF    |                                     |
+| Auto-submit on timeout     | SYSTEM         | SYSTEM       | SYSTEM    | SYSTEM | SYSTEM  | SYSTEM  | ExamAttempt sweeper (B14, ADR-0004) |
+| Resume interrupted attempt | —              | —            | —         | —      | —       | SELF    |                                     |
+| View previous results      | —              | —            | —         | —      | —       | SELF ⚠️ | Result (B15), school setting (B17)  |
 
 <details><summary>Notes</summary>
 

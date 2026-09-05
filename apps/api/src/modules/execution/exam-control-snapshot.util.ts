@@ -37,6 +37,22 @@ export async function computeExamControlSnapshot(
     const absentCount = await tx.examParticipation.count({
       where: { schoolId, examId, status: 'ABSENT' },
     });
+
+    // B13: real ExamAttempt data — independent counts, never derived by
+    // subtraction from authorizedCount (a derived `notStartedCount` could
+    // go negative under a real edge case, e.g. a makeup/retry attempt from
+    // a future phase; independent counts stay correct regardless).
+    const inProgressCount = await tx.examAttempt.count({
+      where: { schoolId, examId, state: 'IN_PROGRESS' },
+    });
+    const submittedCount = await tx.examAttempt.count({
+      where: { schoolId, examId, state: { in: ['SUBMITTED', 'AUTO_SUBMITTED'] } },
+    });
+    const liveAttempts = await tx.examAttempt.findMany({
+      where: { schoolId, examId, state: 'IN_PROGRESS' },
+      select: { studentProfileId: true, state: true, expiresAt: true },
+    });
+    const nowMs = Date.now();
     const names = await resolveMembershipDisplayNames(
       schoolId,
       sessions.flatMap((s) => [s.openedByMembershipId, s.closedByMembershipId]),
@@ -56,13 +72,17 @@ export async function computeExamControlSnapshot(
       sessions: sessions.map((s) => toExamSessionResponseDto(s, names)),
       aggregate: {
         authorizedCount,
-        notStartedCount: authorizedCount,
-        inProgressCount: 0,
-        submittedCount: 0,
+        notStartedCount: Math.max(0, authorizedCount - inProgressCount - submittedCount),
+        inProgressCount,
+        submittedCount,
         absentCount,
-        attemptDataAvailable: false,
+        attemptDataAvailable: true,
       },
-      liveAttempts: [],
+      liveAttempts: liveAttempts.map((a) => ({
+        studentProfileId: a.studentProfileId,
+        status: a.state,
+        timeRemainingSeconds: Math.max(0, Math.floor((a.expiresAt.getTime() - nowMs) / 1000)),
+      })),
       staleness: {
         isStale,
         openSince: openSince?.toISOString() ?? null,

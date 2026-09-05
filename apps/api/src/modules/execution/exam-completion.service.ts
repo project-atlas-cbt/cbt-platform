@@ -23,13 +23,13 @@ type CompleteOutcome =
   | { kind: 'NOT_COMPLETABLE' }
   | { kind: 'OK'; absentCount: number };
 
-/** No `ExamAttempt` exists yet — every B13-owned precondition this service
- * will eventually also need to check (zero IN_PROGRESS attempts) is a
- * structural no-op today. Kept as a real, named, isolated check so B13
- * supersedes it by editing exactly this function, not by hunting through
- * `complete()`'s own transaction body. */
-function countInProgressAttempts(): Promise<number> {
-  return Promise.resolve(0);
+/** B13 supersedes the B12-era stub (which always returned 0, no
+ * `ExamAttempt` existing yet) with the real check — A-14's "zero
+ * IN_PROGRESS attempts" precondition for End Examination. */
+async function countInProgressAttempts(schoolId: string, examId: string): Promise<number> {
+  return withTenant(prisma, schoolId, (tx) =>
+    tx.examAttempt.count({ where: { schoolId, examId, state: 'IN_PROGRESS' } }),
+  );
 }
 
 /** `POST /v1/exams/:id/complete` — End Examination (A-14): an explicit,
@@ -75,11 +75,7 @@ export class ExamCompletionService {
       });
     }
 
-    if ((await countInProgressAttempts()) > 0) {
-      // Structurally unreachable in B12 (the stub always returns 0) — kept
-      // real, defensive, and tested per this codebase's own precedent for
-      // this class of forward-compatible check (e.g. ExamReadinessService's
-      // "defensive" checks).
+    if ((await countInProgressAttempts(schoolId, examId)) > 0) {
       throw new AppHttpException({
         code: 'EXAM_HAS_IN_PROGRESS_ATTEMPTS',
         message: 'This exam still has attempts in progress.',

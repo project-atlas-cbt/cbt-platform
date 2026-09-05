@@ -325,6 +325,48 @@ export const BASE_ERROR_CODES = {
   // precedent for this class of "the target doesn't structurally qualify"
   // check.
   EXAM_ADMINISTRATOR_REQUIRES_ACTIVE_MEMBERSHIP: { httpStatus: 400, retryable: false },
+
+  // B13 (Attempt Engine).
+  // ATTEMPT_NOT_ELIGIBLE: POST .../exams/:id/attempts attempted by a
+  // student who fails the re-validated-under-lock eligibility predicate
+  // (enrollment, subject registration, session accessibility, or attempt-
+  // limit headroom — `evaluateAttemptStartEligibility`). `details.
+  // failedChecks` carries the full itemised set, mirroring EXAM_NOT_READY's
+  // own "never make the client guess" precedent.
+  ATTEMPT_NOT_ELIGIBLE: { httpStatus: 409, retryable: false },
+  // ATTEMPT_NOT_WRITABLE: any write attempted (answer save, batch flush,
+  // submit, staff end) against an attempt whose `state` is no longer
+  // IN_PROGRESS — the service-layer fast-fail half of the same guarantee
+  // `attempt_answers_immutable_when_attempt_not_in_progress` and
+  // `exam_attempts_status_transition_guard` enforce unconditionally at the
+  // database level (ADR-0007: "answers become immutable after submission").
+  ATTEMPT_NOT_WRITABLE: { httpStatus: 409, retryable: false },
+  // ATTEMPT_WRITE_WINDOW_CLOSED: an answer write (or submit) arrived more
+  // than ADR-0003's grace window (default 60s, env-configurable, never
+  // per-school) after `expires_at` — server receipt time, never a
+  // client-supplied timestamp, is what this is measured against.
+  // Deliberately non-retryable: the offline client must drop this write,
+  // not retry it forever (ADR-0003's own explicit requirement).
+  ATTEMPT_WRITE_WINDOW_CLOSED: { httpStatus: 409, retryable: false },
+  // ATTEMPT_ANSWER_SEQUENCE_STALE: an answer write's client-assigned
+  // sequenceNumber is <= the value already stored for this (attempt,
+  // question) — ADR-0007's ordering protection (resolves X-04). Rejected
+  // WITHOUT writing anything, so an out-of-order offline replay can never
+  // silently overwrite a newer answer. Non-retryable: retrying the exact
+  // same stale write can never succeed.
+  ATTEMPT_ANSWER_SEQUENCE_STALE: { httpStatus: 409, retryable: false },
+  // ATTEMPT_QUESTION_NOT_IN_SNAPSHOT: an answer write named an
+  // examQuestionId/selectedOptionId that does not appear in this attempt's
+  // own frozen AttemptQuestionSnapshot.document — never silently accepted.
+  ATTEMPT_QUESTION_NOT_IN_SNAPSHOT: { httpStatus: 400, retryable: false },
+  // EXAM_SESSION_PARTICIPANT_NOT_FOUND: POST .../extra-time (decision 2,
+  // accommodations) named a student with no ExamSessionParticipant row for
+  // this session at all — distinct from EXAM_SESSION_PARTICIPANT_NOT_
+  // AUTHORIZED (B12), which means a row exists but isn't currently
+  // AUTHORIZED; extra time may be granted regardless of current
+  // AUTHORIZED/REVOKED status (it's frozen at attempt creation, not at
+  // grant time), so only "no row exists" is rejected here.
+  EXAM_SESSION_PARTICIPANT_NOT_FOUND: { httpStatus: 404, retryable: false },
 } as const;
 
 export type BaseErrorCode = keyof typeof BASE_ERROR_CODES;

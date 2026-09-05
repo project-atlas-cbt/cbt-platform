@@ -2755,7 +2755,7 @@ reconfirmed 155 rows, unchanged (both closures reuse `exam.manageAdministrators`
 
 # B13 — Attempt Engine
 
-**Status:** NOT STARTED · **Decided ADRs:** 0002, 0003, 0007, 0008, 0020, 0021
+**Status:** COMPLETE (2026-09-05) · **Decided ADRs:** 0002, 0003, 0007, 0008, 0020, 0021
 
 ## Objective
 
@@ -2778,12 +2778,12 @@ Deliver the highest-integrity path in the product: attempt creation, immutable q
 - Accommodation resolution frozen at attempt creation (resolves `X-11`).
 - Offline media contract per `ADR-0021` (resolves `X-10`).
 - Invalidation of a running attempt with a distinct non-retryable client error (resolves `X-13`).
-- **A confirmed decision on the remote-impersonation candidate mechanism carried forward from `B12`
-  planning** (device/session binding + a mid-attempt-change `AttemptEvent` signal) — see "Carried
-  forward from `B12`" immediately below. Not yet decided; this phase's planning must resolve it
-  before implementation, not silently skip it a second time.
+- **The remote-impersonation candidate mechanism carried forward from `B12` planning** (device/
+  session binding + a mid-attempt-change `AttemptEvent` signal) — **resolved**: built as the
+  signal-only MVP (sub-case 2's primary candidate), confirmed with the project owner during this
+  phase's planning. See "Carried forward from `B12`" immediately below for the full resolution.
 
-## Carried forward from `B12` (raised 2026-09-04, deferred here by design — resolve, don't re-derive)
+## Carried forward from `B12` (raised 2026-09-04, resolved 2026-09-05 — signal-only MVP built)
 
 **Read this before touching `AttemptEvent`/attempt-start design.** During `B12`'s planning, the
 project owner raised a real integrity risk with no existing coverage anywhere in the nine
@@ -2809,37 +2809,26 @@ second sub-case's mechanism is this phase's open decision**:
    not a platform gap. Do not build camera/screen-capture/behavioural-biometric detection for this
    case; it would silently expand approved scope (`AGENTS.md` §17).
 2. **A genuinely separate remote device or session** completes the exam under the student's
-   credentials while the student's own hall device sits idle (or is used only to appear present). A
-   CBT platform can reasonably help surface this without crossing into biometric territory. **Not
-   yet decided — this phase must confirm the approach with the project owner before implementing
-   it, per `AGENTS.md` §3**, using this as the starting analysis rather than re-deriving it:
-   - **Candidate mechanism**: bind an attempt to the session/device/IP that started it at attempt
-     creation (fits naturally into this phase's own attempt-creation transaction — DoD item 1
-     already makes that transaction the one place server-authoritative facts get fixed). A
-     mid-attempt change to that binding (different IP, different device fingerprint, a second
-     concurrent connection attempting to act on the same attempt) is recorded as an
-     `AttemptEvent`-shaped **signal**, never an automated block or judgment — this is the same
-     "counts, not judgments" philosophy `ADR-0020` already establishes for tab-switch/fullscreen-
-     exit signals, so this candidate is very likely an **extension of `ADR-0020`'s existing decided
-     scope, not a new ADR** — confirm this reading during planning rather than assuming it; open a
-     new ADR only if the resolved design turns out to need policy this codebase hasn't already
-     decided (e.g., an automated hard-block rather than a flagged signal, which would be a real
-     product-policy change, not an engineering extension).
-   - **A secondary candidate, lower priority**: an optional per-school allowed-network-range
-     configuration checked at attempt start — useful for a school running all exams from a known
-     lab IP block, of little use for BYOD/remote settings. Worth naming as a possibility during
-     planning, not a commitment either way.
-   - **What this phase must NOT do**: silently build nothing and let this drop a second time
-     (`AGENTS.md` §17 — deferred features must not be dropped, but also must not stay silently
-     deferred forever with no owning decision), and must not silently build an automated block
-     without confirming that's the intended policy (an automated block on a device/IP change has
-     real false-positive risk — a legitimate network failover, a school's own NAT/DHCP churn, or a
-     student switching from Wi-Fi to a mobile hotspot mid-attempt are all real, non-malicious causes
-     of the identical signal).
-   - **Record the outcome explicitly** in this phase's own Change Log entry once decided, the same
-     way `B12`'s decision to defer this here was recorded — whichever way it resolves (built now,
-     built partially as a signal-only MVP, or explicitly re-deferred again with a named reason and a
-     named future owner) must be stated, not left implicit.
+   credentials while the student's own hall device sits idle (or is used only to appear present).
+   **Resolved (confirmed with the project owner during this phase's planning): the primary
+   candidate mechanism is built, as a signal-only MVP, extending `ADR-0020`'s existing scope — no
+   new ADR was needed.**
+   - **Built**: `ExamAttempt` carries `startIpAddress`/`startUserAgent`/`startDeviceId`/
+     `startSessionId`, captured server-side at attempt creation (the same signal `Session
+.ipAddress`/`Session.userAgent` already capture at login, B1 — not new fingerprinting).
+     `AttemptEventType` gained a sixth value, `BINDING_MISMATCH`. The heartbeat endpoint (`POST
+/v1/attempts/:id/heartbeat`) is the carrier: on every call, `AttemptEventService
+.detectBindingMismatch()` compares the request's current IP/device id against the attempt's
+     stored starting values and, on a material difference, records a `BINDING_MISMATCH`
+     `AttemptEvent` — a neutral signal only, exactly like every other ADR-0020 type. **Never an
+     automated block**: the heartbeat still succeeds, and the attempt remains fully writable,
+     regardless of a detected mismatch. A missing/never-sent client field (e.g. no `X-Device-Id`
+     header) degrades to whatever comparison is still possible rather than firing a false positive.
+   - **Not built**: the secondary, lower-priority candidate (an optional per-school allowed-
+     network-range check) — named, not built, no owner assigned yet.
+   - **Deliberately not wired into the answer-save path** — the heartbeat is the correct off-
+     critical-path carrier per `ADR-0020`'s own requirement; wiring it into every answer write would
+     add overhead to the hottest path in the product for no additional detection value.
 
 ## Specification references
 
@@ -2856,30 +2845,36 @@ second sub-case's mechanism is this phase's open decision**:
 
 ## API work
 
-**Contract: `attempt.v1` — the narrowest and most carefully designed surface in the product (`08 §9`).**
+**Contract: `attempt.v1` — the narrowest and most carefully designed surface in the product (`08 §9`). 11 routes: the 8 originally planned, plus 3 confirmed additive ones (`submit`, staff-initiated `end`, and decision 2's accommodation grant).**
 
-| Endpoint                                     | Purpose                                                                       |
-| -------------------------------------------- | ----------------------------------------------------------------------------- |
-| `GET /v1/student/assessment`                 | The single available assessment, or none (`04 §53`)                           |
-| `GET /v1/student/assessment/:examId/preview` | Instructions and rules before starting (`04 §54`)                             |
-| `POST /v1/exams/:id/attempts`                | **Start attempt** — idempotent, transactional                                 |
-| `GET /v1/attempts/:id`                       | Resume: attempt state, snapshot payload, saved answers, server remaining time |
-| `PUT /v1/attempts/:id/answers/:questionId`   | Save one answer — idempotent, sequenced                                       |
-| `POST /v1/attempts/:id/answers/batch`        | Flush an offline queue                                                        |
-| `POST /v1/attempts/:id/heartbeat`            | Liveness (`ADR-0020`)                                                         |
-| `POST /v1/attempts/:id/events`               | Integrity signals, off critical path                                          |
+| Endpoint                                                        | Purpose                                                                                      |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `GET /v1/student/assessment`                                    | The single available assessment, or none (`04 §53`)                                          |
+| `GET /v1/student/assessment/:examId/preview`                    | Instructions and rules before starting (`04 §54`)                                            |
+| `POST /v1/exams/:id/attempts`                                   | **Start attempt** — idempotent, transactional                                                |
+| `GET /v1/attempts/:id`                                          | Resume: attempt state, snapshot payload, saved answers, server remaining time                |
+| `PUT /v1/attempts/:id/answers/:questionId`                      | Save one answer — idempotent, sequenced                                                      |
+| `POST /v1/attempts/:id/answers/batch`                           | Flush an offline queue                                                                       |
+| `POST /v1/attempts/:id/heartbeat`                               | Liveness (`ADR-0020`) plus decision 1's binding-mismatch signal                              |
+| `POST /v1/attempts/:id/events`                                  | Integrity signals, off critical path                                                         |
+| `POST /v1/attempts/:id/submit`                                  | **Additive** — normal submission: state transition + answer freeze only, never marking (B14) |
+| `POST /v1/attempts/:id/end`                                     | **Additive** — staff-initiated end of a running attempt (`examAdmin.endAttempt`)             |
+| `POST /v1/exam-sessions/:id/participants/:studentId/extra-time` | **Additive** — decision 2, grants a per-student accommodation                                |
 
 **The student payload never contains correct answers, marking metadata, or other students' data.** A contract test asserts this and blocks release on failure.
 
 ## Database work
 
-- `ExamAttempt` with timing columns and state.
-- **Partial unique index: at most one active attempt per (student, exam)** — `X-03`/`D-09`.
-- `AttemptQuestionSnapshot` in the shape chosen by `ADR-0008` (per-question rows or one JSONB document).
-- `AttemptAnswer` per `ADR-0007`, with a per-question sequence column for replay ordering.
-- Snapshot immutability enforced by constraint once the attempt exists.
-- Indexes tuned for the write path: answer upsert by (attempt, question) must be a single indexed operation.
-- `school_id` denormalised onto attempt, snapshot, and answer tables per `D-01`.
+- `ExamAttempt` with timing columns and state, plus decision 1's device/session-binding columns (`startIpAddress`/`startUserAgent`/`startDeviceId`/`startSessionId`) and `lastSeenAt` (`ADR-0020`). ✅
+- **Partial unique index: at most one active attempt per (student, exam)** — `X-03`/`D-09`; scoped per-exam (not per-session), since `attemptLimit` is exam-scoped and B12's confirmed multiple-concurrent-open-sessions design would otherwise let a student bypass it via a second session. ✅
+- `AttemptQuestionSnapshot` — `ADR-0008`'s one-JSONB-document shape, as its own dedicated 1:1 table (not a column on `ExamAttempt`), matching this schema's convention of giving every named ERD entity its own table even at 1:1 cardinality. ✅
+- `AttemptAnswer` per `ADR-0007`, with a per-question sequence column for replay ordering — the `(schoolId, attemptId, examQuestionId)` unique index IS the single indexed upsert the write path uses. ✅
+- `AttemptAnswerEvent` per `ADR-0007`'s append-only half, written in the same transaction as the answer upsert. ✅
+- `AttemptEvent` per `ADR-0020`, extended with `BINDING_MISMATCH` (decision 1). ✅
+- `ExamSessionParticipant.extraTimeSeconds` (+ grantor/timestamp) — decision 2, the confirmed resolution of the `StudentAssessmentAccommodation` gap. ✅
+- Snapshot immutability enforced by constraint (an unconditional trigger) once the attempt exists; `AttemptAnswer`/`AttemptAnswerEvent` each carry their own immutability trigger too (parent-status-gated and unconditional respectively). ✅
+- Indexes tuned for the write path: answer upsert by (attempt, question) is a single indexed operation, and the answer-write transaction never touches the parent `ExamAttempt` row (`R-03`). ✅
+- `school_id` denormalised onto every new table per `D-01`. ✅
 
 ## Background jobs
 
@@ -2930,42 +2925,142 @@ B14 finalises attempts created here. B12's Control Center reflects attempt state
 
 ## Definition of Done
 
-1. Starting an attempt creates the attempt and its complete snapshot in **one transaction**; failure of either leaves nothing behind.
-2. A duplicate start — double-click, refresh, or retried request — yields exactly one attempt, enforced by database constraint.
-3. `expires_at` is server-derived from `started_at` + granted duration; the client cannot influence it.
-4. Two students starting at different times have independent, correct expiries.
-5. Refresh mid-attempt restores byte-identical question and option ordering and every saved answer.
-6. Answers persist synchronously and are acknowledged only after commit.
-7. Offline answers queue locally, flush on reconnect, and none are lost.
-8. Out-of-order replay never overwrites a newer answer.
-9. Repeated identical writes are idempotent.
-10. Writes after expiry plus grace are rejected; writes inside grace are accepted and flagged.
-11. A device clock moved backward does not extend the attempt.
-12. **The student-facing payload contains no correct-answer field** — asserted by a release-blocking contract test.
-13. Snapshots are immutable; later revision of a bound question does not alter any existing snapshot.
-14. Accommodations resolve at creation and freeze for the attempt's life.
-15. Invalidating a running attempt stops writes with a distinct non-retryable error.
-16. A student cannot access another student's attempt; cross-tenant access denied.
-17. Question media is available offline per `ADR-0021`.
-18. 1,000 concurrent attempts sustain the answer-save rate within the latency budget agreed in B21.
+1. ✅ Starting an attempt creates the attempt and its complete snapshot in **one transaction**; failure of either leaves nothing behind. (`AttemptLifecycleService.start()`, one `withTenant` transaction; proven by the "an exam with no questions never leaves a half-created attempt behind" test.)
+2. ✅ A duplicate start — double-click, refresh, or retried request — yields exactly one attempt, enforced by database constraint. (`exam_attempts_active_unique` partial index + a `pg_advisory_xact_lock` serializing concurrent first-time starts; proven at 20-way concurrency.)
+3. ✅ `expires_at` is server-derived from `started_at` + granted duration; the client cannot influence it. (No client-writable field exists anywhere on the path; `SaveAnswerDto` carries no timestamp field at all.)
+4. ✅ Two students starting at different times have independent, correct expiries.
+5. ✅ Refresh mid-attempt restores byte-identical question and option ordering and every saved answer. (The snapshot document is written once, never recomputed; `GET /v1/attempts/:id` always re-derives the projection from the same stored document.)
+6. ✅ Answers persist synchronously and are acknowledged only after commit. (Single atomic `INSERT ... ON CONFLICT ... DO UPDATE` inside the request's own transaction — no queue on this path, per `09 §17`.)
+7. ✅ Offline answers queue locally, flush on reconnect, and none are lost. (Server half: `POST /v1/attempts/:id/answers/batch`, per-item outcomes, never all-or-nothing. Client half is F13's job.)
+8. ✅ Out-of-order replay never overwrites a newer answer. (Atomic `WHERE sequence_number <= EXCLUDED.sequence_number` upsert guard — see Implementation notes for why this replaced the originally-planned SELECT-then-branch design.)
+9. ✅ Repeated identical writes are idempotent. (Same guard: an equal sequence number is accepted as a no-op-equivalent success, not rejected as stale.)
+10. ✅ Writes after expiry plus grace are rejected; writes inside grace are accepted and flagged. (`evaluateWriteAdmissibility()`, `ATTEMPT_GRACE_WINDOW_SECONDS`, default 60s.)
+11. ✅ A device clock moved backward does not extend the attempt. (No client timestamp field exists on the write path at all — admissibility and `expires_at` are both server-clock-only, structurally, not just by convention.)
+12. ✅ **The student-facing payload contains no correct-answer field** — asserted by a release-blocking contract test. (Type-level: `StudentAttemptOptionDto` has no `correctFlag` field declared. Runtime: `attempt-snapshot-projection.mapper.ts` builds every option by explicit allow-list, never a spread. Test: a raw-JSON-string `not.toContain('correctFlag')` assertion, plus a dedicated unit-test suite for the mapper itself.)
+13. ✅ Snapshots are immutable; later revision of a bound question does not alter any existing snapshot. (`ExamQuestion.questionRevisionId` binds a specific, B8-immutable-once-APPROVED revision — inherited, not new machinery; the snapshot document itself additionally carries its own unconditional DB trigger.)
+14. ✅ Accommodations resolve at creation and freeze for the attempt's life. (Decision 2: `ExamSessionParticipant.extraTimeSeconds`, resolved into `durationGrantedSeconds` inside the start transaction, never re-read afterward.)
+15. ✅ Invalidating a running attempt stops writes with a distinct non-retryable error. (`ATTEMPT_NOT_WRITABLE` service-layer check + the unconditional `attempt_answers_immutable_when_attempt_not_in_progress` DB trigger backstop — proven directly against a row moved to `INVALIDATED` by hand, since B14's own invalidation endpoint doesn't exist yet.)
+16. ✅ A student cannot access another student's attempt; cross-tenant access denied. (`SELF` resolver against the attempt's own resolved student; cross-school returns `NOT_FOUND`, never `FORBIDDEN`.)
+17. ✅ Question media is available offline per `ADR-0021`. (Server half: the attempt package includes a flattened, deduplicated, freshly-signed media manifest, resolved via `resolveMediaManifest()`. Client-side caching-at-start is F13's job.)
+18. ⚠️ Honestly partial: 1,000 concurrent attempts sustain the answer-save rate within the latency budget agreed in B21 — this phase's own test suite proves correctness at 20-way concurrency (DoD item 2) and proves the write path is a single atomic statement with no lock contention on the parent row (R-03), but the actual 500/1,000-concurrent-client load test against a real latency budget is explicitly B21's job, which hasn't run yet — no latency budget exists yet to test against.
 
 ## Exit criteria
 
-- ADR-0002, 0003, 0007, 0008, 0020, 0021 all decided.
-- Every test in the table above passes in CI, with concurrency and timer suites wired as merge blockers.
-- `09 §39`'s golden-path test passes end to end (jointly with B14).
-- F13 confirms the contract is sufficient for the offline engine.
+- ✅ ADR-0002, 0003, 0007, 0008, 0020, 0021 all decided.
+- ✅ Every test in the table above passes in CI (25 new tests in `attempt.integration.test.ts`, plus 8 pure-unit tests across `attempt-snapshot-builder.test.ts`/`attempt-snapshot-projection.mapper.test.ts`/`attempt-admissibility.util.test.ts`), with the 20-way concurrency case included; the full 500/1,000-tier load test stays B21's job (see DoD item 18).
+- ⚠️ `09 §39`'s golden-path test passes end to end (jointly with B14) — B14 (marking) doesn't exist yet, so only B13's own half of the golden path (start → answer → resume → submit, state-transition-and-freeze only) is proven; the full golden path closes once B14 ships.
+- ⚠️ F13 confirms the contract is sufficient for the offline engine — F13 hasn't started; `attempt.v1` is now frozen and published for it to build against.
 
 ## Deferred items
 
 - Question pools — pending `ADR-0002`; if approved, the start transaction gains a draw step and this phase's scope grows.
-- Advanced anti-cheating enforcement — signals recorded only.
-- **Remote-impersonation/credential-sharing mechanism (sub-case 2, "Carried forward from `B12`"
-  above) — not a pre-existing deferral, an open decision this phase must actually resolve.** Do not
-  list this as simply "deferred" without recording which way it went (built now / built as a
-  signal-only MVP / re-deferred with a named reason and owner) in this phase's own Change Log entry.
-  The remote-control-of-the-same-device sub-case (sub-case 1) stays genuinely out of scope by
-  design, unchanged — that part is settled, not open.
+- Advanced anti-cheating enforcement — signals recorded only (`AttemptEvent`, "counts, not judgements").
+- **The secondary remote-impersonation candidate** (an optional per-school allowed-network-range
+  check, "Carried forward from `B12`" above) — named, not built, no owner assigned yet. The primary
+  candidate (device/session-binding signal via the heartbeat endpoint) IS built — see that section
+  for the full resolution, recorded rather than left implicit.
+- Marking, `AttemptQuestionResult`/`Result` — B14's entire scope; `submit()` performs only the state
+  transition and answer freeze, with a named, commented extension point for B14's own marking-queue
+  enqueue.
+- Auto-submission (`ADR-0004`'s sweeper) — B14's job; this phase ships the writable window and the
+  terminal states the sweeper will transition attempts into, not the sweeper itself.
+- `examAdmin.invalidateAttempt`/`.grantMakeup` (`AttemptAuthorization`, `ADR-0014`) — both remain
+  `awaitingResource`, tagged B14 in the permission table; this phase proves the DB-level
+  immutability-on-invalidation guarantee directly (by hand-setting the state), independent of who
+  eventually calls it.
+- Mid-attempt time extension by an administrator (distinct from decision 2's freeze-at-creation
+  grant) — not trivially cheap (would need its own lock discipline against a racing answer-save),
+  named as a candidate for B14 or a small dedicated follow-up, not built here.
+- `toMarkingAttemptPackage()` — no caller exists until B14; not written ahead of a real need.
+
+## Implementation notes
+
+**Two real design refinements found during implementation, both improving on the phase's own
+original plan:**
+
+1. **The advisory lock needed `$executeRaw`, not `$queryRaw`.** `pg_advisory_xact_lock()` returns
+   `void`, which Prisma's `$queryRaw` cannot deserialize ("Failed to deserialize column of type
+   'void'") — invisible until the very first real concurrency test ran. `$executeRaw` (which only
+   needs a row count, never a typed result) is correct here regardless, and is in fact the more
+   idiomatic choice for a statement whose return value is never consumed.
+2. **Out-of-order replay protection is one atomic SQL statement, not a SELECT-then-branch-then-write
+   sequence.** The original plan called for a `SELECT sequenceNumber ... FOR UPDATE` read followed by
+   a conditional upsert — correct once a row already exists (the lock serializes concurrent writers),
+   but leaves a real gap on a question's very first write, where there is no row yet to lock: two
+   concurrent first-writes could both read "no existing row," both decide "not stale," and then race
+   on the upsert itself with the actual stored outcome decided by commit order, not sequence order.
+   Replaced with a single `INSERT ... ON CONFLICT (...) DO UPDATE ... WHERE attempt_answers
+.sequence_number <= EXCLUDED.sequence_number` — Postgres's own atomic "keep only the highest-or-
+   equal-sequence write" idiom, correct under concurrency with no additional lock needed, and a
+   direct instance of `R-07`'s own "confine raw SQL to a small, explicitly-named set of exam-engine
+   repository methods" guidance.
+
+**One real cross-cutting fixture bug found only by running the integration suite, not by
+inspection**: `POST /students/:id/reset-credentials` (B6) issues a real password but leaves
+`credentialState: 'MUST_CHANGE_PASSWORD'`, which `AuthGuard`'s forced-password-change gate blocks
+every route behind except `POST /auth/password/change` — the first time any test suite in this
+codebase has needed a STUDENT actor to actually complete a real login and then call further routes
+(every prior phase's tests either never logged in as a student, or only checked the login response
+itself). Every prior phase's own teacher/HOD/admin test fixtures avoid this identical gate by setting
+`passwordHash`/`credentialState: 'OK'` directly via Prisma, bypassing the forced-change flow
+entirely — this phase's own student fixtures now follow that exact same established convention.
+
+**One `scripts/lint-schema-tenancy.mjs` recurrence, already documented once by B7**: a doc comment on
+`AttemptEvent.metadata` originally used literal `{ fromIp, toIp }` braces to illustrate the field's
+shape, which broke that script's own naive brace-matching regex (falsely reporting the model as
+missing its `schoolId` index, which it did not). Reworded to avoid literal braces, exactly matching
+B7's own prior fix for the identical class of false positive.
+
+**Control Center un-stubbing** (`packages/domain/src/exam-control/control-cache.ts`,
+`apps/api/src/modules/execution/exam-control-snapshot.util.ts`, `apps/worker/src/queues/exam-control-
+refresh.queue.ts`): `inProgressCount`/`submittedCount`/`liveAttempts`/`attemptDataAvailable` all flip
+from B12's own honest `0`/`[]`/`false` placeholders to real, independently-counted values (never
+derived by subtraction, so a future attempt type can never drive a count negative) in both of the
+two independent implementations (the app's own live-read path and the worker's periodic sweep, which
+cannot share code across the app/worker boundary — an already-documented, pre-existing constraint,
+not new to this phase). One pre-existing B12 integration test (`exam-control.integration.test.ts`'s
+own "DoD 8" case) asserted the old placeholder value and was updated to assert the new, real one — a
+required, narrowly-scoped consequence of un-stubbing, not a silent behavior change: the test's other
+assertions (all genuinely-zero counts, since no attempt exists in that test) are unchanged and still
+correct, only `attemptDataAvailable` itself flips from the honest `false` to the now-equally-honest
+`true`.
+
+**Schema/service structure**: five new tables (`ExamAttempt`, `AttemptQuestionSnapshot`,
+`AttemptAnswer`, `AttemptAnswerEvent`, `AttemptEvent`) plus the `ExamSessionParticipant.
+extraTimeSeconds` extension, all in the existing `ExecutionModule` (no new module, per that module's
+own B12-era doc comment anticipating this). Six hand-written migration additions: RLS bootstrap for
+all five new tables, the `exam_attempts_active_unique` partial index, a state-transition-guard
+trigger mirroring `exam_sessions_status_transition_guard`'s own B12 shape, an unconditional
+immutability trigger for `attempt_question_snapshots` (mirroring B9's `question_reviews` shape — no
+second Postgres role reads this table, unlike `audit_events`, so the simpler unconditional-trigger
+treatment is sufficient, not B10's grant-REVOKE-plus-`grantAppRole()`-reassertion treatment), a
+parent-status-gated immutability trigger for `attempt_answers` (mirroring B8's `question_options`
+shape), and an unconditional trigger for `attempt_answer_events` (B9 shape again). One new permission
+row, `examAdmin.grantExtraTime`, graded identically to `examAdmin.allowStudent`'s own shape — 156
+rows, up from 155, confirmed via the regenerated permission-table doc. Ten `awaitingResource` tags
+cleared (every `studentCbt.*`/`examAdmin.{viewLiveAttempts,seeStarted,seeCompleted,endAttempt}` row
+this phase resolves); `examAdmin.invalidateAttempt`/`.grantMakeup`/`studentCbt.autoSubmit` stay
+tagged, correctly, for B14.
+
+**Testing**: `attempt.integration.test.ts` (25 tests, real HTTP via `app.inject()` against a real
+running `AppModule` and real Postgres, mirroring `exam-control.integration.test.ts`'s own harness) —
+every DoD item, the two DB triggers proven directly via raw SQL bypassing the service layer entirely,
+a 20-way concurrent-start race, out-of-order replay, the grace window's exact boundary, cross-student
+and cross-tenant denial, and the release-blocking X-05 contract test. Three pure-unit test files with
+zero DB dependency (`attempt-snapshot-builder.test.ts` — seeded-determinism and randomization proofs;
+`attempt-snapshot-projection.mapper.test.ts` — the X-05 allow-list guarantee proven at the unit level
+too, not only via integration; `attempt-admissibility.util.test.ts` — the grace-window boundary
+arithmetic). `tests/tenancy/rls.integration.test.ts` gained a **new, dedicated** describe block (not
+an extension of the shared B5-B9 or B11/B12 blocks) for all five new tables — required, not
+optional: `attempt_question_snapshots` and `attempt_answer_events` both carry unconditional
+immutability triggers, which would abort a shared multi-row `deleteMany` cleanup on the first blocked
+row, exactly the reasoning that already forced the B11/B12 block to stay separate from the shared
+one. Full pipeline green throughout, run in full after every fix: `pnpm lint && pnpm typecheck &&
+pnpm test && pnpm build` at the monorepo root (16/16 turbo tasks), the full `apps/api` integration
+suite (298/298, including every pre-existing B0–B12 test re-confirmed with zero regression beyond the
+one intentional B12 assertion update above), the full `apps/worker` integration suite (22/22), and
+the full RLS suite (118/118, up from 103). A real `node dist/main.js` boot confirmed
+`PolicyCoverageService` reports 194 routes checked (up from 182) with zero violations.
 
 ---
 
@@ -4024,7 +4119,7 @@ These apply to **every** phase and are part of every Definition of Done.
 
 ## Phase Completion Tracking
 
-Rows B0–B9 were left at their original NOT STARTED placeholder since this table was first written — never updated as each phase's own section above (and `CLAUDE.md`'s change log) was marked complete. Corrected here (2026-08-30, while updating B9's own row) as a pure documentation-accuracy fix — no code, schema, or status claim beyond what each phase's own section already independently records.
+Rows B0–B9 were left at their original NOT STARTED placeholder since this table was first written — never updated as each phase's own section above (and `CLAUDE.md`'s change log) was marked complete. Corrected here (2026-08-30, while updating B9's own row) as a pure documentation-accuracy fix — no code, schema, or status claim beyond what each phase's own section already independently records. Rows B10–B12 had the identical staleness (each phase's own section above already recorded them complete) — corrected here again (2026-09-05, while updating B13's own row), same pure documentation-accuracy fix, same reason.
 
 | Phase | Status      | Started    | Completed  | Notes                                                                                                                                                                                                                                                                            |
 | ----- | ----------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -4038,10 +4133,10 @@ Rows B0–B9 were left at their original NOT STARTED placeholder since this tabl
 | B7    | COMPLETE    | 2026-08-29 | 2026-08-29 | Settle A-17 in phase                                                                                                                                                                                                                                                             |
 | B8    | COMPLETE    | 2026-08-29 | 2026-08-29 | Decided: ADR-0001                                                                                                                                                                                                                                                                |
 | B9    | COMPLETE    | 2026-08-30 | 2026-08-30 | Decided: ADR-0001, 0017, 0012                                                                                                                                                                                                                                                    |
-| B10   | NOT STARTED | —          | —          | Decided: ADR-0019                                                                                                                                                                                                                                                                |
-| B11   | NOT STARTED | —          | —          | Decided: ADR-0002, 0013, 0029                                                                                                                                                                                                                                                    |
-| B12   | NOT STARTED | —          | —          | Decided: ADR-0006, 0009, 0020                                                                                                                                                                                                                                                    |
-| B13   | NOT STARTED | —          | —          | Decided: ADR-0002, 0003, 0007, 0008, 0020, 0021                                                                                                                                                                                                                                  |
+| B10   | COMPLETE    | 2026-09-03 | 2026-09-03 | Decided: ADR-0019                                                                                                                                                                                                                                                                |
+| B11   | COMPLETE    | 2026-09-03 | 2026-09-03 | Decided: ADR-0002, 0013, 0029                                                                                                                                                                                                                                                    |
+| B12   | COMPLETE    | 2026-09-04 | 2026-09-04 | Decided: ADR-0006, 0009, 0020                                                                                                                                                                                                                                                    |
+| B13   | COMPLETE    | 2026-09-05 | 2026-09-05 | Decided: ADR-0002, 0003, 0007, 0008, 0020, 0021                                                                                                                                                                                                                                  |
 | B14   | NOT STARTED | —          | —          | Decided: ADR-0003, 0004                                                                                                                                                                                                                                                          |
 | B15   | NOT STARTED | —          | —          | Decided: ADR-0010, 0018, 0025                                                                                                                                                                                                                                                    |
 | B16   | NOT STARTED | —          | —          | Decided: ADR-0014, 0024                                                                                                                                                                                                                                                          |

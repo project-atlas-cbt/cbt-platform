@@ -26,6 +26,10 @@ import { ExamLifecycleService } from './exam-lifecycle.service.js';
 import { ExamSessionParticipantService } from './exam-session-participant.service.js';
 import { ExamSessionService } from './exam-session.service.js';
 import {
+  AttemptLifecycleService,
+  type AttemptRequestContext,
+} from './attempt-lifecycle.service.js';
+import {
   AssignExamAdministratorDto,
   EligibleStudentsResponseDto,
   ExamAdministratorListResponseDto,
@@ -34,6 +38,21 @@ import {
   OpenExamSessionDto,
 } from './dto/exam-session.dto.js';
 import { CompleteExamDto, ExamControlCenterResponseDto } from './dto/exam-control-center.dto.js';
+import { AttemptPackageResponseDto } from './dto/attempt.dto.js';
+
+function attemptRequestContext(
+  req: FastifyRequest,
+  user: AuthenticatedUser,
+): AttemptRequestContext {
+  const userAgent = req.headers['user-agent'];
+  const deviceId = req.headers['x-device-id'];
+  return {
+    ...(req.ip !== undefined && { ipAddress: req.ip }),
+    ...(typeof userAgent === 'string' && { userAgent }),
+    ...(typeof deviceId === 'string' && { deviceId }),
+    sessionId: user.sessionId,
+  };
+}
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
@@ -57,7 +76,30 @@ export class ExamControlController {
     private readonly controlCenter: ExamControlCenterService,
     private readonly stream: ExamControlStreamService,
     private readonly completion: ExamCompletionService,
+    private readonly attempts: AttemptLifecycleService,
   ) {}
+
+  @Post(':id/attempts')
+  @HttpCode(HttpStatus.OK)
+  @Authorized('studentCbt.start')
+  @ApiOperation({
+    summary:
+      "Start (or idempotently resume) this student's attempt — the highest-integrity transaction in the product (07 §23-24, 09 §47).",
+  })
+  @ApiOkResponse({ type: AttemptPackageResponseDto })
+  async startAttempt(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+  ): Promise<AttemptPackageResponseDto> {
+    const user = currentUser(req);
+    return this.attempts.start(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      id,
+      attemptRequestContext(req, user),
+      { actorUserId: user.userId, actorRole: 'STUDENT' },
+    );
+  }
 
   @Post(':id/close')
   @HttpCode(HttpStatus.OK)

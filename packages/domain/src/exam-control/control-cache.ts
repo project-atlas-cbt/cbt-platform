@@ -61,9 +61,9 @@ export interface ExamControlCenterSessionSnapshot {
 export interface ExamControlCenterAggregateSnapshot {
   authorizedCount: number;
   notStartedCount: number;
-  /** Always 0 until B13 — no `ExamAttempt` exists yet, never fabricated. */
+  /** B13: `count(ExamAttempt.state = 'IN_PROGRESS')` for this exam. */
   inProgressCount: number;
-  /** Always 0 until B13 — no `ExamAttempt` exists yet, never fabricated. */
+  /** B13: `count(ExamAttempt.state IN ('SUBMITTED', 'AUTO_SUBMITTED'))`. */
   submittedCount: number;
   absentCount: number;
   attemptDataAvailable: boolean;
@@ -76,13 +76,13 @@ export interface ExamControlCenterStalenessSnapshot {
 }
 
 /** Shared by `GET /v1/exams/:id/control`'s response and every SSE event
- * this exam's channel publishes — additive-only for B13. */
+ * this exam's channel publishes. */
 export interface ExamControlCenterSnapshot {
   examId: string;
   examStatus: ExamStatus;
   sessions: ExamControlCenterSessionSnapshot[];
   aggregate: ExamControlCenterAggregateSnapshot;
-  /** Reserved shape for B13 — always `[]` in B12. */
+  /** B13: one row per currently-`IN_PROGRESS` `ExamAttempt` for this exam. */
   liveAttempts: { studentProfileId: string; status: string; timeRemainingSeconds: number | null }[];
   staleness: ExamControlCenterStalenessSnapshot;
   computedAt: string;
