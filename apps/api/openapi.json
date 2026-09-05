@@ -6270,7 +6270,7 @@
             }
           }
         },
-        "summary": "Liveness only (ADR-0020) — never blocks or delays answering.",
+        "summary": "Liveness (ADR-0020) plus the decision-1 device/session-binding signal — never blocks or delays answering.",
         "tags": ["attempts"]
       }
     },
@@ -6368,6 +6368,35 @@
           }
         },
         "summary": "Staff-initiated end of a running attempt.",
+        "tags": ["attempts"]
+      }
+    },
+    "/attempts/{id}/status": {
+      "get": {
+        "operationId": "AttemptController_status",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B14: post-submission status for the confirmation screen — live-aggregated marking output, never a Result (B15).",
         "tags": ["attempts"]
       }
     },
@@ -11514,6 +11543,89 @@
           "submittedAt",
           "invalidationReason"
         ]
+      },
+      "AttemptMarkingStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["NOT_APPLICABLE", "PENDING", "COMPLETE"],
+            "description": "NOT_APPLICABLE while the attempt is still IN_PROGRESS (or was invalidated/cancelled — never submitted); PENDING once finalized but not yet fully marked (the queued marking job has not completed); COMPLETE once every question has a recorded result."
+          },
+          "questionCount": {
+            "type": "number"
+          },
+          "markedCount": {
+            "type": "number"
+          },
+          "correctCount": {
+            "type": "number"
+          },
+          "incorrectCount": {
+            "type": "number"
+          },
+          "unansweredCount": {
+            "type": "number"
+          },
+          "partialCount": {
+            "type": "number",
+            "description": "Always 0 this phase — PARTIAL is reserved for a future non-objective type."
+          },
+          "awardedMarks": {
+            "type": "number"
+          },
+          "maximumMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number",
+            "nullable": true,
+            "description": "null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE."
+          }
+        },
+        "required": [
+          "status",
+          "questionCount",
+          "markedCount",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "partialCount",
+          "awardedMarks",
+          "maximumMarks",
+          "percentage"
+        ]
+      },
+      "AttemptStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "AUTO_SUBMITTED",
+              "INVALIDATED",
+              "CANCELLED"
+            ]
+          },
+          "submittedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "marking": {
+            "$ref": "#/components/schemas/AttemptMarkingStatusDto"
+          }
+        },
+        "required": ["attemptId", "examId", "state", "submittedAt", "marking"]
       },
       "ActiveAssessmentResponseDto": {
         "type": "object",

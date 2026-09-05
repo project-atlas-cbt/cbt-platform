@@ -2617,7 +2617,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Liveness only (ADR-0020) — never blocks or delays answering. */
+        /** Liveness (ADR-0020) plus the decision-1 device/session-binding signal — never blocks or delays answering. */
         post: operations["AttemptController_heartbeat"];
         delete?: never;
         options?: never;
@@ -2670,6 +2670,23 @@ export interface paths {
         put?: never;
         /** Staff-initiated end of a running attempt. */
         post: operations["AttemptController_end"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** B14: post-submission status for the confirmation screen — live-aggregated marking output, never a Result (B15). */
+        get: operations["AttemptController_status"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4305,6 +4322,33 @@ export interface components {
             /** Format: date-time */
             submittedAt: string | null;
             invalidationReason: string | null;
+        };
+        AttemptMarkingStatusDto: {
+            /**
+             * @description NOT_APPLICABLE while the attempt is still IN_PROGRESS (or was invalidated/cancelled — never submitted); PENDING once finalized but not yet fully marked (the queued marking job has not completed); COMPLETE once every question has a recorded result.
+             * @enum {string}
+             */
+            status: "NOT_APPLICABLE" | "PENDING" | "COMPLETE";
+            questionCount: number;
+            markedCount: number;
+            correctCount: number;
+            incorrectCount: number;
+            unansweredCount: number;
+            /** @description Always 0 this phase — PARTIAL is reserved for a future non-objective type. */
+            partialCount: number;
+            awardedMarks: number;
+            maximumMarks: number;
+            /** @description null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE. */
+            percentage: number | null;
+        };
+        AttemptStatusResponseDto: {
+            attemptId: string;
+            examId: string;
+            /** @enum {string} */
+            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
+            /** Format: date-time */
+            submittedAt: string | null;
+            marking: components["schemas"]["AttemptMarkingStatusDto"];
         };
         ActiveAssessmentResponseDto: {
             examId: string | null;
@@ -8622,6 +8666,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttemptStateResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptStatusResponseDto"];
                 };
             };
         };

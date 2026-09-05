@@ -286,11 +286,11 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | See who has started              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
 | See who has completed            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
 | Manually allow student           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Grant makeup access              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | AttemptAuthorization (B14, ADR-0014) |
+| Grant makeup access              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | AttemptAuthorization (B16, ADR-0014) |
 | Mark/confirm absence             | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
 | End individual attempt           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
 | Grant extra time (accommodation) | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Invalidate attempt               | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | ⏸ DEFERRED | —       | ExamAttempt (B14)                    |
+| Invalidate attempt               | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | ⏸ DEFERRED | —       | ExamAttempt (B16, ADR-0014)          |
 
 <details><summary>Notes</summary>
 
@@ -311,16 +311,16 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Student CBT
 
-| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER | STUDENT | Awaiting                            |
-| -------------------------- | -------------- | ------------ | --------- | ------ | ------- | ------- | ----------------------------------- |
-| View active assessment     | —              | —            | —         | —      | —       | SELF    |                                     |
-| Start exam                 | —              | —            | —         | —      | —       | SELF    |                                     |
-| Answer questions           | —              | —            | —         | —      | —       | SELF    |                                     |
-| Navigate questions         | —              | —            | —         | —      | —       | SELF    |                                     |
-| Submit exam                | —              | —            | —         | —      | —       | SELF    |                                     |
-| Auto-submit on timeout     | SYSTEM         | SYSTEM       | SYSTEM    | SYSTEM | SYSTEM  | SYSTEM  | ExamAttempt sweeper (B14, ADR-0004) |
-| Resume interrupted attempt | —              | —            | —         | —      | —       | SELF    |                                     |
-| View previous results      | —              | —            | —         | —      | —       | SELF ⚠️ | Result (B15), school setting (B17)  |
+| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER | STUDENT | Awaiting                           |
+| -------------------------- | -------------- | ------------ | --------- | ------ | ------- | ------- | ---------------------------------- |
+| View active assessment     | —              | —            | —         | —      | —       | SELF    |                                    |
+| Start exam                 | —              | —            | —         | —      | —       | SELF    |                                    |
+| Answer questions           | —              | —            | —         | —      | —       | SELF    |                                    |
+| Navigate questions         | —              | —            | —         | —      | —       | SELF    |                                    |
+| Submit exam                | —              | —            | —         | —      | —       | SELF    |                                    |
+| Auto-submit on timeout     | SYSTEM         | SYSTEM       | SYSTEM    | SYSTEM | SYSTEM  | SYSTEM  |                                    |
+| Resume interrupted attempt | —              | —            | —         | —      | —       | SELF    |                                    |
+| View previous results      | —              | —            | —         | —      | —       | SELF ⚠️ | Result (B15), school setting (B17) |
 
 <details><summary>Notes</summary>
 
@@ -332,7 +332,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 | Action                         | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR  | HOD        | TEACHER     | STUDENT | Awaiting                              |
 | ------------------------------ | -------------- | ------------ | ---------- | ---------- | ----------- | ------- | ------------------------------------- |
-| Automatic marking              | SYSTEM         | SYSTEM       | SYSTEM     | SYSTEM     | SYSTEM      | —       | Result (B14/B15)                      |
+| Automatic marking              | SYSTEM         | SYSTEM       | SYSTEM     | SYSTEM     | SYSTEM      | —       | Result (B15)                          |
 | View exam results              | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | SELF ⚠️ | Result (B15)                          |
 | View individual student result | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | SELF    | Result (B15)                          |
 | View class performance         | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | —       | Result (B16/B17 analytics)            |

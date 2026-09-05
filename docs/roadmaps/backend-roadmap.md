@@ -58,8 +58,8 @@ If a future decision is reopened or superseded, the affected phases return to **
 | B10 | Audit & Notifications              | 0019                               | F2 (surface)  | NOT STARTED |
 | B11 | Exam Builder & Readiness           | 0002, 0013, 0029                   | F11           | COMPLETE    |
 | B12 | Exam Activation & Control          | 0006, 0009, 0020                   | F12           | NOT STARTED |
-| B13 | Attempt Engine                     | 0002, 0003, 0007, 0008, 0020, 0021 | F13           | NOT STARTED |
-| B14 | Submission & Marking               | 0003, 0004                         | F13           | NOT STARTED |
+| B13 | Attempt Engine                     | 0002, 0003, 0007, 0008, 0020, 0021 | F13           | COMPLETE    |
+| B14 | Submission & Marking               | 0003, 0004                         | F13           | COMPLETE    |
 | B15 | Results & Publication              | 0010, 0018, 0025                   | F15           | NOT STARTED |
 | B16 | Participation, Absence & Makeup    | 0014, 0024                         | F16           | NOT STARTED |
 | B17 | Analytics                          | 0002, 0025                         | F17           | NOT STARTED |
@@ -3066,7 +3066,7 @@ the full RLS suite (118/118, up from 103). A real `node dist/main.js` boot confi
 
 # B14 — Submission & Marking
 
-**Status:** NOT STARTED · **Decided ADRs:** 0003 (cutoff), 0004 (auto-submission ownership)
+**Status:** COMPLETE (2026-09-05) · **Decided ADRs:** 0003 (cutoff), 0004 (auto-submission ownership)
 
 ## Objective
 
@@ -3144,29 +3144,52 @@ B15 creates results from marking output. The sweeper must coordinate with B12's 
 
 ## Definition of Done
 
-1. Manual submission transitions `IN_PROGRESS → SUBMITTED`, freezes answers, and records the timestamp.
-2. The confirmation warns of unanswered questions with an accurate count (`05 §37`).
-3. Repeated submission is idempotent — one result, one marking run, same response.
-4. Time expiry produces `AUTO_SUBMITTED` with no student interaction and no confirmation prompt (`05 §34`).
-5. **An attempt abandoned entirely — browser closed, power lost — is auto-submitted by the sweeper and marked**, without which the exam could never reach `COMPLETED`.
-6. A race between manual submit, sweeper, and opportunistic finalisation yields exactly one submission.
-7. Marking evaluates every snapshot question and produces correct per-question results.
-8. Totals, percentage, and correct/incorrect/unanswered counts are arithmetically correct against fixtures.
-9. Marking is idempotent; re-running produces identical results without duplication.
-10. A marking worker crash leaves the attempt finalised and marking resumable.
-11. Editing the source question after the exam does not change any recorded mark.
-12. Answers cannot be modified after submission — enforced by constraint.
-13. Submissions are audited.
+1. ✅ Manual submission transitions `IN_PROGRESS → SUBMITTED`, freezes answers, and records the timestamp — unchanged from B13, extended to enqueue marking after the transition commits.
+2. ⚠️ Honestly partial — the confirmation UI's unanswered-count warning is F13's job; B14's own server contract supports it (the client already has every question's `selectedOptionId` from the attempt package) but this phase built no new endpoint for it.
+3. ✅ Repeated submission is idempotent — one result, one marking run, same response (proven via a stable `mark-${attemptId}` jobId plus the pre-existing conditional-`updateMany` guard).
+4. ✅ Time expiry produces `AUTO_SUBMITTED` with no student interaction — via the sweeper and, additionally, opportunistic finalisation at every relevant touchpoint (heartbeat, answer-write's rejection path, submit's own late-arrival path, resume, status).
+5. ✅ **An attempt abandoned entirely is auto-submitted by the sweeper and marked** — proven in `attempt-auto-submit.integration.test.ts`.
+6. ✅ A race between manual submit, sweeper, and opportunistic finalisation yields exactly one submission — proven via a 10-way concurrent `POST /submit` race and a sweeper-vs-already-SUBMITTED stand-in.
+7. ✅ Marking evaluates every snapshot question and produces correct per-question results.
+8. ✅ Totals, percentage, and correct/incorrect/unanswered counts are arithmetically correct — proven both by `@atlas/domain`'s unit tests and `GET /status`'s own live-aggregation integration test.
+9. ✅ Marking is idempotent; re-running produces identical results without duplication (an unconditional upsert, since the two frozen inputs never change between runs).
+10. ✅ A marking worker crash leaves the attempt finalised and marking resumable — proven by a forced mid-run throw (full transactional rollback, then a clean re-run).
+11. ✅ Editing the source question after the exam does not change any recorded mark — proven structurally (the marking function's signature has no DB parameter at all) rather than by mutating a live fixture; see `attempt-marking.integration.test.ts`'s own header comment for the full reasoning.
+12. ✅ Answers cannot be modified after submission — unchanged from B13, untouched by this phase.
+13. ✅ Submissions are audited — `ATTEMPT_SUBMITTED` (B13) and `ATTEMPT_AUTO_SUBMITTED` (new).
 
 ## Exit criteria
 
-- ADR-0003 and ADR-0004 decided and implemented.
-- Concurrency, timeout, and failure suites green as merge blockers.
-- `09 §39`'s golden-path test passes end to end with B13.
+- ✅ ADR-0003 and ADR-0004 decided and implemented.
+- ✅ Concurrency, timeout, and failure suites green — all merge-blocking.
+- ⚠️ `09 §39`'s full golden-path test (through B15's `Result`) can't close until B15 exists; B14's own half (submit → auto-submit → mark) is proven end to end.
 
 ## Deferred items
 
 - Marking of non-objective question types (essay, short answer) — out of scope for this release (`05 §15.2`); `PARTIAL` exists in the model for future use.
+- `Result`, `ResultPublication`, `GradingScale`, `ResultAdjustment` — B14 stays entity-free for `Result` by confirmed decision; B15's own job, reading `AttemptQuestionResult` as its marking-output input.
+- `AttemptAuthorization` (makeup/retry), `examAdmin.invalidateAttempt`/`.grantMakeup` — confirmed deferred to B16, matching ADR-0014's own "Blocks phases: B16." Two permission-table `awaitingResource` tags and one schema comment that previously said "B14" were corrected to say B16 as part of this phase's own documentation-accuracy pass (no grant or schema shape changed).
+- The confirmation screen's unanswered-count warning UI (DoD item 2) — F13's job; the server data it needs already exists.
+- A "finalized attempt with no marking output and no pending job" reconciliation scan for the narrow case where `enqueueMarking()` itself fails after a successful finalisation transition — a known, documented residual risk (see `AttemptFinalizationService`'s own doc comment), not built this phase; a candidate for a future hardening pass or B21.
+- The full concurrent-load test against a real latency budget — B21's job, per ADR-0004's own "sized against B21 load results" text.
+
+## Implementation notes (2026-09-05)
+
+**Two genuine architecture-boundary decisions confirmed with the project owner before implementation, not guessed, per this codebase's own established practice:**
+
+1. **B14 stays entity-free for `Result`.** Only `AttemptQuestionResult` (per-question marking output) is persisted. Totals/percentage/counts for `GET /v1/attempts/:id/status` are computed **live** by aggregating those rows on every read — never persisted as a `Result` row. This reading is the more literal one given the roadmap's own DB-work section (which never lists a `Result` table as B14's own deliverable) and its own "B15 creates results from marking output" phrasing.
+2. **`AttemptAuthorization`/`examAdmin.invalidateAttempt`/`.grantMakeup` are deferred to B16**, per ADR-0014's own "Blocks phases: B16" — not built here, despite the permission table's own `awaitingResource` tags (and one schema comment) previously saying "B14." Corrected as part of this phase's documentation-accuracy pass; no grant shape or scope changed.
+3. **A manual `POST /submit` arriving past the grace window now opportunistically finalizes to `AUTO_SUBMITTED` and returns 200**, instead of the `400 ATTEMPT_WRITE_WINDOW_CLOSED` B13 left there — a confirmed, deliberate behavior change completing ADR-0004's "any server request touching an expired attempt finalises it immediately" in the one narrow race window that error case represented.
+
+**Schema**: one new table, `AttemptQuestionResult` (keyed `(schoolId, attemptId, examQuestionId)`, matching `AttemptAnswer`'s own shape), one new enum (`AttemptQuestionCorrectness`), one new school-scoped partial index for the sweeper (`exam_attempts (school_id, expires_at) WHERE state = 'IN_PROGRESS'`), and one genuinely new trigger idiom (not one of B13's three): a parent-state-gated **write** guard blocking INSERT/UPDATE only _while_ the parent attempt is still `IN_PROGRESS` — never blocking for any other reason, since re-marking (an upsert) is a deliberate, expected overwrite, not an anomaly requiring an immutability trigger the way `AttemptAnswer`/`AttemptQuestionSnapshot` need one.
+
+**Cross-app sharing (`packages/domain/src/execution/`, new)**: `evaluateWriteAdmissibility`/`attemptGraceWindowSeconds` moved out of `apps/api`-local code — the first phase where a second app (`apps/worker`'s sweeper) needs the identical grace-window boundary, and a hand-duplicated second copy would be exactly the drift risk `AGENTS.md §5` names by name. `computeAttemptQuestionMarkingResults` (new) is a single shared pure function with no DB parameter at all — structurally incapable of reading the live question bank, which is what makes DoD item 11 true by construction, not merely by testing. `ATTEMPT_MARKING_QUEUE_NAME`/`AttemptMarkingJobPayload` mirror `packages/notifications`' own dispatch-queue contract shape exactly.
+
+**The marking-job consumer lives in `apps/worker`, not `apps/api`** — a deliberate departure from B7/B10's own precedent (both hosted their consumers in `apps/api` specifically because they reuse Nest-DI-resolved singletons `apps/worker` cannot reach). Marking has no such dependency, so its consumer lives where background jobs default to living in this codebase, giving real BullMQ retry/backoff/crash-resumability with no extra bootstrap machinery. Three producers share the one queue across two processes: `apps/api`'s `submit()`/`end()`/`AttemptFinalizationService`, and `apps/worker`'s own sweeper.
+
+**A real, live-verified end-to-end proof, not just component-level tests**: booting the real compiled `apps/api` and `apps/worker` processes against the same Redis showed ~20 real marking jobs — enqueued by earlier `apps/api` integration-test runs exercising `submit()`/`end()` for real (each test file boots its own separate `AppModule`, so only `attempt.integration.test.ts`'s own mocked spy suppresses its own calls) — complete successfully once the worker started consuming, proving the cross-process queue mechanism works for real, not just against mocks. One additional job failed, traced directly to a stray, malformed leftover fixture from this session's own earlier (already-fixed) test-writing iterations against the shared dev database, not a product defect — the marking job correctly rejected the malformed input with a clear Postgres error rather than corrupting anything.
+
+Full pipeline green: `pnpm lint && pnpm typecheck && pnpm build` at the monorepo root (16/16 turbo tasks), the schema-tenancy lint (47 models), the full `apps/api` integration suite (306 tests across 36 files, zero regressions), the full `apps/worker` integration suite (32 tests across 7 files, including the two new B14 files), and the extended RLS suite (`tests/tenancy/rls.integration.test.ts`, 121 tests, the B13/B14 describe block now 18 of them) — plus `pnpm generate` (`GET /v1/attempts/:id/status` published in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (156 rows, confirmed unchanged in count — the two `studentCbt.autoSubmit`/`results.automaticMarking` tag edits and two ADR-0014 stale-tag corrections are documentation-only). A real `node dist/main.js` boot (apps/api) confirmed `PolicyCoverageService` reports 195 routes checked with zero violations (up from 194 — the new status route); a real `node dist/main.js` boot (apps/worker) confirmed both new queues (`atlas-attempt-auto-submit-sweep`, sweep every 15000ms; `atlas-attempt-marking`, per-item consumer) register correctly alongside every pre-existing sweep. One pre-existing, unrelated test failure was observed and confirmed (via `git stash`) to already exist on unmodified `dev` branch code before this phase touched anything: `attempt-snapshot-projection.mapper.test.ts`'s own "resolves media URLs... defaulting to empty strings when unresolved" case, a stale assertion from before a B13-era fix changed unresolved-media handling from blank-string to omission — not fixed here, per `AGENTS.md §15`'s "no unrelated broad refactors" (recorded as a Candidate for whoever next touches that file).
 
 ---
 
@@ -4137,7 +4160,7 @@ Rows B0–B9 were left at their original NOT STARTED placeholder since this tabl
 | B11   | COMPLETE    | 2026-09-03 | 2026-09-03 | Decided: ADR-0002, 0013, 0029                                                                                                                                                                                                                                                    |
 | B12   | COMPLETE    | 2026-09-04 | 2026-09-04 | Decided: ADR-0006, 0009, 0020                                                                                                                                                                                                                                                    |
 | B13   | COMPLETE    | 2026-09-05 | 2026-09-05 | Decided: ADR-0002, 0003, 0007, 0008, 0020, 0021                                                                                                                                                                                                                                  |
-| B14   | NOT STARTED | —          | —          | Decided: ADR-0003, 0004                                                                                                                                                                                                                                                          |
+| B14   | COMPLETE    | 2026-09-05 | 2026-09-05 | Decided: ADR-0003, 0004                                                                                                                                                                                                                                                          |
 | B15   | NOT STARTED | —          | —          | Decided: ADR-0010, 0018, 0025                                                                                                                                                                                                                                                    |
 | B16   | NOT STARTED | —          | —          | Decided: ADR-0014, 0024                                                                                                                                                                                                                                                          |
 | B17   | NOT STARTED | —          | —          | Decided: ADR-0002, 0025                                                                                                                                                                                                                                                          |

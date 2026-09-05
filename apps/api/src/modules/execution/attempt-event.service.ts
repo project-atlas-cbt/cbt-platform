@@ -3,6 +3,7 @@ import { prisma, withTenant, type Prisma } from '@atlas/db';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
+import { AttemptFinalizationService } from './attempt-finalization.service.js';
 import { loadAttemptWithOwnerOrThrow } from './attempt-mappers.js';
 import type { RecordAttemptEventDto } from './dto/attempt.dto.js';
 
@@ -17,7 +18,10 @@ import type { RecordAttemptEventDto } from './dto/attempt.dto.js';
 export class AttemptEventService {
   private readonly logger = new Logger(AttemptEventService.name);
 
-  constructor(private readonly authz: AuthorizationService) {}
+  constructor(
+    private readonly authz: AuthorizationService,
+    private readonly finalization: AttemptFinalizationService,
+  ) {}
 
   /** `POST /v1/attempts/:id/events` — a signal, never a judgement (ADR-0020:
    * "the system never labels a student as cheating"). Client-reported and
@@ -60,11 +64,14 @@ export class AttemptEventService {
    * `POST /v1/attempts/:id/heartbeat` — liveness, PLUS decision 1's
    * device/session-binding signal (confirmed this planning session,
    * extending ADR-0020's own "counts, not judgements" scope — see
-   * `schema.prisma`'s B13 header comment). The heartbeat is the natural
-   * carrier for this check: it already runs periodically throughout the
-   * attempt and is, by design, off the critical path — never the answer-
-   * save path, and never a blocking check (a mismatch is recorded, the
-   * heartbeat still succeeds either way).
+   * `schema.prisma`'s B13 header comment), PLUS (B14) ADR-0004's
+   * opportunistic finalisation. The heartbeat is the natural carrier for
+   * all three: it already runs periodically throughout the attempt and is,
+   * by design, off the critical path — never the answer-save path, and
+   * never a blocking check (a mismatch is recorded, the heartbeat still
+   * succeeds either way; finalizeIfExpired's own internal work happens
+   * before liveness/binding are touched, since a just-finalized attempt's
+   * `lastSeenAt` no longer matters the way an in-progress one's does).
    */
   async heartbeat(
     schoolId: string,
@@ -82,6 +89,9 @@ export class AttemptEventService {
         code: 'FORBIDDEN',
         message: 'You do not have permission to send a heartbeat for this attempt.',
       });
+    }
+    if (attempt.state === 'IN_PROGRESS') {
+      await this.finalization.finalizeIfExpired(schoolId, attemptId, new Date());
     }
     await this.touchLastSeen(schoolId, attemptId);
     await this.detectBindingMismatch(schoolId, attempt, requestCtx);

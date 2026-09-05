@@ -1,4 +1,4 @@
-import type { AttemptSnapshotDocumentV1 } from './attempt-snapshot.types.js';
+import type { AttemptSnapshotDocumentV1 } from '@atlas/domain';
 import type { StudentAttemptMediaDto, StudentAttemptQuestionDto } from './dto/attempt.dto.js';
 
 /**
@@ -18,10 +18,12 @@ import type { StudentAttemptMediaDto, StudentAttemptQuestionDto } from './dto/at
  * makes a future accidental field addition to the internal document fail
  * to leak by default rather than leak by default.
  *
- * No `toMarkingAttemptPackage()` exists in this file, or anywhere in B13 —
- * nothing in this phase needs to read `correctFlag` outside
- * `attempt-snapshot-builder.ts`'s own write path. That is B14's extension
- * point to add when it needs one, not built here ahead of a real caller.
+ * B14 added the one other permitted reader of `correctFlag`:
+ * `@atlas/domain`'s `computeAttemptQuestionMarkingResults()` — marking's own
+ * arithmetic, whose output type has no `correctFlag`-shaped field of its
+ * own, so the value cannot leak forward through it either. That function
+ * lives in `@atlas/domain`, not here, since `apps/worker`'s marking-job
+ * consumer needs it too and cannot import this app's source.
  *
  * `mediaUrls` and `answersByExamQuestionId` are pre-resolved by the caller
  * (`attempt-media-manifest.util.ts`'s async signed-URL resolution, and a

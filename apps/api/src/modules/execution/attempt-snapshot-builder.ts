@@ -1,8 +1,8 @@
 import {
   CURRENT_ATTEMPT_SNAPSHOT_DOCUMENT_VERSION,
   type AttemptSnapshotDocumentV1,
-  type SnapshotSourceQuestion,
-} from './attempt-snapshot.types.js';
+} from '@atlas/domain';
+import type { SnapshotSourceQuestion } from './attempt-snapshot.types.js';
 
 /**
  * A deterministic, seedable PRNG (mulberry32, seeded via a 32-bit FNV-1a

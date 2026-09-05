@@ -17,7 +17,10 @@ import { AttemptAnswerService } from './attempt-answer.service.js';
 import { AttemptAuditActionRegistrationProvider } from './attempt-audit-action-registration.provider.js';
 import { AttemptController } from './attempt.controller.js';
 import { AttemptEventService } from './attempt-event.service.js';
+import { AttemptFinalizationService } from './attempt-finalization.service.js';
 import { AttemptLifecycleService } from './attempt-lifecycle.service.js';
+import { AttemptMarkingQueueService } from './attempt-marking-queue.service.js';
+import { AttemptStatusService } from './attempt-status.service.js';
 import { StudentAssessmentController } from './student-assessment.controller.js';
 import { StudentAssessmentService } from './student-assessment.service.js';
 
@@ -82,6 +85,13 @@ import { StudentAssessmentService } from './student-assessment.service.js';
     AttemptEventService,
     StudentAssessmentService,
     AttemptAuditActionRegistrationProvider,
+    // B14 — Submission & Marking. AttemptMarkingQueueService is the
+    // producer-only queue handle; its Worker consumer lives in
+    // apps/worker, not here (attempt-marking-queue.service.ts's own doc
+    // comment has the full reasoning).
+    AttemptFinalizationService,
+    AttemptMarkingQueueService,
+    AttemptStatusService,
   ],
 })
 export class ExecutionModule {}

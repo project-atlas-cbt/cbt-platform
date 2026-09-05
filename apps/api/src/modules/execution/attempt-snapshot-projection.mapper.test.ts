@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toStudentAttemptQuestions } from './attempt-snapshot-projection.mapper.js';
-import type { AttemptSnapshotDocumentV1 } from './attempt-snapshot.types.js';
+import type { AttemptSnapshotDocumentV1 } from '@atlas/domain';
 
 const DOCUMENT: AttemptSnapshotDocumentV1 = {
   version: 1,

@@ -135,3 +135,17 @@ export const ATTEMPT_EVENT_TYPES = [
   'BINDING_MISMATCH',
 ] as const;
 export type AttemptEventType = (typeof ATTEMPT_EVENT_TYPES)[number];
+
+/// B14 (Submission & Marking) — mirrors schema.prisma's
+/// AttemptQuestionCorrectness enum. PARTIAL is reserved/unused this phase
+/// (every question type this codebase supports today is decided purely by
+/// the selected option's correctFlag) — kept for spec fidelity (07 §9.4)
+/// against a future non-objective question type, same precedent as
+/// ATTEMPT_TYPES' own MAKEUP/RETRY/SPECIAL above.
+export const ATTEMPT_QUESTION_CORRECTNESS_VALUES = [
+  'CORRECT',
+  'INCORRECT',
+  'UNANSWERED',
+  'PARTIAL',
+] as const;
+export type AttemptQuestionCorrectness = (typeof ATTEMPT_QUESTION_CORRECTNESS_VALUES)[number];

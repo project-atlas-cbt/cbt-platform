@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  attemptGraceWindowSeconds,
-  evaluateWriteAdmissibility,
-} from './attempt-admissibility.util.js';
+import { attemptGraceWindowSeconds, evaluateWriteAdmissibility } from './attempt-admissibility.js';
 
 describe('attemptGraceWindowSeconds', () => {
   afterEach(() => {

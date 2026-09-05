@@ -1,6 +1,6 @@
 import { prisma, withTenant } from '@atlas/db';
+import type { AttemptSnapshotDocumentV1 } from '@atlas/domain';
 import type { ObjectStorageService } from '../../storage/object-storage.service.js';
-import type { AttemptSnapshotDocumentV1 } from './attempt-snapshot.types.js';
 
 /** ADR-0021: signed URLs need only outlive the client's initial download
  * window at attempt start (or a resume's re-download after a cache

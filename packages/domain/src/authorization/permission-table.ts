@@ -1869,7 +1869,11 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'AttemptAuthorization (B14, ADR-0014)',
+    // B14 stale-tag correction (confirmed decision, this planning session):
+    // ADR-0014 itself states "Blocks phases: B16", and its own Required-
+    // changes list never names B14 — AttemptAuthorization/grantMakeup/
+    // invalidateAttempt are deferred to B16, not built in B14.
+    awaitingResource: 'AttemptAuthorization (B16, ADR-0014)',
   },
   {
     id: 'examAdmin.markAbsence',
@@ -1933,7 +1937,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       ),
       STUDENT: denied(),
     },
-    awaitingResource: 'ExamAttempt (B14)',
+    // B14 stale-tag correction — see examAdmin.grantMakeup's own comment
+    // immediately above for the full reasoning: deferred to B16, not B14.
+    awaitingResource: 'ExamAttempt (B16, ADR-0014)',
   },
 
   // ------------------------------------------------------------------
@@ -2014,6 +2020,12 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     // marking is not what this permission id gates.
   },
   {
+    // B14: the ExamAttempt sweeper (ADR-0004) now exists — apps/worker's
+    // BullMQ repeatable job as the authority, plus opportunistic
+    // finalisation at every relevant apps/api touchpoint, both sharing one
+    // idempotent, conditionally-guarded transition. awaitingResource
+    // cleared; system() grants needed no scope resolver and were never
+    // blocked on anything but the mechanism's existence.
     id: 'studentCbt.autoSubmit',
     section: 'Student CBT',
     label: 'Auto-submit on timeout',
@@ -2026,7 +2038,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: system(),
       STUDENT: system(),
     },
-    awaitingResource: 'ExamAttempt sweeper (B14, ADR-0004)',
   },
   {
     id: 'studentCbt.resume',
@@ -2065,6 +2076,12 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
   // Results
   // ------------------------------------------------------------------
   {
+    // B14: the marking MECHANISM is now real (AttemptQuestionResult per
+    // question, read from the frozen snapshot, idempotent/upsert-based).
+    // awaitingResource narrowed rather than cleared — this row is named
+    // after the `Result` entity, which still genuinely doesn't exist until
+    // B15 (this phase's own confirmed decision: B14 stays entity-free for
+    // `Result` — see AttemptQuestionResult's own schema doc comment).
     id: 'results.automaticMarking',
     section: 'Results',
     label: 'Automatic marking',
@@ -2077,7 +2094,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: system(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Result (B14/B15)',
+    awaitingResource: 'Result (B15)',
   },
   {
     id: 'results.viewExamResults',

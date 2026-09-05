@@ -6,12 +6,18 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
+import {
+  CURRENT_ATTEMPT_SNAPSHOT_DOCUMENT_VERSION,
+  evaluateWriteAdmissibility,
+  type AttemptSnapshotDocumentV1,
+} from '@atlas/domain';
 import { AuditService } from '../operations/audit-event.service.js';
 import { requireSchoolActor } from '../questions/question-scope.util.js';
 import { loadExamOrThrow } from '../exams/exam-mappers.js';
 import { QUESTION_REVISION_INCLUDE } from '../questions/question-mappers.js';
-import { evaluateWriteAdmissibility } from './attempt-admissibility.util.js';
 import { evaluateAttemptStartEligibility } from './attempt-eligibility.util.js';
+import { AttemptFinalizationService } from './attempt-finalization.service.js';
+import { AttemptMarkingQueueService } from './attempt-marking-queue.service.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
 import {
   loadAttemptWithOwnerOrThrow,
@@ -21,11 +27,7 @@ import {
 import { resolveMediaManifest } from './attempt-media-manifest.util.js';
 import { toStudentAttemptQuestions } from './attempt-snapshot-projection.mapper.js';
 import { buildSnapshotDocument } from './attempt-snapshot-builder.js';
-import {
-  CURRENT_ATTEMPT_SNAPSHOT_DOCUMENT_VERSION,
-  type AttemptSnapshotDocumentV1,
-  type SnapshotSourceQuestion,
-} from './attempt-snapshot.types.js';
+import type { SnapshotSourceQuestion } from './attempt-snapshot.types.js';
 import type { AttemptPackageResponseDto, AttemptStateResponseDto } from './dto/attempt.dto.js';
 
 interface ActorContext {
@@ -83,9 +85,10 @@ type StartOutcome =
  * `07 §23`–`§24`/`09 §47`: attempt creation, the highest-integrity
  * transaction in the product. `start()`/`resume()` build the full,
  * projected `AttemptPackageResponseDto` (`08 §11.1` step 7); `submit()`/
- * `end()` own only the state transition and answer freeze — marking
- * (`AttemptQuestionResult`/`Result`) is explicitly B14's job, never
- * invoked from here (see `submit()`'s own doc comment).
+ * `end()` own the state transition and answer freeze, then (B14) enqueue
+ * marking onto the shared `ATTEMPT_MARKING_QUEUE_NAME` queue — never
+ * perform marking itself, and never touch `AttemptQuestionResult` directly
+ * (see `submit()`'s own doc comment).
  */
 @Injectable()
 export class AttemptLifecycleService {
@@ -94,6 +97,8 @@ export class AttemptLifecycleService {
     private readonly audit: AuditService,
     private readonly stream: ExamControlStreamService,
     private readonly storage: ObjectStorageService,
+    private readonly finalization: AttemptFinalizationService,
+    private readonly marking: AttemptMarkingQueueService,
   ) {}
 
   /**
@@ -284,7 +289,15 @@ export class AttemptLifecycleService {
 
   /** `GET /v1/attempts/:id` — DoD item 5: refresh returns byte-identical
    * ordering and every saved answer, since the snapshot document is never
-   * recomputed and every answer is read fresh. */
+   * recomputed and every answer is read fresh.
+   *
+   * B14, opportunistic-finalisation touchpoint (ADR-0004: "any server
+   * request touching an expired attempt finalises it immediately") — not
+   * one of the roadmap's own named "natural candidates" (heartbeat,
+   * answer-write, submit, status), included for literal completeness so a
+   * student reloading an expired-but-not-yet-finalised attempt sees the
+   * correct terminal state immediately rather than a stale IN_PROGRESS
+   * package until the next heartbeat/sweep tick. */
   async resume(
     schoolId: string,
     actor: AuthorizedActor,
@@ -301,19 +314,30 @@ export class AttemptLifecycleService {
         message: 'You do not have permission to view this attempt.',
       });
     }
-    return this.buildAttemptPackage(schoolId, attempt);
+
+    if (attempt.state !== 'IN_PROGRESS') {
+      return this.buildAttemptPackage(schoolId, attempt);
+    }
+    await this.finalization.finalizeIfExpired(schoolId, attemptId, new Date());
+    const current = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+    return this.buildAttemptPackage(schoolId, current);
   }
 
   /**
    * `POST /v1/attempts/:id/submit` — the state transition and answer
-   * freeze ONLY. Deliberately, explicitly does NOT enqueue marking, does
-   * NOT compute a score, and does NOT touch `AttemptQuestionResult`/
-   * `Result` — neither table exists until B14. The admissibility check
-   * mirrors the answer-save path's own ADR-0003 window (a submission
-   * arriving well past expiry-plus-grace is refused the same way a late
-   * answer is, rather than freezing an attempt at an arbitrarily-delayed
-   * moment) — B14 hooks its own marking-queue enqueue immediately after
-   * the transition below commits.
+   * freeze, PLUS (B14) enqueuing marking once that transition commits.
+   * Never marks synchronously inline — the roadmap's own "Submission →
+   * queue marking, keeping the interactive path minimal" — and never
+   * touches `AttemptQuestionResult` itself; that's the marking job's job.
+   *
+   * The admissibility check mirrors the answer-save path's own ADR-0003
+   * window. B14 changed its own `REJECTED` branch (confirmed decision,
+   * this phase's planning session): a manual submit arriving past the
+   * grace window is now treated the same as any other "server request
+   * touching an expired attempt" (ADR-0004) — finalized to
+   * `AUTO_SUBMITTED` and returned as an ordinary success, not the `400
+   * ATTEMPT_WRITE_WINDOW_CLOSED` B13 left here (which pre-dated any
+   * mechanism that could actually resolve the underlying condition).
    */
   async submit(
     schoolId: string,
@@ -337,10 +361,9 @@ export class AttemptLifecycleService {
     if (attempt.state === 'IN_PROGRESS') {
       const admissibility = evaluateWriteAdmissibility(attempt.expiresAt, receivedAt);
       if (admissibility === 'REJECTED') {
-        throw new AppHttpException({
-          code: 'ATTEMPT_WRITE_WINDOW_CLOSED',
-          message: 'This attempt has expired and the grace window has closed.',
-        });
+        await this.finalization.finalizeIfExpired(schoolId, attemptId, receivedAt);
+        const current = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+        return toAttemptStateResponseDto(current);
       }
     }
 
@@ -374,8 +397,7 @@ export class AttemptLifecycleService {
       entityId: attemptId,
     });
     await this.stream.publishUpdate(schoolId, attempt.examId);
-
-    // B14 hooks marking-queue enqueue here, after the transition commits.
+    await this.marking.enqueue({ schoolId, attemptId }, `mark-${attemptId}`);
 
     const updated = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
     return toAttemptStateResponseDto(updated);
@@ -433,6 +455,7 @@ export class AttemptLifecycleService {
       entityId: attemptId,
     });
     await this.stream.publishUpdate(schoolId, attempt.examId);
+    await this.marking.enqueue({ schoolId, attemptId }, `mark-${attemptId}`);
 
     const updated = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
     return toAttemptStateResponseDto(updated);

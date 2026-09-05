@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
+import { evaluateWriteAdmissibility, type AttemptSnapshotDocumentV1 } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
-import { evaluateWriteAdmissibility } from './attempt-admissibility.util.js';
+import { AttemptFinalizationService } from './attempt-finalization.service.js';
 import { loadAttemptWithOwnerOrThrow, type AttemptWithOwner } from './attempt-mappers.js';
 import { AttemptEventService } from './attempt-event.service.js';
-import type { AttemptSnapshotDocumentV1 } from './attempt-snapshot.types.js';
 import type {
   BatchAnswerItemDto,
   BatchAnswerResultDto,
@@ -53,6 +53,7 @@ export class AttemptAnswerService {
   constructor(
     private readonly authz: AuthorizationService,
     private readonly attemptEvents: AttemptEventService,
+    private readonly finalization: AttemptFinalizationService,
   ) {}
 
   async saveAnswer(
@@ -210,6 +211,17 @@ export class AttemptAnswerService {
 
     const admissibility = evaluateWriteAdmissibility(attempt.expiresAt, receivedAt);
     if (admissibility === 'REJECTED') {
+      // B14 (ADR-0004): "any server request touching an expired attempt
+      // finalises it immediately" — a best-effort side effect only,
+      // mirroring this file's own recordRejectedEvent precedent just
+      // below (awaited so it completes deterministically, its own failure
+      // swallowed rather than propagated). The client-visible response for
+      // a late ANSWER write is unchanged — still rejected, same code —
+      // only submit()'s own late-arrival response changes, per this
+      // phase's confirmed decision.
+      await this.finalization
+        .finalizeIfExpired(schoolId, attempt.id, receivedAt)
+        .catch(() => undefined);
       throw new AppHttpException({
         code: 'ATTEMPT_WRITE_WINDOW_CLOSED',
         message: 'This attempt has expired and the grace window for late answers has closed.',

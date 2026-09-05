@@ -1999,28 +1999,38 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
 
 /**
  * B13's five new tables (ExamAttempt, AttemptQuestionSnapshot,
- * AttemptAnswer, AttemptAnswerEvent, AttemptEvent) — a deliberately
- * SEPARATE describe block, mirroring the B11/B12 block's own precedent
- * (and its reasoning) exactly: `attempt_question_snapshots` carries an
- * UNCONDITIONAL immutability trigger (no parent-status gate at all — every
- * row is undeletable the instant it's written, ADR-0008), and
- * `attempt_answer_events` carries the identical unconditional shape
- * (ADR-0007). Mixing either into the shared B5-B9 block, or even the B11/
- * B12 block above (whose own APPROVED-revision fixture already needs
- * isolating for the *same* class of reason), would make that block's own
- * multi-row `deleteMany` cleanup abort entirely on the first blocked row.
- * `attempt_answers` itself is only CONDITIONALLY immutable (blocked only
- * once its parent `exam_attempts.state` leaves `IN_PROGRESS`) — this
- * fixture's own attempt is deliberately left `IN_PROGRESS` throughout, so
- * that row alone deletes cleanly; `exam_attempts` itself still can't be
- * deleted while its `Restrict`-FK'd `attempt_question_snapshots`/
- * `attempt_answer_events` children remain, cascading the same "genuinely,
- * permanently undeletable, best-effort, harmless" pattern up through
- * `exam_sessions`/`exams` exactly as the B11/B12 block's own teardown
- * already documents for its APPROVED question.
+ * AttemptAnswer, AttemptAnswerEvent, AttemptEvent), plus B14's
+ * AttemptQuestionResult — a deliberately SEPARATE describe block, mirroring
+ * the B11/B12 block's own precedent (and its reasoning) exactly:
+ * `attempt_question_snapshots` carries an UNCONDITIONAL immutability
+ * trigger (no parent-status gate at all — every row is undeletable the
+ * instant it's written, ADR-0008), and `attempt_answer_events` carries the
+ * identical unconditional shape (ADR-0007). Mixing either into the shared
+ * B5-B9 block, or even the B11/B12 block above (whose own APPROVED-revision
+ * fixture already needs isolating for the *same* class of reason), would
+ * make that block's own multi-row `deleteMany` cleanup abort entirely on
+ * the first blocked row. `attempt_answers` itself is only CONDITIONALLY
+ * immutable (blocked only once its parent `exam_attempts.state` leaves
+ * `IN_PROGRESS`) — this fixture's own primary attempt is deliberately left
+ * `IN_PROGRESS` throughout, so that row alone deletes cleanly; `exam_
+ * attempts` itself still can't be deleted while its `Restrict`-FK'd
+ * `attempt_question_snapshots`/`attempt_answer_events` children remain,
+ * cascading the same "genuinely, permanently undeletable, best-effort,
+ * harmless" pattern up through `exam_sessions`/`exams` exactly as the
+ * B11/B12 block's own teardown already documents for its APPROVED question.
+ *
+ * `attempt_question_results` (B14) carries NO immutability trigger at all
+ * (re-marking is a deliberate, expected overwrite — its own schema doc
+ * comment) — only a write GUARD blocking INSERT/UPDATE while the parent
+ * attempt is still IN_PROGRESS. Since this block's primary attempt is kept
+ * IN_PROGRESS specifically so `attempt_answers` deletes cleanly, a SECOND,
+ * minimal attempt (transitioned straight to SUBMITTED, no snapshot/answers
+ * of its own needed — AttemptQuestionResult's only real FK is to
+ * exam_attempts) carries the one AttemptQuestionResult row this block's own
+ * RLS assertions need.
  */
 describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
-  'Row-Level Security tenant isolation — exam_attempts, attempt_question_snapshots, attempt_answers, attempt_answer_events, attempt_events (B13, ADR-0023)',
+  'Row-Level Security tenant isolation — exam_attempts, attempt_question_snapshots, attempt_answers, attempt_answer_events, attempt_events, attempt_question_results (B13/B14, ADR-0023)',
   () => {
     let owner: PrismaClient;
     let app: PrismaClient;
@@ -2036,6 +2046,8 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let answerEventB: { id: string };
     let eventA: { id: string };
     let eventB: { id: string };
+    let resultA: { id: string };
+    let resultB: { id: string };
 
     async function buildFixture(label: string) {
       const school = await owner.school.create({
@@ -2301,7 +2313,47 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         }),
       );
 
-      return { school, attempt, snapshot, answer, answerEvent, event };
+      // B14: a second, minimal attempt, created directly SUBMITTED (this
+      // block's own header comment explains why the primary attempt above
+      // can't carry this row) — a legitimate fixture shortcut, mirroring
+      // `exam-control-refresh.integration.test.ts`'s own "direct create
+      // with a non-default status" precedent: the exam_attempts_status_
+      // transition_guard trigger only fires on UPDATE (`BEFORE UPDATE OF
+      // state`), never INSERT, so this bypasses nothing that trigger
+      // itself checks. Also sidesteps `exam_attempts_active_unique` (at
+      // most one IN_PROGRESS attempt per school/exam/student) — the
+      // primary attempt above is deliberately left IN_PROGRESS for the
+      // same (exam, student), so a second IN_PROGRESS attempt there would
+      // collide on that real partial index.
+      const secondAttempt = await withTenant(owner, school.id, (tx) =>
+        tx.examAttempt.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            examSessionId: examSession.id,
+            studentProfileId: studentProfile.id,
+            attemptNumber: 2,
+            state: 'SUBMITTED',
+            durationGrantedSeconds: 3600,
+            expiresAt: new Date(Date.now() + 3600 * 1000),
+            submittedAt: new Date(),
+          },
+        }),
+      );
+      const result = await withTenant(owner, school.id, (tx) =>
+        tx.attemptQuestionResult.create({
+          data: {
+            schoolId: school.id,
+            attemptId: secondAttempt.id,
+            examQuestionId: examQuestion.id,
+            correctness: 'CORRECT',
+            awardedMarks: 2,
+            maximumMarks: 2,
+          },
+        }),
+      );
+
+      return { school, attempt, secondAttempt, snapshot, answer, answerEvent, event, result };
     }
 
     beforeAll(async () => {
@@ -2323,10 +2375,17 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       answerEventB = b.answerEvent;
       eventA = a.event;
       eventB = b.event;
+      resultA = a.result;
+      resultB = b.result;
     });
 
     afterAll(async () => {
       const ids = [schoolA.id, schoolB.id];
+      // attempt_question_results (B14) carries no immutability trigger at
+      // all — deletes cleanly regardless of the parent attempt's state.
+      await owner.attemptQuestionResult
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
       // attempt_events carries no immutability trigger — deletes cleanly.
       await owner.attemptEvent
         .deleteMany({ where: { schoolId: { in: ids } } })
@@ -2422,6 +2481,12 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'attempt_events',
         idA: () => eventA.id,
         idB: () => eventB.id,
+      },
+      {
+        label: 'attempt_question_results',
+        table: 'attempt_question_results',
+        idA: () => resultA.id,
+        idB: () => resultB.id,
       },
     ];
 

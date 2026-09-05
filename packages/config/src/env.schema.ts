@@ -161,6 +161,22 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(4 * 60 * 60 * 1000),
+
+  // B14: apps/worker's ADR-0004 auto-submission sweep interval — the
+  // "authority" half of that ADR's shared idempotent finalisation routine
+  // (apps/api's own opportunistic-finalisation touchpoints are the other
+  // half, and catch the common case immediately; this sweep is the
+  // last-resort backstop for a truly abandoned attempt — browser closed,
+  // power lost — with no further server request to opportunistically catch
+  // it). An engineering default pending real load-testing (ADR-0004 itself:
+  // "sized against B21 load results; must never contend with the
+  // interactive answer path") — short enough to feel responsive without
+  // the sweep itself becoming a load concern. Default: 15 seconds.
+  ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 1000),
 });
 
 export type Env = z.infer<typeof envSchema>;

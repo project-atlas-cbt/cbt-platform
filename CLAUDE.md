@@ -386,10 +386,14 @@ remote-impersonation signal (device/session-binding fields + a `BINDING_MISMATCH
 detected via the heartbeat endpoint, never a block) and the `StudentAssessmentAccommodation` gap
 (resolved by extending `ExamSessionParticipant` with `extraTimeSeconds` rather than a new entity).
 Un-stubs both of `B12`'s own honest Control Center placeholders in both independent implementations.
-Every frontend phase through `F12` and every backend phase through `B13` are now closed out —
-`B14 — Submission & Marking` is next on the backend critical path, continuing the highest-risk
-segment of the roadmap alongside `B13`. See this file's Change Log entries below (dated 2026-09-04
-and 2026-09-05) for full detail on all four phases.
+Every frontend phase through `F12` and every backend phase through `B14` are now closed out —
+`B14 — Submission & Marking` is complete too (2026-09-05): exactly-once submission, ADR-0004's
+auto-submission (a sweeper in `apps/worker` plus opportunistic finalisation across every relevant
+`apps/api` touchpoint), and automatic objective marking (`AttemptQuestionResult`, read only from the
+frozen snapshot, idempotent via upsert) — deliberately entity-free of `Result` itself (a confirmed
+decision; `Result`/`GradingScale`/publication are all `B15`'s job). `B15 — Results & Publication` is
+next on the backend critical path. See this file's Change Log entries below (dated 2026-09-04 and
+2026-09-05) for full detail on all five phases.
 
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
@@ -5224,3 +5228,188 @@ is that `B13` and `B14` must not be parallelised with each other (B14's submissi
 logic depends on B13's attempt state machine being settled), so this is the natural, required next
 step, not merely the next-numbered one. A future `F13` (the offline exam engine) remains open and
 buildable immediately against the now-frozen `attempt.v1` contract, independent of `B14`.
+
+### 2026-09-05 — `B14` complete: Submission & Marking
+
+Requested explicitly: start `B14`. Followed the working-rules checklist via three parallel research
+passes (the full B14 roadmap section, its two decided ADRs — 0003, 0004 — in full, and every
+B14-assigned audit finding, X-01/X-07; the product specification text for submission/auto-submission/
+marking across `05`/`06`/`07`/`08`, cross-checked for exactly where the `Result` boundary actually
+falls between this phase and B15; the existing B13 implementation — `AttemptLifecycleService`,
+`attempt-admissibility.util.ts`, `attempt-snapshot-projection.mapper.ts`, the worker sweep
+conventions in `subscription-expiry.queue.ts`/`exam-control-refresh.queue.ts`), then a dedicated Plan
+agent, then direct verification reads of the live source before writing any code — per this
+project's own precedent for the highest-risk segment of the roadmap.
+
+**Two genuine architecture-boundary questions confirmed with the project owner before planning was
+finalized, not guessed, mirroring this project's own established practice for exactly this class of
+decision:**
+
+1. **B14 stays entity-free for `Result`.** Only `AttemptQuestionResult` (per-question marking
+   output — `CORRECT`/`INCORRECT`/`UNANSWERED`/`PARTIAL`) is persisted. Totals/percentage/counts for
+   the new `GET /v1/attempts/:id/status` are computed **live** by aggregating those rows on every
+   read — never persisted as a `Result` row. This matches the roadmap's own literal DB-work section
+   (which never lists a `Result` table as B14's deliverable) and its own "B15 creates results from
+   marking output" phrasing more closely than the alternative (B14 also creating a `PROCESSING`-
+   state `Result` row) — and avoids a partial, null-grade `Result` shape B15 would otherwise have to
+   migrate around, since grade computation needs B15's own not-yet-built `GradingScale`.
+2. **`AttemptAuthorization`/`examAdmin.invalidateAttempt`/`.grantMakeup` are deferred to `B16`**,
+   matching ADR-0014's own "Blocks phases: B16" text — not built here, despite the permission
+   table's own `awaitingResource` tags (and one `AttemptType` schema comment) previously saying
+   "B14." A genuine documentation inconsistency found during research (the tags trace back to
+   informal B12/B13-era discussion, never the roadmap's own frozen B14 Scope/API/DoD text, which
+   never once mentions invalidation or makeup) — corrected as a small, confirmed documentation-
+   accuracy fix, not new scope.
+
+**A third decision, changing B13's own shipped behaviour, confirmed directly against the code before
+implementing**: a manual `POST /submit` arriving past the grace window used to throw `400
+ATTEMPT_WRITE_WINDOW_CLOSED` — a real gap once ADR-0004's mechanism exists to actually resolve the
+underlying condition. Confirmed with the project owner: `submit()`'s own `REJECTED` branch now calls
+the same shared finalisation routine and returns the resulting `AUTO_SUBMITTED` state as an ordinary
+200, completing ADR-0004's "any server request touching an expired attempt finalises it immediately"
+in the one narrow race window that error case represented.
+
+**Schema** (`packages/db/prisma/schema.prisma`, one migration `20260905090449_b14_submission_
+marking`): one new table, `AttemptQuestionResult` — keyed `(schoolId, attemptId, examQuestionId)`,
+deliberately mirroring `AttemptAnswer`'s identical shape (the upsert target); `maximumMarks` is
+denormalized from the snapshot's own frozen per-question marks, matching `ExamAttempt
+.durationGrantedSeconds`'s own "copy the frozen value, don't re-derive" precedent. One new enum,
+`AttemptQuestionCorrectness` (`PARTIAL` reserved, unused this phase — every question type this
+codebase supports today is decided purely by a single selected option's `correctFlag`). One new
+school-scoped partial index for the sweeper (`exam_attempts (school_id, expires_at) WHERE state =
+'IN_PROGRESS'`). One genuinely new trigger idiom, distinct from B13's three: a parent-state-gated
+**write** guard blocking INSERT/UPDATE only _while_ the parent attempt is still `IN_PROGRESS` — never
+blocking for any other reason, since re-marking (an upsert) is a deliberate, expected overwrite, not
+an anomaly the way `AttemptAnswer`/`AttemptQuestionSnapshot` need an immutability trigger for. Two
+stale "B14" references corrected to "B16" during this same pass: `AttemptType`'s own enum comment
+and `ExamAttempt.invalidatedByMembershipId`'s comment, both predating this phase's own confirmed
+decision 2.
+
+**Cross-app sharing** (`packages/domain/src/execution/`, new — the first time this codebase has
+needed a second app to share attempt-engine logic, not just types): `evaluateWriteAdmissibility`/
+`attemptGraceWindowSeconds` moved verbatim out of `apps/api`-local code, since `apps/worker`'s
+sweeper needs the _identical_ grace-window boundary and a hand-duplicated second copy would be
+exactly the drift risk `AGENTS.md §5` names by name for this subsystem. `computeAttemptQuestionMarking
+Results` (new) is a single shared pure function — no DB parameter in its signature at all, only the
+frozen snapshot document and caller-supplied answers — which is what makes DoD item 11 ("editing the
+source question after the exam does not change any recorded mark") true **structurally**, not merely
+by testing; `apps/worker`'s marking-job consumer is directly readable as never touching `Question`/
+`QuestionRevision`/`ExamQuestion`/`QuestionOption` anywhere. `ATTEMPT_MARKING_QUEUE_NAME`/
+`AttemptMarkingJobPayload` mirror `packages/notifications`' own dispatch-queue contract shape
+exactly. The pre-mapping `SnapshotSource*` builder-input shapes (no second-app caller) stay local to
+`apps/api`, as does the X-05-critical `toStudentAttemptQuestions()` projector.
+
+**`apps/api`**: `AttemptLifecycleService.submit()`/`.end()` enqueue marking (stable `mark-
+${attemptId}` jobId) after their own conditional transition commits — never marking synchronously
+inline, keeping the interactive path minimal per the roadmap's own text. New `AttemptFinalization
+Service` implements ADR-0004's shared idempotent routine (one atomic conditional `UPDATE ... WHERE
+state = 'IN_PROGRESS' AND expires_at <= cutoff`), called opportunistically from every relevant
+touchpoint: `AttemptEventService.heartbeat()`, `AttemptAnswerService.writeAnswerInner()`'s own
+rejection path (best-effort, the client-visible late-_answer_ response is unchanged — only late-
+_submit_ changes, per decision 3), `submit()`'s own `REJECTED` branch, `resume()` (added for literal
+ADR-0004 completeness, not one of the roadmap's own named "natural candidates"), and the new `GET
+/v1/attempts/:id/status`. New `AttemptMarkingQueueService` (producer-only `Queue` handle, mirroring
+`NotificationDispatchQueueService`'s own established B7/B10 split). New `AttemptStatusService` +
+`AttemptStatusResponseDto` live-aggregate `AttemptQuestionResult` rows into `marking: {status:
+NOT_APPLICABLE|PENDING|COMPLETE, questionCount, markedCount, correctCount, incorrectCount,
+unansweredCount, partialCount, awardedMarks, maximumMarks, percentage}` — deliberately not a
+`Result` view, per decision 1. `ATTEMPT_AUTO_SUBMITTED` registered alongside B13's own non-canonical
+attempt actions.
+
+**`apps/worker`**: two new queues. `attempt-auto-submit.queue.ts` (`runAttemptAutoSubmitSweep`) is
+ADR-0004's authority half — the exact same conditional-transition idiom as `AttemptFinalization
+Service`, independently implemented (the two cannot share code across the `apps/api`/`apps/worker`
+boundary), sharing only `@atlas/domain`'s grace-window function so the two can never disagree about
+the boundary itself. Per-attempt `try/catch`, not just per-school — one level finer than every other
+sweep in this file, since a single attempt's audit-write or enqueue failure is a much narrower blast
+radius than a whole tenant's. `attempt-marking.queue.ts` (`runAttemptMarking`) is the marking-job
+consumer, **deliberately placed in `apps/worker`, not `apps/api`** — a genuine departure from B7/B10's
+own precedent (both hosted their consumers in `apps/api` specifically because they reuse Nest-DI-
+resolved singletons `apps/worker` cannot reach; marking has no such dependency), giving it real
+BullMQ retry/backoff/crash-resumability with no extra bootstrap machinery. The whole per-attempt
+marking run sits inside one `withTenant` transaction, so "resumable" (DoD item 10) means "safely
+re-run from scratch" on a crash/retry (full transactional rollback, zero partial rows), not literal
+partial-progress resumption — simpler, and correct at this codebase's actual per-attempt scale.
+
+**A known, documented residual risk, not silently accepted**: the state transition itself must
+commit immediately regardless of downstream availability (ADR-0004), so — unlike `subscription-
+expiry.queue.ts`'s own "don't mark a threshold handled until the dispatch enqueue actually succeeds"
+pattern — neither `AttemptFinalizationService` nor the sweeper can defer finalisation until
+`marking.enqueue()` succeeds. A Redis outage at that exact instant would leave an attempt correctly
+finalized and audited but with marking never enqueued, and nothing today re-discovers and retries
+that gap later. Recorded explicitly in both services' own doc comments as a Candidate for a future
+hardening pass or `B21`, not a defect this phase silently shipped unaware of.
+
+**A real, live-verified end-to-end proof, not just component-level tests**: booting the real
+compiled `apps/api` and `apps/worker` processes against the same Redis showed roughly twenty real
+marking jobs — enqueued by earlier `apps/api` integration-test runs genuinely exercising `submit()`/
+`end()` (each test file boots its own separate `AppModule`; only `attempt.integration.test.ts`'s own
+mocked spy suppresses its own calls, so every _other_ file's calls went out for real) — complete
+successfully once the worker started consuming, proving the cross-process queue mechanism for real,
+not only against mocks. One additional job failed; traced directly (via a real owner-connection
+query against the dev database) to a stray, malformed leftover fixture from this session's own
+earlier, already-fixed test-writing iterations against the shared, non-isolated dev database — the
+marking job correctly rejected the malformed input with a clear Postgres error rather than corrupting
+anything, and the underlying fixture bug had already been fixed in the committed test file before
+this verification ran. Not a product defect.
+
+**Testing**: `packages/domain/src/execution/attempt-admissibility.test.ts` (moved, unchanged, 9
+tests) and `attempt-marking.test.ts` (new, 7 tests — table-driven marking arithmetic with no DB
+involved). `apps/api`'s `attempt.integration.test.ts` gained 9 new B14 cases (marking-enqueue wiring
+and jobId stability; a 10-way concurrent-submit race yielding exactly one submission and one enqueue;
+the confirmed late-submit-finalizes-to-200 behaviour change; `GET /status`'s three marking states —
+`NOT_APPLICABLE`/`PENDING`/`COMPLETE` with exact live-aggregated totals; a cross-student security
+regression; the new trigger proven directly by a raw-Prisma bypass) — 33 tests in that file total,
+all green against real Postgres. Two new `apps/worker` integration test files:
+`attempt-auto-submit.integration.test.ts` (5 tests — full timeout finalisation with audit+enqueue;
+never-finalizes-within-grace; a second tick is a safe no-op; a concurrency stand-in pre-setting an
+attempt to already-`SUBMITTED`; one attempt's enqueue failure never blocks a sibling attempt's own
+finalisation in the same sweep tick) and `attempt-marking.integration.test.ts` (5 tests — correct/
+incorrect/unanswered marking; idempotent re-marking with no duplicate rows; a forced mid-run crash
+proving full transactional rollback then a clean resumed re-run; refusing to mark a still-
+`IN_PROGRESS` attempt, deferring to BullMQ retry; the new trigger proven directly). `tests/tenancy/
+rls.integration.test.ts`'s existing B13 describe block extended to cover `attempt_question_results`
+too (a second, minimal attempt per fixture school, created directly `SUBMITTED` to hold the one
+result row the shared IN_PROGRESS-attempt fixture structurally cannot) — 121 tests in that file, up
+from 103 (net +18: the new table's 3 cases × 6 already-covered assertion shapes... actually 3 new
+`it.each` cases across the existing 3-assertion matrix). DoD item 11 (data integrity against source-
+question edits) is proven **structurally** rather than via a live `Question`/`QuestionRevision`
+fixture mutation — see `attempt-marking.integration.test.ts`'s own header comment for the full
+reasoning (the marking function's signature has no database parameter at all, a stronger guarantee
+than an integration test observing an absence of effect in one fixture).
+
+Full pipeline green, run in full after every fix: `pnpm lint && pnpm typecheck && pnpm build` at the
+monorepo root (16/16 turbo tasks, including the schema-tenancy lint across all 47 models), the full
+`apps/api` integration suite (306 tests across 36 files, zero regressions), the full `apps/worker`
+integration suite (32 tests across 7 files), and the extended RLS suite (121 tests) — plus `pnpm
+generate` (`GET /v1/attempts/:id/status` published in `apps/api/openapi.json`/`packages/contracts`)
+and `pnpm generate:permission-table-doc` (156 rows, confirmed unchanged in count — every edit this
+phase made to the permission table was a tag correction, not a grant or row change). A real `node
+dist/main.js` boot (`apps/api`) confirmed `PolicyCoverageService` reports 195 routes checked with
+zero violations (up from 194 — exactly the new status route); a real `node dist/main.js` boot
+(`apps/worker`) confirmed both new queues (`atlas-attempt-auto-submit-sweep`, sweep every 15000ms;
+`atlas-attempt-marking`, per-item, no schedule) register correctly alongside every pre-existing sweep,
+and is what surfaced the live cross-process verification described above. One pre-existing, unrelated
+test failure was observed and confirmed via `git stash` to already exist on unmodified `dev` branch
+code before this phase touched anything: `attempt-snapshot-projection.mapper.test.ts`'s "resolves
+media URLs... defaulting to empty strings when unresolved" case, a stale assertion predating a B13-era
+fix that changed unresolved-media handling from blank-string to omission — not fixed here, per
+`AGENTS.md §15`'s "no unrelated broad refactors" (recorded as a Candidate for whoever next touches
+that file).
+
+`docs/roadmaps/backend-roadmap.md`'s B14 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-partial-with-reason (item 2, the confirmation UI's unanswered-count
+warning, is F13's job), a full "Implementation notes" subsection, and an expanded Deferred items list
+recording exactly how both carried-forward decisions and the third confirmed behaviour change
+resolved. The Phase Map and Phase Completion Tracking tables both had their B13/B14 rows corrected
+(B13 had drifted to "NOT STARTED" in the Phase Map specifically, a stale artifact predating this
+session). `docs/roadmaps/roadmap-index.md`'s version (1.25), Current State, and Immediate Next
+Actions all updated to record `B14` complete and `B15` next on the critical path.
+
+Project state moves from _Implementation (B13 complete)_ to _Implementation (B14 complete)_.
+**Next: `B15 — Results & Publication`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2 →
+B3 → B5 → B6 → B8 → B9 → B11 → B12 → B13 → B14 → B15 → …`) — the phase that creates `Result` itself
+from this phase's own marking output, closes `09 §39`'s full golden-path exit criterion jointly named
+by both B13 and B14, and is gated by ADR-0010/0018/0025 (all three already Accepted). A future `F13`
+(the offline exam engine) remains open and buildable immediately against the now-frozen `attempt.v1`
+contract (11 routes), independent of `B15`.

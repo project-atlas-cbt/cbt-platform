@@ -11,7 +11,16 @@
  * contract test), Accommodations (decision 2), Signals (decision 1).
  */
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { parseCookie } from 'cookie';
@@ -19,12 +28,20 @@ import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
+import { AttemptMarkingQueueService } from './attempt-marking-queue.service.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
 
 let app: NestFastifyApplication;
 const passwords = new PasswordService();
+// B14: mocked rather than left to hit real Redis — nothing in this process
+// consumes the marking queue (the consumer lives in apps/worker, proven
+// separately by attempt-marking.integration.test.ts there), so this suite
+// only needs to assert ITS OWN code called enqueue correctly, matching
+// question-review.integration.test.ts's own "spy directly on the injected
+// singleton" precedent for the identical class of out-of-band side effect.
+let markingEnqueueSpy: MockInstance<AttemptMarkingQueueService['enqueue']>;
 
 beforeAll(async () => {
   app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
@@ -32,6 +49,12 @@ beforeAll(async () => {
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
+  const markingQueue = app.get(AttemptMarkingQueueService);
+  markingEnqueueSpy = vi.spyOn(markingQueue, 'enqueue').mockResolvedValue(undefined);
+});
+
+beforeEach(() => {
+  markingEnqueueSpy.mockClear();
 });
 
 afterAll(async () => {
@@ -215,6 +238,12 @@ afterAll(async () => {
     ).catch(() => undefined);
     await withTenant(prisma, schoolId, (tx) =>
       tx.attemptAnswer.deleteMany({ where: { schoolId } }),
+    ).catch(() => undefined);
+    // B14: no immutability trigger on this table (re-marking is a
+    // deliberate, expected overwrite), but its FK to exam_attempts is still
+    // onDelete: Restrict — must clear before examAttempt.deleteMany below.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptQuestionResult.deleteMany({ where: { schoolId } }),
     ).catch(() => undefined);
     await withTenant(prisma, schoolId, (tx) =>
       tx.attemptQuestionSnapshot.deleteMany({ where: { schoolId } }),
@@ -934,6 +963,209 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
       }),
     );
     expect(auditEvents.length).toBe(1);
+  });
+
+  // ---------------------------------------------------------------------
+  // B14 — Submission & Marking
+  // ---------------------------------------------------------------------
+
+  it('B14: submit enqueues exactly one marking job after the transition commits, and a duplicate submit never re-enqueues', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    const first = await post(studentA, `/attempts/${pkg.attemptId}/submit`, {});
+    expect(first.statusCode).toBe(200);
+    expect(markingEnqueueSpy).toHaveBeenCalledTimes(1);
+    expect(markingEnqueueSpy).toHaveBeenCalledWith(
+      { schoolId, attemptId: pkg.attemptId },
+      `mark-${pkg.attemptId}`,
+    );
+
+    // DoD 9's own idempotency, extended: the second, already-terminal call
+    // must not enqueue a second marking run (re-queued marking overwrites,
+    // per the roadmap's own scope text — it must never be asked to run
+    // twice for one submission in the first place).
+    const second = await post(studentA, `/attempts/${pkg.attemptId}/submit`, {});
+    expect(second.statusCode).toBe(200);
+    expect(markingEnqueueSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('B14 concurrency: N simultaneous submit calls yield exactly one submission and exactly one marking enqueue', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, () => post(studentA, `/attempts/${pkg.attemptId}/submit`, {})),
+    );
+    for (const res of responses) {
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ state: string }>().state).toBe('SUBMITTED');
+    }
+
+    const attempt = await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.findUniqueOrThrow({ where: { id: pkg.attemptId } }),
+    );
+    expect(attempt.state).toBe('SUBMITTED');
+
+    const auditEvents = await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.findMany({
+        where: { schoolId, action: 'ATTEMPT_SUBMITTED', entityId: pkg.attemptId },
+      }),
+    );
+    expect(auditEvents.length).toBe(1);
+    expect(markingEnqueueSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('B14 confirmed decision: a manual submit past the grace window opportunistically finalizes to AUTO_SUBMITTED (200), not an error', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.update({
+        where: { id: pkg.attemptId },
+        data: { expiresAt: new Date(Date.now() - 120 * 1000) },
+      }),
+    );
+
+    const res = await post(studentA, `/attempts/${pkg.attemptId}/submit`, {});
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ state: string }>().state).toBe('AUTO_SUBMITTED');
+
+    const auditEvents = await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.findMany({
+        where: { schoolId, action: 'ATTEMPT_AUTO_SUBMITTED', entityId: pkg.attemptId },
+      }),
+    );
+    expect(auditEvents.length).toBe(1);
+    expect(markingEnqueueSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('B14 GET /status: NOT_APPLICABLE while the attempt is still IN_PROGRESS', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    const res = await get(studentA, `/attempts/${pkg.attemptId}/status`);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ state: string; marking: { status: string; questionCount: number } }>();
+    expect(body.state).toBe('IN_PROGRESS');
+    expect(body.marking.status).toBe('NOT_APPLICABLE');
+    expect(body.marking.questionCount).toBe(2);
+  });
+
+  it('B14 GET /status: PENDING immediately after submit, before any marking has run', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    await post(studentA, `/attempts/${pkg.attemptId}/submit`, {});
+
+    const res = await get(studentA, `/attempts/${pkg.attemptId}/status`);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      state: string;
+      marking: { status: string; markedCount: number; questionCount: number };
+    }>();
+    expect(body.state).toBe('SUBMITTED');
+    expect(body.marking.status).toBe('PENDING');
+    expect(body.marking.markedCount).toBe(0);
+    expect(body.marking.questionCount).toBe(2);
+  });
+
+  it('B14 GET /status: COMPLETE with correct live-aggregated totals once marking output exists', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    await post(studentA, `/attempts/${pkg.attemptId}/submit`, {});
+
+    // Stands in for "the real apps/worker marking job has since run" — that
+    // real read-snapshot/write-result path is proven independently by
+    // apps/worker's own attempt-marking.integration.test.ts; this suite
+    // only proves GET /status's own live-aggregation contract.
+    const [q1, q2] = pkg.questions;
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptQuestionResult.createMany({
+        data: [
+          {
+            schoolId,
+            attemptId: pkg.attemptId,
+            examQuestionId: q1!.examQuestionId,
+            correctness: 'CORRECT',
+            awardedMarks: 2,
+            maximumMarks: 2,
+          },
+          {
+            schoolId,
+            attemptId: pkg.attemptId,
+            examQuestionId: q2!.examQuestionId,
+            correctness: 'INCORRECT',
+            awardedMarks: 0,
+            maximumMarks: 2,
+          },
+        ],
+      }),
+    );
+
+    const res = await get(studentA, `/attempts/${pkg.attemptId}/status`);
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      marking: {
+        status: string;
+        questionCount: number;
+        markedCount: number;
+        correctCount: number;
+        incorrectCount: number;
+        unansweredCount: number;
+        partialCount: number;
+        awardedMarks: number;
+        maximumMarks: number;
+        percentage: number | null;
+      };
+    }>();
+    expect(body.marking).toEqual({
+      status: 'COMPLETE',
+      questionCount: 2,
+      markedCount: 2,
+      correctCount: 1,
+      incorrectCount: 1,
+      unansweredCount: 0,
+      partialCount: 0,
+      awardedMarks: 2,
+      maximumMarks: 4,
+      percentage: 50,
+    });
+  });
+
+  it("B14 security regression: a student cannot view another student's submission status", async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    const res = await get(studentB, `/attempts/${pkg.attemptId}/status`);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('B14: the database trigger itself blocks writing a marking result while the parent attempt is still IN_PROGRESS, independent of the service layer', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    await expect(
+      withTenant(prisma, schoolId, (tx) =>
+        tx.attemptQuestionResult.create({
+          data: {
+            schoolId,
+            attemptId: pkg.attemptId,
+            examQuestionId: pkg.questions[0]!.examQuestionId,
+            correctness: 'CORRECT',
+            awardedMarks: 2,
+            maximumMarks: 2,
+          },
+        }),
+      ),
+    ).rejects.toThrow();
   });
 
   // ---------------------------------------------------------------------

@@ -9,9 +9,11 @@ import { resolveExamActorRole } from '../exams/actor.util.js';
 import { AttemptAnswerService } from './attempt-answer.service.js';
 import { AttemptEventService } from './attempt-event.service.js';
 import { AttemptLifecycleService } from './attempt-lifecycle.service.js';
+import { AttemptStatusService } from './attempt-status.service.js';
 import {
   AttemptPackageResponseDto,
   AttemptStateResponseDto,
+  AttemptStatusResponseDto,
   RecordAttemptEventDto,
   SaveAnswerBatchDto,
   SaveAnswerBatchResponseDto,
@@ -37,6 +39,7 @@ export class AttemptController {
     private readonly lifecycle: AttemptLifecycleService,
     private readonly answers: AttemptAnswerService,
     private readonly events: AttemptEventService,
+    private readonly statusService: AttemptStatusService,
   ) {}
 
   @Get(':id')
@@ -160,5 +163,20 @@ export class AttemptController {
       actorUserId: user.userId,
       actorRole: resolveExamActorRole(user),
     });
+  }
+
+  @Get(':id/status')
+  @Authorized('studentCbt.resume')
+  @ApiOperation({
+    summary:
+      'B14: post-submission status for the confirmation screen — live-aggregated marking output, never a Result (B15).',
+  })
+  @ApiOkResponse({ type: AttemptStatusResponseDto })
+  async status(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+  ): Promise<AttemptStatusResponseDto> {
+    const user = currentUser(req);
+    return this.statusService.getStatus(user.schoolId, actorFromAuthenticatedUser(user), id);
   }
 }

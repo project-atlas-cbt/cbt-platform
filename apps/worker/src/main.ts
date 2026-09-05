@@ -2,11 +2,18 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { loadEnv, loadRootEnv } from '@atlas/config';
 import { prisma } from '@atlas/db';
+import { ATTEMPT_MARKING_QUEUE_NAME, type AttemptMarkingJobPayload } from '@atlas/domain';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
   type NotificationDispatchJobPayload,
 } from '@atlas/notifications';
 import { createProbeWorker } from './queues/probe.queue.js';
+import {
+  ATTEMPT_AUTO_SUBMIT_QUEUE_NAME,
+  createAttemptAutoSubmitWorker,
+  scheduleAttemptAutoSubmitSweep,
+} from './queues/attempt-auto-submit.queue.js';
+import { createAttemptMarkingWorker } from './queues/attempt-marking.queue.js';
 import {
   SUBSCRIPTION_EXPIRY_QUEUE_NAME,
   createSubscriptionExpiryWorker,
@@ -117,6 +124,43 @@ async function main() {
     env.EXAM_CONTROL_REFRESH_INTERVAL_MS,
   );
 
+  // B14: this process is a producer onto the shared marking queue — both
+  // its own ADR-0004 sweeper (below) and apps/api's submit()/end()/
+  // opportunistic-finalisation paths enqueue here; the marking-job
+  // consumer (attemptMarkingWorker) lives in THIS same process, since
+  // marking needs no apps/api-only Nest DI (attempt-marking.queue.ts's own
+  // doc comment has the full reasoning) — unlike the notification-dispatch
+  // queue above, this process is producer AND consumer for this one.
+  const attemptMarkingQueue = new Queue<AttemptMarkingJobPayload>(ATTEMPT_MARKING_QUEUE_NAME, {
+    connection,
+  });
+  const enqueueMarking = async (
+    payload: AttemptMarkingJobPayload,
+    jobId?: string,
+  ): Promise<void> => {
+    await attemptMarkingQueue.add('mark', payload, {
+      ...(jobId !== undefined && { jobId }),
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 10_000 },
+      removeOnComplete: true,
+      removeOnFail: 10,
+    });
+  };
+  const attemptMarkingWorker = createAttemptMarkingWorker(connection, {});
+
+  // B14: ADR-0004's sweeper — the authority half of "a background sweeper
+  // as the authority, plus opportunistic finalisation, sharing one
+  // idempotent routine" (apps/api's AttemptFinalizationService is the
+  // opportunistic half).
+  const attemptAutoSubmitWorker = createAttemptAutoSubmitWorker(connection, {
+    enqueueMarking,
+  });
+  const attemptAutoSubmitQueue = new Queue(ATTEMPT_AUTO_SUBMIT_QUEUE_NAME, { connection });
+  await scheduleAttemptAutoSubmitSweep(
+    attemptAutoSubmitQueue,
+    env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS,
+  );
+
   // Same 'error'-event risk as the Workers below, for the Queue (enqueue)
   // side of each connection.
   for (const queue of [
@@ -126,6 +170,8 @@ async function main() {
     unassignedStudentsDigestQueue,
     examControlRefreshQueue,
     notificationDispatchQueue,
+    attemptMarkingQueue,
+    attemptAutoSubmitQueue,
   ]) {
     queue.on('error', (err) => {
       console.error(`[worker] queue "${queue.name}" connection error:`, err.message);
@@ -139,6 +185,8 @@ async function main() {
     importExpiryWorker,
     unassignedStudentsDigestWorker,
     examControlRefreshWorker,
+    attemptMarkingWorker,
+    attemptAutoSubmitWorker,
   ]) {
     worker.on('completed', (job) => {
       console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
@@ -157,7 +205,7 @@ async function main() {
   }
 
   console.log(
-    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), "${examControlRefreshWorker.name}" (sweep every ${env.EXAM_CONTROL_REFRESH_INTERVAL_MS}ms), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
+    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), "${examControlRefreshWorker.name}" (sweep every ${env.EXAM_CONTROL_REFRESH_INTERVAL_MS}ms), "${attemptAutoSubmitWorker.name}" (sweep every ${env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS}ms), "${attemptMarkingWorker.name}" (per-item, no schedule), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
   );
 
   const shutdown = async () => {
@@ -169,6 +217,8 @@ async function main() {
       importExpiryWorker.close(),
       unassignedStudentsDigestWorker.close(),
       examControlRefreshWorker.close(),
+      attemptMarkingWorker.close(),
+      attemptAutoSubmitWorker.close(),
     ]);
     await subscriptionExpiryQueue.close();
     await orphanMediaReportQueue.close();
@@ -176,6 +226,8 @@ async function main() {
     await unassignedStudentsDigestQueue.close();
     await examControlRefreshQueue.close();
     await notificationDispatchQueue.close();
+    await attemptMarkingQueue.close();
+    await attemptAutoSubmitQueue.close();
     redis.disconnect();
     await prisma.$disconnect();
     process.exit(0);

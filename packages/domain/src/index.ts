@@ -138,11 +138,13 @@ export {
   ATTEMPT_PARTICIPATION_STATUSES,
   ATTEMPT_ANSWER_STATES,
   ATTEMPT_EVENT_TYPES,
+  ATTEMPT_QUESTION_CORRECTNESS_VALUES,
   type AttemptState,
   type AttemptType,
   type AttemptParticipationStatus,
   type AttemptAnswerState,
   type AttemptEventType,
+  type AttemptQuestionCorrectness,
 } from './exams/constants.js';
 export {
   CANONICAL_AUDIT_ACTIONS,
@@ -156,3 +158,22 @@ export {
   type NotificationType,
   type NotificationStatus,
 } from './notifications/constants.js';
+export {
+  attemptGraceWindowSeconds,
+  evaluateWriteAdmissibility,
+  type AttemptWriteAdmissibility,
+} from './execution/attempt-admissibility.js';
+export {
+  CURRENT_ATTEMPT_SNAPSHOT_DOCUMENT_VERSION,
+  computeAttemptQuestionMarkingResults,
+  type AttemptSnapshotOptionV1,
+  type AttemptSnapshotMediaV1,
+  type AttemptSnapshotQuestionV1,
+  type AttemptSnapshotDocumentV1,
+  type AttemptAnswerForMarking,
+  type AttemptQuestionMarkingResult,
+} from './execution/attempt-marking.js';
+export {
+  ATTEMPT_MARKING_QUEUE_NAME,
+  type AttemptMarkingJobPayload,
+} from './execution/attempt-marking-queue.js';

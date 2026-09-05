@@ -2317,9 +2317,12 @@ enum AttemptState {
   CANCELLED
 }
 
-/// MAKEUP/RETRY/SPECIAL are unreachable in B13 — AttemptAuthorization
-/// (ADR-0014) is B14's job — shipped in full for spec fidelity, same
-/// precedent as AttemptState.NOT_STARTED above.
+/// MAKEUP/RETRY/SPECIAL are unreachable through B14 — AttemptAuthorization
+/// (ADR-0014) is B16's job, per that ADR's own "Blocks phases: B16" (a B13/
+/// B14-era comment here previously said "B14's job"; corrected during B14's
+/// own documentation-accuracy pass — no grant or schema shape changed) —
+/// shipped in full for spec fidelity, same precedent as
+/// AttemptState.NOT_STARTED above.
 enum AttemptType {
   STANDARD
   MAKEUP
@@ -2389,8 +2392,9 @@ model ExamAttempt {
   invalidatedAt             DateTime? @map("invalidated_at") @db.Timestamptz(6)
   /// Bare UUID, no relation — mirrors Exam.cancelledByMembershipId's own
   /// B11 precedent (denormalized actor+timestamp for cheap display; the
-  /// real audit trail of record is AuditEvent). Written only by B14
-  /// (examAdmin.invalidateAttempt stays awaitingResource in B13).
+  /// real audit trail of record is AuditEvent). Written only by B16
+  /// (examAdmin.invalidateAttempt stays awaitingResource through B14, per
+  /// ADR-0014's own "Blocks phases: B16").
   invalidatedByMembershipId String?   @map("invalidated_by_membership_id") @db.Uuid
 
   /// ADR-0020: updated by answer saves (via a separate, lightweight,
@@ -2414,13 +2418,14 @@ model ExamAttempt {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  exam           Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
-  examSession    ExamSession              @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
-  studentProfile StudentProfile           @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Restrict)
-  snapshot       AttemptQuestionSnapshot?
-  answers        AttemptAnswer[]
-  answerEvents   AttemptAnswerEvent[]
-  events         AttemptEvent[]
+  exam            Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  examSession     ExamSession              @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
+  studentProfile  StudentProfile           @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Restrict)
+  snapshot        AttemptQuestionSnapshot?
+  answers         AttemptAnswer[]
+  answerEvents    AttemptAnswerEvent[]
+  events          AttemptEvent[]
+  questionResults AttemptQuestionResult[]
 
   // Composite-FK target for every child table below.
   @@unique([schoolId, id])
@@ -2579,4 +2584,64 @@ model AttemptEvent {
   // Control Center's "counts, not judgements" aggregate by type.
   @@index([schoolId, attemptId, type])
   @@map("attempt_events")
+}
+
+/// B14 (Submission & Marking) — PARTIAL is reserved/unused this phase; every
+/// question type this codebase supports today (SINGLE_CHOICE/TRUE_FALSE) is
+/// decided purely by whether the selected option's correctFlag is true, so
+/// marking never branches on questionType. Kept for spec fidelity (07 §9.4)
+/// against a future non-objective question type, mirroring this schema's
+/// established "ship the full vocabulary, write only what's reachable now"
+/// precedent (AttemptState.NOT_STARTED, ExamStatus.OPEN before B12, ...).
+enum AttemptQuestionCorrectness {
+  CORRECT
+  INCORRECT
+  UNANSWERED
+  PARTIAL
+}
+
+/// B14 — one row per (attempt, question), the marking output ADR-0007's own
+/// frozen inputs (AttemptQuestionSnapshot.document + the now-immutable
+/// AttemptAnswer rows) always resolve to the same way twice, which is what
+/// makes an unconditional upsert correct with no ordering guard needed
+/// (unlike AttemptAnswer, marking has no sequence-number/replay concept).
+/// Deliberately entity-free of `Result` (a confirmed decision this phase's
+/// own planning session settled): totals/percentage/counts are computed
+/// LIVE by aggregating these rows (`GET /v1/attempts/:id/status`), never
+/// persisted as a `Result` row — `Result`/`GradingScale`/publication/
+/// adjustment are all B15's job, reading this table as its own marking
+/// output ("B15 creates results from marking output" — backend-roadmap.md's
+/// own B14 section). maximumMarks is denormalized from the snapshot's own
+/// frozen per-question `marks` (ADR-0029) rather than re-joined on every
+/// read — the same "copy the frozen value, don't re-derive" precedent as
+/// ExamAttempt.durationGrantedSeconds — so GET /status is one indexed
+/// aggregate query with no JSONB parsing. No unconditional immutability
+/// trigger, unlike AttemptAnswer/AttemptAnswerEvent/AttemptQuestionSnapshot:
+/// re-marking is a deliberate, expected overwrite, not an anomaly. This
+/// migration's own attempt_question_results_require_finalized_attempt
+/// trigger instead blocks writes only WHILE the parent attempt is still
+/// IN_PROGRESS — the DB-level backstop for "finalisation must be durable
+/// before any downstream marking worker runs," and never blocks for any
+/// other reason.
+model AttemptQuestionResult {
+  id             String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId       String @map("school_id") @db.Uuid
+  attemptId      String @map("attempt_id") @db.Uuid
+  examQuestionId String @map("exam_question_id") @db.Uuid
+
+  correctness  AttemptQuestionCorrectness
+  awardedMarks Int                        @map("awarded_marks")
+  maximumMarks Int                        @map("maximum_marks")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  attempt ExamAttempt @relation(fields: [schoolId, attemptId], references: [schoolId, id], onDelete: Restrict)
+
+  // The upsert target (marking is keyed on exactly this triple) — mirrors
+  // AttemptAnswer's identical (schoolId, attemptId, examQuestionId) shape.
+  @@unique([schoolId, attemptId, examQuestionId])
+  @@index([schoolId])
+  @@index([schoolId, attemptId])
+  @@map("attempt_question_results")
 }

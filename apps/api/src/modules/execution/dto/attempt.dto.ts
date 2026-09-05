@@ -17,6 +17,9 @@ import {
   type AttemptState,
 } from '@atlas/domain';
 
+const ATTEMPT_MARKING_STATUSES = ['NOT_APPLICABLE', 'PENDING', 'COMPLETE'] as const;
+type AttemptMarkingStatus = (typeof ATTEMPT_MARKING_STATUSES)[number];
+
 /**
  * `X-05` (BLOCKER, resolved by ADR-0008): the projection this file exposes
  * to a student — `StudentAttemptOptionDto` — has NO `correctFlag` field
@@ -346,6 +349,78 @@ export class RecordAttemptEventDto {
   @ApiPropertyOptional({ type: Object, description: 'Client-reported, untrusted metadata.' })
   @IsOptional()
   metadata?: Record<string, unknown>;
+}
+
+/** `marking` half of `GET /v1/attempts/:id/status` — B14. Deliberately NOT
+ * a `Result` view (that entity doesn't exist until B15 — this phase's own
+ * confirmed decision): every field here is a live aggregate over
+ * `AttemptQuestionResult` rows, computed on read, never persisted. */
+export class AttemptMarkingStatusDto {
+  @ApiProperty({
+    type: String,
+    enum: ATTEMPT_MARKING_STATUSES,
+    description:
+      'NOT_APPLICABLE while the attempt is still IN_PROGRESS (or was invalidated/cancelled — never submitted); PENDING once finalized but not yet fully marked (the queued marking job has not completed); COMPLETE once every question has a recorded result.',
+  })
+  status!: AttemptMarkingStatus;
+
+  @ApiProperty({ type: Number })
+  questionCount!: number;
+
+  @ApiProperty({ type: Number })
+  markedCount!: number;
+
+  @ApiProperty({ type: Number })
+  correctCount!: number;
+
+  @ApiProperty({ type: Number })
+  incorrectCount!: number;
+
+  @ApiProperty({ type: Number })
+  unansweredCount!: number;
+
+  @ApiProperty({
+    type: Number,
+    description: 'Always 0 this phase — PARTIAL is reserved for a future non-objective type.',
+  })
+  partialCount!: number;
+
+  @ApiProperty({ type: Number })
+  awardedMarks!: number;
+
+  @ApiProperty({ type: Number })
+  maximumMarks!: number;
+
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description: 'null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE.',
+  })
+  percentage!: number | null;
+}
+
+/** `GET /v1/attempts/:id/status` — B14. Post-submission status for the
+ * confirmation screen (04 §59) — a technical extension of `resume()`'s own
+ * "view my own attempt" capability, gated by the same `studentCbt.resume`
+ * permission (no separately-named "view submission status" capability
+ * exists in `02`'s matrix). Opportunistically finalizes an expired attempt
+ * before reporting (ADR-0004), the same as every other touchpoint in this
+ * module. */
+export class AttemptStatusResponseDto {
+  @ApiProperty({ type: String })
+  attemptId!: string;
+
+  @ApiProperty({ type: String })
+  examId!: string;
+
+  @ApiProperty({ type: String, enum: ATTEMPT_STATES })
+  state!: AttemptState;
+
+  @ApiProperty({ type: String, nullable: true, format: 'date-time' })
+  submittedAt!: string | null;
+
+  @ApiProperty({ type: AttemptMarkingStatusDto })
+  marking!: AttemptMarkingStatusDto;
 }
 
 /** `POST /v1/exam-sessions/:id/participants/:studentId/extra-time` —
