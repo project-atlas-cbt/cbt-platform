@@ -19,6 +19,7 @@ interface ActorContext {
 
 type CompleteOutcome =
   | { kind: 'SESSIONS_STILL_OPEN' }
+  | { kind: 'ATTEMPTS_STILL_IN_PROGRESS' }
   | { kind: 'STALE_ABSENTEE_LIST' }
   | { kind: 'NOT_COMPLETABLE' }
   | { kind: 'OK'; absentCount: number };
@@ -76,6 +77,9 @@ export class ExamCompletionService {
     }
 
     if ((await countInProgressAttempts(schoolId, examId)) > 0) {
+      // Fast-fail only — deliberately NOT the real guarantee. See the
+      // re-check inside the transaction below for why this alone isn't
+      // sufficient.
       throw new AppHttpException({
         code: 'EXAM_HAS_IN_PROGRESS_ATTEMPTS',
         message: 'This exam still has attempts in progress.',
@@ -97,6 +101,19 @@ export class ExamCompletionService {
       await tx.$queryRaw`
         SELECT id FROM exams WHERE id = ${examId}::uuid AND school_id = ${schoolId}::uuid FOR UPDATE
       `;
+
+      // Found in review (B13 gap closure): the pre-transaction check above
+      // is a fast-fail only, not the real guarantee — AttemptLifecycleService
+      // .start() does not participate in this same exam-row lock (it takes
+      // its own advisory lock scoped to (school, exam, student) instead),
+      // so a fresh attempt can be created in the window between that
+      // pre-check and this lock's acquisition. Re-verified here, under the
+      // lock, exactly like openSessionCount immediately below — this is
+      // what makes the real guarantee hold regardless of that gap.
+      const inProgressAttemptCount = await tx.examAttempt.count({
+        where: { schoolId, examId, state: 'IN_PROGRESS' },
+      });
+      if (inProgressAttemptCount > 0) return { kind: 'ATTEMPTS_STILL_IN_PROGRESS' };
 
       const openSessionCount = await tx.examSession.count({
         where: { schoolId, examId, status: 'OPEN' },
@@ -161,6 +178,12 @@ export class ExamCompletionService {
       throw new AppHttpException({
         code: 'EXAM_SESSIONS_STILL_OPEN',
         message: 'Close every open session before ending the examination.',
+      });
+    }
+    if (outcome.kind === 'ATTEMPTS_STILL_IN_PROGRESS') {
+      throw new AppHttpException({
+        code: 'EXAM_HAS_IN_PROGRESS_ATTEMPTS',
+        message: 'This exam still has attempts in progress.',
       });
     }
     if (outcome.kind === 'STALE_ABSENTEE_LIST') {

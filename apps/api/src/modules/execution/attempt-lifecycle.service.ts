@@ -160,7 +160,7 @@ export class AttemptLifecycleService {
         return { kind: 'EXISTING', attemptId: existing.id };
       }
 
-      const session = await tx.examSessionParticipant.findFirst({
+      const candidateSessions = await tx.examSessionParticipant.findMany({
         where: {
           schoolId,
           studentProfileId: studentProfile.id,
@@ -168,11 +168,28 @@ export class AttemptLifecycleService {
           session: { schoolId, examId, status: 'OPEN' },
         },
         orderBy: { authorizedAt: 'desc' },
-        select: { examSessionId: true, extraTimeSeconds: true },
+        select: { examSessionId: true, extraTimeSeconds: true, extraTimeGrantedAt: true },
       });
-      if (!session) {
+      if (candidateSessions.length === 0) {
         return { kind: 'INELIGIBLE', failedChecks: ['SESSION_NOT_ACCESSIBLE'] };
       }
+      // Found in review (B13 gap closure): a student can hold AUTHORIZED
+      // participant rows across MORE THAN ONE concurrently OPEN session of
+      // the same exam (B12's own confirmed "multiple concurrent open
+      // sessions per exam" design — e.g. the OPEN_TO_ELIGIBLE bulk-
+      // authorize sweep firing for two parallel labs opened together). An
+      // explicit accommodation grant (decision 2) must never be silently
+      // dropped just because a DIFFERENT, more-recently-authorized row
+      // happens to sort first — prefer whichever candidate actually
+      // carries one (most-recently-granted wins on a genuine double
+      // grant), falling back to the most-recently-authorized row only when
+      // none of them do.
+      const accommodatedSession = candidateSessions
+        .filter((s) => s.extraTimeSeconds !== null)
+        .sort(
+          (a, b) => (b.extraTimeGrantedAt?.getTime() ?? 0) - (a.extraTimeGrantedAt?.getTime() ?? 0),
+        )[0];
+      const session = accommodatedSession ?? candidateSessions[0]!;
 
       const eligibility = await evaluateAttemptStartEligibility(tx, {
         schoolId,

@@ -148,9 +148,49 @@ export class AttemptAnswerService {
     }
   }
 
-  /** Shared by both the single-answer and batch paths — everything from
-   * "is this attempt still writable" through the actual DB write. */
+  /** Shared by both the single-answer and batch paths — wraps
+   * `writeAnswerInner` so EVERY rejection (validation, admissibility,
+   * ordering, or a genuinely unexpected failure) records one
+   * `AttemptAnswerEvent`, not just the two paths that used to remember to
+   * call `recordRejectedEvent` explicitly (Found in review — B13 gap
+   * closure: `ATTEMPT_NOT_WRITABLE` and both `ATTEMPT_QUESTION_NOT_IN
+   * _SNAPSHOT` cases left no forensic trail at all, and the batch flush's
+   * own catch-all recorded nothing for a truly unanticipated error).
+   * "Final submitted state must remain reconstructable" (ADR-0007)
+   * extends to what a client attempted and was refused, regardless of
+   * why. Best-effort: a failure to log the rejection must never mask or
+   * replace the original error. */
   private async writeAnswer(
+    schoolId: string,
+    attempt: AttemptWithOwner,
+    examQuestionId: string,
+    dto: Pick<SaveAnswerDto, 'selectedOptionId' | 'sequenceNumber' | 'source'>,
+    receivedAt: Date,
+  ): Promise<UpsertOutcome> {
+    try {
+      return await this.writeAnswerInner(schoolId, attempt, examQuestionId, dto, receivedAt);
+    } catch (error) {
+      const reason =
+        error instanceof AppHttpException
+          ? error.message
+          : 'Unexpected error while saving this answer.';
+      await this.recordRejectedEvent(
+        schoolId,
+        attempt.id,
+        examQuestionId,
+        dto,
+        receivedAt,
+        reason,
+      ).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /** The actual save logic — "is this attempt still writable" through the
+   * DB write itself. Every throw here goes through `writeAnswer`'s own
+   * centralized rejection-event recording; nothing here should call
+   * `recordRejectedEvent` directly any more. */
+  private async writeAnswerInner(
     schoolId: string,
     attempt: AttemptWithOwner,
     examQuestionId: string,
@@ -170,14 +210,6 @@ export class AttemptAnswerService {
 
     const admissibility = evaluateWriteAdmissibility(attempt.expiresAt, receivedAt);
     if (admissibility === 'REJECTED') {
-      await this.recordRejectedEvent(
-        schoolId,
-        attempt.id,
-        examQuestionId,
-        dto,
-        receivedAt,
-        'Write arrived after the post-expiry grace window closed (ADR-0003).',
-      );
       throw new AppHttpException({
         code: 'ATTEMPT_WRITE_WINDOW_CLOSED',
         message: 'This attempt has expired and the grace window for late answers has closed.',
@@ -246,14 +278,6 @@ export class AttemptAnswerService {
     });
 
     if (upserted === null) {
-      await this.recordRejectedEvent(
-        schoolId,
-        attempt.id,
-        examQuestionId,
-        dto,
-        receivedAt,
-        'A newer answer for this question has already been recorded (ADR-0007/X-04).',
-      );
       throw new AppHttpException({
         code: 'ATTEMPT_ANSWER_SEQUENCE_STALE',
         message: 'A newer answer for this question already exists.',

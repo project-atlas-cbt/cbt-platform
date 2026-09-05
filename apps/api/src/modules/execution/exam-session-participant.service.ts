@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, withTenant } from '@atlas/db';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
@@ -33,15 +33,20 @@ interface ActorContext {
  * any attempt at all for this (session, student), regardless of its
  * current state: even a since-`SUBMITTED`/`INVALIDATED` attempt means the
  * student genuinely started, so a plain revoke is still the wrong tool.
+ *
+ * Takes an already-open `tx`, deliberately — see `revoke()`'s own comment
+ * for why this must run in the SAME transaction as the revocation write
+ * (Found in review, B13 gap closure), not its own separate one.
  */
 async function hasStartedAttempt(
+  tx: Prisma.TransactionClient,
   schoolId: string,
   examSessionId: string,
   studentProfileId: string,
 ): Promise<boolean> {
-  const count = await withTenant(prisma, schoolId, (tx) =>
-    tx.examAttempt.count({ where: { schoolId, examSessionId, studentProfileId } }),
-  );
+  const count = await tx.examAttempt.count({
+    where: { schoolId, examSessionId, studentProfileId },
+  });
   return count > 0;
 }
 
@@ -201,27 +206,43 @@ export class ExamSessionParticipantService {
       });
     }
 
-    if (await hasStartedAttempt(schoolId, examSessionId, studentProfileId)) {
+    const schoolActor = requireSchoolActor(actor);
+    // Found in review (B13 gap closure): hasStartedAttempt() and the
+    // revocation write used to run as two separate, unlocked statements —
+    // a start() call landing in the gap between them could create an
+    // attempt this check never saw, since start() takes its own advisory
+    // lock (school, exam, student), never a lock on
+    // exam_session_participants. Both now run inside one transaction,
+    // narrowing that window to this transaction's own width.
+    const outcome = await withTenant(
+      prisma,
+      schoolId,
+      async (tx): Promise<'STARTED' | 'NOT_AUTHORIZED' | 'OK'> => {
+        if (await hasStartedAttempt(tx, schoolId, examSessionId, studentProfileId)) {
+          return 'STARTED';
+        }
+
+        const { count } = await tx.examSessionParticipant.updateMany({
+          where: { schoolId, examSessionId, studentProfileId, status: 'AUTHORIZED' },
+          data: {
+            status: 'REVOKED',
+            revokedAt: new Date(),
+            revokedByMembershipId: schoolActor.membershipId,
+            revokedReason: dto.reason,
+          },
+        });
+        return count === 0 ? 'NOT_AUTHORIZED' : 'OK';
+      },
+    );
+
+    if (outcome === 'STARTED') {
       throw new AppHttpException({
         code: 'REVOKE_AFTER_START_REFUSED',
         message:
           'This student has already started their attempt — use invalidation instead of revoking access.',
       });
     }
-
-    const schoolActor = requireSchoolActor(actor);
-    const { count } = await withTenant(prisma, schoolId, (tx) =>
-      tx.examSessionParticipant.updateMany({
-        where: { schoolId, examSessionId, studentProfileId, status: 'AUTHORIZED' },
-        data: {
-          status: 'REVOKED',
-          revokedAt: new Date(),
-          revokedByMembershipId: schoolActor.membershipId,
-          revokedReason: dto.reason,
-        },
-      }),
-    );
-    if (count === 0) {
+    if (outcome === 'NOT_AUTHORIZED') {
       throw new AppHttpException({
         code: 'EXAM_SESSION_PARTICIPANT_NOT_AUTHORIZED',
         message: 'This student is not currently authorized for this session.',

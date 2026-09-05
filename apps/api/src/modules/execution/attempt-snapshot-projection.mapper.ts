@@ -41,17 +41,27 @@ export function toStudentAttemptQuestions(
     .sort((a, b) => a.displaySequence - b.displaySequence)
     .map((question): StudentAttemptQuestionDto => {
       const answer = answersByExamQuestionId.get(question.examQuestionId);
+      // Found in review: this used to emit an entry with blank url/
+      // urlExpiresAt strings for an unresolved asset, contradicting this
+      // file's own header comment and `attempt-media-manifest.util.ts`'s
+      // ("degrades to omitting that one asset's entry") — a blank `url`
+      // is a worse contract for a consumer than the asset simply not
+      // appearing (e.g. an `<img src="">` can trigger a same-document
+      // reload in some browsers). Genuinely omitted now, via `flatMap`.
       const media: StudentAttemptMediaDto[] = [...question.media]
         .sort((a, b) => a.displayOrder - b.displayOrder)
-        .map((m) => {
+        .flatMap((m) => {
           const resolved = mediaUrls.get(m.mediaAssetId);
-          return {
-            mediaAssetId: m.mediaAssetId,
-            displayOrder: m.displayOrder,
-            mediaType: m.mediaType,
-            url: resolved?.url ?? '',
-            urlExpiresAt: resolved?.expiresAt ?? '',
-          };
+          if (!resolved) return [];
+          return [
+            {
+              mediaAssetId: m.mediaAssetId,
+              displayOrder: m.displayOrder,
+              mediaType: m.mediaType,
+              url: resolved.url,
+              urlExpiresAt: resolved.expiresAt,
+            },
+          ];
         });
 
       return {
