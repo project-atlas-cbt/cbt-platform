@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useAttemptLock } from './use-attempt-lock';
+import { useAttemptLock, type AttemptLockRole } from './use-attempt-lock';
 
 /**
  * A minimal, faithful-enough fake of the Web Locks API for DoD 20 — jsdom
@@ -153,5 +153,46 @@ describe('useAttemptLock', () => {
       waiter.current.forceSwitch();
     });
     expect(waiter.current.role).toBe('leader');
+  });
+
+  it('bug fix — unmounting while a takeover request is still queued cancels it, freeing the lock for someone else', async () => {
+    const { result: leader, unmount: unmountLeader } = renderHook(() =>
+      useAttemptLock('attempt-4', vi.fn().mockResolvedValue(undefined)),
+    );
+    await waitFor(() => expect(leader.current.role).toBe('leader'));
+
+    const { result: waiter, unmount: unmountWaiter } = renderHook(() =>
+      useAttemptLock('attempt-4', vi.fn()),
+    );
+    await waitFor(() => expect(waiter.current.role).toBe('blocked'));
+
+    act(() => {
+      waiter.current.requestTakeover();
+    });
+
+    // The waiter's takeover request is now queued behind the leader —
+    // unmount it (e.g. the student navigated away) before the leader ever
+    // yields or unmounts itself.
+    unmountWaiter();
+
+    // The leader unmounting releases the lock. Before the fix, the
+    // waiter's still-queued request (never aborted on its own unmount)
+    // would be granted right here, to a component instance that no longer
+    // exists — permanently marking the lock "held" with nothing left to
+    // ever release it.
+    unmountLeader();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The lock must be genuinely free — a fresh instance can become
+    // leader immediately, not stuck 'blocked' behind a phantom holder.
+    const { result: fresh } = renderHook(() => useAttemptLock('attempt-4', vi.fn()));
+    const freshRole: AttemptLockRole = await waitFor(() => {
+      expect(fresh.current.role).not.toBe('pending');
+      return fresh.current.role;
+    });
+    expect(freshRole).toBe('leader');
   });
 });

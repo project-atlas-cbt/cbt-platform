@@ -233,6 +233,15 @@ export class AttemptPackageResponseDto {
 
   @ApiProperty({ type: StudentAttemptQuestionDto, isArray: true })
   questions!: StudentAttemptQuestionDto[];
+
+  /** F13 gap closure (2026-09-05): `null` unless `state` is `INVALIDATED` or
+   * `CANCELLED` — lets a student who reloads/resumes into a terminated
+   * attempt see the real reason (`AttemptStateResponseDto` already exposed
+   * this for the direct submit/end response; `resume()`/`start()` never
+   * did, leaving the client's own `InvalidatedScreen` structurally unable
+   * to show anything but a hardcoded generic message). */
+  @ApiPropertyOptional({ type: String, nullable: true })
+  invalidationReason?: string | null;
 }
 
 /** `PUT /v1/attempts/:id/answers/:questionId` — one answer save. */

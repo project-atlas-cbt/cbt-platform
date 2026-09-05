@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getAttemptDb } from '@/lib/attempt/db';
+import { getAttemptDb, clearAttemptData } from '@/lib/attempt/db';
 import { useReconciledAttempt } from '@/lib/attempt/queries';
 import { useSubmitAttempt } from '@/lib/attempt/mutations';
 import { useAttemptSyncEngine } from '@/lib/attempt/use-attempt-sync-engine';
@@ -36,6 +36,7 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [furthestIndex, setFurthestIndex] = useState(0);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [submitError, setSubmitError] = useState<unknown>(null);
 
   const reconciled = useReconciledAttempt(attemptId);
   const onAttemptNotWritable = useCallback(() => {
@@ -48,6 +49,22 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
   });
   const isLeader = lock.role === 'leader';
   const [takeoverRequested, setTakeoverRequested] = useState(false);
+  // Bug fix: `takeoverRequested` must not survive a successful handoff —
+  // otherwise a tab that becomes leader and later yields again (e.g. a
+  // third tab requests it back) would render `ExamLockedElsewhereScreen`
+  // permanently stuck on "Waiting for your other tab…" instead of ever
+  // offering "Use this tab instead" again. Reset during render, via
+  // React's own documented "adjusting state when a prop changes" pattern
+  // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes)
+  // — a plain `useState` comparison, not a ref (this codebase's
+  // `react-hooks/refs` rule flags mutating a ref's `.current` during
+  // render) and not a `useEffect` (`react-hooks/set-state-in-effect`
+  // correctly flags a synchronous `setState` call in an effect body).
+  const [prevIsLeader, setPrevIsLeader] = useState(isLeader);
+  if (isLeader !== prevIsLeader) {
+    setPrevIsLeader(isLeader);
+    if (isLeader) setTakeoverRequested(false);
+  }
 
   const syncEngine = useAttemptSyncEngine(isLeader ? attemptId : undefined, onAttemptNotWritable);
   useEffect(() => {
@@ -74,7 +91,13 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
     attemptId,
     isLeader ? attemptPackageRow?.expiresAt : undefined,
     attemptPackageRow?.clockSkewMs ?? 0,
-    () => void doSubmit(),
+    // Bug fix: this proactive, one-shot attempt is a UX nicety, not the
+    // real recovery path — `useExpirySubmitRetry` below is what actually
+    // retries on failure. Swallow a rejection here explicitly rather than
+    // leaving it as an unhandled promise rejection if it fails offline.
+    () => {
+      doSubmit().catch(() => undefined);
+    },
   );
   useExpirySubmitRetry(attemptId, isLeader && timer.expired, doSubmit);
 
@@ -126,12 +149,19 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
   }, [attemptId, isLeader]);
 
   // DoD 16: a submitted/auto-submitted attempt visiting the runtime URL
-  // redirects to the confirmation screen — it never allows restart.
+  // redirects to the confirmation screen — it never allows restart. Also
+  // where an INVALIDATED/CANCELLED attempt's local IndexedDB state is
+  // cleared (bug fix — `clearAttemptData` was fully built but never
+  // called anywhere; SUBMITTED/AUTO_SUBMITTED is cleared from
+  // `submitted-screen.tsx` instead, since that route is also reachable
+  // directly, e.g. a bookmark, without ever passing through here).
   useEffect(() => {
     if (!reconciled.data || reconciled.data.isRunning) return;
     const { state } = reconciled.data.package;
     if (state === 'SUBMITTED' || state === 'AUTO_SUBMITTED') {
       router.replace(`/student/exam/${attemptId}/submitted`);
+    } else if (state === 'INVALIDATED' || state === 'CANCELLED') {
+      void clearAttemptData(attemptId);
     }
   }, [reconciled.data, attemptId, router]);
 
@@ -162,7 +192,11 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
       // The redirect effect above is already in flight.
       return null;
     }
-    return <InvalidatedScreen invalidationReason={null} />;
+    // Bug fix: the server now reports the real reason on this same
+    // response (`AttemptPackageResponseDto.invalidationReason`) — this used
+    // to be hardcoded `null`, so the screen could never show anything but
+    // its generic fallback text.
+    return <InvalidatedScreen invalidationReason={pkg.invalidationReason ?? null} />;
   }
 
   if (lock.role === 'blocked') {
@@ -275,10 +309,24 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
         attemptId={attemptId}
         questionCount={questions.length}
         open={submitDialogOpen}
-        onOpenChange={setSubmitDialogOpen}
+        onOpenChange={(open) => {
+          setSubmitDialogOpen(open);
+          setSubmitError(null);
+        }}
         submitting={submitAttempt.isPending}
+        error={submitError}
         onConfirm={() => {
-          void syncEngine.flushNow().then(() => doSubmit());
+          // Bug fix: a failed submit (e.g. genuinely offline right when the
+          // student confirms) used to be an unhandled promise rejection —
+          // the dialog just sat there afterward with no explanation. Now
+          // the failure is caught and surfaced in the dialog itself, and
+          // the dialog stays open so the student can retry once
+          // reconnected.
+          setSubmitError(null);
+          void syncEngine
+            .flushNow()
+            .then(() => doSubmit())
+            .catch((error) => setSubmitError(error));
         }}
       />
     </div>

@@ -2,6 +2,14 @@ import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function formatRemaining(ms: number): string {
+  // Bug fix: `remainingMs` is `Number.POSITIVE_INFINITY` until the timer's
+  // own effect runs its first `recompute()` (state initializes to Infinity
+  // before `expiresAt` is known) — reachable for one real render pass right
+  // as the loading skeleton clears, since `useAttemptTimer`'s `setState`
+  // only lands after that effect commits. Without this guard,
+  // `Infinity % 3600` is `NaN`, producing the literal string
+  // "Infinity:NaN:NaN" for that frame.
+  if (!Number.isFinite(ms)) return '--:--';
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);

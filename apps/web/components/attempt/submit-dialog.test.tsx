@@ -72,4 +72,48 @@ describe('SubmitDialog', () => {
     (await screen.findByRole('button', { name: 'Submit' })).click();
     expect(onConfirm).toHaveBeenCalled();
   });
+
+  it('bug fix — a window-closed answer counts as unanswered, not answered', async () => {
+    await seedAnswer('q1', 'o1'); // genuinely synced
+    await getAttemptDb().answers.put({
+      attemptId: ATTEMPT_ID,
+      examQuestionId: 'q2',
+      selectedOptionId: 'o2', // the student picked one...
+      localSequence: 1,
+      syncStatus: 'window-closed', // ...but the server never accepted it
+      lastServerSequence: null,
+      lastSyncedAt: null,
+      lastAttemptedAt: null,
+      rejectionCode: 'ATTEMPT_WRITE_WINDOW_CLOSED',
+      acknowledged: false,
+      updatedAt: new Date().toISOString(),
+    });
+    render(
+      <SubmitDialog
+        attemptId={ATTEMPT_ID}
+        questionCount={2}
+        open
+        onOpenChange={vi.fn()}
+        onConfirm={vi.fn()}
+        submitting={false}
+      />,
+    );
+    expect(await screen.findByText(/1 unanswered question out of 2/i)).toBeInTheDocument();
+  });
+
+  it('bug fix — shows the submit error and keeps the dialog actionable when a submit fails', async () => {
+    render(
+      <SubmitDialog
+        attemptId={ATTEMPT_ID}
+        questionCount={1}
+        open
+        onOpenChange={vi.fn()}
+        onConfirm={vi.fn()}
+        submitting={false}
+        error={new Error('boom')}
+      />,
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(/try submitting again/i);
+    expect(screen.getByRole('button', { name: 'Submit' })).not.toBeDisabled();
+  });
 });

@@ -120,6 +120,18 @@ export function useAttemptLock(
       channel.close();
       releaseRef.current?.();
       releaseRef.current = null;
+      // Bug fix: a `requestTakeover()` lock request still queued (not yet
+      // granted) at unmount time was never cancelled — the component could
+      // go away (e.g. client-side navigation, not a tab close) while
+      // `navigator.locks.request` keeps waiting, and a later grant would
+      // set state on an unmounted instance and hold the lock with nothing
+      // left to ever release it, permanently starving the correct tab.
+      takeoverAbortRef.current?.abort();
+      takeoverAbortRef.current = null;
+      if (forceSwitchTimeoutRef.current) {
+        clearTimeout(forceSwitchTimeoutRef.current);
+        forceSwitchTimeoutRef.current = null;
+      }
     };
   }, [attemptId, hasLocksApi]);
 

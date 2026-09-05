@@ -10950,6 +10950,10 @@
             "items": {
               "$ref": "#/components/schemas/StudentAttemptQuestionDto"
             }
+          },
+          "invalidationReason": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [

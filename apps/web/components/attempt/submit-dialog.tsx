@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { getAttemptDb } from '@/lib/attempt/db';
+import { describeAttemptError } from '@/lib/attempt/error-utils';
 
 /**
  * F13 — `04 §55`/`§58` (DoD 14): warns of unanswered questions with an
@@ -25,6 +26,7 @@ export function SubmitDialog({
   onOpenChange,
   onConfirm,
   submitting,
+  error,
 }: {
   attemptId: string;
   questionCount: number;
@@ -32,11 +34,17 @@ export function SubmitDialog({
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   submitting: boolean;
+  error?: unknown;
 }) {
   const answeredCount = useLiveQuery(
     async () =>
       (await getAttemptDb().answers.where('attemptId').equals(attemptId).toArray()).filter(
-        (row) => row.selectedOptionId !== null,
+        // Bug fix: a `'window-closed'` row has a `selectedOptionId` (the
+        // student's own pick) but was never accepted by the server — it
+        // will count as unanswered there (per `grace-window-banner.tsx`'s
+        // own copy), so it must not count as answered here either, or this
+        // "accurate unanswered count" (DoD 14) would understate it.
+        (row) => row.selectedOptionId !== null && row.syncStatus !== 'window-closed',
       ).length,
     [attemptId],
     0,
@@ -54,6 +62,12 @@ export function SubmitDialog({
               : `You've answered all ${questionCount} questions. Once you submit, you won't be able to change your answers.`}
           </DialogDescription>
         </DialogHeader>
+        {error ? (
+          <p role="alert" className="text-sm text-danger">
+            {describeAttemptError(error)} Your answers are safely saved on this device — try
+            submitting again once you&apos;re reconnected.
+          </p>
+        ) : null}
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>
             Keep answering

@@ -155,6 +155,25 @@ describe('AttemptSyncEngine', () => {
     expect(mockPost).not.toHaveBeenCalled();
   });
 
+  it('bug fix — two near-simultaneous selections for the same question never share a sequence number', async () => {
+    // Reproduces the pre-fix race directly: two `recordAnswer` calls whose
+    // reads interleave before either write commits (plausible on the slow/
+    // low-end hardware this product targets) used to compute the *same*
+    // `localSequence` for two different selections, since the read and the
+    // write weren't in one transaction. Firing them via `Promise.all`
+    // forces the worst-case interleaving rather than relying on timing.
+    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    await Promise.all([engine.recordAnswer('q1', 'o1'), engine.recordAnswer('q1', 'o2')]);
+
+    const db = getAttemptDb();
+    const row = await db.answers.get([ATTEMPT_ID, 'q1']);
+    // Whichever write logically "won" is fine — the guarantee this test
+    // protects is that the two writes were assigned *distinct* sequence
+    // numbers, never the same one (which would let a stale server response
+    // for the loser be mistaken for confirmation of the winner's value).
+    expect(row?.localSequence).toBe(2);
+  });
+
   it('calls onNotWritable when the whole request fails with ATTEMPT_NOT_WRITABLE, without losing the pending answer', async () => {
     const { ApiError } = await vi.importActual<typeof import('@/lib/api/error')>('@/lib/api/error');
     mockPost.mockImplementationOnce(() => {

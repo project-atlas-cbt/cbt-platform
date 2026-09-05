@@ -32,8 +32,14 @@ export function QuestionNavigator({
     () => getAttemptDb().answers.where('attemptId').equals(attemptId).toArray(),
     [attemptId],
   );
+  // Bug fix: a `'window-closed'` row was rejected by the server (ADR-0003)
+  // and will count as unanswered there — showing it "answered" (green) here
+  // would contradict `grace-window-banner.tsx`'s own warning and understate
+  // the true unanswered count the submit dialog reports.
   const answeredIds = new Set(
-    (answers ?? []).filter((row) => row.selectedOptionId !== null).map((row) => row.examQuestionId),
+    (answers ?? [])
+      .filter((row) => row.selectedOptionId !== null && row.syncStatus !== 'window-closed')
+      .map((row) => row.examQuestionId),
   );
 
   return (

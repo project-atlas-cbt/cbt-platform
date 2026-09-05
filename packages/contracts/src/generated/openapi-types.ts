@@ -4137,6 +4137,7 @@ export interface components {
             generalInstructions?: string | null;
             navigationInstructions?: string | null;
             questions: components["schemas"]["StudentAttemptQuestionDto"][];
+            invalidationReason?: string | null;
         };
         OpenExamSessionDto: {
             /** @enum {string} */

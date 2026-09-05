@@ -79,4 +79,33 @@ describe('QuestionNavigator', () => {
     screen.getByRole('button', { name: /question 2/i }).click();
     expect(onNavigate).toHaveBeenCalledWith(1);
   });
+
+  it('bug fix — a window-closed answer shows as unanswered, not answered', async () => {
+    await getAttemptDb().answers.put({
+      attemptId: ATTEMPT_ID,
+      examQuestionId: 'q1',
+      selectedOptionId: 'o1', // the student picked one...
+      localSequence: 1,
+      syncStatus: 'window-closed', // ...but the server never accepted it
+      lastServerSequence: null,
+      lastSyncedAt: null,
+      lastAttemptedAt: null,
+      rejectionCode: 'ATTEMPT_WRITE_WINDOW_CLOSED',
+      acknowledged: false,
+      updatedAt: new Date().toISOString(),
+    });
+    render(
+      <QuestionNavigator
+        attemptId={ATTEMPT_ID}
+        questionIds={['q1', 'q2']}
+        currentIndex={1}
+        furthestIndex={1}
+        navigationPolicy="FREE"
+        onNavigate={vi.fn()}
+      />,
+    );
+    expect(
+      await screen.findByRole('button', { name: /question 1, unanswered/i }),
+    ).toBeInTheDocument();
+  });
 });

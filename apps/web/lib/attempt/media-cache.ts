@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiClient, unwrap } from '@/lib/api';
 import { getAttemptDb, type MediaManifestRow } from './db';
 
 const CACHE_NAME = 'atlas-exam-media-v1';
@@ -61,6 +62,47 @@ export async function buildMediaManifestFromPackage(
       await db.mediaManifest.put(row);
     }
   });
+}
+
+/**
+ * Bug fix: re-signs every media URL for this attempt from a fresh
+ * `GET /attempts/:id`, without touching answer/question reconciliation
+ * (`resume.ts` owns that — importing it here would create a cycle, since
+ * `resume.ts` already imports this module). This is the only real way to
+ * repair an evicted-while-online cache entry whose manifest `url` has
+ * itself already expired — retrying `fetchAndCacheOne` with that same
+ * expired URL is guaranteed to fail (it's an expired S3 signature).
+ * De-duplicated per attempt so multiple `<QuestionMedia>` instances
+ * discovering the same problem at once don't each fire their own request.
+ * Returns `true` only if the refresh actually succeeded.
+ */
+const inFlightManifestRefreshes = new Map<string, Promise<boolean>>();
+
+export async function refreshMediaManifestUrls(attemptId: string): Promise<boolean> {
+  const existing = inFlightManifestRefreshes.get(attemptId);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    try {
+      const response = await unwrap(
+        apiClient.GET('/attempts/{id}', { params: { path: { id: attemptId } } }),
+      );
+      await buildMediaManifestFromPackage(
+        attemptId,
+        response.questions.map((question) => ({
+          examQuestionId: question.examQuestionId,
+          media: question.media,
+        })),
+      );
+      return true;
+    } catch {
+      return false;
+    } finally {
+      inFlightManifestRefreshes.delete(attemptId);
+    }
+  })();
+  inFlightManifestRefreshes.set(attemptId, promise);
+  return promise;
 }
 
 async function fetchAndCacheOne(row: MediaManifestRow): Promise<boolean> {
@@ -182,7 +224,27 @@ export function useMediaAssetUrl(
           await db.mediaManifest.update([attemptId, mediaAssetId], {
             cacheStatus: 'stale-needs-refetch',
           });
-          if (online) void fetchAndCacheOne(row);
+        }
+        if (online) {
+          if (urlStillValid) {
+            void fetchAndCacheOne(row);
+          } else {
+            // Bug fix: `row.url` is the very thing that made us fall
+            // through here — retrying it would only fail again (an
+            // expired signed URL). The only real fix is a fresh one from
+            // the server; fetch it now and use it directly rather than
+            // repeating a doomed request and leaving the student staring
+            // at "unavailable" while genuinely online.
+            const refreshed = await refreshMediaManifestUrls(attemptId);
+            if (refreshed) {
+              const freshRow = await db.mediaManifest.get([attemptId, mediaAssetId]);
+              if (freshRow && Date.now() < Date.parse(freshRow.urlExpiresAt)) {
+                if (!cancelled) setResolution({ status: 'ready', src: freshRow.url });
+                void fetchAndCacheOne(freshRow);
+                return;
+              }
+            }
+          }
         }
         if (!cancelled) setResolution({ status: 'unavailable', src: null });
         return;

@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAttemptStatus } from '@/lib/attempt/queries';
+import { clearAttemptData } from '@/lib/attempt/db';
 import { AutoSubmitNotice } from './auto-submit-notice';
 
 const STATUS_POLL_INTERVAL_MS = 5_000;
@@ -19,6 +21,16 @@ const STATUS_POLL_INTERVAL_MS = 5_000;
 export function SubmittedScreen({ attemptId }: { attemptId: string }) {
   const status = useAttemptStatus(attemptId, { refetchIntervalMs: STATUS_POLL_INTERVAL_MS });
   const autoSubmitted = status.data?.state === 'AUTO_SUBMITTED';
+
+  // Bug fix: `clearAttemptData` was fully built (db.ts) but never called
+  // anywhere — this is the confirmed terminal state for SUBMITTED/
+  // AUTO_SUBMITTED (this route is also reachable directly, e.g. a
+  // bookmark, without ever passing through `exam-runtime.tsx`, which
+  // handles the INVALIDATED/CANCELLED case instead). Idempotent — safe if
+  // already cleared.
+  useEffect(() => {
+    void clearAttemptData(attemptId);
+  }, [attemptId]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface px-6 text-center">

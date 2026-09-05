@@ -515,6 +515,7 @@ export class AttemptLifecycleService {
       generalInstructions: examMeta.generalInstructions,
       navigationInstructions: examMeta.navigationInstructions,
       questions,
+      invalidationReason: attempt.invalidationReason,
     };
   }
 }

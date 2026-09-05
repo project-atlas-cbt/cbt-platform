@@ -165,6 +165,43 @@ describe('ExamRuntime (integration)', () => {
     expect(screen.queryByText('What is 2+2?')).not.toBeInTheDocument();
   });
 
+  it('bug fix — an invalidated attempt shows the real server-provided reason, not just the generic fallback', async () => {
+    mockGet.mockResolvedValue(
+      ok({
+        ...PACKAGE,
+        state: 'INVALIDATED',
+        invalidationReason: 'Suspected integrity violation.',
+      }),
+    );
+    renderRuntime();
+    expect(await screen.findByText('Suspected integrity violation.')).toBeInTheDocument();
+  });
+
+  it('bug fix — a failed submit surfaces an error in the dialog instead of failing silently', async () => {
+    mockPost.mockImplementation((path: unknown) => {
+      if (path === '/attempts/{id}/answers/batch') {
+        return ok({
+          results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }],
+        }) as never;
+      }
+      if (path === '/attempts/{id}/submit') {
+        return Promise.reject(new Error('network down')) as never;
+      }
+      return ok({ status: 'ok' }) as never;
+    });
+    renderRuntime();
+    await screen.findByText('What is 2+2?');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /submit assessment/i }));
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/try submitting again/i);
+    // The failure never silently navigated away, and the dialog is still
+    // actionable — the student can retry once reconnected.
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeInTheDocument();
+  });
+
   it('DoD 16 — an already-submitted attempt redirects to the confirmation screen rather than rendering the runtime', async () => {
     mockGet.mockResolvedValue(ok({ ...PACKAGE, state: 'SUBMITTED' }));
     renderRuntime();

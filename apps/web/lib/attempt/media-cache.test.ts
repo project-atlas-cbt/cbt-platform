@@ -1,7 +1,14 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
+import { apiClient } from '@/lib/api';
 import { buildMediaManifestFromPackage, downloadAllMedia, useMediaAssetUrl } from './media-cache';
 import { getAttemptDb, clearAttemptData } from './db';
+
+vi.mock('@/lib/api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
+  return { ...actual, apiClient: { ...actual.apiClient, GET: vi.fn() } };
+});
+const mockGet = vi.mocked(apiClient.GET);
 
 const ATTEMPT_ID = 'attempt-media-1';
 
@@ -146,6 +153,51 @@ describe('useMediaAssetUrl (no Cache Storage available, matching a real offline+
   it('an unknown asset id resolves to "unavailable"', async () => {
     const { result } = renderHook(() => useMediaAssetUrl(ATTEMPT_ID, 'does-not-exist'));
     await waitFor(() => expect(result.current.status).toBe('unavailable'));
+  });
+
+  it('bug fix — online with an expired manifest URL fetches a fresh one rather than retrying the expired one', async () => {
+    mockGet.mockReset();
+    await buildMediaManifestFromPackage(ATTEMPT_ID, [
+      {
+        examQuestionId: 'q1',
+        media: [
+          {
+            mediaAssetId: 'm1',
+            displayOrder: 1,
+            mediaType: 'IMAGE',
+            url: 'https://x/old-expired',
+            urlExpiresAt: new Date(Date.now() - 60_000).toISOString(),
+          },
+        ],
+      },
+    ]);
+    mockGet.mockResolvedValue({
+      data: {
+        attemptId: ATTEMPT_ID,
+        questions: [
+          {
+            examQuestionId: 'q1',
+            media: [
+              {
+                mediaAssetId: 'm1',
+                displayOrder: 1,
+                mediaType: 'IMAGE',
+                url: 'https://x/fresh',
+                urlExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+              },
+            ],
+          },
+        ],
+      },
+      response: new Response(null, { status: 200 }),
+    });
+
+    const { result } = renderHook(() => useMediaAssetUrl(ATTEMPT_ID, 'm1'));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.src).toBe('https://x/fresh');
+    expect(mockGet).toHaveBeenCalledWith('/attempts/{id}', {
+      params: { path: { id: ATTEMPT_ID } },
+    });
   });
 });
 

@@ -27,6 +27,23 @@ import { isNotWritableError, isQuestionNotInSnapshotError } from './error-utils'
 export class AttemptSyncEngine {
   private flushChain: Promise<void> = Promise.resolve();
 
+  /** Bug fix (see `recordAnswer`'s own doc comment): serializes the read-
+   * modify-write itself, exactly like `flushChain` already serializes
+   * network flushes — a second, independent chain, since a write must
+   * never wait behind a flush (ADR-0020/DoD 6: answering is never blocked
+   * by network activity) and a flush must never wait behind a write either
+   * (it only ever reads whatever is *currently* `pending`). An explicit
+   * `db.transaction()` around the read+write was tried first and reverted:
+   * under fake-indexeddb (this codebase's IndexedDB test double), a
+   * `recordAnswer` transaction genuinely deadlocked against a concurrently
+   * in-flight `flush()`'s own separate implicit transactions on the same
+   * table — reproduced by this file's own `sync-engine.test.ts` DoD-9 case
+   * hanging indefinitely. Plain promise-chain serialization (no second
+   * Dexie transaction) gives the same "no two `recordAnswer` calls for one
+   * question can interleave their read and write" guarantee without ever
+   * touching Dexie's own transaction scheduler for it. */
+  private writeChain: Promise<void> = Promise.resolve();
+
   /** Called when a flush discovers the attempt itself has left
    *  `IN_PROGRESS` (submitted elsewhere, invalidated, a structural
    *  mismatch) — never thrown out of `scheduleFlush()`'s chain, since a
@@ -51,25 +68,44 @@ export class AttemptSyncEngine {
 
   /** Writes the new answer to Dexie and schedules a flush. Does not await
    * the network round-trip — callers that need to know the flush finished
-   * (e.g. before submitting) should call `flushNow()` directly instead. */
+   * (e.g. before submitting) should call `flushNow()` directly instead.
+   *
+   * Bug fix: the read (`existing`) and the write (`put`) are now serialized
+   * through `writeChain`. Previously they were two separate awaited
+   * operations with nothing serializing them — two `recordAnswer` calls
+   * for the *same question* close enough together (both `get()`s resolving
+   * before either `put()`, plausible on the slow/low-end hardware this
+   * product explicitly targets) could read the same `existing` row and
+   * compute the *same* `localSequence` for two different selections. If the
+   * first (stale) value reached the server first, the second (real, later)
+   * value's flush would then be rejected as `ATTEMPT_ANSWER_SEQUENCE_STALE`
+   * — a rejection `applyBatchResults` treats as "the server already has
+   * this exact value" — silently and permanently losing the student's
+   * actual answer with no error ever surfaced. */
   async recordAnswer(examQuestionId: string, selectedOptionId: string | null): Promise<void> {
     const db = getAttemptDb();
-    const existing = await db.answers.get([this.attemptId, examQuestionId]);
-    const localSequence = (existing?.localSequence ?? 0) + 1;
-    const row: AnswerRow = {
-      attemptId: this.attemptId,
-      examQuestionId,
-      selectedOptionId,
-      localSequence,
-      syncStatus: 'pending',
-      lastServerSequence: existing?.lastServerSequence ?? null,
-      lastSyncedAt: existing?.lastSyncedAt ?? null,
-      lastAttemptedAt: null,
-      rejectionCode: null,
-      acknowledged: false,
-      updatedAt: new Date().toISOString(),
-    };
-    await db.answers.put(row);
+    const task = this.writeChain.then(async () => {
+      const existing = await db.answers.get([this.attemptId, examQuestionId]);
+      const localSequence = (existing?.localSequence ?? 0) + 1;
+      const row: AnswerRow = {
+        attemptId: this.attemptId,
+        examQuestionId,
+        selectedOptionId,
+        localSequence,
+        syncStatus: 'pending',
+        lastServerSequence: existing?.lastServerSequence ?? null,
+        lastSyncedAt: existing?.lastSyncedAt ?? null,
+        lastAttemptedAt: null,
+        rejectionCode: null,
+        acknowledged: false,
+        updatedAt: new Date().toISOString(),
+      };
+      await db.answers.put(row);
+    });
+    // A rejected link must never break the chain for the next write —
+    // mirrors `scheduleFlush()`'s own `.catch(() => undefined)` precedent.
+    this.writeChain = task.catch(() => undefined);
+    await task;
     this.scheduleFlush();
   }
 

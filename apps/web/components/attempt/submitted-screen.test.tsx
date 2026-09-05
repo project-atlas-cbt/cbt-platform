@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { clearAttemptData } from '@/lib/attempt/db';
 import { SubmittedScreen } from './submitted-screen';
 
 vi.mock('@/lib/api', async () => {
@@ -9,6 +10,12 @@ vi.mock('@/lib/api', async () => {
   return { ...actual, apiClient: { ...actual.apiClient, GET: vi.fn() } };
 });
 const mockGet = vi.mocked(apiClient.GET);
+
+vi.mock('@/lib/attempt/db', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/attempt/db')>('@/lib/attempt/db');
+  return { ...actual, clearAttemptData: vi.fn().mockResolvedValue(undefined) };
+});
+const mockClearAttemptData = vi.mocked(clearAttemptData);
 
 function ok<T>(data: T) {
   return Promise.resolve({ data, response: new Response(null, { status: 200 }) } as never);
@@ -45,6 +52,14 @@ const MARKING_NOT_APPLICABLE = {
 describe('SubmittedScreen', () => {
   beforeEach(() => {
     mockGet.mockReset();
+    mockClearAttemptData.mockClear();
+  });
+
+  it('bug fix — clears the attempt’s local IndexedDB state once the confirmation screen is reached', async () => {
+    mockGet.mockResolvedValue(ok(MARKING_NOT_APPLICABLE));
+    renderWithClient();
+    await screen.findByText(/your assessment has been submitted/i);
+    expect(mockClearAttemptData).toHaveBeenCalledWith('attempt-1');
   });
 
   it('DoD 16 — confirms submission', async () => {
