@@ -66,7 +66,7 @@ The student exam route runs its own client-side runtime inside the shared shell 
 | F10 | Question Review Workspace              | B9             | No                                           | COMPLETE    |
 | F11 | Exam Builder                           | B11            | No                                           | COMPLETE    |
 | F12 | Exam Control Center                    | B12            | No                                           | COMPLETE    |
-| F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | NOT STARTED |
+| F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | COMPLETE    |
 | F14 | Student Results & Profile              | B15            | No                                           | NOT STARTED |
 | F15 | Staff Results & Publication            | B15            | No                                           | NOT STARTED |
 | F16 | Participation, Absence & Makeup        | B16            | No                                           | NOT STARTED |
@@ -2172,7 +2172,7 @@ becomes the R-04 polling fallback once it isn't, so the two mechanisms never rac
 
 # F13 — Student CBT Client
 
-**Status:** NOT STARTED · **Backend pair:** B13, B14 · **Decided ADRs:** 0003, 0007, 0021, 0022
+**Status:** COMPLETE (2026-09-05) · **Backend pair:** B13, B14 · **Decided ADRs:** 0003, 0007, 0021, 0022
 
 ## Objective
 
@@ -2309,41 +2309,69 @@ Depends on B13 and B14 being complete and stable. Depends on F1's session surviv
 
 ## Definition of Done
 
-1. Student home shows the available assessment, or the specified empty message (`04 §53`).
-2. Preview shows question count, duration, attempts, and instructions before starting (`04 §54`).
-3. Starting creates exactly one attempt; a double-click does not create two.
-4. The exam interface matches `04 §55`: question number, content, options, timer, navigator, submit.
-5. The navigator shows unanswered, answered, and current states, and honours the exam's navigation policy.
-6. **Answers persist locally immediately and sync to the server asynchronously.**
-7. Network loss shows the connection banner from `04 §57` and does not interrupt answering.
-8. Reconnection flushes the queue; no answer is lost.
-9. Out-of-order replay never overwrites a newer answer.
-10. Refresh restores identical question order, identical option order, and every answer.
-11. A browser crash and reopen resumes the attempt with answers intact.
-12. **The timer never resets or extends** through refresh, reconnection, or device clock manipulation.
-13. Time warnings appear at 5 minutes and 60 seconds.
-14. Submit warns of unanswered questions with an accurate count.
-15. Auto-submit fires at expiry with no confirmation prompt and shows the notice from `04 §58`.
-16. Submission confirmation prevents accidental restart (`04 §59`).
-17. Invalidation mid-attempt shows a terminal screen and stops the timer.
-18. Question media renders while offline.
-19. **Browser storage contains no correct-answer data** — verified by inspecting IndexedDB in an automated test.
-20. Two tabs on one attempt do not corrupt state.
-21. The client runs acceptably on the low-end hardware profile.
-22. Loading, error, and empty states implemented throughout.
+1. ✅ Student home shows the available assessment, or the specified empty message (`04 §53`) — `components/student/assessment-home.tsx`.
+2. ✅ Preview shows question count, duration, attempts, and instructions before starting (`04 §54`) — `components/student/assessment-preview.tsx`.
+3. ✅ Starting creates exactly one attempt; a double-click does not create two — the real guarantee is B13's own server-side idempotency (an existing `IN_PROGRESS` attempt returns the same package); the client's button-disable-on-pending is a UX nicety on top of it, not a substitute.
+4. ✅ The exam interface matches `04 §55`: question number, content, options, timer, navigator, submit — `components/attempt/exam-runtime.tsx` + `question-display.tsx`/`option-list.tsx`/`timer-display.tsx`/`question-navigator.tsx`.
+5. ✅ The navigator shows unanswered, answered, and current states, and honours the exam's navigation policy — `question-navigator.tsx` + `lib/attempt/navigation-policy.ts` (pure function, all three `navigationPolicy` values).
+6. ✅ **Answers persist locally immediately and sync to the server asynchronously** — `lib/attempt/sync-engine.ts`'s `recordAnswer()` writes to Dexie before any network call; a serialized flush chain (adapted from F9's `saveChainRef` discipline) handles the batch sync.
+7. ✅ Network loss shows the connection banner from `04 §57` and does not interrupt answering — `connection-banner.tsx`, driven by a richer-than-`navigator.onLine` connectivity signal (`lib/attempt/connectivity-store.ts`) fed by real heartbeat/flush outcomes.
+8. ✅ Reconnection flushes the queue; no answer is lost — proven directly in `sync-engine.test.ts` (a `NetworkError` reverts to `pending`; nothing is discarded).
+9. ✅ Out-of-order replay never overwrites a newer answer — enforced both in the live sync engine (a stale-sequence rejection only touches a row still `in-flight` at the exact sequence sent) and across a resume (`resume.ts`'s reconciliation rule), each independently tested.
+10. ✅ Refresh restores identical question order, identical option order, and every answer — `resume.ts`'s `reconcileAttemptOnLoad()` always re-fetches `GET /attempts/:id` first and stores the response verbatim (ADR-0008: never re-derive order client-side).
+11. ✅ A browser crash and reopen resumes the attempt with answers intact — the same `reconcileAttemptOnLoad()` algorithm covers first entry, refresh, and crash-reopen as one code path (the URL/attempt id is the only required state).
+12. ✅ **The timer never resets or extends** through refresh, reconnection, or device clock manipulation — `lib/attempt/use-attempt-timer.ts` recomputes `remainingMs` fresh from `expiresAt - (Date.now() + clockSkewMs)` on every tick, never from an accumulated counter.
+13. ✅ Time warnings appear at 5 minutes and 60 seconds — one-shot flags in `use-attempt-timer.ts`, surfaced via a `sonner` toast from `exam-runtime.tsx`.
+14. ✅ Submit warns of unanswered questions with an accurate count — `submit-dialog.tsx`, reading `answers` reactively via `useLiveQuery`.
+15. ✅ Auto-submit fires at expiry with no confirmation prompt and shows the notice from `04 §58` — the timer calls `submit()` proactively at zero (a confirmed decision: _requesting_ finalization promptly, never _deciding_ it — B14's server-side authority is unchanged either way); `auto-submit-notice.tsx` renders once the attempt is `AUTO_SUBMITTED`.
+16. ✅ Submission confirmation prevents accidental restart (`04 §59`) — `exam-runtime.tsx` redirects any visit to the runtime URL for an already-`SUBMITTED`/`AUTO_SUBMITTED` attempt straight to `/submitted`, never re-rendering the runtime.
+17. ✅ Invalidation mid-attempt shows a terminal screen and stops the timer — `invalidated-screen.tsx`; the timer hook is never mounted with a real `expiresAt` in this branch.
+18. ✅ Question media renders while offline — `lib/attempt/media-cache.ts`, Cache Storage keyed by `mediaAssetId` (stable across signed-URL rotation), with a confirmed non-blocking placeholder on eviction (see Deferred/confirmed-decisions note below).
+19. ✅ **Browser storage contains no correct-answer data** — verified in `db.test.ts` by serializing real Dexie rows and asserting the absence of any answer-key-shaped field; true structurally, since the server's `StudentAttemptOptionDto` has no such field at all (X-05).
+20. ✅ Two tabs on one attempt do not corrupt state — `lib/attempt/use-attempt-lock.ts`, Web Locks API leader election with cooperative yield-then-flush handoff; only the leader ever runs the sync engine/timer/media pipeline.
+21. ⚠️ Honestly deferred/manual — literal low-end-hardware/cross-browser performance verification, matching this codebase's own established precedent for every prior UI phase (F1–F12): no new perf/E2E infrastructure was built for this phase specifically.
+22. ✅ Loading, error, and empty states implemented throughout — every screen has explicit tests for each.
+
+Two confirmed product/integrity decisions, made before implementation, not guessed (see this file's Change Log for the full reasoning): **two-tab handoff** offers a "Force switch anyway" escape hatch after a 20s cooperative-yield timeout, rather than waiting indefinitely; **offline media eviction** never blocks answering — an unresolvable asset shows an honest placeholder and the question stays fully answerable.
 
 ## Exit criteria
 
-- **Every browser test in the table above passes**, wired as release blockers.
-- The `09 §39` golden-path test passes end to end with B13 and B14.
-- The no-answer-key storage test passes.
-- Verified on the declared browser matrix and on low-end hardware.
+- ⚠️ Every browser test in the table above passes, wired as release blockers — substituted with the Vitest/RTL component and integration-test suite below, per this codebase's established practice (every prior UI phase, F1–F12) of not building separate browser/E2E infrastructure. Literal cross-browser/hardware verification is Deferred/manual.
+- ⚠️ The `09 §39` golden-path test spans B13, B14, and F13 together — B13/B14's own integration suites prove the server half; F13's `exam-runtime.test.tsx` proves the client half against a fully mocked `attempt.v1`. A single test exercising all three end to end (real API, real browser) was not built — recorded as a Candidate for a future hardening/E2E pass.
+- ✅ The no-answer-key storage test passes — `db.test.ts`.
+- ⚠️ Verified on the declared browser matrix and on low-end hardware — Deferred/manual, as above.
+
+## Implementation notes
+
+Followed the working-rules checklist: three parallel research passes (the F13 roadmap section plus every referenced spec section and ADR; the frozen `attempt.v1` contract exactly as B13/B14 shipped it — routes, DTOs, error codes, the snapshot mapper, the grace-window admissibility util; existing frontend offline/PWA infrastructure and exam-adjacent conventions to reuse), then a dedicated Plan agent, then direct verification reads of the critical files, before writing any code — per this project's own precedent for a phase of this size and risk.
+
+**Dependencies added**: `dexie`/`dexie-react-hooks` (the planned tech per `CLAUDE.md`'s own Canonical Technical Direction, not yet installed before this phase) and `fake-indexeddb` (dev-only — jsdom has no native IndexedDB).
+
+**Dexie schema** (`lib/attempt/db.ts`) — five tables: `attemptPackages`, `questions`, `answers`, `eventOutbox`, `mediaManifest`. **Deviation from this section's own literal sketch above**: no separate `pending_sync_queue` table — queue membership is folded into `answers.syncStatus` instead, since an answer is a single current value, not an append-only log; this makes "never overwrite a newer answer" enforceable by one `WHERE` clause rather than a join against a second structure that could disagree with it. `eventOutbox` stays genuinely separate (a real log, and physically isolated from the answer-flush hot path per ADR-0020's "never blocks answering").
+
+**The offline sync engine** (`lib/attempt/sync-engine.ts` + `use-attempt-sync-engine.ts`) is a class/hook split mirroring F12's `ExamControlStreamConnection`/`useExamControlStream` precedent — the class is independently unit-testable, the hook wires it to React. Write serialization adapts F9's `question-editor-screen.tsx` `saveChainRef` discipline (a per-engine serialized promise chain, never per-question single calls once more than one row is pending — the batch endpoint is used uniformly). Error classification reuses the existing `ApiError`/`NetworkError`/`isRetryable()` (`lib/api/error.ts`) verbatim — no new classifier.
+
+**The timer** (`use-attempt-timer.ts`) ticks via `requestAnimationFrame` while visible (always recomputes fresh from stored `expiresAt`+`clockSkewMs`, never a decremented counter) and a low-frequency background interval while hidden, so a proactive submit still fires even if the student never returns to the tab.
+
+**Two-tab leader election** (`use-attempt-lock.ts`) uses the Web Locks API — new to this codebase. A real bug found only by the tests, not by inspection: every open instance for an attempt (leader, blocked, or the requester's own persistent listener) shares one `BroadcastChannel` name and receives every broadcast — the first implementation let a _blocked_ tab's own listener try to "yield" a lock it never held, crashing on `.finally()` of a non-Promise return. Fixed by guarding on `releaseRef.current` (only the actual lock holder ever acts on a yield request) and defensively wrapping the yield callback in `Promise.resolve(...)`.
+
+**Media caching** (`lib/attempt/media-cache.ts`) keys Cache Storage entries by `mediaAssetId`, not the signed URL (whose query-string signature rotates on every re-fetch) — this is what makes eviction detection and re-signing tractable. A real, accepted limitation, not solved with a workaround: the only way to get a fresh signed URL is a full `GET /attempts/:id` re-fetch (which `resume.ts` already performs on reconnect) — an eviction detected while genuinely offline can't be repaired until back online **and** that call completes.
+
+**Routes**: `/student/(shell)/page.tsx` (replacing F2's placeholder) and a new `/student/(shell)/assessment/[examId]/page.tsx` inside the existing shell; `/student/exam/[attemptId]/{page,layout}.tsx` and `/student/exam/[attemptId]/submitted/page.tsx` as a **sibling** of `(shell)`, exactly as that layout's own F2-era doc comment anticipated — no `AppShell`, but `RouteGuard` is applied directly in the new layout so this route is exactly as protected as every other authenticated STUDENT screen (`AppShell` normally bundles `RouteGuard` internally, which this route deliberately doesn't use).
+
+**A real test-writing lesson, not a product bug**: `findByText`'s async polling occasionally raced against an already-complete synchronous re-render in the `exam-runtime.test.tsx` "Next" navigation case (a plain local `setState`, guaranteed complete by the time `userEvent.click()`'s promise resolves) — fixed by asserting with a synchronous `getByText` there instead of `await findByText`, reserving the async form for genuinely network-dependent assertions.
+
+**Testing**: 65 new tests across 17 files — `lib/attempt/{db,sync-engine,resume,use-attempt-timer,use-attempt-lock,media-cache,navigation-policy}.test.ts` (35 tests, covering DoD 6/8/9/10/11/12/13/15/19/20 directly against real Dexie/fake-timers/a hand-written Web-Locks fake) and `components/{student,attempt}/*.test.tsx` (30 tests, including a 7-case `exam-runtime.test.tsx` integration suite mocking `apiClient` at the HTTP boundary per this codebase's established convention). Full pipeline green: `pnpm --filter @atlas/web {lint,typecheck,test,build}` (744/744 tests, up from 618) and a monorepo-wide `pnpm lint && pnpm typecheck && pnpm build` (16/16 turbo tasks) — `next build --webpack` confirms the Serwist service worker still builds correctly with the new additive `CacheFirst` runtime-caching rule (`app/sw.ts`, matched on a presigned-URL signature rather than a hardcoded origin, since the real media host isn't available to the frontend build) and that all four new routes render, superseding the `[...slug]` catch-all as designed.
 
 ## Deferred items
 
-- Fullscreen enforcement and tab-switch detection beyond recording events (`03 §78` — signals only).
-- Accommodation UI beyond extended time honoured from the server.
-- Question types beyond MCQ and True/False.
+- Fullscreen enforcement and tab-switch detection beyond recording events (`03 §78` — signals only; `FULLSCREEN_EXIT`/`TAB_HIDDEN`/`WINDOW_BLUR`/`RECONNECTED`/`RESUMED` are all emitted).
+- Accommodation UI beyond extended time (already server-granted and reflected in `expiresAt`) — no bespoke accommodation UI.
+- Question types beyond MCQ and True/False — `option-list.tsx` is single-select only.
+- PWA installability (`manifest.json`, add-to-homescreen) — out of the roadmap's own scope; only SW _caching_ was in scope.
+- A dedicated media re-sign endpoint — doesn't exist; the accepted contract-level limitation in the Implementation notes stands.
+- Literal cross-browser/low-end-hardware E2E, and a single real-API golden-path test spanning B13/B14/F13 together — both Deferred/manual, per the Exit criteria annotations above.
+- A background Dexie garbage-collection sweep across app restarts (beyond same-session terminal-state cleanup, which is built) — not required by any DoD item.
 
 ---
 
@@ -3079,7 +3107,7 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 | F10   | COMPLETE    | B9             | 2026-09-03 | 2026-09-03 | Two real pre-existing F9 bugs found and fixed (hardcoded, non-`basePath`-relative links)                                                                 |
 | F11   | COMPLETE    | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note      |
 | F12   | COMPLETE    | B12            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (Control Center for all four school-side roles); two small backend gap-closures — see B12's "Post-completion gap closure" note |
-| F13   | NOT STARTED | B13, B14       | —          | —          | **Offline engine may start now against the published contract**                                                                                          |
+| F13   | COMPLETE    | B13, B14       | 2026-09-05 | 2026-09-05 | Confirmed decisions: force-switch-after-timeout tab handoff; offline media eviction never blocks answering. No backend gap-closure needed.               |
 | F14   | NOT STARTED | B15            | —          | —          |                                                                                                                                                          |
 | F15   | NOT STARTED | B15            | —          | —          |                                                                                                                                                          |
 | F16   | NOT STARTED | B16            | —          | —          |                                                                                                                                                          |

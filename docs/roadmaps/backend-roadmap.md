@@ -46,18 +46,18 @@ If a future decision is reopened or superseded, the affected phases return to **
 | ID  | Phase                              | Gating ADRs                        | Frontend pair | Status      |
 | --- | ---------------------------------- | ---------------------------------- | ------------- | ----------- |
 | B0  | Engineering Foundation & Contracts | 0022, 0023, 0027, 0031, 0033, 0005 | F0            | COMPLETE    |
-| B1  | Identity & Authentication          | 0005, 0019, 0022                   | F1            | NOT STARTED |
-| B2  | Authorization & Tenancy Engine     | 0012, 0023                         | F2            | NOT STARTED |
-| B3  | Platform, Schools & Subscriptions  | 0015, 0016, 0019, 0012             | F3, F4        | NOT STARTED |
-| B4  | Media, Storage & Branding          | 0021                               | F5            | NOT STARTED |
-| B5  | Academic Structure                 | 0001, 0011, 0013                   | F6            | NOT STARTED |
-| B6  | People, Profiles & Enrollment      | 0011, 0017                         | F7            | NOT STARTED |
-| B7  | Bulk Import Pipeline               | —                                  | F8            | NOT STARTED |
-| B8  | Question Bank                      | 0001                               | F9            | NOT STARTED |
-| B9  | Question Review & Governance       | 0001, 0017                         | F10           | NOT STARTED |
-| B10 | Audit & Notifications              | 0019                               | F2 (surface)  | NOT STARTED |
+| B1  | Identity & Authentication          | 0005, 0019, 0022                   | F1            | COMPLETE    |
+| B2  | Authorization & Tenancy Engine     | 0012, 0023                         | F2            | COMPLETE    |
+| B3  | Platform, Schools & Subscriptions  | 0015, 0016, 0019, 0012             | F3, F4        | COMPLETE    |
+| B4  | Media, Storage & Branding          | 0021                               | F5            | COMPLETE    |
+| B5  | Academic Structure                 | 0001, 0011, 0013                   | F6            | COMPLETE    |
+| B6  | People, Profiles & Enrollment      | 0011, 0017                         | F7            | COMPLETE    |
+| B7  | Bulk Import Pipeline               | —                                  | F8            | COMPLETE    |
+| B8  | Question Bank                      | 0001                               | F9            | COMPLETE    |
+| B9  | Question Review & Governance       | 0001, 0017                         | F10           | COMPLETE    |
+| B10 | Audit & Notifications              | 0019                               | F2 (surface)  | COMPLETE    |
 | B11 | Exam Builder & Readiness           | 0002, 0013, 0029                   | F11           | COMPLETE    |
-| B12 | Exam Activation & Control          | 0006, 0009, 0020                   | F12           | NOT STARTED |
+| B12 | Exam Activation & Control          | 0006, 0009, 0020                   | F12           | COMPLETE    |
 | B13 | Attempt Engine                     | 0002, 0003, 0007, 0008, 0020, 0021 | F13           | COMPLETE    |
 | B14 | Submission & Marking               | 0003, 0004                         | F13           | COMPLETE    |
 | B15 | Results & Publication              | 0010, 0018, 0025                   | F15           | NOT STARTED |

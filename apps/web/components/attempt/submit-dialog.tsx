@@ -1,0 +1,68 @@
+'use client';
+
+import { useLiveQuery } from 'dexie-react-hooks';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { getAttemptDb } from '@/lib/attempt/db';
+
+/**
+ * F13 — `04 §55`/`§58` (DoD 14): warns of unanswered questions with an
+ * accurate count before a manual submit. Never shown for the proactive
+ * zero-reached submit (`use-attempt-timer.ts`) or auto-submit — those are
+ * never confirmable by design (DoD 15: "no confirmation prompt").
+ */
+export function SubmitDialog({
+  attemptId,
+  questionCount,
+  open,
+  onOpenChange,
+  onConfirm,
+  submitting,
+}: {
+  attemptId: string;
+  questionCount: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  submitting: boolean;
+}) {
+  const answeredCount = useLiveQuery(
+    async () =>
+      (await getAttemptDb().answers.where('attemptId').equals(attemptId).toArray()).filter(
+        (row) => row.selectedOptionId !== null,
+      ).length,
+    [attemptId],
+    0,
+  );
+  const unansweredCount = Math.max(0, questionCount - (answeredCount ?? 0));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Submit your answers?</DialogTitle>
+          <DialogDescription>
+            {unansweredCount > 0
+              ? `You have ${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'} out of ${questionCount}. Once you submit, you won't be able to change your answers.`
+              : `You've answered all ${questionCount} questions. Once you submit, you won't be able to change your answers.`}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>
+            Keep answering
+          </Button>
+          <Button variant="primary" onClick={onConfirm} loading={submitting}>
+            Submit
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -1,6 +1,9 @@
 import { afterEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+// F13 — jsdom has no native IndexedDB; Dexie (lib/attempt/db.ts) needs a
+// real (or faithfully faked) `indexedDB` global to run at all under Vitest.
+import 'fake-indexeddb/auto';
 
 // @testing-library/react's auto-cleanup only self-registers for Jest by
 // default; under Vitest it must be wired explicitly, or DOM from one

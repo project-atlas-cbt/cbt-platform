@@ -391,9 +391,13 @@ Every frontend phase through `F12` and every backend phase through `B14` are now
 auto-submission (a sweeper in `apps/worker` plus opportunistic finalisation across every relevant
 `apps/api` touchpoint), and automatic objective marking (`AttemptQuestionResult`, read only from the
 frozen snapshot, idempotent via upsert) — deliberately entity-free of `Result` itself (a confirmed
-decision; `Result`/`GradingScale`/publication are all `B15`'s job). `B15 — Results & Publication` is
-next on the backend critical path. See this file's Change Log entries below (dated 2026-09-04 and
-2026-09-05) for full detail on all five phases.
+decision; `Result`/`GradingScale`/publication are all `B15`'s job). **`F13 — Student CBT Client`**
+(the offline exam engine) is complete too (2026-09-05): Dexie-backed local-write-first answer
+persistence, a server-skew-derived countdown timer, Web Locks API two-tab leader election, and
+Cache-Storage-backed offline media, proving `B13`+`B14`'s `attempt.v1` contract end to end with no
+backend gap-closure needed. `B15 — Results & Publication` is next on the backend critical path. See
+this file's Change Log entries below (dated 2026-09-04 and 2026-09-05) for full detail on all six
+phases.
 
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
@@ -5458,3 +5462,145 @@ No schema change, no permission-table change, no product-behaviour change beyond
 reliability gap itself, no ADR involved, no roadmap phase status changed. Project state remains
 _Implementation (B14 complete)_ — this was a same-phase gap closure, not a new phase. **Next:
 `B15 — Results & Publication`**, unchanged.
+
+### 2026-09-05 — `F13` complete: Student CBT Client (offline exam engine)
+
+Requested explicitly: start `F13`. Followed the working-rules checklist via three parallel research
+passes (the full F13 roadmap section, every referenced spec section and ADR — 0003/0004/0007/0008/
+0009/0020/0021; the frozen `attempt.v1` contract exactly as B13/B14 shipped it — every route, DTO
+field, error code, the X-05 snapshot-projection mapper, and the grace-window admissibility util;
+existing frontend offline/PWA infrastructure and exam-adjacent conventions to reuse), then a
+dedicated Plan agent, then direct verification reads of the critical live source (`offline-
+indicator.tsx`'s own doc comment, `app/sw.ts`, `(shell)/layout.tsx`'s doc comment anticipating this
+exact sibling route, `app-shell.tsx`'s `RouteGuard`-bundling) before writing any code — per this
+project's own precedent for a phase of this size and, per `AGENTS.md` §5, integrity risk. Both
+backend dependencies (`B13`, `B14`) were already complete and `attempt.v1` frozen, so this closes the
+roadmap's own "longest-lead frontend item" the moment its contract stabilized, exactly as `roadmap-
+index.md` §5 anticipated.
+
+**Two genuine product/integrity decisions confirmed with the project owner before finalizing the
+plan, not guessed:**
+
+1. **Two-tab handoff**: cooperative yield first (the leader flushes pending answers, then releases
+   the Web Lock deliberately — control never changes hands mid-write); if the leader doesn't respond
+   within 20 seconds (a genuinely abandoned tab — device asleep, browser left open), the waiting tab
+   gets a **"Force switch anyway"** escape hatch rather than waiting indefinitely. The Web Locks API
+   has no "steal" primitive, so this is a deliberate, accepted, narrow risk (an abandoned tab's own
+   in-flight write could be cut off) against the alternative of permanently locking a student out of
+   their own exam.
+2. **Offline media eviction never blocks answering** — if a question's image/diagram was evicted
+   from Cache Storage and the device is offline (so it can't be re-fetched), the student sees an
+   honest "unavailable offline" placeholder and can answer normally; the platform's offline-
+   resilience goal outranks treating an image as a hard prerequisite to answering.
+
+**Dependencies added**: `dexie`/`dexie-react-hooks` (`CLAUDE.md`'s own Canonical Technical Direction
+had named this as planned tech since project inception; never installed until this phase actually
+needed it) and `fake-indexeddb` (dev-only — jsdom has no native IndexedDB).
+
+**The Dexie schema** (`apps/web/lib/attempt/db.ts`) — five tables: `attemptPackages`, `questions`,
+`answers`, `eventOutbox`, `mediaManifest`. **One deliberate deviation from the roadmap's own literal
+sketch**: no separate "pending sync queue" table — queue membership is folded into `answers
+.syncStatus` instead, since an answer is a single current value, not an append-only log; this makes
+"never overwrite a newer answer with an older one" (DoD 9) enforceable by one `WHERE` clause rather
+than a join against a second structure that could disagree with it. `eventOutbox` stays genuinely
+separate (a real log of heartbeats/integrity events, physically isolated from the answer-flush hot
+path per ADR-0020's "never blocks answering," enforced structurally here, not by discipline).
+
+**The offline sync engine** (`lib/attempt/sync-engine.ts` + `use-attempt-sync-engine.ts`) is a
+class/hook split mirroring F12's `ExamControlStreamConnection`/`useExamControlStream` precedent.
+Write serialization adapts F9's `question-editor-screen.tsx` `saveChainRef` discipline (one
+serialized promise chain per engine, so at most one `POST .../answers/batch` request is ever in
+flight — never per-question single calls once more than one row is pending, uniformly via the batch
+endpoint even for exactly one). Error classification reuses the existing `ApiError`/`NetworkError`/
+`isRetryable()` (`lib/api/error.ts`) verbatim. `ATTEMPT_WRITE_WINDOW_CLOSED` permanently excludes a
+row from retry and surfaces via a new, explicit, must-acknowledge `grace-window-banner.tsx` (ADR-0003's
+"never silently" requirement — no existing wireframe, new copy). `ATTEMPT_ANSWER_SEQUENCE_STALE`
+discards silently only when the local row hasn't since moved to a higher sequence (the expected,
+benign out-of-order-replay case).
+
+**The timer** (`use-attempt-timer.ts`) computes `remainingMs` fresh from `expiresAt - (Date.now() +
+clockSkewMs)` on every tick — never an accumulated counter — which is what makes device-clock
+manipulation harmless (DoD 12). Ticks via `requestAnimationFrame` while visible, a low-frequency
+background interval while hidden. At zero, calls `submit()` proactively exactly once — _requesting_
+finalization promptly for good UX (since B14, a late submit safely finalizes to `AUTO_SUBMITTED`
+rather than erroring), never _deciding_ it; the server's own sweeper remains the authority either
+way (ADR-0004).
+
+**Two-tab leader election** (`use-attempt-lock.ts`) uses the Web Locks API — new to this codebase.
+**A real bug found only by the tests, not by inspection**: every open instance for one attempt
+(leader, blocked, or the requester's own persistent listener) shares one `BroadcastChannel` name and
+receives every broadcast — the first implementation let a _blocked_ tab's own listener try to
+"yield" a lock it never held, crashing on `.finally()` of a non-Promise return from a test double.
+Fixed by guarding on `releaseRef.current` (only the actual lock holder ever acts on a yield request)
+and defensively wrapping the yield callback in `Promise.resolve(...)`.
+
+**Media caching** (`lib/attempt/media-cache.ts`) keys Cache Storage entries by `mediaAssetId`, never
+the signed URL (whose query-string signature rotates on every re-fetch) — this is what makes
+eviction detection and re-signing tractable at all. A real, accepted limitation, not solved with a
+workaround: the only way to get a fresh signed URL is a full `GET /attempts/:id` re-fetch (which
+`resume.ts` already performs on reconnect) — an eviction detected while genuinely offline can't be
+repaired until back online **and** that call completes.
+
+**Resume/reconciliation** (`resume.ts`'s `reconcileAttemptOnLoad()`) is one algorithm covering first
+entry, browser refresh, and crash-reopen alike — always re-fetches `GET /attempts/:id` first (server
+state is the entry point, never local Dexie alone), stores the response verbatim (ADR-0008: never
+re-derive question/option order client-side), and reconciles each answer against the rule "keep the
+local value if its sequence is higher than the server's, unless it's already `window-closed`
+(preserved as-is, never resent)." This single rule is what makes DoD 9 hold across a resume, not
+just within one live session.
+
+**Routes**: `/student/(shell)/page.tsx` (replacing F2's placeholder) and a new `/student/(shell)/
+assessment/[examId]/page.tsx` inside the existing shell chrome; `/student/exam/[attemptId]/{page,
+layout}.tsx` and `/student/exam/[attemptId]/submitted/page.tsx` as a **sibling** of `(shell)`,
+exactly as that layout's own F2-era doc comment anticipated (no `AppShell`/nav chrome for the
+runtime). Since `AppShell` normally bundles `RouteGuard` internally and this route deliberately
+skips `AppShell`, the new layout applies `RouteGuard` directly — the runtime is exactly as protected
+as every other authenticated STUDENT screen, not accidentally left open.
+
+**Service worker** (`app/sw.ts`): additive only — F0's `defaultCache` (app-shell precache) is
+untouched. One new `CacheFirst` runtime-caching rule, matched on the hallmark of a B4 presigned URL
+(an `X-Amz-Signature` query parameter) rather than a hardcoded object-storage origin, since the real
+media host (MinIO locally, S3/CloudFront in production) isn't available to this frontend build at
+all. This is a defense-in-depth backstop, not the primary mechanism — `media-cache.ts`'s own manual
+`fetch`+`caches.put` pipeline is what actually drives the offline guarantee.
+
+**A real test-writing lesson, not a product bug**: `exam-runtime.test.tsx`'s "Next" navigation case
+initially used `await screen.findByText(...)` and failed intermittently despite the DOM
+demonstrably already showing the right content (confirmed via `screen.debug()`) — `findByText`'s
+async polling occasionally raced against an already-complete synchronous local `setState`, which
+`userEvent.click()`'s own promise resolution already guarantees has finished. Fixed by asserting
+with a synchronous `getByText` there instead, reserving the async form for genuinely network-
+dependent assertions — reliable across repeated runs afterward.
+
+**Testing**: 65 new tests across 17 files — `lib/attempt/{db,sync-engine,resume,use-attempt-timer,
+use-attempt-lock,media-cache,navigation-policy}.test.ts` (35 tests: DoD 6/8/9/10/11/12/13/15/19/20
+proven directly against real Dexie, fake timers, and a hand-written Web-Locks-API fake modeling
+`ifAvailable`/queuing/`signal`-cancellation) and `components/{student,attempt}/*.test.tsx` (30
+tests, including a 7-case `exam-runtime.test.tsx` integration suite mocking `apiClient` at the HTTP
+boundary per this codebase's established RTL convention). Full pipeline green: `pnpm --filter
+@atlas/web {lint,typecheck,test,build}` (744/744 tests, up from 618) and a monorepo-wide `pnpm lint
+&& pnpm typecheck && pnpm build` (16/16 turbo tasks) — `next build --webpack` confirmed the Serwist
+service worker still builds correctly with the new runtime-caching rule and that all four new routes
+render, correctly superseding the `[...slug]` catch-all.
+
+**Honestly deferred, not silently dropped** (full list in `frontend-roadmap.md`'s F13 section):
+literal cross-browser/low-end-hardware E2E and a single real-API golden-path test spanning
+B13/B14/F13 together (both Deferred/manual, matching this codebase's own established precedent for
+every prior UI phase — no new browser/E2E infrastructure was built specifically for this phase);
+fullscreen enforcement beyond the `FULLSCREEN_EXIT` signal; accommodation UI beyond server-granted
+extended time; question types beyond MCQ/True-False; PWA installability; a dedicated media re-sign
+endpoint (doesn't exist — the accepted limitation above stands); a background Dexie GC sweep across
+app restarts beyond the same-session terminal-state cleanup that is built.
+
+`docs/roadmaps/frontend-roadmap.md`'s F13 section gained status `COMPLETE`, every DoD item annotated
+with what's real (21 of 22 fully; item 21, low-end-hardware performance, honestly Deferred/manual),
+a full "Implementation notes" subsection, and an expanded Deferred items list. `docs/roadmaps/
+roadmap-index.md`'s version (1.26), Current State, and its own §5 "may proceed in parallel" /
+"must wait for a stable contract" notes were all updated to record F13 complete.
+
+Project state moves from _Implementation (B14 complete)_ to _Implementation (F13 complete; every
+frontend phase through F13 closed out)_.
+**Next: `B15 — Results & Publication`** on the backend critical path (`Gate 1 ADRs → B0 → B1 → B2 →
+B3 → B5 → B6 → B8 → B9 → B11 → B12 → B13 → B14 → B15 → …`) — unaffected by F13's own always-
+parallelisable position; a future `F14` (Student Results & Profile) remains open once `B15` ships
+and the frontend/backend phase-pairing default is next prioritized.
