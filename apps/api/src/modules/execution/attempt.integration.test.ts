@@ -1043,6 +1043,45 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     expect(markingEnqueueSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('B14 review fix: a downstream failure (e.g. a Redis blip) during opportunistic finalisation never fails the caller — the transition itself still commits', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.update({
+        where: { id: pkg.attemptId },
+        data: { expiresAt: new Date(Date.now() - 120 * 1000) },
+      }),
+    );
+
+    // Simulate the exact residual risk AttemptFinalizationService's own doc
+    // comment names (a Redis outage during marking.enqueue) for ONE call —
+    // heartbeat's own opportunistic finalisation is the one this test picks
+    // since that endpoint's whole purpose is to be invisible, low-stakes
+    // plumbing; resume() and GET /status share the identical code path.
+    markingEnqueueSpy.mockRejectedValueOnce(new Error('simulated Redis outage'));
+
+    const res = await post(studentA, `/attempts/${pkg.attemptId}/heartbeat`, {});
+    expect(res.statusCode).toBe(200);
+
+    // The transition and its audit trail are NOT rolled back by the
+    // downstream enqueue failure — only the enqueue itself was lost (the
+    // documented residual risk), never the finalisation.
+    const attempt = await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.findUniqueOrThrow({ where: { id: pkg.attemptId } }),
+    );
+    expect(attempt.state).toBe('AUTO_SUBMITTED');
+
+    const auditEvents = await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.findMany({
+        where: { schoolId, action: 'ATTEMPT_AUTO_SUBMITTED', entityId: pkg.attemptId },
+      }),
+    );
+    expect(auditEvents.length).toBe(1);
+    expect(markingEnqueueSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('B14 GET /status: NOT_APPLICABLE while the attempt is still IN_PROGRESS', async () => {
     const examId = await buildReadyExam();
     await openSession(examId);

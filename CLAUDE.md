@@ -5413,3 +5413,48 @@ from this phase's own marking output, closes `09 §39`'s full golden-path exit c
 by both B13 and B14, and is gated by ADR-0010/0018/0025 (all three already Accepted). A future `F13`
 (the offline exam engine) remains open and buildable immediately against the now-frozen `attempt.v1`
 contract (11 routes), independent of `B15`.
+
+### 2026-09-05 — `B14` gap closure: thorough implementation review, two fixes
+
+Requested explicitly, same day as `B14` itself: a thorough review of the just-shipped implementation
+looking for bugs, not new scope. Read every B14 file end to end (schema/migration, both
+`packages/domain/src/execution/*` files, all of `apps/api/src/modules/execution/*`, both
+`apps/worker/src/queues/attempt-*` files, and the permission-table edits) rather than sampling. Two
+real issues surfaced — no product/architecture decision needed for either; full detail (failure
+scenario, the fix, and file references) is in `docs/roadmaps/backend-roadmap.md`'s B14 section,
+"Post-completion gap closure" note, not duplicated here:
+
+1. **`AttemptFinalizationService.finalizeIfExpired()` could turn a downstream side-effect failure
+   into a 500 on endpoints that explicitly document themselves as non-blocking.** The state
+   transition committed as its own transaction, but the subsequent audit write, Control Center
+   publish, and marking-queue enqueue all ran unguarded — a transient failure in any one of them
+   (a Redis blip being the obvious candidate, since it's shared by both the stream and the queue)
+   propagated all the way up through the caller. Only one of the method's four `apps/api` call sites
+   (`AttemptAnswerService.writeAnswerInner()`) protected against this; `heartbeat()`, `resume()`,
+   and `GET /v1/attempts/:id/status` did not, despite each promising never to block — turning what
+   the method's own doc comment already called an accepted, silent residual risk into an actual
+   500 surfaced to students mid-exam. Fixed by wrapping the post-transition sequence in its own
+   `try/catch` (log-and-continue) inside `finalizeIfExpired()` itself, mirroring `apps/worker`'s own
+   per-attempt `try/catch` in its sweeper — the method now always returns `true` once the transition
+   has committed, regardless of whether the side effects succeeded. New regression test in
+   `attempt.integration.test.ts` forces the enqueue call to reject during a heartbeat past the grace
+   window and proves the request still returns 200 with the attempt correctly `AUTO_SUBMITTED`.
+2. **`ATTEMPT_GRACE_WINDOW_SECONDS` was never declared in the validated env schema or
+   `.env.example`**, unlike every other configurable knob in this codebase — not a functional bug
+   (the read already had a safe fallback), but an inconsistency B14 was the natural point to close,
+   since this is the phase that moved the function into `packages/domain`. Added to
+   `packages/config/src/env.schema.ts` and `.env.example` so a malformed value fails fast at boot;
+   `packages/domain` itself keeps its own independent, defensive read (deliberately no dependency on
+   `packages/config`).
+
+Full pipeline reconfirmed green after both fixes: `pnpm --filter @atlas/api {typecheck,lint}`,
+`pnpm --filter @atlas/config {typecheck,test}`, the full `attempt.integration.test.ts` suite (34
+tests, up from 33), the full `apps/api` unit suite (168/169 — the one pre-existing, unrelated
+`attempt-snapshot-projection.mapper.test.ts` failure this same phase's own Change Log entry above
+already recorded, reconfirmed unrelated), and monorepo-wide `pnpm lint && pnpm typecheck && pnpm
+build` (16/16 turbo tasks each, including the schema-tenancy lint — 47 models, unchanged).
+
+No schema change, no permission-table change, no product-behaviour change beyond correcting the
+reliability gap itself, no ADR involved, no roadmap phase status changed. Project state remains
+_Implementation (B14 complete)_ — this was a same-phase gap closure, not a new phase. **Next:
+`B15 — Results & Publication`**, unchanged.

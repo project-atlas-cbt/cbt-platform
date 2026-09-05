@@ -177,6 +177,17 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(15 * 1000),
+
+  // ADR-0003's post-expiry grace window, in seconds — read directly by
+  // `@atlas/domain`'s `attemptGraceWindowSeconds()` (not through this
+  // validated `Env` object; `packages/domain` deliberately has no
+  // dependency on `packages/config`, so it keeps its own defensive
+  // `process.env` read with an identical fallback-to-60 behaviour).
+  // Declared here anyway, matching every other configurable knob in this
+  // file, so `apps/api`/`apps/worker` fail fast at boot on a malformed
+  // value instead of silently falling back — an integrity parameter, never
+  // a per-school policy. Default: 60 seconds.
+  ATTEMPT_GRACE_WINDOW_SECONDS: z.coerce.number().int().min(0).default(60),
 });
 
 export type Env = z.infer<typeof envSchema>;

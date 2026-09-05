@@ -3191,6 +3191,57 @@ B15 creates results from marking output. The sweeper must coordinate with B12's 
 
 Full pipeline green: `pnpm lint && pnpm typecheck && pnpm build` at the monorepo root (16/16 turbo tasks), the schema-tenancy lint (47 models), the full `apps/api` integration suite (306 tests across 36 files, zero regressions), the full `apps/worker` integration suite (32 tests across 7 files, including the two new B14 files), and the extended RLS suite (`tests/tenancy/rls.integration.test.ts`, 121 tests, the B13/B14 describe block now 18 of them) — plus `pnpm generate` (`GET /v1/attempts/:id/status` published in `apps/api/openapi.json`/`packages/contracts`) and `pnpm generate:permission-table-doc` (156 rows, confirmed unchanged in count — the two `studentCbt.autoSubmit`/`results.automaticMarking` tag edits and two ADR-0014 stale-tag corrections are documentation-only). A real `node dist/main.js` boot (apps/api) confirmed `PolicyCoverageService` reports 195 routes checked with zero violations (up from 194 — the new status route); a real `node dist/main.js` boot (apps/worker) confirmed both new queues (`atlas-attempt-auto-submit-sweep`, sweep every 15000ms; `atlas-attempt-marking`, per-item consumer) register correctly alongside every pre-existing sweep. One pre-existing, unrelated test failure was observed and confirmed (via `git stash`) to already exist on unmodified `dev` branch code before this phase touched anything: `attempt-snapshot-projection.mapper.test.ts`'s own "resolves media URLs... defaulting to empty strings when unresolved" case, a stale assertion from before a B13-era fix changed unresolved-media handling from blank-string to omission — not fixed here, per `AGENTS.md §15`'s "no unrelated broad refactors" (recorded as a Candidate for whoever next touches that file).
 
+## Post-completion gap closure (2026-09-05): a thorough implementation review, two fixes
+
+Requested explicitly, same day as B14 itself: a thorough review of the just-shipped implementation
+looking for bugs, not new scope. Read every B14 file end to end rather than sampling. Two real
+issues surfaced — one a genuine reliability regression, one a documentation-consistency gap — no
+product/architecture decision needed for either:
+
+1. **`AttemptFinalizationService.finalizeIfExpired()` could turn a downstream side-effect failure
+   into a 500 on endpoints that explicitly promise never to block.** The method's own doc comment
+   already named the residual risk of a `marking.enqueue()` failure (e.g. a Redis blip — the same
+   Redis the Control Center stream also depends on) as an accepted, silent gap — but the
+   implementation didn't actually make it silent: the audit write, `ExamControlStreamService
+.publishUpdate()`, and `AttemptMarkingQueueService.enqueue()` all ran unguarded after the state
+   transition had already committed, so any one of them throwing propagated all the way up through
+   the caller. Only one of this method's four `apps/api` call sites protected against this
+   (`AttemptAnswerService.writeAnswerInner()`'s own `.catch(() => undefined)`); the other three —
+   `heartbeat()`, `resume()`, and `GET /v1/attempts/:id/status` — did not, despite each explicitly
+   documenting itself as non-blocking/best-effort. `submit()`'s own late-arrival branch carried the
+   identical exposure. Concretely: a transient Redis outage at the moment a batch of abandoned
+   attempts crossed their expiry threshold would have turned what should be graceful degradation
+   (attempts still finalize; marking is merely delayed) into hard 500s on the heartbeat/resume/
+   status calls of every student mid-exam who happened to trigger opportunistic finalisation during
+   that window — the opposite of each of those methods' own stated design intent. Fixed by wrapping
+   the post-transition audit/stream/enqueue sequence in its own `try/catch` inside
+   `finalizeIfExpired()` itself (log-and-continue via `Logger.error`), mirroring `apps/worker`'s own
+   per-attempt `try/catch` in its sweeper (`attempt-auto-submit.queue.ts`) — the method's contract
+   now genuinely matches its doc comment: it returns `true` once the transition itself has
+   committed, never throwing because of a downstream side effect. New regression test in
+   `attempt.integration.test.ts` (`markingEnqueueSpy.mockRejectedValueOnce(...)` during a heartbeat
+   call past the grace window) proves the request still returns 200 and the attempt still
+   transitions to `AUTO_SUBMITTED` with its audit event, even though the enqueue itself failed.
+2. **`ATTEMPT_GRACE_WINDOW_SECONDS` was never declared in the validated env schema or
+   `.env.example`**, unlike every other configurable knob in this codebase (including this same
+   phase's own `ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS`) — `@atlas/domain`'s
+   `attemptGraceWindowSeconds()` read it directly off `process.env` with its own silent fallback to
+   60 on anything unset or malformed. Not a functional bug (the fallback is safe), but an
+   inconsistency with established convention that B14 was the natural point to close, since this is
+   the phase that moved the function into `packages/domain`. Added to `packages/config/src/env
+.schema.ts` (`z.coerce.number().int().min(0).default(60)`) and `.env.example`, so `apps/api`/
+   `apps/worker` fail fast at boot on a malformed value — `packages/domain` itself still keeps its
+   own independent, defensive read (it has no dependency on `packages/config`, deliberately, and
+   never will need one for this).
+
+Full pipeline reconfirmed green after both fixes: `pnpm --filter @atlas/api {typecheck,lint}`,
+`pnpm --filter @atlas/config {typecheck,test}`, the full `attempt.integration.test.ts` suite (34
+tests, up from 33), the full `apps/api` unit suite (168/169 — the one pre-existing, unrelated
+`attempt-snapshot-projection.mapper.test.ts` failure already recorded above, reconfirmed unrelated),
+and monorepo-wide `pnpm lint && pnpm typecheck && pnpm build` (16/16 turbo tasks each). No schema
+change, no permission-table change, no product-behaviour change beyond correcting the reliability
+gap itself, no ADR involved, no roadmap phase status changed.
+
 ---
 
 # B15 — Results & Publication
