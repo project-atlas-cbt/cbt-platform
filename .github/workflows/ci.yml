@@ -21,6 +21,13 @@ jobs:
   lint-typecheck-unit-build:
     name: Lint, typecheck, unit test, build
     runs-on: ubuntu-latest
+    env:
+      # No database is reachable in this job and none is needed — but four
+      # apps/api unit tests import @atlas/db, whose client.ts constructs a
+      # PrismaClient at module scope and throws without this. Same reasoning,
+      # and the same dummy-value treatment, as the `contract-drift` job below.
+      # Nothing here ever opens a connection.
+      DATABASE_APP_URL: 'postgresql://atlas_app:atlas_app_ci_password@localhost:5432/atlas_ci?schema=public'
     steps:
       - uses: actions/checkout@v4
 
