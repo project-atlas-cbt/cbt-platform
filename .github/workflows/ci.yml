@@ -159,7 +159,7 @@ jobs:
       - name: Build API and contracts
         run: |
           pnpm --filter @atlas/api... build
-          pnpm --filter @atlas/contracts build --if-present
+          pnpm --filter @atlas/contracts build
 
       - name: Emit OpenAPI document and regenerate contract types
         run: |
