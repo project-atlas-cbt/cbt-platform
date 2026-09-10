@@ -150,7 +150,12 @@ describe('ClassDetailScreen', () => {
       isError: false,
       data: {
         students: [
-          { enrollmentId: 'e1', studentId: 'ST001', displayName: 'Ada Okoye', startDate: '2026-09-01' },
+          {
+            enrollmentId: 'e1',
+            studentId: 'ST001',
+            displayName: 'Ada Okoye',
+            startDate: '2026-09-01',
+          },
         ],
       },
     } as never);

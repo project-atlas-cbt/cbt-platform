@@ -149,9 +149,16 @@ jobs:
           pnpm db:generate
           pnpm db:migrate:deploy
 
+      # `--filter @atlas/api...` (with the trailing dots) builds @atlas/api AND
+      # its workspace dependencies. Every packages/* package resolves through
+      # its built dist/ ("main": "./dist/index.js", a deliberate B0 decision),
+      # so without them `nest build` cannot resolve @atlas/db or @atlas/domain
+      # and fails with a wall of TS2307. The `integration` job never hit this
+      # because it runs a full `pnpm build`, where turbo's `dependsOn:
+      # ["^build"]` builds dependencies first.
       - name: Build API and contracts
         run: |
-          pnpm --filter @atlas/api build
+          pnpm --filter @atlas/api... build
           pnpm --filter @atlas/contracts build --if-present
 
       - name: Emit OpenAPI document and regenerate contract types
