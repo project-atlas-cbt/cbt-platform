@@ -6448,6 +6448,469 @@
         "summary": "Instructions and rules before starting (03 §32-36).",
         "tags": ["attempts"]
       }
+    },
+    "/exams/{id}/results": {
+      "get": {
+        "operationId": "ResultController_listForExam",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Student name or student ID substring.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["PROCESSING", "FINAL", "ADJUSTED", "VOIDED"]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["studentName", "percentage", "earnedMarks", "finalizedAt"]
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResultsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Scoped result list with exam summary statistics and, for a multi-class exam, a per-class breakdown (04 §48, ADR-0013).",
+        "tags": ["results"]
+      }
+    },
+    "/results/{id}": {
+      "get": {
+        "operationId": "ResultController_getDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultDetailResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One result with its per-question breakdown and full adjustment history.",
+        "tags": ["results"]
+      }
+    },
+    "/exams/{id}/results/publish": {
+      "post": {
+        "operationId": "ResultController_publish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishResultsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultPublicationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Release this exam's results to students. Refused when the school has locked publication to administrative release (DoD item 7).",
+        "tags": ["results"]
+      }
+    },
+    "/exams/{id}/results/unpublish": {
+      "post": {
+        "operationId": "ResultController_unpublish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpublishResultsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultPublicationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reverse publication, with a mandatory reason (05 §65).",
+        "tags": ["results"]
+      }
+    },
+    "/results/{id}/withhold": {
+      "post": {
+        "operationId": "ResultController_withhold",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithholdResultDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Hold one disputed result back without unpublishing the cohort (ADR-0010).",
+        "tags": ["results"]
+      }
+    },
+    "/results/{id}/release": {
+      "post": {
+        "operationId": "ResultController_release",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithholdResultDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Release a previously withheld result.",
+        "tags": ["results"]
+      }
+    },
+    "/results/adjustments": {
+      "post": {
+        "operationId": "ResultController_createAdjustment",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResultAdjustmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultAdjustmentOperationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The only path by which a score changes after marking. Creates a parent operation; a worker applies it idempotently and resumably (ADR-0025).",
+        "tags": ["results"]
+      }
+    },
+    "/results/adjustments/{id}": {
+      "get": {
+        "operationId": "ResultController_getAdjustment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultAdjustmentOperationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Adjustment progress and outcome.",
+        "tags": ["results"]
+      }
+    },
+    "/student/results": {
+      "get": {
+        "operationId": "StudentResultController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResultsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The signed-in student's own published results only (05 §51).",
+        "tags": ["student-results"]
+      }
+    },
+    "/student/results/{id}": {
+      "get": {
+        "operationId": "StudentResultController_getDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResultDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One result, with detail gated by the exam's own result_detail_visibility policy (ADR-0010).",
+        "tags": ["student-results"]
+      }
+    },
+    "/school/grading-scales": {
+      "get": {
+        "operationId": "GradingScaleController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradingScaleListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The school's grading scales with their current bands, plus the platform default template offered as a starting point.",
+        "tags": ["grading-scales"]
+      },
+      "put": {
+        "operationId": "GradingScaleController_put",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutGradingScaleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradingScaleResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a scale, or add a version to an existing one. Never an in-place band edit — ADR-0018 versions instead, so historical grades stay explainable.",
+        "tags": ["grading-scales"]
+      }
+    },
+    "/school/grading-scales/{id}/versions": {
+      "get": {
+        "operationId": "GradingScaleController_listVersions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradingScaleVersionListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Every version of a scale, newest first, each flagged with whether any result was graded against it (ADR-0018: make versioning visible).",
+        "tags": ["grading-scales"]
+      }
     }
   },
   "info": {
@@ -11714,6 +12177,905 @@
           "questionCount",
           "totalMarks"
         ]
+      },
+      "ResultListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "attemptId": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentName": {
+            "type": "string"
+          },
+          "studentIdentifier": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string",
+            "nullable": true
+          },
+          "className": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "enum": ["PROCESSING", "FINAL", "ADJUSTED", "VOIDED"]
+          },
+          "totalMarks": {
+            "type": "number"
+          },
+          "earnedMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "correctCount": {
+            "type": "number"
+          },
+          "incorrectCount": {
+            "type": "number"
+          },
+          "unansweredCount": {
+            "type": "number"
+          },
+          "partialCount": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string",
+            "nullable": true
+          },
+          "withheld": {
+            "type": "boolean"
+          },
+          "withheldReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "voidedReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "finalizedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "submittedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "attemptState": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "attemptId",
+          "studentProfileId",
+          "studentName",
+          "studentIdentifier",
+          "classId",
+          "className",
+          "state",
+          "totalMarks",
+          "earnedMarks",
+          "percentage",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "partialCount",
+          "grade",
+          "withheld",
+          "withheldReason",
+          "voidedReason",
+          "finalizedAt",
+          "submittedAt",
+          "attemptState"
+        ]
+      },
+      "ExamResultSummaryDto": {
+        "type": "object",
+        "properties": {
+          "resultCount": {
+            "type": "number"
+          },
+          "voidedCount": {
+            "type": "number"
+          },
+          "pendingCount": {
+            "type": "number"
+          },
+          "averagePercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "resultCount",
+          "voidedCount",
+          "pendingCount",
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate"
+        ]
+      },
+      "ExamResultClassSummaryDto": {
+        "type": "object",
+        "properties": {
+          "resultCount": {
+            "type": "number"
+          },
+          "voidedCount": {
+            "type": "number"
+          },
+          "pendingCount": {
+            "type": "number"
+          },
+          "averagePercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "number",
+            "nullable": true
+          },
+          "classId": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resultCount",
+          "voidedCount",
+          "pendingCount",
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "classId",
+          "className"
+        ]
+      },
+      "ExamResultsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultListItemDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ExamResultSummaryDto"
+          },
+          "classSummaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamResultClassSummaryDto"
+            }
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "adjustmentInProgress": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "summary",
+          "classSummaries",
+          "published",
+          "adjustmentInProgress"
+        ]
+      },
+      "ResultQuestionBreakdownDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "displaySequence": {
+            "type": "number"
+          },
+          "content": {
+            "type": "string"
+          },
+          "correctness": {
+            "type": "string"
+          },
+          "awardedMarks": {
+            "type": "number"
+          },
+          "maximumMarks": {
+            "type": "number"
+          },
+          "voided": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "displaySequence",
+          "content",
+          "correctness",
+          "awardedMarks",
+          "maximumMarks",
+          "voided"
+        ]
+      },
+      "ResultAdjustmentHistoryItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "adjustmentType": {
+            "type": "string",
+            "enum": ["VOID_QUESTION", "AWARD_MARK", "DEDUCT_MARK", "RECALCULATE", "MANUAL_OVERRIDE"]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "authorizedByName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "oldValue": {
+            "type": "object"
+          },
+          "newValue": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "adjustmentType",
+          "reason",
+          "authorizedByName",
+          "createdAt",
+          "oldValue",
+          "newValue"
+        ]
+      },
+      "ResultDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "attemptId": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentName": {
+            "type": "string"
+          },
+          "studentIdentifier": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string",
+            "nullable": true
+          },
+          "className": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "enum": ["PROCESSING", "FINAL", "ADJUSTED", "VOIDED"]
+          },
+          "totalMarks": {
+            "type": "number"
+          },
+          "earnedMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "correctCount": {
+            "type": "number"
+          },
+          "incorrectCount": {
+            "type": "number"
+          },
+          "unansweredCount": {
+            "type": "number"
+          },
+          "partialCount": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string",
+            "nullable": true
+          },
+          "withheld": {
+            "type": "boolean"
+          },
+          "withheldReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "voidedReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "finalizedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "submittedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "attemptState": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examTitle": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "gradingScaleVersionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultQuestionBreakdownDto"
+            }
+          },
+          "adjustments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultAdjustmentHistoryItemDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "attemptId",
+          "studentProfileId",
+          "studentName",
+          "studentIdentifier",
+          "classId",
+          "className",
+          "state",
+          "totalMarks",
+          "earnedMarks",
+          "percentage",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "partialCount",
+          "grade",
+          "withheld",
+          "withheldReason",
+          "voidedReason",
+          "finalizedAt",
+          "submittedAt",
+          "attemptState",
+          "examId",
+          "examTitle",
+          "subjectName",
+          "gradingScaleVersionId",
+          "questions",
+          "adjustments"
+        ]
+      },
+      "PublishResultsDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "ResultPublicationResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PUBLISHED", "UNPUBLISHED"]
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "unpublishedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "adjustmentInProgress": {
+            "type": "boolean"
+          },
+          "affectedResultCount": {
+            "type": "number",
+            "description": "Results this action made visible or hid."
+          }
+        },
+        "required": [
+          "examId",
+          "status",
+          "publishedAt",
+          "publishedByName",
+          "unpublishedAt",
+          "adjustmentInProgress",
+          "affectedResultCount"
+        ]
+      },
+      "UnpublishResultsDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Mandatory — recorded in the audit trail."
+          }
+        },
+        "required": ["reason"]
+      },
+      "WithholdResultDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Mandatory — why this result is held back."
+          }
+        },
+        "required": ["reason"]
+      },
+      "CreateResultAdjustmentDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The exam being adjusted."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["VOID_QUESTION", "AWARD_MARK", "DEDUCT_MARK", "RECALCULATE", "MANUAL_OVERRIDE"]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Mandatory for every adjustment type (07 §34)."
+          },
+          "targetExamQuestionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "VOID_QUESTION only — the ExamQuestion excluded from every affected result."
+          },
+          "markDelta": {
+            "type": "number",
+            "description": "AWARD_MARK/DEDUCT_MARK only — magnitude, always positive."
+          },
+          "targetResultId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "MANUAL_OVERRIDE only — the single result being overridden."
+          },
+          "overrideEarnedMarks": {
+            "type": "number",
+            "description": "MANUAL_OVERRIDE only — the earned-marks value set outright."
+          }
+        },
+        "required": ["examId", "type", "reason"]
+      },
+      "ResultAdjustmentOperationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["VOID_QUESTION", "AWARD_MARK", "DEDUCT_MARK", "RECALCULATE", "MANUAL_OVERRIDE"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "PROCESSING", "COMPLETED", "FAILED"]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "appliedCount": {
+            "type": "number"
+          },
+          "failedCount": {
+            "type": "number"
+          },
+          "failureReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "type",
+          "status",
+          "reason",
+          "totalCount",
+          "appliedCount",
+          "failedCount",
+          "failureReason",
+          "createdByName",
+          "createdAt",
+          "completedAt"
+        ]
+      },
+      "StudentResultListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examTitle": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "examType": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalMarks": {
+            "type": "number"
+          },
+          "earnedMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "examTitle",
+          "subjectName",
+          "examType",
+          "totalMarks",
+          "earnedMarks",
+          "percentage",
+          "grade",
+          "publishedAt"
+        ]
+      },
+      "StudentResultsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentResultListItemDto"
+            }
+          }
+        },
+        "required": ["items"]
+      },
+      "StudentResultQuestionDto": {
+        "type": "object",
+        "properties": {
+          "displaySequence": {
+            "type": "number"
+          },
+          "content": {
+            "type": "string"
+          },
+          "correctness": {
+            "type": "string"
+          },
+          "awardedMarks": {
+            "type": "number"
+          },
+          "maximumMarks": {
+            "type": "number"
+          }
+        },
+        "required": ["displaySequence", "content", "correctness", "awardedMarks", "maximumMarks"]
+      },
+      "StudentResultDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examTitle": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "examType": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalMarks": {
+            "type": "number"
+          },
+          "earnedMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "detailVisibility": {
+            "type": "string",
+            "enum": ["SCORE_ONLY", "SCORE_AND_COUNTS", "FULL_REVIEW"]
+          },
+          "correctCount": {
+            "type": "number",
+            "nullable": true
+          },
+          "incorrectCount": {
+            "type": "number",
+            "nullable": true
+          },
+          "unansweredCount": {
+            "type": "number",
+            "nullable": true
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentResultQuestionDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "examTitle",
+          "subjectName",
+          "examType",
+          "totalMarks",
+          "earnedMarks",
+          "percentage",
+          "grade",
+          "publishedAt",
+          "detailVisibility",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "questions"
+        ]
+      },
+      "GradingScaleBandDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "minPercentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "maxPercentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "isPassing": {
+            "type": "boolean"
+          }
+        },
+        "required": ["label", "minPercentage", "maxPercentage", "isPassing"]
+      },
+      "GradingScaleVersionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "versionNumber": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "bands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleBandDto"
+            }
+          },
+          "inUse": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "versionNumber", "createdAt", "bands", "inUse"]
+      },
+      "GradingScaleResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"],
+            "nullable": true
+          },
+          "currentVersion": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GradingScaleVersionResponseDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name", "level", "currentVersion", "updatedAt"]
+      },
+      "GradingScaleListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleResponseDto"
+            }
+          },
+          "defaultTemplate": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleBandDto"
+            }
+          }
+        },
+        "required": ["items", "defaultTemplate"]
+      },
+      "PutGradingScaleDto": {
+        "type": "object",
+        "properties": {
+          "scaleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Omit to create a new scale; supply it to add a version to an existing one."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "level": {
+            "type": "string",
+            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"],
+            "nullable": true
+          },
+          "bands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleBandDto"
+            }
+          }
+        },
+        "required": ["name", "bands"]
+      },
+      "GradingScaleVersionListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleVersionResponseDto"
+            }
+          }
+        },
+        "required": ["items"]
       },
       "ErrorEnvelopeErrorDto": {
         "type": "object",

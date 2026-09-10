@@ -6,6 +6,12 @@ import {
   type AttemptMarkingJobPayload,
   type AttemptSnapshotDocumentV1,
 } from '@atlas/domain';
+import {
+  autoPublishIfPolicyRequires,
+  finalizeResultAfterMarking,
+  recordAutoPublication,
+  type FinalizedResultOutcome,
+} from './result-finalization.js';
 
 /**
  * B14's marking-job consumer — lives in `apps/worker`, not `apps/api`,
@@ -56,6 +62,8 @@ export async function runAttemptMarking(
   payload: AttemptMarkingJobPayload,
 ): Promise<void> {
   const { schoolId, attemptId } = payload;
+  let finalized: FinalizedResultOutcome | undefined;
+  let published = false;
 
   await withTenant(prisma, schoolId, async (tx) => {
     const attempt = await tx.examAttempt.findUniqueOrThrow({
@@ -110,7 +118,39 @@ export async function runAttemptMarking(
         },
       });
     }
+
+    // B15: the result is finalised inside this same transaction, after the
+    // last per-question upsert — so DoD item 2's "PROCESSING → FINAL only
+    // after ALL question marking completes" holds structurally rather than
+    // by a check, and a crashed run rolls the transition back with the marks.
+    finalized = await finalizeResultAfterMarking(tx, schoolId, attemptId, results);
+    if (finalized.autoPublish) {
+      published = await autoPublishIfPolicyRequires(tx, schoolId, finalized.examId);
+    }
   });
+
+  // The audit event and notification for an automatic release are written
+  // after the transaction commits, matching this worker's sibling sweeps: a
+  // notification failure must never roll back marking that has succeeded.
+  if (finalized && published) {
+    // Bound to a local so the narrowing survives into the closure below.
+    const outcome = finalized;
+    try {
+      // `withTenant`, not a bare `prisma` read: `exams` is school-owned and
+      // RLS-protected, so an unscoped query returns nothing here.
+      const exam = await withTenant(prisma, schoolId, (tx) =>
+        tx.exam.findUniqueOrThrow({
+          where: { id: outcome.examId },
+          select: { title: true },
+        }),
+      );
+      await recordAutoPublication(schoolId, outcome, exam.title, outcome.studentUserId);
+    } catch (error) {
+      console.error(
+        `[attempt-marking] result ${finalized.resultId} was published automatically but its audit/notification write failed: ${String(error)}`,
+      );
+    }
+  }
 }
 
 export function createAttemptMarkingWorker(

@@ -395,9 +395,19 @@ decision; `Result`/`GradingScale`/publication are all `B15`'s job). **`F13 — S
 (the offline exam engine) is complete too (2026-09-05): Dexie-backed local-write-first answer
 persistence, a server-skew-derived countdown timer, Web Locks API two-tab leader election, and
 Cache-Storage-backed offline media, proving `B13`+`B14`'s `attempt.v1` contract end to end with no
-backend gap-closure needed. `B15 — Results & Publication` is next on the backend critical path. See
-this file's Change Log entries below (dated 2026-09-04 and 2026-09-05) for full detail on all six
-phases.
+backend gap-closure needed. **`B15 — Results & Publication`** is complete too (2026-09-10):
+`results.v1`/`student-results.v1` — the staff results list with summary statistics and ADR-0013's
+per-class breakdown, per-exam publication with ADR-0010's per-result `withheld` axis, ADR-0018's
+versioned grading scales with the grade frozen at finalisation, and ADR-0025's resumable parent/child
+bulk adjustment as the only path by which a score changes after marking. Four decisions were confirmed
+with the project owner first, each a place where an ADR demands something B15's own roadmap text never
+named. Closes `B14`'s last open exit criterion. DoD item 4 is honestly partial by phase boundary (B15
+owns the `VOIDED` state and the exclusion from every aggregate; the invalidation endpoint is `B16`'s
+per ADR-0014), and the phase surfaced **a real cross-phase conflict `B16` must settle**: `B13`'s
+attempt state-transition trigger makes `SUBMITTED` terminal, so a submitted attempt cannot be
+invalidated at all — precisely the case ADR-0025 assumes. `B16 — Participation, Absence & Makeup` is
+next on the backend critical path; `F14`/`F15` are both now unblocked. See this file's Change Log
+entries below (dated 2026-09-04, 2026-09-05 and 2026-09-10) for full detail on all seven phases.
 
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
@@ -5604,3 +5614,145 @@ frontend phase through F13 closed out)_.
 B3 → B5 → B6 → B8 → B9 → B11 → B12 → B13 → B14 → B15 → …`) — unaffected by F13's own always-
 parallelisable position; a future `F14` (Student Results & Profile) remains open once `B15` ships
 and the frontend/backend phase-pairing default is next prioritized.
+
+### 2026-09-10 — `B15` complete: Results & Publication
+
+Requested explicitly: start `B15`. Followed the working-rules checklist via parallel research passes
+(the full B15 roadmap section and its 14 DoD items verbatim; the three gating ADRs — 0010, 0018,
+0025 — in full plus the two more that name B15 without saying so in their headers, ADR-0013 and
+ADR-0029; every B15-assigned audit finding, C-05/C-12/A-09/A-11/D-08/M-06/X-14; the product
+specification for `Result`/`ResultAdjustment`/`ResultPublication`/grading across `01`/`02`/`03`/`05`/
+`06`/`07`; and the existing `B14` marking output this phase consumes), then direct verification reads
+of the live source before writing any code.
+
+**Four decisions confirmed with the project owner before implementation** (`AGENTS.md` §3) — each a
+place where an ADR demands something B15's own roadmap text never names, the same class of
+already-approved-but-unassigned gap `F5` hit with the result-policy columns:
+
+1. **`withheld` built now.** ADR-0010 mandates a per-result withholding flag three times (Decision,
+   the visibility formula, Required changes) and audit A-09's recommended interpretation names it —
+   but B15's Scope, Database work, API table and all 14 DoD items never mention it, and no endpoint
+   existed for it. Built as `Result.withheld` plus an audited `POST /results/:id/withhold`·`/release`
+   pair, folded into the shared visibility rule so the helper's formula is complete rather than
+   permanently partial.
+2. **Bulk adjustment MARKS results under adjustment rather than auto-unpublishing them.** ADR-0025
+   offers both mechanisms without choosing. The marker (`ResultPublication.adjustmentInProgress`)
+   preserves the exam's publication state, so a completed adjustment doesn't depend on someone
+   remembering to re-publish and a crashed one cannot silently strand a published cohort.
+3. **Pass mark is an `isPassing` flag per grade band.** "Pass rate" is a required analytics metric
+   (`05 §55.1`, `01 §44`) with no threshold defined anywhere in the corpus. Carrying it on the band
+   means the pass concept derives from the same frozen scale version that produced the grade, rather
+   than a second, independently-driftable source. A school with no scale configured reports `null`,
+   never an invented cut-off.
+4. **ADR-0018's "platform default scale offered at onboarding" gap closed here** — that ADR assigns
+   it to `B3`/`B5`, neither of which built it, and `F5` already ships a grading placeholder naming
+   `B15`. `GET /school/grading-scales` returns `05 §46`'s sample bands as a starting point, freely
+   editable, never enforced.
+
+**Schema** (one migration `20260910014500_b15_results_publication`): `Result`, `ResultPublication`,
+`ResultAdjustmentOperation`, `ResultAdjustment`, `GradingScale`, `GradingScaleVersion`,
+`GradingScaleBand`, plus four enums. `Result.state` is ADR-0010's REDUCED marking lifecycle —
+`PROCESSING → FINAL → ADJUSTED`, with `VOIDED` from ADR-0025 and `PUBLISHED`/`UNPUBLISHED` removed
+(resolving C-05: publication and marking are orthogonal axes, so an ADJUSTED-and-PUBLISHED result is
+representable and adjusting a published result no longer silently unpublishes it). RLS on all seven
+tables. **Three triggers**, each enforcing at the database level what the roadmap demands there
+rather than in a service: `result_adjustments` unconditionally append-only (`07 §10.2`: "an event,
+not a silent overwrite" — B9's `question_reviews` idiom, not B8's parent-gated one, because an
+adjustment record is never legitimately edited at any point in its life); a `Result` state-transition
+guard making `VOIDED` terminal; and grading-scale bands frozen once a result has actually been graded
+against their version (the exact failure M-06 exists to prevent — editing bands in place would
+silently rewrite every historical grade). Two partial unique indexes enforce "one active grading
+scale per level scope", including the school-wide default.
+
+**Shared domain code** (`packages/domain/src/results/`) — pure, DB-free, 40 new unit tests: result
+totals, grade-band resolution and band validation, the ADR-0010/ADR-0025 visibility rule, the
+adjustment arithmetic, and the replay function. **One scoped refactor** (`AGENTS.md` §15):
+`AttemptStatusService`'s inline totals arithmetic (B14) moved here and is now shared with the marking
+worker that persists it, so the number a student sees on the confirmation screen and the number
+stored on their result are the same computation by construction rather than two implementations that
+could drift.
+
+**API** (`apps/api/src/modules/results/`, populating the B0-era stub): `results.v1` and
+`student-results.v1`, 13 routes. Deliberately a **separate DTO family** for the student surface
+rather than a filtered view of the staff one — the same structural technique B13 used for X-05, so a
+staff-only field (a withheld reason, adjustment history, another student's marks) cannot reach a
+student payload by accident. `FULL_REVIEW` shows question review, never an answer key. Scope resolves
+through the EXAM, mirroring `ExamService`'s own resolution rather than inventing a second scheme,
+because `02`'s Results rows grade exactly like the exam that produced them.
+
+**Workers**: result finalisation and automatic publication ride inside `apps/worker`'s existing
+marking transaction (so DoD item 2's "`PROCESSING → FINAL` only after ALL marking completes" is
+structural, not checked), and a new resumable `result-adjustment.queue.ts` implements ADR-0025's
+parent/child processing — chunked, idempotent via the child table's own unique index, single-writer
+via B7's claim-lease idiom, with one audit event per RESULT rather than per operation.
+
+**Three DoD-adjacent items honestly recorded rather than silently claimed:**
+
+- **DoD 4 is partial by phase boundary.** B15 owns the `VOIDED` state, the transition and the
+  exclusion; the invalidation ENDPOINT is `B16`'s per ADR-0014.
+- **A real cross-phase conflict `B16` must resolve, found by this phase's own test:** `B13`'s
+  `exam_attempts_status_transition_guard` treats `SUBMITTED` as terminal, so a submitted attempt
+  cannot be invalidated at all — but that is precisely the case ADR-0025 contemplates ("If a
+  submitted, marked attempt is invalidated, its Result still exists"), and `03 §76`/`05 §30` both
+  allow invalidation after the student has started. B15 did not change another phase's shipped state
+  machine; the conflict is recorded in `B16`'s and `B15`'s own roadmap sections for B16 to settle.
+- **The exit criterion "F14 and F15 confirm their contracts" stays open**, as for every backend-only
+  phase.
+
+**Two real bugs found by this phase's own tests, not by inspection:**
+
+1. **Two active school-wide grading scales made grade resolution ambiguous** — with no uniqueness
+   rule, a second submission created a rival scale and row order would have decided real students'
+   grades. Fixed by versioning the existing scale for a level scope instead of creating a competitor,
+   backed by the two partial unique indexes above.
+2. **Two unscoped RLS writes in the worker's automatic-publication path.** `recordAutoPublication`
+   and its exam-title lookup used the bare `prisma` client instead of `withTenant`, so RLS silently
+   refused both and the surrounding best-effort `try/catch` swallowed the failure — the student's
+   "your result is available" notification never landed. Caught only because the test asserted the
+   notification actually arrives, rather than that the publication row changed.
+
+**Cross-cutting registrations** (each mandatory — the app fails to boot otherwise): `RESULT_PUBLISHED`
+and `RESULT_ADJUSTED` flipped from `DEFERRED` to `LIVE` in the canonical audit vocabulary with a new
+registration provider, `AuditVocabularyCoverageService`'s `EXPECTED_DEFERRED` narrowed to `B16`'s two
+remaining actions, and `RESULT_PUBLISHED` removed from `DEFERRED_NOTIFICATION_TYPES` now that B10's
+deferred producer exists. Permission table: 159 rows (up from 156) — `results.withhold`,
+`results.adjust` (TEACHER `denied()`, per `02 §6`'s "Edit score ❌") and `results.manualOverride`
+(School Admin only). Grading configuration reuses `schoolConfig.settings.*` rather than adding a row
+that would grade identically.
+
+**Verification.** `pnpm lint` green (54 models, tenancy convention holds); `pnpm typecheck` green;
+`pnpm test` — only the pre-existing `attempt-snapshot-projection.mapper.test.ts` failure B14's own
+Change Log already documented, re-confirmed by `git stash` against unmodified code; `pnpm build` 8/9
+(only `@atlas/web`, on Google Fonts being unreachable through this environment's proxy);
+`apps/api` integration 325/326; `apps/worker` integration 43/43; `tests/` 148/148 including the
+migration reset/reapply cycle. A real `node dist/main.js` boot of both apps confirmed
+`PolicyCoverageService` reports **208 routes with zero violations** (up from 195 — exactly the 13 new
+ones), audit-vocabulary coverage passing, and the new `atlas-result-adjustment` queue registering.
+`pnpm generate` and `pnpm generate:permission-table-doc` re-run and committed.
+
+**Environment note for future sessions.** This session ran in a remote container with no Docker and
+no access to the PGDG or MinIO download hosts, so the documented local stack could not be used
+verbatim. Substituted: PostgreSQL **16** with a spec-conformant `uuidv7()` shim (the schema depends on
+PostgreSQL 18's built-in), plus a Postgres event trigger that re-creates the shim after
+`prisma migrate reset` drops the `public` schema; native Redis; and `s3rver` in place of MinIO. Two
+consequences worth knowing: the one `apps/api` integration failure is
+`media.integration.test.ts`'s "retrievable only via a signed URL" case, which asserts MinIO's
+default-private bucket behaviour that `s3rver` does not implement — not a regression, and its own
+test name says "real MinIO"; and CI, on real PostgreSQL 18 with real MinIO, remains the authoritative
+check. Separately noted, not introduced here: the committed `apps/api/openapi.json` is
+Prettier-formatted (the pre-commit hook and `pnpm format:check` require it), while the
+`contract-drift` CI job compares against `openapi:emit`'s raw `JSON.stringify` output — the two
+formats differ, and this phase followed the committed convention.
+
+`docs/roadmaps/backend-roadmap.md`'s B15 section gained status `COMPLETE`, every DoD item annotated
+with what is real versus honestly partial, a full "Implementation notes" subsection, and an expanded
+Deferred items list carrying the B16 conflict forward. Cross-references updated in `B3` (both
+result-policy readers have now shipped), `B10` (the `RESULT_PUBLISHED` producer), `B11` (the
+`resultPolicyLocked` deferral, closed) and `B14` (its `Result` deferral and its open exit criterion).
+`docs/roadmaps/roadmap-index.md`'s version, Current State and Immediate Next Actions all updated.
+
+Project state moves from _Implementation (F13 complete)_ to _Implementation (B15 complete)_.
+**Next: `B16 — Participation, Absence & Makeup`** on the backend critical path — which must also
+settle the `SUBMITTED`-is-terminal conflict above. `F14` (Student Results & Profile) and `F15` (Staff
+Results & Publication) are both now unblocked and are the natural next step under the
+frontend/backend phase-pairing default (`AGENTS.md` §19).

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
-import type { AttemptSnapshotDocumentV1 } from '@atlas/domain';
+import { computeResultTotals, type AttemptSnapshotDocumentV1 } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
@@ -10,11 +10,20 @@ import type { AttemptStatusResponseDto } from './dto/attempt.dto.js';
 
 /**
  * `GET /v1/attempts/:id/status` (B14) — post-submission status for the
- * confirmation screen (`04 §59`). Deliberately does NOT read or construct a
- * `Result` row — that entity doesn't exist until B15 (this phase's own
- * confirmed decision: B14 stays entity-free for `Result`). Every `marking`
- * field is a live aggregate over `AttemptQuestionResult` rows, computed on
- * every read — never cached, never persisted as a second copy of the truth.
+ * confirmation screen (`04 §59`). Every `marking` field is a live aggregate
+ * over `AttemptQuestionResult` rows, computed on every read.
+ *
+ * Still deliberately does NOT read the `Result` row, now that B15 has built
+ * one. This endpoint answers "did my submission go through, and is marking
+ * finished?" — an execution question, available the instant marking
+ * completes and regardless of publication. The `Result` is the academic
+ * record, gated by ADR-0010's visibility rules and served by
+ * `student-results.v1`. Reading the result here would leak an unpublished
+ * score through the execution surface.
+ *
+ * B15 did make the two share their arithmetic: both go through
+ * `@atlas/domain`'s `computeResultTotals`, so the number shown here and the
+ * number persisted on the result can never disagree.
  */
 @Injectable()
 export class AttemptStatusService {
@@ -61,17 +70,30 @@ export class AttemptStatusService {
     const results = await withTenant(prisma, schoolId, (tx) =>
       tx.attemptQuestionResult.findMany({
         where: { schoolId, attemptId },
-        select: { correctness: true, awardedMarks: true, maximumMarks: true },
+        select: {
+          examQuestionId: true,
+          correctness: true,
+          awardedMarks: true,
+          maximumMarks: true,
+        },
       }),
     );
 
     const markedCount = results.length;
-    const correctCount = results.filter((r) => r.correctness === 'CORRECT').length;
-    const incorrectCount = results.filter((r) => r.correctness === 'INCORRECT').length;
-    const unansweredCount = results.filter((r) => r.correctness === 'UNANSWERED').length;
-    const partialCount = results.filter((r) => r.correctness === 'PARTIAL').length;
-    const awardedMarks = results.reduce((sum, r) => sum + r.awardedMarks, 0);
-    const maximumMarks = results.reduce((sum, r) => sum + r.maximumMarks, 0);
+    // B15 extracted this arithmetic into @atlas/domain so the live aggregate
+    // here and the persisted `Result` row the marking worker writes are the
+    // same computation, not two implementations that could drift.
+    const totals = computeResultTotals(
+      results.map((r) => ({
+        examQuestionId: r.examQuestionId,
+        correctness: r.correctness,
+        awardedMarks: r.awardedMarks,
+        maximumMarks: r.maximumMarks,
+      })),
+    );
+    const { correctCount, incorrectCount, unansweredCount, partialCount } = totals;
+    const awardedMarks = totals.earnedMarks;
+    const maximumMarks = totals.totalMarks;
 
     const isFinalized = current.state === 'SUBMITTED' || current.state === 'AUTO_SUBMITTED';
     const markingComplete = isFinalized && questionCount > 0 && markedCount >= questionCount;
@@ -96,10 +118,7 @@ export class AttemptStatusService {
         partialCount,
         awardedMarks,
         maximumMarks,
-        percentage:
-          markingComplete && maximumMarks > 0
-            ? Math.round((awardedMarks / maximumMarks) * 10000) / 100
-            : null,
+        percentage: markingComplete && maximumMarks > 0 ? totals.percentage : null,
       },
     };
   }
