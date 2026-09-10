@@ -2377,7 +2377,7 @@ Followed the working-rules checklist: three parallel research passes (the F13 ro
 
 # F14 — Student Results & Profile
 
-**Status:** NOT STARTED · **Backend pair:** B15
+**Status:** COMPLETE (2026-09-10) · **Backend pair:** B15
 
 ## Objective
 
@@ -2433,25 +2433,122 @@ Pairs with F15's publication action.
 
 ## Definition of Done
 
-1. Only published results appear.
-2. An unpublished result is not visible even by direct URL.
-3. A voided result is not visible to the student.
-4. Result detail shows score, percentage, and correct/incorrect/unanswered counts per `04 §61`.
-5. Question-by-question review appears only when school policy permits it.
-6. Absent exams show `ABSENT`, never `0%` (`03 §42`).
-7. Profile shows student ID, class, and department, with password change working.
-8. No other student's data is reachable.
-9. Loading, error, and empty states implemented, including "no results yet."
+1. ✅ Only published results appear — enforced entirely server-side
+   (`studentVisibleResultWhere`, B15); the frontend renders exactly what
+   `GET /student/results` returns, with no client-side filtering to get
+   wrong.
+2. ✅ An unpublished result is not visible even by direct URL — a uniform
+   404 for every non-visible case; `ResultDetailScreen` renders one generic
+   "Result not available" state, never a specific reason (proven directly
+   by a dedicated test).
+3. ✅ A voided result is not visible to the student — the same uniform 404
+   mechanism; `VOIDED` rows are structurally excluded by the server query.
+4. ✅ Result detail shows score, percentage, and correct/incorrect/
+   unanswered counts per `04 §61` — score/percentage/grade are always
+   shown; counts render whenever `detailVisibility !== 'SCORE_ONLY'`.
+5. ✅ Question-by-question review appears only when school policy permits
+   it — gated on `detailVisibility === 'FULL_REVIEW'`; no correct-answer
+   field exists anywhere in the DTO to render even if attempted (X-05's
+   boundary, structural).
+6. **Honestly partial, not built with fabricated data.** No exam a student
+   never attempted ever appears in `student-results.v1`'s response at
+   all — there is no participation/absence record yet (`B16 —
+Participation, Absence & Makeup`, the phase that will own
+   `ExamParticipation`, has not started). An `ABSENT` row cannot be shown
+   because no data source exists to show it from; recorded here rather
+   than silently claimed, matching this project's established practice for
+   a DoD item gated on a backend phase that doesn't exist yet.
+7. ✅ Profile shows student ID, class, and department, with password
+   change working — closed via a confirmed, small, additive backend
+   gap-closure (`GET /v1/students/me`, see Implementation notes below);
+   password change is a genuine self-service flow against B1's
+   already-supported `POST /auth/password/change` `currentPassword`
+   branch, closing the real gap F2's own Change Log entry first recorded.
+8. ✅ No other student's data is reachable — both `student-results.v1`
+   routes and the new `GET /students/me` resolve the caller's own
+   `studentProfileId`/`membershipId` entirely server-side; no student id is
+   ever accepted from the client on any route this phase consumes.
+9. ✅ Loading, error, and empty states implemented, including "no results
+   yet" — `ResultsListScreen`/`ResultDetailScreen`/`StudentProfileScreen`
+   all cover pending/error/empty per this codebase's established
+   per-screen convention.
 
 ## Exit criteria
 
-- Publication E2E green with F15.
-- Result-visibility security tests green.
+- Publication E2E green with F15 — **not yet exercisable**: `F15` (Staff
+  Results & Publication) has not been built, so no real publish action
+  exists yet to drive this E2E from. `F14`'s own security/visibility tests
+  are green against the real, already-published-result fixtures B15's own
+  test suite establishes.
+- Result-visibility security tests green — ✅ (component-level: the
+  generic-404 test above; server-level: already proven by B15's own
+  `results.integration.test.ts`).
+
+## Implementation notes
+
+**Backend gap-closure, confirmed with the project owner before
+implementation (`AGENTS.md` §3), not silently built or silently
+deferred**: the Profile screen's Class/Department fields (`04 §62`) had no
+self-service data source — `users.student.view` (the staff directory read)
+is `denied()` for STUDENT by design, and no other route let a student
+self-discover their own current enrollment. Closed with a small, additive
+change mirroring this project's own repeated precedent for this exact
+shape of discovery (F9's `GET /questions/assigned-subjects`, F11's
+`GET /teachers/me/assignments`): a new permission row
+`users.student.viewOwnProfile` (`STUDENT: granted('SELF')`, every other
+role `denied()`), a new `GET /v1/students/me` route on the existing
+`StudentController` (registered **before** the existing `:id` route — a
+literal `me` segment would otherwise be swallowed by the dynamic `:id`
+matcher), and a new `StudentService.getOwnProfile()` that resolves the
+caller's own `StudentProfile` and reuses the already-existing
+`resolveCurrentEnrollments()` query (now exported) rather than
+duplicating it. A new, deliberately minimal `StudentOwnProfileResponseDto`
+(`displayName`, `studentId`, `currentClassName`, `departmentName`) is a
+separate DTO family from the staff `StudentResponseDto`, mirroring
+`student-result.dto.ts`'s own established "separate, audience-scoped DTO
+family" precedent — no account/profile status, no ids beyond what the
+screen needs. `account.changeOwnProfile` (the deferred profile-_edit_
+permission `awaitingResource`-flagged since B1) is untouched — this screen
+is read-only display plus password change, never a name/detail editor.
+
+**Self-service password change is a genuine new capability, not a reuse
+of the forced first-login form.** `apps/web/app/(school)/password/change/
+change-password-form.tsx`'s `ChangePasswordForm` is built specifically for
+the `credentialState !== 'OK'` branch (no `currentPassword`, redirects to
+`/` on success) — reusing it verbatim for self-service would have been
+wrong on both counts. `components/account/change-own-password-form.tsx`
+(`ChangeOwnPasswordForm`) is new: requires `currentPassword`, posts to the
+already-fully-supported `POST /auth/password/change` (`IdentityService
+.changePassword`'s `credentialState === 'OK'` branch — no backend change
+needed), and shows an inline success message with no navigation.
+`buildChangePasswordSchema(requireCurrent)` (`lib/auth/schemas.ts`) — built
+and tested since an earlier phase but never consumed by any form until
+now — supplied exactly the right validation shape.
+
+**Results list/detail have no dedicated `*-flow.integration.test.tsx`
+file**, a deliberate departure from the plan's own initial assumption:
+that convention (`question-editor-flow.integration.test.tsx`,
+`question-review-flow.integration.test.tsx`) exists only for stateful,
+multi-step, single-component flows (autosave, a review workspace) — the
+closer, correct precedent for a plain `Link`-based list→detail pair is
+F7's student directory / F11's exam list, **neither of which has a flow
+test either**. Coverage instead comes from thorough per-screen component
+tests (`results-list-screen.test.tsx`, `result-detail-screen.test.tsx`,
+including all three `detailVisibility` tiers and the generic-404 security
+case), matching the actual established convention for this screen shape.
+
+**Routes matched the roadmap's own table exactly** (`/student/results`,
+`/student/results/:id`, `/student/profile`) — no correction needed this
+time (contrast F1/F8/F9/F11's own routing corrections). All three
+supersede the `[...slug]` catch-all automatically.
 
 ## Deferred items
 
 - Result transcripts and report cards (`01 §53`).
 - Performance trends for students — not specified in the student scope.
+- DoD item 6 (`ABSENT` display) — genuinely blocked on `B16`, not a scope
+  choice; revisit once `ExamParticipation`/absence records exist.
+- The publication E2E named in Exit criteria — waits on `F15`.
 
 ---
 

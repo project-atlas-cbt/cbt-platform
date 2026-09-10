@@ -934,6 +934,25 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     },
   },
   {
+    id: 'users.student.viewOwnProfile',
+    section: 'User Management',
+    label: 'View own student profile',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: platformRead(),
+      SCHOOL_ADMIN: denied(),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: granted(
+        'SELF',
+        'F14 gap-closure — GET /students/me (name, student ID, current class/department for the ' +
+          "Profile screen, 04 §62). Distinct from users.student.view (the staff directory's " +
+          "broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.",
+      ),
+    },
+  },
+  {
     id: 'users.student.create',
     section: 'User Management',
     label: 'Create Student',

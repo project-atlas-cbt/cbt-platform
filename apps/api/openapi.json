@@ -3073,6 +3073,28 @@
         ]
       }
     },
+    "/students/me": {
+      "get": {
+        "operationId": "StudentController_getOwnProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentOwnProfileResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The signed-in student's own name, student ID, class and department (04 §62).",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/students/{id}": {
       "get": {
         "operationId": "StudentController_get",
@@ -10095,6 +10117,31 @@
           "total",
           "page",
           "pageSize"
+        ]
+      },
+      "StudentOwnProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "studentId": {
+            "type": "string"
+          },
+          "currentClassName": {
+            "type": "string",
+            "nullable": true
+          },
+          "departmentName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "displayName",
+          "studentId",
+          "currentClassName",
+          "departmentName"
         ]
       },
       "CreateStudentDto": {

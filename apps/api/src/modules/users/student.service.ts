@@ -10,6 +10,7 @@ import type {
   CreateStudentDto,
   ListStudentsQueryDto,
   StudentListResponseDto,
+  StudentOwnProfileResponseDto,
   StudentResponseDto,
   UpdateStudentDto,
 } from './dto/student.dto.js';
@@ -72,7 +73,7 @@ const INCLUDE = { membership: { include: { user: true } } } as const;
  * ids, not N+1 per-row queries). `classGroupSession` is `StudentEnrollment`'s
  * actual relation field name to `ClassGroup` (not `classGroup`) — see the
  * schema's own D-10-style composite-FK comment on that field. */
-async function resolveCurrentEnrollments(
+export async function resolveCurrentEnrollments(
   tx: Prisma.TransactionClient,
   schoolId: string,
   studentProfileIds: string[],
@@ -176,6 +177,39 @@ export class StudentService {
       return toResponseDto(row, enrollmentMap.get(row.id));
     });
     if (!result) return notFound('Student');
+    return result;
+  }
+
+  /** F14 gap-closure — `GET /students/me` (04 §62's Profile screen). Resolves
+   * the *caller's own* row from their `membershipId` — the same lookup shape
+   * `student-result.service.ts`'s `requireOwnStudentProfile` uses — never a
+   * caller-supplied id, so there is no "someone else's profile" case to
+   * consider. Deliberately minimal (`StudentOwnProfileResponseDto`, not the
+   * full staff `StudentResponseDto`) — no account/profile status, no ids
+   * beyond what the screen needs. */
+  async getOwnProfile(
+    schoolId: string,
+    membershipId: string,
+  ): Promise<StudentOwnProfileResponseDto> {
+    const result = await withTenant(prisma, schoolId, async (tx) => {
+      const row = await tx.studentProfile.findUnique({
+        where: { schoolId_membershipId: { schoolId, membershipId } },
+        include: INCLUDE,
+      });
+      if (!row) return null;
+      const enrollmentMap = await resolveCurrentEnrollments(tx, schoolId, [row.id]);
+      const enrollment = enrollmentMap.get(row.id);
+      return {
+        displayName: row.membership.user.displayName,
+        studentId: row.studentId,
+        currentClassName: enrollment?.currentClassName ?? null,
+        departmentName: enrollment?.departmentName ?? null,
+      };
+    });
+    // Unreachable via the STUDENT-only route this backs (a membership with
+    // an active STUDENT role always has a StudentProfile) — defensive, not
+    // a real case, matching `get()`'s own precedent for a missing row.
+    if (!result) return notFound('Student profile');
     return result;
   }
 

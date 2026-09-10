@@ -405,8 +405,15 @@ named. Closes `B14`'s last open exit criterion. DoD item 4 is honestly partial b
 owns the `VOIDED` state and the exclusion from every aggregate; the invalidation endpoint is `B16`'s
 per ADR-0014), and the phase surfaced **a real cross-phase conflict `B16` must settle**: `B13`'s
 attempt state-transition trigger makes `SUBMITTED` terminal, so a submitted attempt cannot be
-invalidated at all — precisely the case ADR-0025 assumes. `B16 — Participation, Absence & Makeup` is
-next on the backend critical path; `F14`/`F15` are both now unblocked. See this file's Change Log
+invalidated at all — precisely the case ADR-0025 assumes. **`F14 — Student Results & Profile`** is
+complete too (2026-09-10): the results list, result detail gated by the exam's `detailVisibility`
+policy, and the Profile screen (`04 §60`–`§62`) — proving `student-results.v1` end to end and closing
+a genuinely long-open gap, self-service password change, that every phase since F2's own Change Log
+entry had left unbuilt. One confirmed small additive backend gap-closure (`GET /v1/students/me`, a new
+`users.student.viewOwnProfile` permission row, 160 rows) closed the Profile screen's Class/Department
+fields; one DoD item stays honestly partial by phase boundary, not fabricated (`ABSENT` exams — no
+participation data exists until `B16`). `B16 — Participation, Absence & Makeup` is next on the backend
+critical path; `F15` (Staff Results & Publication) remains open. See this file's Change Log
 entries below (dated 2026-09-04, 2026-09-05 and 2026-09-10) for full detail on all seven phases.
 
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
@@ -5809,3 +5816,111 @@ already-documented Google-Fonts-through-proxy gap, untouched by this pass); `pnp
 
 Project state remains _Implementation (B15 complete)_ — this was a same-phase gap closure, not a new
 phase. **Next: `B16 — Participation, Absence & Makeup`**, unchanged.
+
+### 2026-09-10 — `F14` complete: Student Results & Profile
+
+Requested explicitly: start `F14`. Followed the working-rules checklist via three parallel research
+passes (the full F14 roadmap section, its exact spec text — `04 §60`–`§62`, `05 §51`/`§59`, `03 §50`,
+`01 §28`, `02`'s Student rows — and the three named ADRs' own "Required changes" text; the complete,
+already-frozen `student-results.v1` contract as B15 actually shipped it — routes, DTOs, permission
+grants, the uniform-404 visibility mechanism; existing frontend conventions to reuse), then direct
+reads of the live source (`MeResponseDto`, `student-result.{controller,service,dto}.ts`, the
+permission table's `account.*`/`users.student.*` rows, `student.controller.ts`'s route order,
+`student.service.ts`'s existing enrollment-resolution query) before writing any code — no gating ADR
+is unresolved; `B15` (F14's backend pair) is complete.
+
+**One confirmed backend gap-closure, put to the project owner before implementation
+(`AGENTS.md` §3), not silently built or silently deferred**: the Profile screen's Class/Department
+fields (`04 §62`) had no self-service data source — `users.student.view` (the staff directory read)
+is `denied()` for STUDENT by design, and `GET /auth/me` carries only user/membership/roles, not
+enrollment. Confirmed: build the small, additive gap-closure, mirroring this project's own repeated
+precedent for this exact shape of discovery (F9's `GET /questions/assigned-subjects`, F11's
+`GET /teachers/me/assignments`) — never guessed at, and never silently expanded beyond what the
+screen needs.
+
+**Backend**: a new permission row `users.student.viewOwnProfile` (`STUDENT: granted('SELF')`, every
+other role `denied()` — 160 rows, up from 159); a new `GET /v1/students/me` route on the existing
+`StudentController`, registered **before** the controller's existing `:id` route (straight after
+`list()`) — otherwise Nest/Fastify would match the literal `me` segment against `:id` first, a real
+route-ordering hazard this codebase hadn't hit before; and `StudentService.getOwnProfile()`, which
+resolves the caller's own `StudentProfile` by `(schoolId, membershipId)` — the same lookup shape
+`student-result.service.ts`'s `requireOwnStudentProfile` already established — and reuses the
+already-existing `resolveCurrentEnrollments()` query (now exported, unchanged otherwise) rather than
+duplicating it. A new, deliberately minimal `StudentOwnProfileResponseDto` (`displayName`,
+`studentId`, `currentClassName`, `departmentName`) is a separate DTO family from the staff
+`StudentResponseDto`, mirroring `student-result.dto.ts`'s own established "separate, audience-scoped
+DTO family" precedent. `account.changeOwnProfile` (the deferred profile-_edit_ permission, flagged
+`awaitingResource` since B1) is untouched — this screen is read-only display plus password change,
+never a name/detail editor.
+
+**A real bug found only by the integration tests, not by inspection**: the first version of the new
+test fixture's `seedLoggedInStudent()` helper (created via the real `POST /students` route, then
+setting `passwordHash`/`credentialState: 'OK'` directly via Prisma to bypass the reset-credentials
+flow — the same convention every other test file's student/teacher/HOD login fixtures already use)
+left `User.status` at `INVITED` — `POST /students` never activates the account, only
+`ActivationService.redeem()`/the 2026-08-30 auth-audit fix's two extended methods do — so every login
+attempt in the new tests failed with a generic 401 until the fixture also set `status: 'ACTIVE'`,
+matching that same 2026-08-30 gap closure's own precedent for this exact pitfall.
+
+**Frontend**: `lib/results/{queries,error-utils,format}.ts` (`useStudentResults`/`useStudentResult`,
+`describeResultError`, a percentage formatter trimmed to one decimal place); `components/results/
+{result-grade-badge,results-list-screen,result-detail-screen}.tsx` — `ResultsListScreen` (a
+single-audience card list, no `basePath`/pagination since the API has neither), `ResultDetailScreen`
+(always shows score/percentage/grade; correct/incorrect/unanswered counts gated on
+`detailVisibility !== 'SCORE_ONLY'`; a question-by-question review, sanitized via the existing
+`sanitizeQuestionHtml`, gated on `detailVisibility === 'FULL_REVIEW'` and never rendering a
+correct-answer field, which structurally does not exist in this DTO — X-05's boundary held by
+construction, not convention); routed at `/student/results` and `/student/results/[resultId]`,
+superseding the `[...slug]` catch-all. `lib/account/queries.ts` (`useOwnStudentProfile`) and
+`components/account/change-own-password-form.tsx` (`ChangeOwnPasswordForm`) — a genuinely new
+self-service password-change flow, **not** a reuse of `password/change/change-password-form.tsx`'s
+`ChangePasswordForm` (built for the forced, no-`currentPassword` branch, redirects to `/` on
+success): this one requires `currentPassword`, posts to the already-fully-supported
+`POST /auth/password/change` (`IdentityService.changePassword`'s `credentialState === 'OK'` branch —
+no backend change needed), and shows an inline success message with no navigation. Closes the real
+gap F2's own Change Log entry first recorded ("self-service password change has real backend support
+but no frontend entry point") and every phase since left open. `buildChangePasswordSchema
+(requireCurrent)` (`lib/auth/schemas.ts`) — built and tested since an earlier phase but never
+consumed by any form until now — supplied exactly the right validation shape.
+`components/student/student-profile-screen.tsx` (`StudentProfileScreen`), routed at
+`/student/profile`, composes both.
+
+**No dedicated `*-flow.integration.test.tsx` file was built for results list→detail**, a deliberate
+departure from the original plan's own assumption. That convention
+(`question-editor-flow.integration.test.tsx`, `question-review-flow.integration.test.tsx`) exists
+only for stateful, multi-step, single-component flows — the correct precedent for a plain
+`Link`-based list→detail pair is F7's student directory or F11's exam list, **neither of which has a
+flow test either**. Coverage instead comes from thorough per-screen component tests, matching the
+actual established convention for this screen shape.
+
+**Testing**: 4 new backend integration cases in `users.integration.test.ts` (own profile before/after
+enrollment, the route-ordering proof, a non-student 403); 27 new frontend tests across 6 files
+(`results-list-screen`, `result-detail-screen` — all three `detailVisibility` tiers plus the
+generic-404 security case, `result-grade-badge`, `change-own-password-form`,
+`student-profile-screen`). Full pipeline green: `pnpm --filter @atlas/domain run build`, `pnpm
+--filter @atlas/api {typecheck,lint}`, the full `apps/api` integration suite (329/330 — the one
+failure is the pre-existing, already-documented `s3rver`-vs-real-MinIO gap in
+`media.integration.test.ts`, unrelated), `pnpm generate` + `pnpm generate:permission-table-doc` (160
+rows), a real `node dist/main.js` boot confirming `PolicyCoverageService` reports 209 routes checked
+with zero violations, `pnpm --filter @atlas/web {lint,typecheck}`, the full `apps/web` suite
+(781/781, up from 754), and `next build --webpack` confirming all three new routes render, correctly
+superseding the `[...slug]` catch-all.
+
+**Honestly deferred, not silently dropped**: DoD item 6 (`ABSENT` exams shown, never `0%`) — no
+participation/absence data source exists at all yet (`B16` hasn't started; `student-results.v1` only
+ever returns rows that already have a `Result`), so this cannot be built with real data and was not
+faked. Result transcripts/report cards (`01 §53`) and student performance trends — both already
+named Deferred in the roadmap's own text, not newly found here. The publication E2E named in F14's
+own Exit criteria waits on `F15`, which was not built this pass.
+
+`docs/roadmaps/frontend-roadmap.md`'s F14 section gained status `COMPLETE`, every DoD item annotated
+with what's real versus honestly-partial-with-reason, a full "Implementation notes" subsection, and
+an expanded Deferred items list. `docs/roadmaps/backend-roadmap.md`'s B6 section gained a
+"Post-completion gap closure (2026-09-10, during F14)" note. `docs/roadmaps/roadmap-index.md`'s
+version (1.28), Current State, and Immediate Next Actions all updated to record `F14` complete.
+
+Project state moves from _Implementation (B15 complete)_ to _Implementation (B15/F14 complete)_.
+**Next: `B16 — Participation, Absence & Makeup`** on the backend critical path — unaffected by F14's
+own always-parallelisable position, and still the phase that must resolve the `SUBMITTED`-terminal
+conflict B15 surfaced. `F15` (Staff Results & Publication) remains open whenever the frontend/backend
+phase-pairing default is next prioritized.

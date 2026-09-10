@@ -1443,6 +1443,26 @@ contract was already correct and sufficient; this was purely a frontend orchestr
 create flow never called it). Fixed in `apps/web` — see `frontend-roadmap.md`'s F7 section for the
 frontend-side detail.
 
+## Post-completion gap closure (2026-09-10, during `F14`)
+
+`F14`'s Profile screen (`04 §62`) needed a student's own current class/department; no such
+self-service read existed — `users.student.view` (the staff directory) is `denied()` for STUDENT
+by design. Confirmed with the project owner before implementation (`AGENTS.md` §3): a small,
+additive `GET /v1/students/me` route (`StudentController`), gated by a new permission row
+`users.student.viewOwnProfile` (`STUDENT: granted('SELF')`, every other role `denied()` — 160
+rows, up from 159). `StudentService.getOwnProfile()` resolves the caller's own `StudentProfile`
+by `(schoolId, membershipId)` and reuses the already-existing `resolveCurrentEnrollments()`
+query (now exported, unchanged otherwise) rather than duplicating it. A new, deliberately
+minimal `StudentOwnProfileResponseDto` (`displayName`, `studentId`, `currentClassName`,
+`departmentName`) is a separate DTO family from the staff `StudentResponseDto`, mirroring
+`student-result.dto.ts`'s own established precedent — no account/profile status, no ids beyond
+what the screen needs. The new route is registered **before** the controller's existing `:id`
+route (straight after `list()`) — otherwise Nest/Fastify would match the literal `me` segment
+against `:id` first. No schema change, no migration. Full detail (including the four new
+integration test cases and the real `node dist/main.js` boot confirming 209 routes checked with
+zero `PolicyCoverageService` violations) in `CLAUDE.md`'s matching 2026-09-10 Change Log entry
+and `frontend-roadmap.md`'s F14 section.
+
 ---
 
 # B7 — Bulk Import Pipeline
