@@ -5756,3 +5756,56 @@ Project state moves from _Implementation (F13 complete)_ to _Implementation (B15
 settle the `SUBMITTED`-is-terminal conflict above. `F14` (Student Results & Profile) and `F15` (Staff
 Results & Publication) are both now unblocked and are the natural next step under the
 frontend/backend phase-pairing default (`AGENTS.md` §19).
+
+### 2026-09-10 — `B15` gap closure: thorough implementation review, two fixes
+
+Requested explicitly, same session as `B15` itself: a thorough review of the just-shipped
+implementation looking for bugs, not new scope. Read every B15 file end to end — schema/triggers,
+`packages/domain/src/results/*`, every `apps/api` service, both `apps/worker` queues — cross-checked
+against its own test suite rather than re-reading the phase in isolation. Two real issues surfaced,
+both fixed with regression coverage; full detail (failure scenarios, the fix, and file references)
+is in `docs/roadmaps/backend-roadmap.md`'s B15 section, "Post-completion gap closure" note, not
+duplicated here in full:
+
+1. **Mixing adjustment types silently discarded an earlier correction — the exact "silent score
+   change" this phase's own governing constraint (DoD item 10) exists to forbid.**
+   `applyResultAdjustment`'s `VOID_QUESTION`/`RECALCULATE` branches recomputed straight from raw
+   marking evidence minus voided questions, ignoring `current` (and therefore any
+   `AWARD_MARK`/`DEDUCT_MARK`/`MANUAL_OVERRIDE` already applied by an earlier, separate operation)
+   entirely — an award followed by an unrelated void silently lost the award, directly contradicting
+   the domain file's own claim that the sequence is "order-independent... replayable." Fixed by
+   having `VOID_QUESTION` carry forward the delta between `current` and what the baseline would have
+   been without this void, applied on top of the newly-reduced baseline — `RECALCULATE` is left
+   unchanged, since discarding a prior manual correction is its documented, tested, intentional
+   "repair path" behaviour, not a bug. Six new domain unit tests cover every delta type preserved
+   across a void, preservation across two successive voids, clamping to a reduced total, and confirm
+   `RECALCULATE`'s reset is untouched. A new worker-level integration test proves the fix through the
+   real chunked/transactional path across two separate, completed operations, and was confirmed to
+   fail with exactly the predicted buggy value against the pre-fix code (via a deliberate
+   `git stash`/re-run/restore) before the fix was restored — not just asserted to pass.
+2. **The publication policy lock (DoD item 7) was wired into `publish` only**, despite the
+   permission table's own comment on `results.withhold` claiming parity ("graded exactly like
+   `results.publish`... anyone who may release a cohort may hold one of its results back") and
+   despite that DoD item being marked `✅` complete. A teacher locked out of publishing could still
+   `unpublish` their own exam's results, or `withhold`/`release` an individual one. Fixed by calling
+   `assertPolicyPermits()` from all four actions the service exposes, not `publish` alone. New
+   integration test case proves the same 403 now applies to all three, with an administrative actor
+   unaffected, exactly as the pre-existing `publish`-only test already established for that action.
+
+Both bugs were real, in B15's own code (not inherited from an earlier phase), found by a targeted
+file-by-file read rather than by running the existing suite (which, being written by the same pass
+that introduced the bugs, never exercised either gap). No schema change, no permission-table change,
+no product-behaviour change beyond correcting the two bugs themselves, no ADR involved, no roadmap
+phase status changed. Full pipeline reconfirmed green after both fixes, against a rebuilt local
+Postgres 16 + `uuidv7()` shim + native Redis + `s3rver` stack (this session's environment had reset
+since `B15`'s own pass and needed re-provisioning from scratch — roles, database, shim function,
+migrations, grants — before any test could run): `packages/domain` 143/143 unit tests (up from 137);
+`apps/api` 169/169 unit, 327 integration tests (326 pass — the one failure is the already-documented,
+pre-existing `s3rver`-vs-real-MinIO gap in `media.integration.test.ts`, unrelated to B15);
+`apps/worker` 44/44 integration tests (up from 43); the `tests/` RLS suite 142/142; monorepo-wide
+`pnpm lint && pnpm typecheck` both 16/16 clean; `pnpm build` 8/9 (the one failure is `@atlas/web`'s
+already-documented Google-Fonts-through-proxy gap, untouched by this pass); `pnpm generate
+:permission-table-doc` confirmed a clean, zero-diff regeneration.
+
+Project state remains _Implementation (B15 complete)_ — this was a same-phase gap closure, not a new
+phase. **Next: `B16 — Participation, Absence & Makeup`**, unchanged.

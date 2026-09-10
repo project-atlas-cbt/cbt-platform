@@ -3453,6 +3453,58 @@ ADR demands something B15's own roadmap text never named:
 - A standalone unit test for `ResultQueryService`'s summary/pass-rate arithmetic — currently proven
   through the integration suite only. Candidate.
 
+## Post-completion gap closure: thorough implementation review, two fixes
+
+Requested explicitly, same session as B15 itself: a thorough review of the just-shipped
+implementation looking for bugs, not new scope. Read every B15 file end to end — schema/triggers,
+the shared domain arithmetic, every service, both worker queues — cross-checked against its own
+test suite. Two real issues surfaced, both fixed with regression coverage; full detail in this
+project's own Change Log.
+
+1. **Mixing adjustment types silently discarded an earlier correction.**
+   `applyResultAdjustment`'s `VOID_QUESTION`/`RECALCULATE` branches recomputed straight from the
+   raw `AttemptQuestionResult` marking evidence minus voided questions, ignoring `current` entirely
+   — so a `VOID_QUESTION` run against a result that an earlier, separate `AWARD_MARK`/
+   `DEDUCT_MARK`/`MANUAL_OVERRIDE` operation had already touched silently erased that correction.
+   Concretely: award +1 (9/10), then void an unrelated question (recomputes to 7/9 from raw,
+   losing the award) — exactly the "silent score change" DoD item 10 exists to forbid, and the
+   opposite of the domain file's own claim that the sequence is "order-independent... replayable."
+   Fixed by having `VOID_QUESTION` carry forward the delta between `current` and what the baseline
+   would have been without this void (i.e. raw minus only the prior completed `VOID_QUESTION`s),
+   applying that same delta on top of the newly-recomputed, newly-reduced baseline.
+   `RECALCULATE` is deliberately left unchanged — it is the documented, tested "repair path" that
+   resets to ground truth, so discarding a prior manual correction is its intended behaviour, not
+   a bug. New unit tests (`result-adjustment.test.ts`) cover AWARD_MARK/DEDUCT_MARK/MANUAL_OVERRIDE
+   each preserved across a later void, preservation across two successive voids, clamping a
+   preserved delta to a newly-reduced total, and confirm RECALCULATE's reset behaviour is
+   untouched. A new worker-level integration test (`result-adjustment.integration.test.ts`) proves
+   the fix end to end through the real chunked/transactional path across two separate, completed
+   operations — and was confirmed to fail with exactly the predicted buggy value (0 instead of 2)
+   against the pre-fix code before the fix was restored.
+2. **The publication policy lock was enforced on `publish` only.** `assertPolicyPermits()` (DoD
+   item 7: "a teacher cannot override a school-locked publication policy") was called only from
+   `ResultPublicationService.publish()` — never from `unpublish()`, `withhold()`, or `release()`,
+   despite the permission table's own comment on `results.withhold` claiming parity ("graded
+   exactly like `results.publish`... anyone who may release a cohort may hold one of its results
+   back") and despite DoD item 7 being marked `✅` complete. A teacher locked out of publishing
+   could still unpublish their own exam's results, or withhold/release an individual one,
+   bypassing the school's lock entirely. Fixed by calling `assertPolicyPermits()` from all four
+   actions. New integration test case proves a locked school refuses a teacher-initiated
+   unpublish/withhold/release (403, matching `publish`'s existing behaviour) while an
+   administrative actor remains unaffected, exactly as the pre-existing `publish` test already
+   established for that action alone.
+
+No schema change, no permission-table change, no product-behaviour change beyond correcting the
+two bugs themselves, no ADR involved, no roadmap phase status changed. `packages/domain`: 143/143
+unit tests (up from 137). `apps/api`: 169/169 unit, 327 integration tests (326 pass; the one
+failure, `media.integration.test.ts`'s "retrievable only via a signed URL" case, is this session's
+own already-documented `s3rver`-vs-real-MinIO environment gap, unrelated to B15). `apps/worker`:
+44/44 integration tests (up from 43). `tests/` RLS suite: 142/142. Monorepo-wide `pnpm lint &&
+pnpm typecheck` both 16/16 clean; `pnpm build` 8/9 (`@atlas/web`'s Google-Fonts-through-proxy
+failure is this session's own already-documented, pre-existing environment gap, untouched by this
+pass). `pnpm generate:permission-table-doc` confirmed a clean, zero-diff regeneration (159 rows,
+unchanged).
+
 ---
 
 # B16 — Participation, Absence & Makeup

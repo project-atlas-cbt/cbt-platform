@@ -116,6 +116,7 @@ export class ResultPublicationService {
     const schoolActor = requireSchoolActorForResults(actor);
     const exam = await loadExamOrThrow(schoolId, examId);
     await this.assertAllowed(schoolId, actor, exam, 'results.unpublish');
+    await this.assertPolicyPermits(schoolId, schoolActor, exam);
 
     const affected = await this.countVisibleResults(schoolId, examId);
 
@@ -186,6 +187,7 @@ export class ResultPublicationService {
 
     const exam = await loadExamOrThrow(schoolId, result.examId);
     await this.assertAllowed(schoolId, actor, exam, 'results.withhold');
+    await this.assertPolicyPermits(schoolId, schoolActor, exam);
 
     await withTenant(prisma, schoolId, (tx) =>
       tx.result.update({
@@ -219,10 +221,23 @@ export class ResultPublicationService {
    * lock check here.
    *
    * The rule reads off both axes. `Exam.resultPolicy` names WHO releases;
-   * `School.resultPolicyLocked` says whether a teacher may act outside it.
-   * So a teacher may publish only when the exam's own policy actually names
-   * them — and when the school has locked its policy, not even a divergent
-   * seeded value on an older exam lets them through.
+   * `School.resultPolicyLocked` says whether a teacher (or HOD — neither is
+   * "administrative" below) may act outside it. So a non-administrative
+   * actor may act only when the exam's own policy actually names them — and
+   * when the school has locked its policy, not even a divergent seeded value
+   * on an older exam lets them through.
+   *
+   * Called from all four actions this service exposes — `publish`,
+   * `unpublish`, `withhold`, and `release` — not `publish` alone. Withholding
+   * or releasing one result, and unpublishing a whole exam, are each just as
+   * much "who controls what a student sees" as publishing is; the
+   * permission table's own comment on `results.withhold` says as much
+   * ("graded exactly like `results.publish`... anyone who may release a
+   * cohort may hold one of its results back"). Found and closed by
+   * post-implementation review: the original pass wired this into `publish`
+   * only, so a teacher locked out of publishing could still unpublish their
+   * own exam's results, or withhold/release an individual one, bypassing the
+   * school's lock entirely.
    */
   private async assertPolicyPermits(
     schoolId: string,

@@ -893,6 +893,71 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     });
   });
 
+  // Regression: post-implementation review found the lock above was wired
+  // into `publish` only — a teacher locked out of publishing could still
+  // unpublish their own exam's results, or withhold/release an individual
+  // one, bypassing the school's lock entirely (the permission table's own
+  // comment on `results.withhold` says it should be "graded exactly like
+  // results.publish").
+  it('DoD 7: the same lock refuses a teacher-initiated unpublish, withhold, and release', async () => {
+    const examId = await buildReadyExam({ resultPolicy: 'TEACHER' });
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const a = await sitExamAndMark(studentA, examId, 1);
+
+    // Published while the policy still names the teacher, exactly as DoD 7's
+    // own worked example does — then the school locks release to
+    // administrative-only, same as above.
+    expect((await post(teacher, `/exams/${examId}/results/publish`, {})).statusCode).toBe(200);
+    await withTenant(prisma, schoolId, () =>
+      prisma.school.update({
+        where: { id: schoolId },
+        data: { resultPolicy: 'SCHOOL_ADMIN', resultPolicyLocked: true },
+      }),
+    );
+
+    const refusedUnpublish = await post(teacher, `/exams/${examId}/results/unpublish`, {
+      reason: 'Trying to reverse it myself.',
+    });
+    expect(refusedUnpublish.statusCode).toBe(403);
+    expect(refusedUnpublish.json<{ error: { message: string } }>().error.message).toContain(
+      'locked',
+    );
+
+    const refusedWithhold = await post(teacher, `/results/${a.resultId}/withhold`, {
+      reason: 'Trying to hold it back myself.',
+    });
+    expect(refusedWithhold.statusCode).toBe(403);
+
+    const refusedRelease = await post(teacher, `/results/${a.resultId}/release`, {
+      reason: 'Trying to release it myself.',
+    });
+    expect(refusedRelease.statusCode).toBe(403);
+
+    // The result is still published and visible — none of the refused calls
+    // had any effect.
+    expect(await studentSeesResult(studentA, a.resultId)).toBe(true);
+
+    // The School Admin is unaffected by the lock for all three, matching
+    // publish's own already-established behaviour.
+    expect(
+      (await post(admin, `/results/${a.resultId}/withhold`, { reason: 'Admin holds it back.' }))
+        .statusCode,
+    ).toBe(200);
+    expect(
+      (await post(admin, `/results/${a.resultId}/release`, { reason: 'Admin releases it.' }))
+        .statusCode,
+    ).toBe(200);
+    expect(
+      (await post(admin, `/exams/${examId}/results/unpublish`, { reason: 'Admin reverses it.' }))
+        .statusCode,
+    ).toBe(200);
+
+    await prisma.school.update({
+      where: { id: schoolId },
+      data: { resultPolicy: 'SCHOOL_ADMIN', resultPolicyLocked: false },
+    });
+  });
+
   it('a teacher cannot publish an exam configured for administrative release', async () => {
     const examId = await buildReadyExam({ resultPolicy: 'SCHOOL_ADMIN' });
     await post(teacher, `/exams/${examId}/sessions`, {});

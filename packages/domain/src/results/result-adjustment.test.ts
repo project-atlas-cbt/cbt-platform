@@ -166,6 +166,137 @@ describe('applyResultAdjustment', () => {
   it('VOID_QUESTION with no target is a no-op rather than a silent wipe', () => {
     expect(applyResultAdjustment(original, { type: 'VOID_QUESTION' }, marking)).toEqual(original);
   });
+
+  // Regression: post-implementation review found that VOID_QUESTION always
+  // recomputed straight from raw marking evidence, discarding any
+  // AWARD_MARK/DEDUCT_MARK/MANUAL_OVERRIDE delta already applied in an
+  // earlier, separate adjustment operation on the same result — a silent
+  // score change, exactly what this phase's own governing constraint (no
+  // path may silently change a score) exists to forbid.
+  describe('composing a delta-type adjustment with a later VOID_QUESTION', () => {
+    it('preserves an earlier AWARD_MARK bonus across a later void', () => {
+      const afterAward = applyResultAdjustment(
+        original,
+        { type: 'AWARD_MARK', markDelta: 2 },
+        marking,
+      );
+      expect(afterAward).toMatchObject({ earnedMarks: 9, totalMarks: 10 });
+
+      // A separate, later operation voids an unrelated wrong answer.
+      const afterVoid = applyResultAdjustment(
+        afterAward,
+        { type: 'VOID_QUESTION', targetExamQuestionId: 'q-wrong-0' },
+        marking,
+        [], // no earlier COMPLETED VOID_QUESTION operation yet
+      );
+
+      // Raw-minus-voided baseline is 9/9 (7 correct + the voided wrong
+      // answer's 0 marks removed from the denominator); the +2 award must
+      // still be reflected on top of it, clamped to the new total.
+      expect(afterVoid.totalMarks).toBe(9);
+      expect(afterVoid.earnedMarks).toBe(9); // 7 + 2, clamped to 9
+      expect(afterVoid.percentage).toBe(100);
+    });
+
+    it('preserves an earlier DEDUCT_MARK penalty across a later void', () => {
+      const afterDeduct = applyResultAdjustment(
+        original,
+        { type: 'DEDUCT_MARK', markDelta: 3 },
+        marking,
+      );
+      expect(afterDeduct).toMatchObject({ earnedMarks: 4, totalMarks: 10 });
+
+      const afterVoid = applyResultAdjustment(
+        afterDeduct,
+        { type: 'VOID_QUESTION', targetExamQuestionId: 'q-wrong-0' },
+        marking,
+        [],
+      );
+
+      expect(afterVoid.totalMarks).toBe(9);
+      expect(afterVoid.earnedMarks).toBe(4); // 7 - 3, unaffected by the void
+    });
+
+    it('preserves an earlier MANUAL_OVERRIDE across a later void', () => {
+      const afterOverride = applyResultAdjustment(
+        original,
+        { type: 'MANUAL_OVERRIDE', overrideEarnedMarks: 9 },
+        marking,
+      );
+      expect(afterOverride.earnedMarks).toBe(9);
+
+      const afterVoid = applyResultAdjustment(
+        afterOverride,
+        { type: 'VOID_QUESTION', targetExamQuestionId: 'q-wrong-0' },
+        marking,
+        [],
+      );
+
+      // The override set a +2-over-raw delta (9 vs. the raw 7); that delta
+      // rides forward onto the reduced 9-mark total.
+      expect(afterVoid.totalMarks).toBe(9);
+      expect(afterVoid.earnedMarks).toBe(9);
+    });
+
+    it('preserves a delta across TWO successive VOID_QUESTION adjustments', () => {
+      const first = applyResultAdjustment(
+        original,
+        { type: 'VOID_QUESTION', targetExamQuestionId: 'q-wrong-0' },
+        marking,
+      );
+      const afterAward = applyResultAdjustment(
+        first,
+        { type: 'AWARD_MARK', markDelta: 1 },
+        marking,
+      );
+      expect(afterAward).toMatchObject({ earnedMarks: 8, totalMarks: 9 });
+
+      const second = applyResultAdjustment(
+        afterAward,
+        { type: 'VOID_QUESTION', targetExamQuestionId: 'q-wrong-1' },
+        marking,
+        ['q-wrong-0'],
+      );
+
+      // Raw-minus-both-voids baseline is 7/8; the +1 award rides forward.
+      expect(second.totalMarks).toBe(8);
+      expect(second.earnedMarks).toBe(8);
+    });
+
+    it('still clamps a preserved delta to the newly-reduced total', () => {
+      const afterAward = applyResultAdjustment(
+        original,
+        { type: 'AWARD_MARK', markDelta: 3 },
+        marking,
+      );
+      expect(afterAward).toMatchObject({ earnedMarks: 10, totalMarks: 10 });
+
+      // Voiding a CORRECT answer shrinks the total to 9 with a 6-mark raw
+      // baseline; a naive "+3" would overshoot the new total.
+      const afterVoid = applyResultAdjustment(
+        afterAward,
+        { type: 'VOID_QUESTION', targetExamQuestionId: 'q-correct-0' },
+        marking,
+        [],
+      );
+
+      expect(afterVoid.totalMarks).toBe(9);
+      expect(afterVoid.earnedMarks).toBe(9); // 6 + 3, clamped to the new total of 9
+    });
+
+    it('RECALCULATE remains a deliberate reset — it does NOT preserve a prior delta', () => {
+      // Confirms the fix above is scoped to VOID_QUESTION only: RECALCULATE
+      // is still the "repair path" that resets to ground truth, per its own
+      // existing contract.
+      const afterAward = applyResultAdjustment(
+        original,
+        { type: 'AWARD_MARK', markDelta: 2 },
+        marking,
+      );
+      const recalculated = applyResultAdjustment(afterAward, { type: 'RECALCULATE' }, marking);
+      expect(recalculated).toEqual(original);
+    });
+  });
 });
 
 describe('replayOriginalValues (DoD item 12)', () => {

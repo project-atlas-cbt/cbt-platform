@@ -576,4 +576,66 @@ describe('B15 result adjustment worker (ADR-0025)', () => {
     );
     expect(audits.map((a) => a.action)).toEqual(['RESULT_MANUAL_OVERRIDE']);
   });
+
+  // Regression (post-implementation review): a second, SEPARATE, later
+  // operation of a different type must not silently discard the first one's
+  // effect. Runs the real worker end to end across two completed operations
+  // — this is the integration-level risk (wiring `current`/
+  // `previouslyVoidedExamQuestionIds` correctly across operations), on top
+  // of the arithmetic itself already covered by
+  // `result-adjustment.test.ts`'s own unit-level composition suite.
+  it("a later VOID_QUESTION preserves an earlier, separate operation's AWARD_MARK", async () => {
+    const fixture = await createFixture(1);
+    schools.push(fixture.schoolId);
+    const [resultId] = await Promise.all([
+      createFinalisedResult(fixture, fixture.studentProfileIds[0]!, 1),
+    ]);
+
+    // Baseline: Q1 (5/5, correct) + Q2 (0/3, incorrect) = 5/8.
+    const awardOperationId = await createOperation(fixture, {
+      type: 'AWARD_MARK',
+      reason: 'Bonus mark for everyone.',
+      markDelta: 2,
+      totalCount: 1,
+    });
+    await runResultAdjustment({}, { schoolId: fixture.schoolId, operationId: awardOperationId });
+
+    const afterAward = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.findUniqueOrThrow({ where: { id: resultId } }),
+    );
+    expect(afterAward.earnedMarks).toBe(7); // 5 + 2
+    expect(afterAward.totalMarks).toBe(8);
+
+    // A second, unrelated operation voids Q1 — the question the bonus had
+    // nothing to do with. Without the fix, VOID_QUESTION recomputes straight
+    // from raw marking evidence (Q2 alone: 0/3), silently erasing the award.
+    // With the fix, the +2 delta carries forward onto the reduced baseline.
+    const voidOperationId = await createOperation(fixture, {
+      type: 'VOID_QUESTION',
+      reason: 'Question 1 was later found to be ambiguous too.',
+      targetExamQuestionId: Q1,
+      totalCount: 1,
+    });
+    await runResultAdjustment({}, { schoolId: fixture.schoolId, operationId: voidOperationId });
+
+    const afterVoid = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.findUniqueOrThrow({ where: { id: resultId } }),
+    );
+    expect(afterVoid.totalMarks).toBe(3); // Q2 alone
+    // The bug this test guards against would leave this at 0 (raw Q2 score,
+    // discarding the earlier +2 award entirely).
+    expect(afterVoid.earnedMarks).toBe(2); // 0 (raw, Q1 voided) + 2 (preserved award)
+    expect(afterVoid.state).toBe('ADJUSTED');
+
+    // Both operations are independently recorded — the append-only history
+    // this whole guarantee rests on.
+    const history = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultAdjustment.findMany({
+        where: { schoolId: fixture.schoolId, resultId },
+        orderBy: { createdAt: 'asc' },
+      }),
+    );
+    expect(history.map((h) => h.adjustmentType)).toEqual(['AWARD_MARK', 'VOID_QUESTION']);
+    expect((history[0]!.oldValue as unknown as AdjustableResultValues).earnedMarks).toBe(5);
+  });
 });

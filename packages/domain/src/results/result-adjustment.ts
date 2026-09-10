@@ -63,21 +63,38 @@ export function toAdjustableValues(totals: ResultTotals): AdjustableResultValues
  * Applies one adjustment to one result's current values.
  *
  * `questionResults` is the attempt's immutable marking evidence, needed by
- * the two types that re-derive rather than shift:
+ * the two types that re-derive from it rather than shift `current` directly:
  *
  *   - `VOID_QUESTION` (03 §73's "exclude question from score") removes the
  *     question from BOTH earned and maximum marks, so the percentage reflects
  *     an exam of the remaining questions rather than punishing every student
  *     for a question nobody could answer correctly. Its correctness count is
  *     removed too, so the counts continue to sum to the questions that still
- *     carry marks.
- *   - `RECALCULATE` (05 §53's "Recalculate result") re-derives everything
- *     from the marking evidence — the repair path when a result's stored
- *     totals have drifted from the rows they summarise.
+ *     carry marks. Any AWARD_MARK/DEDUCT_MARK/MANUAL_OVERRIDE delta already
+ *     reflected in `current` is preserved on top of the newly-excluded
+ *     baseline — the difference between `current.earnedMarks` and what the
+ *     baseline would have been WITHOUT this void (the same recompute over
+ *     `previouslyVoidedExamQuestionIds` alone) is carried forward, so voiding
+ *     a second question never silently erases an earlier bonus, penalty, or
+ *     override. (Bug found by post-implementation review: recomputing
+ *     straight from raw marking evidence on every VOID_QUESTION discarded
+ *     every prior delta-type adjustment — e.g. AWARD_MARK then VOID_QUESTION
+ *     silently lost the award. Fixed here, not worked around at a call site,
+ *     since both `apps/api`'s single-adjustment path and `apps/worker`'s
+ *     bulk path share this one function.)
+ *   - `RECALCULATE` (05 §53's "Recalculate result") is the one deliberate
+ *     exception to that preservation: it re-derives EVERYTHING from the
+ *     marking evidence, minus only questions voided by completed
+ *     VOID_QUESTION operations — the repair path when a result's stored
+ *     totals have drifted, which by design discards any AWARD_MARK/
+ *     DEDUCT_MARK/MANUAL_OVERRIDE applied since, resetting the score to what
+ *     the marking evidence alone says.
  *
- * Both are computed against the marking evidence MINUS every question voided
- * by earlier adjustments, which is what makes a sequence of adjustments
- * order-independent in outcome and replayable in order.
+ * VOID_QUESTION's own exclusion set (this target plus every prior completed
+ * VOID_QUESTION) is what makes a sequence of VOID_QUESTION adjustments
+ * order-independent in outcome and replayable in order. RECALCULATE is not
+ * order-independent with delta-type adjustments — discarding them is its
+ * whole purpose.
  */
 export function applyResultAdjustment(
   current: AdjustableResultValues,
@@ -88,8 +105,21 @@ export function applyResultAdjustment(
   switch (spec.type) {
     case 'VOID_QUESTION': {
       if (!spec.targetExamQuestionId) return current;
+
+      // What the baseline was immediately before this void (raw marking
+      // evidence minus only the questions earlier VOID_QUESTIONs excluded).
+      // The gap between that and `current` is every AWARD_MARK/DEDUCT_MARK/
+      // MANUAL_OVERRIDE delta applied since — carried forward below rather
+      // than silently dropped.
+      const priorBaseline = recomputeExcluding(
+        questionResults,
+        new Set(previouslyVoidedExamQuestionIds),
+      );
+      const manualDelta = current.earnedMarks - priorBaseline.earnedMarks;
+
       const voided = new Set([...previouslyVoidedExamQuestionIds, spec.targetExamQuestionId]);
-      return recomputeExcluding(questionResults, voided);
+      const newBaseline = recomputeExcluding(questionResults, voided);
+      return withEarnedMarks(newBaseline, newBaseline.earnedMarks + manualDelta);
     }
 
     case 'RECALCULATE': {
