@@ -18,7 +18,9 @@
           }
         },
         "summary": "The effective capability set for the current user in the current school (B2). Presentation only — every real route is independently enforced by PermissionGuard.",
-        "tags": ["authorization"]
+        "tags": [
+          "authorization"
+        ]
       }
     },
     "/audit": {
@@ -105,7 +107,9 @@
           }
         },
         "summary": "Scoped audit retrieval — filters: actor, action, entity type, date range (B10).",
-        "tags": ["audit"]
+        "tags": [
+          "audit"
+        ]
       }
     },
     "/tenant/resolve": {
@@ -125,7 +129,9 @@
           }
         },
         "summary": "Resolve the current subdomain's school for pre-login branding (ADR-0005), plus a CSRF token.",
-        "tags": ["identity"]
+        "tags": [
+          "identity"
+        ]
       }
     },
     "/auth/login": {
@@ -155,7 +161,9 @@
           }
         },
         "summary": "Authenticate within the resolved tenant (ADR-0005).",
-        "tags": ["identity"]
+        "tags": [
+          "identity"
+        ]
       }
     },
     "/auth/logout": {
@@ -175,7 +183,9 @@
           }
         },
         "summary": "Revoke the current session.",
-        "tags": ["identity"]
+        "tags": [
+          "identity"
+        ]
       }
     },
     "/auth/refresh": {
@@ -195,7 +205,9 @@
           }
         },
         "summary": "Rotate the current session (ADR-0022).",
-        "tags": ["identity"]
+        "tags": [
+          "identity"
+        ]
       }
     },
     "/auth/me": {
@@ -215,7 +227,9 @@
           }
         },
         "summary": "Current user, membership, and roles — read live from the database.",
-        "tags": ["identity"]
+        "tags": [
+          "identity"
+        ]
       }
     },
     "/auth/password/change": {
@@ -245,7 +259,9 @@
           }
         },
         "summary": "Authenticated password change — clears any forced-change state.",
-        "tags": ["identity"]
+        "tags": [
+          "identity"
+        ]
       }
     },
     "/auth/password/reset/request": {
@@ -275,7 +291,9 @@
           }
         },
         "summary": "Initiate a staff password reset (ADR-0019 — students have no email).",
-        "tags": ["identity"]
+        "tags": [
+          "identity"
+        ]
       }
     },
     "/auth/password/reset/confirm": {
@@ -305,7 +323,9 @@
           }
         },
         "summary": "Complete a password reset with a single-use token.",
-        "tags": ["identity"]
+        "tags": [
+          "identity"
+        ]
       }
     },
     "/health": {
@@ -318,7 +338,9 @@
           }
         },
         "summary": "Liveness probe — the process is up.",
-        "tags": ["health"]
+        "tags": [
+          "health"
+        ]
       }
     },
     "/health/ready": {
@@ -331,7 +353,9 @@
           }
         },
         "summary": "Readiness probe — database, Redis, and object storage are reachable.",
-        "tags": ["health"]
+        "tags": [
+          "health"
+        ]
       }
     },
     "/media/uploads": {
@@ -361,7 +385,9 @@
           }
         },
         "summary": "Request an upload target for a question image/diagram/other asset (07 §11.3).",
-        "tags": ["media"]
+        "tags": [
+          "media"
+        ]
       }
     },
     "/media/uploads/{id}/complete": {
@@ -390,7 +416,9 @@
           }
         },
         "summary": "Finalise and validate an uploaded asset by content sniffing.",
-        "tags": ["media"]
+        "tags": [
+          "media"
+        ]
       }
     },
     "/media/{id}/url": {
@@ -419,7 +447,9 @@
           }
         },
         "summary": "Short-lived signed access URL for a non-logo media asset.",
-        "tags": ["media"]
+        "tags": [
+          "media"
+        ]
       }
     },
     "/platform/auth/login": {
@@ -449,7 +479,9 @@
           }
         },
         "summary": "Authenticate as Software Admin (ADR-0005's distinct platform host).",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/auth/logout": {
@@ -469,7 +501,9 @@
           }
         },
         "summary": "Revoke the current Software Admin session.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/auth/me": {
@@ -489,7 +523,9 @@
           }
         },
         "summary": "Current Software Admin identity and roles — read live from the database.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/auth/permissions": {
@@ -509,7 +545,9 @@
           }
         },
         "summary": "The effective capability set for the current Software Admin session — platform-scoped analog of GET /me/permissions.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/schools": {
@@ -561,7 +599,11 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["name", "status", "createdAt"]
+              "enum": [
+                "name",
+                "status",
+                "createdAt"
+              ]
             }
           },
           {
@@ -570,7 +612,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["asc", "desc"]
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           }
         ],
@@ -587,7 +632,9 @@
           }
         },
         "summary": "List schools (05 §3.1) — search, status filter, sort, and pagination (F3 gap closure).",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       },
       "post": {
         "operationId": "SchoolsAdminController_create",
@@ -615,7 +662,9 @@
           }
         },
         "summary": "Create a school + initial admin + subscription (05 §3.2).",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/schools/{id}": {
@@ -644,7 +693,9 @@
           }
         },
         "summary": "School overview (05 §3.3 / 04 §8).",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/schools/{id}/suspend": {
@@ -683,7 +734,9 @@
           }
         },
         "summary": "Suspend a school (platform action, reason required, audited).",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/schools/{id}/reactivate": {
@@ -722,7 +775,9 @@
           }
         },
         "summary": "Reactivate a suspended school (reason required, audited).",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/schools/{id}/deactivate": {
@@ -761,7 +816,9 @@
           }
         },
         "summary": "Deactivate a school — terminal, reason required, audited.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/schools/{id}/subscriptions": {
@@ -800,7 +857,9 @@
           }
         },
         "summary": "Issue or renew a subscription period.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/schools/{id}/activation-grants": {
@@ -829,7 +888,9 @@
           }
         },
         "summary": "Issue a standalone renewal key against the current subscription period.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       },
       "get": {
         "operationId": "SchoolsAdminController_listActivationGrants",
@@ -856,7 +917,9 @@
           }
         },
         "summary": "Activation and renewal key history for a school (05 §4.1) — F3 gap-closure.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/metrics": {
@@ -876,7 +939,9 @@
           }
         },
         "summary": "Platform dashboard aggregates (04 §6) — cached, never live-computed.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/platform/metrics/media/orphan-report": {
@@ -896,7 +961,9 @@
           }
         },
         "summary": "B4 orphan-media report (report only, never deletes) — cached.",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/activation/verify": {
@@ -926,7 +993,9 @@
           }
         },
         "summary": "Validate an activation/renewal key without consuming it (03 §3).",
-        "tags": ["activation"]
+        "tags": [
+          "activation"
+        ]
       }
     },
     "/activation/redeem": {
@@ -956,7 +1025,9 @@
           }
         },
         "summary": "Redeem an activation/renewal key (03 §3).",
-        "tags": ["activation"]
+        "tags": [
+          "activation"
+        ]
       }
     },
     "/school/profile": {
@@ -976,7 +1047,9 @@
           }
         },
         "summary": "The caller's own school profile (03 §4 Step 1).",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       },
       "patch": {
         "operationId": "SchoolProfileController_updateProfile",
@@ -1004,7 +1077,9 @@
           }
         },
         "summary": "Update the caller's own school profile (School Admin only).",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/school/subscription": {
@@ -1024,7 +1099,9 @@
           }
         },
         "summary": "Read-only subscription status (05 §4.1) — School Admin/Moderator.",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/school/branding/logo/upload-target": {
@@ -1054,7 +1131,9 @@
           }
         },
         "summary": "Request an upload target for a new school logo.",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/school/branding/logo/upload-target/{id}/complete": {
@@ -1083,7 +1162,9 @@
           }
         },
         "summary": "Finalise and validate an uploaded logo by content sniffing.",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/school/branding": {
@@ -1103,7 +1184,9 @@
           }
         },
         "summary": "The caller's own school branding + derived palette.",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       },
       "put": {
         "operationId": "SchoolBrandingController_updateBranding",
@@ -1131,7 +1214,9 @@
           }
         },
         "summary": "Update logo and/or primary colour (School Admin only) — freely editable, audited.",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/school/result-policy": {
@@ -1151,7 +1236,9 @@
           }
         },
         "summary": "The caller's own school's result-publication defaults and lock flag.",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       },
       "put": {
         "operationId": "SchoolResultPolicyController_updateResultPolicy",
@@ -1179,7 +1266,9 @@
           }
         },
         "summary": "Update result-publication defaults and the override lock (School Admin only).",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/school/onboarding": {
@@ -1199,7 +1288,9 @@
           }
         },
         "summary": "The caller's own school's onboarding wizard progress.",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/school/onboarding/progress": {
@@ -1229,7 +1320,9 @@
           }
         },
         "summary": "Advance/update the onboarding wizard step pointer.",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/school/onboarding/complete": {
@@ -1249,7 +1342,9 @@
           }
         },
         "summary": "Mark onboarding complete (05 §5.2: requires a current session and a class).",
-        "tags": ["school"]
+        "tags": [
+          "school"
+        ]
       }
     },
     "/platform/audit": {
@@ -1345,7 +1440,9 @@
           }
         },
         "summary": "Platform-wide audit retrieval, optionally narrowed to one school (B10).",
-        "tags": ["platform"]
+        "tags": [
+          "platform"
+        ]
       }
     },
     "/academics/context": {
@@ -1365,7 +1462,9 @@
           }
         },
         "summary": "Current school + session + term (04 §66 context switcher), every role.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/sessions": {
@@ -1385,7 +1484,9 @@
           }
         },
         "summary": "List the school's academic sessions (07 §6.1).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "post": {
         "operationId": "SessionController_create",
@@ -1413,7 +1514,9 @@
           }
         },
         "summary": "Create an academic session (starts DRAFT).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/sessions/{id}": {
@@ -1442,7 +1545,9 @@
           }
         },
         "summary": "Get one academic session.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "patch": {
         "operationId": "SessionController_update",
@@ -1479,7 +1584,9 @@
           }
         },
         "summary": "Edit a DRAFT or UPCOMING session.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "delete": {
         "operationId": "SessionController_remove",
@@ -1506,7 +1613,9 @@
           }
         },
         "summary": "Hard-delete a session (blocked if terms/classes/offerings/HOD assignments exist).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/sessions/{id}/activate": {
@@ -1535,7 +1644,9 @@
           }
         },
         "summary": "Make this session CURRENT (roadmap-named endpoint, DoD item 2).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/sessions/{id}/archive": {
@@ -1564,7 +1675,9 @@
           }
         },
         "summary": "Archive a session (FR AC-01).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/sessions/{sessionId}/terms": {
@@ -1593,7 +1706,9 @@
           }
         },
         "summary": "List a session's terms (07 §6.2).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "post": {
         "operationId": "TermController_create",
@@ -1630,7 +1745,9 @@
           }
         },
         "summary": "Create a term within a session.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/terms/{id}": {
@@ -1669,7 +1786,9 @@
           }
         },
         "summary": "Edit a DRAFT or UPCOMING term.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "delete": {
         "operationId": "TermController_remove",
@@ -1696,7 +1815,9 @@
           }
         },
         "summary": "Delete a term.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/terms/{id}/activate": {
@@ -1725,7 +1846,9 @@
           }
         },
         "summary": "Make this term CURRENT within its session (feeds GET /academics/context).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/departments": {
@@ -1745,7 +1868,9 @@
           }
         },
         "summary": "List the school's departments (07 §6.3).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "post": {
         "operationId": "DepartmentController_create",
@@ -1773,7 +1898,9 @@
           }
         },
         "summary": "Create a department.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/departments/{id}": {
@@ -1802,7 +1929,9 @@
           }
         },
         "summary": "Get one department.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "patch": {
         "operationId": "DepartmentController_update",
@@ -1839,7 +1968,9 @@
           }
         },
         "summary": "Edit a department.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "delete": {
         "operationId": "DepartmentController_remove",
@@ -1866,7 +1997,9 @@
           }
         },
         "summary": "Hard-delete a department (blocked if subjects/classes/HOD assignments exist).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/departments/{id}/deactivate": {
@@ -1895,7 +2028,9 @@
           }
         },
         "summary": "Deactivate a department (FR AC-03) — always allowed.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/classes": {
@@ -1924,7 +2059,9 @@
           }
         },
         "summary": "List the school's classes (07 §6.4), optionally filtered by session.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "post": {
         "operationId": "ClassGroupController_create",
@@ -1952,7 +2089,9 @@
           }
         },
         "summary": "Create a class within a session.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/classes/{id}": {
@@ -1981,7 +2120,9 @@
           }
         },
         "summary": "Get one class.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "patch": {
         "operationId": "ClassGroupController_update",
@@ -2018,7 +2159,9 @@
           }
         },
         "summary": "Edit a class.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "delete": {
         "operationId": "ClassGroupController_remove",
@@ -2045,7 +2188,9 @@
           }
         },
         "summary": "Hard-delete a class (blocked if offerings exist).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/classes/{id}/archive": {
@@ -2074,7 +2219,9 @@
           }
         },
         "summary": "Archive a class (FR AC-04) — always allowed.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/subjects": {
@@ -2094,7 +2241,9 @@
           }
         },
         "summary": "List the school's subjects (07 §6.5).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "post": {
         "operationId": "SubjectController_create",
@@ -2122,7 +2271,9 @@
           }
         },
         "summary": "Create a subject.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/subjects/{id}": {
@@ -2151,7 +2302,9 @@
           }
         },
         "summary": "Get one subject.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "patch": {
         "operationId": "SubjectController_update",
@@ -2188,7 +2341,9 @@
           }
         },
         "summary": "Edit a subject, including assigning its department (FR AC-05).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "delete": {
         "operationId": "SubjectController_remove",
@@ -2215,7 +2370,9 @@
           }
         },
         "summary": "Hard-delete a subject (blocked if offerings exist).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/subjects/{id}/deactivate": {
@@ -2244,7 +2401,9 @@
           }
         },
         "summary": "Deactivate a subject — always allowed, never breaks history.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/classes/{id}/subjects": {
@@ -2273,7 +2432,9 @@
           }
         },
         "summary": "Offerings for a class (roadmap-named endpoint, 07 §6.6).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       },
       "post": {
         "operationId": "ClassSubjectController_create",
@@ -2310,7 +2471,9 @@
           }
         },
         "summary": "Offer a subject to a class.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/class-subjects/{id}": {
@@ -2339,7 +2502,9 @@
           }
         },
         "summary": "Remove a class-subject offering.",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/departments/{id}/hod-assignments": {
@@ -2368,7 +2533,9 @@
           }
         },
         "summary": "A department's HOD assignment history (07 §6.9).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/hod-assignments": {
@@ -2398,7 +2565,9 @@
           }
         },
         "summary": "Assign an HOD to a department (rejects a membership without an active HOD role).",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/academics/hod-assignments/{id}/end": {
@@ -2427,7 +2596,9 @@
           }
         },
         "summary": "End an HOD assignment (FR §13: \"School Admin -> remove HOD\").",
-        "tags": ["academics"]
+        "tags": [
+          "academics"
+        ]
       }
     },
     "/students/{id}/enrollments": {
@@ -2466,7 +2637,9 @@
           }
         },
         "summary": "Enroll a student into a class for a session, or move them to another class within a session they are already enrolled in (07 §35) — one endpoint serves both.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "get": {
         "operationId": "StudentEnrollmentController_listForStudent",
@@ -2493,7 +2666,9 @@
           }
         },
         "summary": "A student's full enrollment history (never overwritten, 07 §35).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/classes/{id}/students": {
@@ -2522,7 +2697,9 @@
           }
         },
         "summary": "A class's current roster (07 §6.7).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/teachers/me/assignments": {
@@ -2542,7 +2719,9 @@
           }
         },
         "summary": "The caller's own active class×subject assignments (F11 gap-closure) — the data source for the exam builder's class/subject pickers.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/teachers/{id}/assignments": {
@@ -2571,7 +2750,9 @@
           }
         },
         "summary": "A teacher's current active assignments.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "put": {
         "operationId": "TeacherAssignmentController_replace",
@@ -2608,7 +2789,9 @@
           }
         },
         "summary": "Replace a teacher's subject×class assignment set for a session (04 §25, 05 §12.1) — full-replace: removed pairs are ended (DoD item 5), not deleted.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/classes/{id}/teachers": {
@@ -2637,7 +2820,9 @@
           }
         },
         "summary": "A class's currently assigned teachers, by subject.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/students/{id}/subject-registrations": {
@@ -2666,7 +2851,9 @@
           }
         },
         "summary": "A student's current enrollment's subject registrations.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/students/{id}/subject-registrations/{classSubjectId}/deregister": {
@@ -2703,7 +2890,9 @@
           }
         },
         "summary": "Deregister a student from an elective (ADR-0011) — effective for future exams only; historical attempts/results are untouched.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/students/{id}/subject-registrations/{classSubjectId}/re-register": {
@@ -2740,7 +2929,9 @@
           }
         },
         "summary": "Re-register a student for a previously deregistered elective.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/classes/{id}/credential-sheet": {
@@ -2762,7 +2953,9 @@
           }
         },
         "summary": "Regenerate and download a one-time credential sheet (CSV) for every active student in this class (audited; the plaintext passwords are never retrievable again).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/students": {
@@ -2805,7 +2998,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["asc", "desc"]
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           },
           {
@@ -2814,7 +3010,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["studentId", "lastName"]
+              "enum": [
+                "studentId",
+                "lastName"
+              ]
             }
           },
           {
@@ -2839,7 +3038,9 @@
           }
         },
         "summary": "List the school's students (05 §9.1) — search, sort, class filter, and pagination (F7 gap closure).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "post": {
         "operationId": "StudentController_create",
@@ -2867,7 +3068,9 @@
           }
         },
         "summary": "Create a student.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/students/{id}": {
@@ -2896,7 +3099,9 @@
           }
         },
         "summary": "Get one student profile (05 §9.2).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "patch": {
         "operationId": "StudentController_update",
@@ -2933,7 +3138,9 @@
           }
         },
         "summary": "Edit a student.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/students/{id}/deactivate": {
@@ -2962,7 +3169,9 @@
           }
         },
         "summary": "Deactivate a student's account (never deletes authored history).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/students/{id}/reactivate": {
@@ -2991,7 +3200,9 @@
           }
         },
         "summary": "Reactivate a student's account.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/students/{id}/reset-credentials": {
@@ -3020,7 +3231,9 @@
           }
         },
         "summary": "Issue a fresh system-generated password for a student (audited; the resetter sees the plaintext exactly once, here — never retrievable again).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/teachers": {
@@ -3063,7 +3276,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["asc", "desc"]
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           },
           {
@@ -3072,7 +3288,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["staffId", "lastName"]
+              "enum": [
+                "staffId",
+                "lastName"
+              ]
             }
           }
         ],
@@ -3089,7 +3308,9 @@
           }
         },
         "summary": "List the school's teachers (05 §11.1) — search, sort, pagination (F7 gap closure).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "post": {
         "operationId": "TeacherController_create",
@@ -3117,7 +3338,9 @@
           }
         },
         "summary": "Create a teacher (dispatches an invitation email).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/teachers/{id}": {
@@ -3146,7 +3369,9 @@
           }
         },
         "summary": "Get one teacher profile.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "patch": {
         "operationId": "TeacherController_update",
@@ -3183,7 +3408,9 @@
           }
         },
         "summary": "Edit a teacher.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/teachers/{id}/deactivate": {
@@ -3212,7 +3439,9 @@
           }
         },
         "summary": "Deactivate a teacher's account — their questions and exams remain, still attributed to them (DoD item 6).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/teachers/{id}/reactivate": {
@@ -3241,7 +3470,9 @@
           }
         },
         "summary": "Reactivate a teacher's account.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/teachers/{id}/reset-credentials": {
@@ -3270,7 +3501,9 @@
           }
         },
         "summary": "Send a teacher a fresh invitation link to set a new password (audited).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/hods": {
@@ -3313,7 +3546,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["asc", "desc"]
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           },
           {
@@ -3322,7 +3558,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["staffId", "lastName"]
+              "enum": [
+                "staffId",
+                "lastName"
+              ]
             }
           }
         ],
@@ -3339,7 +3578,9 @@
           }
         },
         "summary": "List the school's HODs (05 §13) — search, sort, pagination (F7 gap closure).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "post": {
         "operationId": "HodController_promote",
@@ -3367,7 +3608,9 @@
           }
         },
         "summary": "Promote an existing teacher to HOD (adds an HOD RoleAssignment to their membership — no new person record is created).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/hods/{id}": {
@@ -3396,7 +3639,9 @@
           }
         },
         "summary": "Get one HOD (route :id is the membershipId).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "patch": {
         "operationId": "HodController_update",
@@ -3433,7 +3678,9 @@
           }
         },
         "summary": "Edit an HOD's identity fields (F7 decision C — a dedicated HOD route, not a silent call into the Teacher endpoint).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/hods/{id}/reset-credentials": {
@@ -3462,7 +3709,9 @@
           }
         },
         "summary": "Send an HOD a fresh invitation link to set a new password (audited).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/hods/{id}/department": {
@@ -3501,7 +3750,9 @@
           }
         },
         "summary": "Set (or change) an HOD's department — ends the current HODAssignment (if any) and creates the new one atomically; prior approvals stay attributed to the previous HOD (DoD item 7).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/hods/{id}/remove": {
@@ -3530,7 +3781,9 @@
           }
         },
         "summary": "Remove HOD standing — the person reverts to a plain teacher; nothing they authored or approved is affected.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/moderators": {
@@ -3573,7 +3826,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["asc", "desc"]
+              "enum": [
+                "asc",
+                "desc"
+              ]
             }
           },
           {
@@ -3582,7 +3838,10 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["loginIdentifier", "lastName"]
+              "enum": [
+                "loginIdentifier",
+                "lastName"
+              ]
             }
           }
         ],
@@ -3599,7 +3858,9 @@
           }
         },
         "summary": "List the school's moderators (05 §14) — School Admin only; search, sort, pagination (F7 gap closure).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "post": {
         "operationId": "ModeratorController_create",
@@ -3627,7 +3888,9 @@
           }
         },
         "summary": "Create a moderator (dispatches an invitation email).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/moderators/{id}": {
@@ -3656,7 +3919,9 @@
           }
         },
         "summary": "Get one moderator.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       },
       "patch": {
         "operationId": "ModeratorController_update",
@@ -3693,7 +3958,9 @@
           }
         },
         "summary": "Edit a moderator.",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/moderators/{id}/remove": {
@@ -3722,7 +3989,9 @@
           }
         },
         "summary": "Remove a moderator's access (ends their role and deactivates the account).",
-        "tags": ["people"]
+        "tags": [
+          "people"
+        ]
       }
     },
     "/imports/upload-target": {
@@ -3752,7 +4021,9 @@
           }
         },
         "summary": "Request an upload target for a student/teacher import file.",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/upload-target/{id}/complete": {
@@ -3781,7 +4052,9 @@
           }
         },
         "summary": "Finalise and validate an uploaded import file by content.",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/students": {
@@ -3811,7 +4084,9 @@
           }
         },
         "summary": "Start validating a student import file (05 §10.1).",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/teachers": {
@@ -3841,7 +4116,9 @@
           }
         },
         "summary": "Start validating a teacher import file (05 §10.1).",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/questions/upload-target": {
@@ -3871,7 +4148,9 @@
           }
         },
         "summary": "Request an upload target for a question import file.",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/questions/upload-target/{id}/complete": {
@@ -3900,7 +4179,9 @@
           }
         },
         "summary": "Finalise and validate an uploaded question import file by content.",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/questions": {
@@ -3930,7 +4211,9 @@
           }
         },
         "summary": "Start validating a question import file (05 §18).",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports": {
@@ -3972,7 +4255,9 @@
           }
         },
         "summary": "This school's recent import jobs, newest first.",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/templates/{type}": {
@@ -3985,7 +4270,9 @@
           }
         },
         "summary": "Download the current, versioned CSV template for this import type.",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/{id}": {
@@ -4027,7 +4314,12 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["VALID", "INVALID", "COMMITTED", "FAILED"]
+              "enum": [
+                "VALID",
+                "INVALID",
+                "COMMITTED",
+                "FAILED"
+              ]
             }
           }
         ],
@@ -4044,7 +4336,9 @@
           }
         },
         "summary": "Status, counts, and a page of row-level validation results.",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/{id}/errors": {
@@ -4066,7 +4360,9 @@
           }
         },
         "summary": "Download every invalid/failed row as a correctable, re-uploadable CSV (DoD item 6).",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/imports/{id}/confirm": {
@@ -4095,7 +4391,9 @@
           }
         },
         "summary": "Commit every VALID row of a validated import (05 §10.2).",
-        "tags": ["imports"]
+        "tags": [
+          "imports"
+        ]
       }
     },
     "/questions": {
@@ -4125,7 +4423,9 @@
           }
         },
         "summary": "Create a question + its initial draft revision (DoD items 1/2/8).",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       },
       "get": {
         "operationId": "QuestionController_list",
@@ -4144,7 +4444,14 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+              "enum": [
+                "JSS1",
+                "JSS2",
+                "JSS3",
+                "SS1",
+                "SS2",
+                "SS3"
+              ]
             }
           },
           {
@@ -4161,7 +4468,11 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["EASY", "MEDIUM", "HARD"]
+              "enum": [
+                "EASY",
+                "MEDIUM",
+                "HARD"
+              ]
             }
           },
           {
@@ -4216,7 +4527,9 @@
           }
         },
         "summary": "List questions within the caller's scope, filtered.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/counts": {
@@ -4236,7 +4549,9 @@
           }
         },
         "summary": "Status counts for the bank home (05 §15.1), within the caller's scope.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/export": {
@@ -4257,7 +4572,14 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+              "enum": [
+                "JSS1",
+                "JSS2",
+                "JSS3",
+                "SS1",
+                "SS2",
+                "SS3"
+              ]
             }
           },
           {
@@ -4274,7 +4596,11 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["EASY", "MEDIUM", "HARD"]
+              "enum": [
+                "EASY",
+                "MEDIUM",
+                "HARD"
+              ]
             }
           },
           {
@@ -4322,7 +4648,9 @@
           }
         },
         "summary": "Download the bank (within scope) as a re-importable CSV.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/assigned-subjects": {
@@ -4342,7 +4670,9 @@
           }
         },
         "summary": "Subjects the caller (a teacher) is actively assigned to teach — powers the Question Editor's Subject picker, since `schoolConfig.subject.view` is denied to TEACHER.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/{id}": {
@@ -4371,7 +4701,9 @@
           }
         },
         "summary": "A question with its full revision history.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/{id}/archive": {
@@ -4400,7 +4732,9 @@
           }
         },
         "summary": "Archive a question — always allowed, never touches any revision row.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/{questionId}/revisions/{revisionId}": {
@@ -4447,7 +4781,9 @@
           }
         },
         "summary": "Edit a draft revision in place — freely editable while DRAFT.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       },
       "delete": {
         "operationId": "QuestionRevisionController_remove",
@@ -4482,7 +4818,9 @@
           }
         },
         "summary": "Delete a draft revision — refused for a question's only revision.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/{questionId}/revisions": {
@@ -4521,7 +4859,9 @@
           }
         },
         "summary": "Start a new revision cloned from the current one (must be APPROVED or REJECTED).",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/{questionId}/revisions/{revisionId}/submit": {
@@ -4558,7 +4898,9 @@
           }
         },
         "summary": "DRAFT -> SUBMITTED, running the full validation catalogue (DoD item 8).",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/media/upload-target": {
@@ -4588,7 +4930,9 @@
           }
         },
         "summary": "Request an upload target for a question image/diagram, scope-checked.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/media/upload-target/{id}/complete": {
@@ -4617,7 +4961,9 @@
           }
         },
         "summary": "Finalise and validate an uploaded question image/diagram.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/{questionId}/revisions/{revisionId}/media": {
@@ -4664,7 +5010,9 @@
           }
         },
         "summary": "Attach an already-uploaded, READY asset to a draft revision.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/questions/{questionId}/revisions/{revisionId}/media/{mediaId}": {
@@ -4709,7 +5057,9 @@
           }
         },
         "summary": "Remove media from a draft revision.",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/topics": {
@@ -4747,7 +5097,9 @@
           }
         },
         "summary": "List topics for a subject, optionally filtered to one parent (subtopics).",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       },
       "post": {
         "operationId": "TopicController_create",
@@ -4775,7 +5127,9 @@
           }
         },
         "summary": "Create or resolve (case-insensitively) a topic (DoD item 9).",
-        "tags": ["questions"]
+        "tags": [
+          "questions"
+        ]
       }
     },
     "/reviews/queue": {
@@ -4795,7 +5149,9 @@
           }
         },
         "summary": "Pending questions within the actor's scope, grouped by subject (DoD item 1).",
-        "tags": ["question-review"]
+        "tags": [
+          "question-review"
+        ]
       }
     },
     "/reviews/questions/{id}": {
@@ -4824,7 +5180,9 @@
           }
         },
         "summary": "The full review workspace: content, options, metadata, and review history.",
-        "tags": ["question-review"]
+        "tags": [
+          "question-review"
+        ]
       }
     },
     "/reviews/questions/{id}/approve": {
@@ -4863,7 +5221,9 @@
           }
         },
         "summary": "Approve — an optional HOD note (DoD item 2).",
-        "tags": ["question-review"]
+        "tags": [
+          "question-review"
+        ]
       }
     },
     "/reviews/questions/{id}/reject": {
@@ -4902,7 +5262,9 @@
           }
         },
         "summary": "Reject — reason mandatory (DoD item 3).",
-        "tags": ["question-review"]
+        "tags": [
+          "question-review"
+        ]
       }
     },
     "/reviews/questions/{id}/request-changes": {
@@ -4941,7 +5303,9 @@
           }
         },
         "summary": "Request changes — reason mandatory, behaves like reject (DoD item 4).",
-        "tags": ["question-review"]
+        "tags": [
+          "question-review"
+        ]
       }
     },
     "/reviews/history/{questionId}": {
@@ -4970,7 +5334,9 @@
           }
         },
         "summary": "Full immutable review history across every revision of the question (DoD item 5).",
-        "tags": ["question-review"]
+        "tags": [
+          "question-review"
+        ]
       }
     },
     "/notifications": {
@@ -5012,7 +5378,9 @@
           }
         },
         "summary": "Current user's notifications, newest first, plus unread count (B10).",
-        "tags": ["notifications"]
+        "tags": [
+          "notifications"
+        ]
       }
     },
     "/notifications/{id}/read": {
@@ -5041,7 +5409,9 @@
           }
         },
         "summary": "Mark one notification read (B10).",
-        "tags": ["notifications"]
+        "tags": [
+          "notifications"
+        ]
       }
     },
     "/notifications/read-all": {
@@ -5061,7 +5431,9 @@
           }
         },
         "summary": "Mark every unread notification read (B10).",
-        "tags": ["notifications"]
+        "tags": [
+          "notifications"
+        ]
       }
     },
     "/exams": {
@@ -5091,7 +5463,9 @@
           }
         },
         "summary": "Create an exam within the caller's assigned scope (DoD item 1).",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       },
       "get": {
         "operationId": "ExamController_list",
@@ -5102,7 +5476,15 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["DRAFT", "READY", "OPEN", "CLOSED", "COMPLETED", "ARCHIVED", "CANCELLED"]
+              "enum": [
+                "DRAFT",
+                "READY",
+                "OPEN",
+                "CLOSED",
+                "COMPLETED",
+                "ARCHIVED",
+                "CANCELLED"
+              ]
             }
           },
           {
@@ -5190,7 +5572,9 @@
           }
         },
         "summary": "List exams within the caller's scope, tabbed by status and filtered.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}": {
@@ -5219,7 +5603,9 @@
           }
         },
         "summary": "A single exam with its full configuration and question selection.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       },
       "patch": {
         "operationId": "ExamController_update",
@@ -5256,7 +5642,9 @@
           }
         },
         "summary": "Edit a DRAFT exam's identity fields, including class targeting.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       },
       "delete": {
         "operationId": "ExamController_remove",
@@ -5283,7 +5671,9 @@
           }
         },
         "summary": "Delete a DRAFT exam outright.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}/available-questions": {
@@ -5312,7 +5702,14 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+              "enum": [
+                "JSS1",
+                "JSS2",
+                "JSS3",
+                "SS1",
+                "SS2",
+                "SS3"
+              ]
             }
           },
           {
@@ -5329,7 +5726,11 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": ["EASY", "MEDIUM", "HARD"]
+              "enum": [
+                "EASY",
+                "MEDIUM",
+                "HARD"
+              ]
             }
           },
           {
@@ -5384,7 +5785,9 @@
           }
         },
         "summary": "Approved question revisions available to bind — this exam's subject/level only.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}/questions": {
@@ -5423,7 +5826,9 @@
           }
         },
         "summary": "Set the exam's question selection — a full replace (DoD items 2/9).",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}/configuration": {
@@ -5462,7 +5867,9 @@
           }
         },
         "summary": "Configure duration/attempts/navigation/randomization/result policy.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}/readiness": {
@@ -5491,7 +5898,9 @@
           }
         },
         "summary": "The itemised readiness checklist (05 §72) — never a single boolean.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}/ready": {
@@ -5520,7 +5929,9 @@
           }
         },
         "summary": "DRAFT → READY — succeeds only when every readiness check passes.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}/cancel": {
@@ -5559,7 +5970,9 @@
           }
         },
         "summary": "Cancel from DRAFT or READY — mandatory reason, audited (DoD item 7).",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}/archive": {
@@ -5588,7 +6001,9 @@
           }
         },
         "summary": "Archive from DRAFT, READY, or CANCELLED.",
-        "tags": ["exams"]
+        "tags": [
+          "exams"
+        ]
       }
     },
     "/exams/{id}/attempts": {
@@ -5617,7 +6032,9 @@
           }
         },
         "summary": "Start (or idempotently resume) this student's attempt — the highest-integrity transaction in the product (07 §23-24, 09 §47).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/close": {
@@ -5646,7 +6063,9 @@
           }
         },
         "summary": "Close the whole exam — cascades every OPEN session to CLOSED. ADR-0009: this is \"Pause.\"",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/reopen": {
@@ -5675,7 +6094,9 @@
           }
         },
         "summary": "Reopen the exam so new sessions may be opened again. Does not auto-reopen closed sessions.",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/sessions": {
@@ -5714,7 +6135,9 @@
           }
         },
         "summary": "Open a new ExamSession (DoD items 1-4).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/control": {
@@ -5743,7 +6166,9 @@
           }
         },
         "summary": "Control Center aggregates + session list (DoD items 8-9, 13).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/control/stream": {
@@ -5765,7 +6190,9 @@
           }
         },
         "summary": "SSE live updates — Last-Event-ID reconnection replay (DoD item 10).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/complete": {
@@ -5804,7 +6231,9 @@
           }
         },
         "summary": "End Examination — confirm absences (DoD item 12, A-14).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/eligible-students": {
@@ -5833,7 +6262,9 @@
           }
         },
         "summary": "The exam's full targeted-class roster with live eligibility (A-04).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/administrators": {
@@ -5862,7 +6293,9 @@
           }
         },
         "summary": "List every delegation (any status) for this exam — F12 gap closure.",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       },
       "post": {
         "operationId": "ExamControlController_assignAdministrator",
@@ -5899,7 +6332,9 @@
           }
         },
         "summary": "Delegate exam administration (ADR-0012/M-15).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exams/{id}/administrators/{membershipId}": {
@@ -5936,7 +6371,9 @@
           }
         },
         "summary": "Revoke a delegated administrator.",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exam-sessions/{id}/close": {
@@ -5965,7 +6402,9 @@
           }
         },
         "summary": "Close this session for new starts. Running attempts continue (ADR-0009).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exam-sessions/{id}/reopen": {
@@ -5994,7 +6433,9 @@
           }
         },
         "summary": "Reopen this session for new starts (ADR-0009).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exam-sessions/{id}/participants": {
@@ -6033,7 +6474,9 @@
           }
         },
         "summary": "Batch-authorize students for this session (DoD items 2/4).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exam-sessions/{id}/participants/{studentId}": {
@@ -6080,7 +6523,9 @@
           }
         },
         "summary": "Revoke access before start — refused after start (DoD item 7, X-13).",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/exam-sessions/{id}/participants/{studentId}/extra-time": {
@@ -6127,7 +6572,9 @@
           }
         },
         "summary": "Grant a per-student accommodation (extra time) — B13 decision 2, X-11. Frozen into ExamAttempt.durationGrantedSeconds at attempt creation.",
-        "tags": ["exam-control"]
+        "tags": [
+          "exam-control"
+        ]
       }
     },
     "/attempts/{id}": {
@@ -6156,7 +6603,9 @@
           }
         },
         "summary": "Resume: full state, projected snapshot, saved answers, server-computed remaining time (DoD item 5).",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/attempts/{id}/answers/{questionId}": {
@@ -6203,7 +6652,9 @@
           }
         },
         "summary": "Save one answer — idempotent, sequenced (ADR-0003/ADR-0007).",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/attempts/{id}/answers/batch": {
@@ -6242,7 +6693,9 @@
           }
         },
         "summary": "Flush an offline answer queue — never all-or-nothing.",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/attempts/{id}/heartbeat": {
@@ -6271,7 +6724,9 @@
           }
         },
         "summary": "Liveness (ADR-0020) plus the decision-1 device/session-binding signal — never blocks or delays answering.",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/attempts/{id}/events": {
@@ -6310,7 +6765,9 @@
           }
         },
         "summary": "Integrity signals (ADR-0020) — counts, never judgements. Off the critical path.",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/attempts/{id}/submit": {
@@ -6339,7 +6796,9 @@
           }
         },
         "summary": "Normal submission — state transition and answer freeze only, never marking (B14).",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/attempts/{id}/end": {
@@ -6368,7 +6827,9 @@
           }
         },
         "summary": "Staff-initiated end of a running attempt.",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/attempts/{id}/status": {
@@ -6397,7 +6858,9 @@
           }
         },
         "summary": "B14: post-submission status for the confirmation screen — live-aggregated marking output, never a Result (B15).",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/student/assessment": {
@@ -6417,7 +6880,9 @@
           }
         },
         "summary": "The single available assessment for the caller, or none.",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
       }
     },
     "/student/assessment/{examId}/preview": {
@@ -6446,7 +6911,511 @@
           }
         },
         "summary": "Instructions and rules before starting (03 §32-36).",
-        "tags": ["attempts"]
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/exams/{id}/results": {
+      "get": {
+        "operationId": "ResultController_listForExam",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Student name or student ID substring.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PROCESSING",
+                "FINAL",
+                "ADJUSTED",
+                "VOIDED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "studentName",
+                "percentage",
+                "earnedMarks",
+                "finalizedAt"
+              ]
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResultsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Scoped result list with exam summary statistics and, for a multi-class exam, a per-class breakdown (04 §48, ADR-0013).",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/results/{id}": {
+      "get": {
+        "operationId": "ResultController_getDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultDetailResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One result with its per-question breakdown and full adjustment history.",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/exams/{id}/results/publish": {
+      "post": {
+        "operationId": "ResultController_publish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishResultsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultPublicationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Release this exam's results to students. Refused when the school has locked publication to administrative release (DoD item 7).",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/exams/{id}/results/unpublish": {
+      "post": {
+        "operationId": "ResultController_unpublish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnpublishResultsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultPublicationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reverse publication, with a mandatory reason (05 §65).",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/results/{id}/withhold": {
+      "post": {
+        "operationId": "ResultController_withhold",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithholdResultDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Hold one disputed result back without unpublishing the cohort (ADR-0010).",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/results/{id}/release": {
+      "post": {
+        "operationId": "ResultController_release",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithholdResultDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Release a previously withheld result.",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/results/adjustments": {
+      "post": {
+        "operationId": "ResultController_createAdjustment",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResultAdjustmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultAdjustmentOperationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The only path by which a score changes after marking. Creates a parent operation; a worker applies it idempotently and resumably (ADR-0025).",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/results/adjustments/{id}": {
+      "get": {
+        "operationId": "ResultController_getAdjustment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultAdjustmentOperationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Adjustment progress and outcome.",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/student/results": {
+      "get": {
+        "operationId": "StudentResultController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResultsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The signed-in student's own published results only (05 §51).",
+        "tags": [
+          "student-results"
+        ]
+      }
+    },
+    "/student/results/{id}": {
+      "get": {
+        "operationId": "StudentResultController_getDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentResultDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "One result, with detail gated by the exam's own result_detail_visibility policy (ADR-0010).",
+        "tags": [
+          "student-results"
+        ]
+      }
+    },
+    "/school/grading-scales": {
+      "get": {
+        "operationId": "GradingScaleController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradingScaleListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The school's grading scales with their current bands, plus the platform default template offered as a starting point.",
+        "tags": [
+          "grading-scales"
+        ]
+      },
+      "put": {
+        "operationId": "GradingScaleController_put",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutGradingScaleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradingScaleResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a scale, or add a version to an existing one. Never an in-place band edit — ADR-0018 versions instead, so historical grades stay explainable.",
+        "tags": [
+          "grading-scales"
+        ]
+      }
+    },
+    "/school/grading-scales/{id}/versions": {
+      "get": {
+        "operationId": "GradingScaleController_listVersions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradingScaleVersionListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Every version of a scale, newest first, each flagged with whether any result was graded against it (ADR-0018: make versioning visible).",
+        "tags": [
+          "grading-scales"
+        ]
       }
     }
   },
@@ -6480,11 +7449,25 @@
           },
           "action": {
             "type": "string",
-            "enum": ["CREATE", "READ", "UPDATE", "DELETE", "EXECUTE"]
+            "enum": [
+              "CREATE",
+              "READ",
+              "UPDATE",
+              "DELETE",
+              "EXECUTE"
+            ]
           },
           "scope": {
             "type": "string",
-            "enum": ["NONE", "SELF", "OWNED", "ASSIGNED", "DEPARTMENT", "SCHOOL", "PLATFORM"],
+            "enum": [
+              "NONE",
+              "SELF",
+              "OWNED",
+              "ASSIGNED",
+              "DEPARTMENT",
+              "SCHOOL",
+              "PLATFORM"
+            ],
             "description": "Absent when this capability is only reachable via break-glass (breakGlass=true)."
           },
           "breakGlass": {
@@ -6492,7 +7475,12 @@
             "description": "ADR-0012: reachable only through the audited break-glass path, never an ordinary grant."
           }
         },
-        "required": ["resource", "section", "label", "action"]
+        "required": [
+          "resource",
+          "section",
+          "label",
+          "action"
+        ]
       },
       "MePermissionsResponseDto": {
         "type": "object",
@@ -6501,7 +7489,14 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["SOFTWARE_ADMIN", "SCHOOL_ADMIN", "MODERATOR", "HOD", "TEACHER", "STUDENT"]
+              "enum": [
+                "SOFTWARE_ADMIN",
+                "SCHOOL_ADMIN",
+                "MODERATOR",
+                "HOD",
+                "TEACHER",
+                "STUDENT"
+              ]
             }
           },
           "permissions": {
@@ -6511,7 +7506,10 @@
             }
           }
         },
-        "required": ["roles", "permissions"]
+        "required": [
+          "roles",
+          "permissions"
+        ]
       },
       "AuditEventResponseDto": {
         "type": "object",
@@ -6584,7 +7582,12 @@
             "type": "number"
           }
         },
-        "required": ["items", "total", "page", "pageSize"]
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "TenantResolveSchoolDto": {
         "type": "object",
@@ -6608,7 +7611,13 @@
             "nullable": true
           }
         },
-        "required": ["name", "subdomain", "timezone", "logoUrl", "primaryColor"]
+        "required": [
+          "name",
+          "subdomain",
+          "timezone",
+          "logoUrl",
+          "primaryColor"
+        ]
       },
       "TenantResolveResponseDto": {
         "type": "object",
@@ -6628,7 +7637,10 @@
             "description": "ADR-0022's double-submit CSRF token."
           }
         },
-        "required": ["school", "csrfToken"]
+        "required": [
+          "school",
+          "csrfToken"
+        ]
       },
       "LoginDto": {
         "type": "object",
@@ -6641,18 +7653,25 @@
             "type": "string"
           }
         },
-        "required": ["identifier", "password"]
+        "required": [
+          "identifier",
+          "password"
+        ]
       },
       "StatusResponseDto": {
         "type": "object",
         "properties": {
           "status": {
             "type": "string",
-            "enum": ["ok"],
+            "enum": [
+              "ok"
+            ],
             "example": "ok"
           }
         },
-        "required": ["status"]
+        "required": [
+          "status"
+        ]
       },
       "MeUserDto": {
         "type": "object",
@@ -6674,7 +7693,13 @@
             "description": "UserStatus (06 §7) — e.g. ACTIVE, SUSPENDED."
           }
         },
-        "required": ["id", "firstName", "lastName", "displayName", "status"]
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "displayName",
+          "status"
+        ]
       },
       "MeMembershipDto": {
         "type": "object",
@@ -6690,7 +7715,11 @@
             "description": "SchoolMembership.status (07 §5.2)."
           }
         },
-        "required": ["id", "loginIdentifier", "status"]
+        "required": [
+          "id",
+          "loginIdentifier",
+          "status"
+        ]
       },
       "MeResponseDto": {
         "type": "object",
@@ -6706,14 +7735,26 @@
             "description": "Active RoleAssignment.role values for this membership (02).",
             "items": {
               "type": "string",
-              "enum": ["SOFTWARE_ADMIN", "SCHOOL_ADMIN", "MODERATOR", "HOD", "TEACHER", "STUDENT"]
+              "enum": [
+                "SOFTWARE_ADMIN",
+                "SCHOOL_ADMIN",
+                "MODERATOR",
+                "HOD",
+                "TEACHER",
+                "STUDENT"
+              ]
             }
           },
           "effectiveSchoolId": {
             "type": "string"
           }
         },
-        "required": ["user", "membership", "roles", "effectiveSchoolId"]
+        "required": [
+          "user",
+          "membership",
+          "roles",
+          "effectiveSchoolId"
+        ]
       },
       "PasswordChangeDto": {
         "type": "object",
@@ -6726,7 +7767,9 @@
             "minLength": 10
           }
         },
-        "required": ["newPassword"]
+        "required": [
+          "newPassword"
+        ]
       },
       "PasswordResetRequestDto": {
         "type": "object",
@@ -6736,7 +7779,9 @@
             "description": "The staff login identifier to send a reset link for. Students have no email — see A-02."
           }
         },
-        "required": ["identifier"]
+        "required": [
+          "identifier"
+        ]
       },
       "PasswordResetConfirmDto": {
         "type": "object",
@@ -6749,14 +7794,21 @@
             "minLength": 10
           }
         },
-        "required": ["token", "newPassword"]
+        "required": [
+          "token",
+          "newPassword"
+        ]
       },
       "RequestMediaUploadDto": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["QUESTION_IMAGE", "QUESTION_DIAGRAM", "OTHER"]
+            "enum": [
+              "QUESTION_IMAGE",
+              "QUESTION_DIAGRAM",
+              "OTHER"
+            ]
           },
           "filename": {
             "type": "string",
@@ -6771,7 +7823,12 @@
             "description": "Used to pin Content-Length on the presigned PUT."
           }
         },
-        "required": ["type", "filename", "declaredMimeType", "declaredSizeBytes"]
+        "required": [
+          "type",
+          "filename",
+          "declaredMimeType",
+          "declaredSizeBytes"
+        ]
       },
       "RequestMediaUploadResponseDto": {
         "type": "object",
@@ -6787,7 +7844,11 @@
             "format": "date-time"
           }
         },
-        "required": ["mediaAssetId", "uploadUrl", "expiresAt"]
+        "required": [
+          "mediaAssetId",
+          "uploadUrl",
+          "expiresAt"
+        ]
       },
       "MediaAssetSummaryResponseDto": {
         "type": "object",
@@ -6797,7 +7858,11 @@
           },
           "status": {
             "type": "string",
-            "enum": ["PENDING", "READY", "REJECTED"]
+            "enum": [
+              "PENDING",
+              "READY",
+              "REJECTED"
+            ]
           },
           "sniffedMimeType": {
             "type": "string",
@@ -6816,7 +7881,14 @@
             "nullable": true
           }
         },
-        "required": ["id", "status", "sniffedMimeType", "width", "height", "rejectionReason"]
+        "required": [
+          "id",
+          "status",
+          "sniffedMimeType",
+          "width",
+          "height",
+          "rejectionReason"
+        ]
       },
       "SignedMediaUrlResponseDto": {
         "type": "object",
@@ -6829,7 +7901,10 @@
             "format": "date-time"
           }
         },
-        "required": ["url", "expiresAt"]
+        "required": [
+          "url",
+          "expiresAt"
+        ]
       },
       "PlatformLoginDto": {
         "type": "object",
@@ -6842,7 +7917,10 @@
             "type": "string"
           }
         },
-        "required": ["email", "password"]
+        "required": [
+          "email",
+          "password"
+        ]
       },
       "PlatformMeUserDto": {
         "type": "object",
@@ -6864,7 +7942,13 @@
             "description": "UserStatus (06 §7)."
           }
         },
-        "required": ["id", "firstName", "lastName", "displayName", "status"]
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "displayName",
+          "status"
+        ]
       },
       "PlatformMeResponseDto": {
         "type": "object",
@@ -6877,11 +7961,21 @@
             "description": "Active PlatformRoleAssignment.role values (02).",
             "items": {
               "type": "string",
-              "enum": ["SOFTWARE_ADMIN", "SCHOOL_ADMIN", "MODERATOR", "HOD", "TEACHER", "STUDENT"]
+              "enum": [
+                "SOFTWARE_ADMIN",
+                "SCHOOL_ADMIN",
+                "MODERATOR",
+                "HOD",
+                "TEACHER",
+                "STUDENT"
+              ]
             }
           }
         },
-        "required": ["user", "roles"]
+        "required": [
+          "user",
+          "roles"
+        ]
       },
       "SchoolListItemDto": {
         "type": "object",
@@ -6897,7 +7991,13 @@
           },
           "status": {
             "type": "string",
-            "enum": ["PROVISIONAL", "ACTIVE", "SUSPENDED", "EXPIRED", "DEACTIVATED"]
+            "enum": [
+              "PROVISIONAL",
+              "ACTIVE",
+              "SUSPENDED",
+              "EXPIRED",
+              "DEACTIVATED"
+            ]
           },
           "studentCount": {
             "type": "number",
@@ -6909,7 +8009,14 @@
           },
           "subscriptionStatus": {
             "type": "string",
-            "enum": ["PENDING", "ACTIVE", "EXPIRING", "EXPIRED", "SUSPENDED", "CANCELLED"],
+            "enum": [
+              "PENDING",
+              "ACTIVE",
+              "EXPIRING",
+              "EXPIRED",
+              "SUSPENDED",
+              "CANCELLED"
+            ],
             "nullable": true
           },
           "subscriptionExpiresAt": {
@@ -6948,7 +8055,12 @@
             "type": "number"
           }
         },
-        "required": ["schools", "total", "page", "pageSize"]
+        "required": [
+          "schools",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "CreateSchoolDto": {
         "type": "object",
@@ -7000,7 +8112,10 @@
             "type": "string"
           }
         },
-        "required": ["id", "subdomain"]
+        "required": [
+          "id",
+          "subdomain"
+        ]
       },
       "SchoolSubscriptionSummaryDto": {
         "type": "object",
@@ -7013,7 +8128,14 @@
           },
           "status": {
             "type": "string",
-            "enum": ["PENDING", "ACTIVE", "EXPIRING", "EXPIRED", "SUSPENDED", "CANCELLED"]
+            "enum": [
+              "PENDING",
+              "ACTIVE",
+              "EXPIRING",
+              "EXPIRED",
+              "SUSPENDED",
+              "CANCELLED"
+            ]
           },
           "startAt": {
             "type": "string",
@@ -7024,7 +8146,13 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "plan", "status", "startAt", "expiresAt"]
+        "required": [
+          "id",
+          "plan",
+          "status",
+          "startAt",
+          "expiresAt"
+        ]
       },
       "SchoolUsageDto": {
         "type": "object",
@@ -7044,7 +8172,12 @@
             "description": "Attempts do not exist until B13 — always 0 until then, not fabricated."
           }
         },
-        "required": ["students", "teachers", "exams", "attempts"]
+        "required": [
+          "students",
+          "teachers",
+          "exams",
+          "attempts"
+        ]
       },
       "SchoolDetailResponseDto": {
         "type": "object",
@@ -7060,7 +8193,13 @@
           },
           "status": {
             "type": "string",
-            "enum": ["PROVISIONAL", "ACTIVE", "SUSPENDED", "EXPIRED", "DEACTIVATED"]
+            "enum": [
+              "PROVISIONAL",
+              "ACTIVE",
+              "SUSPENDED",
+              "EXPIRED",
+              "DEACTIVATED"
+            ]
           },
           "shortName": {
             "type": "string",
@@ -7115,7 +8254,9 @@
             "type": "string"
           }
         },
-        "required": ["reason"]
+        "required": [
+          "reason"
+        ]
       },
       "IssueSubscriptionDto": {
         "type": "object",
@@ -7129,7 +8270,10 @@
             "minimum": 1
           }
         },
-        "required": ["plan", "periodDays"]
+        "required": [
+          "plan",
+          "periodDays"
+        ]
       },
       "IssueSubscriptionResponseDto": {
         "type": "object",
@@ -7138,7 +8282,9 @@
             "type": "string"
           }
         },
-        "required": ["subscriptionId"]
+        "required": [
+          "subscriptionId"
+        ]
       },
       "SchoolActivationGrantDto": {
         "type": "object",
@@ -7148,11 +8294,19 @@
           },
           "purpose": {
             "type": "string",
-            "enum": ["INITIAL_ACTIVATION", "RENEWAL"]
+            "enum": [
+              "INITIAL_ACTIVATION",
+              "RENEWAL"
+            ]
           },
           "status": {
             "type": "string",
-            "enum": ["ISSUED", "ACTIVATED", "EXPIRED", "REVOKED"]
+            "enum": [
+              "ISSUED",
+              "ACTIVATED",
+              "EXPIRED",
+              "REVOKED"
+            ]
           },
           "issuedAt": {
             "type": "string",
@@ -7199,7 +8353,9 @@
             }
           }
         },
-        "required": ["grants"]
+        "required": [
+          "grants"
+        ]
       },
       "PlatformMetricsResponseDto": {
         "type": "object",
@@ -7293,7 +8449,9 @@
             "type": "string"
           }
         },
-        "required": ["key"]
+        "required": [
+          "key"
+        ]
       },
       "ActivationVerifyResponseDto": {
         "type": "object",
@@ -7303,14 +8461,21 @@
           },
           "purpose": {
             "type": "string",
-            "enum": ["INITIAL_ACTIVATION", "RENEWAL"]
+            "enum": [
+              "INITIAL_ACTIVATION",
+              "RENEWAL"
+            ]
           },
           "requiresPassword": {
             "type": "boolean",
             "description": "Whether redeem must include newPassword."
           }
         },
-        "required": ["schoolName", "purpose", "requiresPassword"]
+        "required": [
+          "schoolName",
+          "purpose",
+          "requiresPassword"
+        ]
       },
       "ActivationRedeemDto": {
         "type": "object",
@@ -7324,21 +8489,28 @@
             "description": "Required for an INITIAL_ACTIVATION-purpose key; the admin has no password yet."
           }
         },
-        "required": ["key"]
+        "required": [
+          "key"
+        ]
       },
       "ActivationRedeemResponseDto": {
         "type": "object",
         "properties": {
           "status": {
             "type": "string",
-            "enum": ["ok"],
+            "enum": [
+              "ok"
+            ],
             "example": "ok"
           },
           "loginIdentifier": {
             "type": "string"
           }
         },
-        "required": ["status", "loginIdentifier"]
+        "required": [
+          "status",
+          "loginIdentifier"
+        ]
       },
       "SchoolProfileResponseDto": {
         "type": "object",
@@ -7414,7 +8586,14 @@
           },
           "status": {
             "type": "string",
-            "enum": ["PENDING", "ACTIVE", "EXPIRING", "EXPIRED", "SUSPENDED", "CANCELLED"],
+            "enum": [
+              "PENDING",
+              "ACTIVE",
+              "EXPIRING",
+              "EXPIRED",
+              "SUSPENDED",
+              "CANCELLED"
+            ],
             "description": "F5 gap-closure: gained an accurate enum: (matching SchoolSubscriptionSummaryDto's own precedent) — was plain type: String before, a real typing gap tsc caught building the first frontend consumer."
           },
           "startAt": {
@@ -7430,7 +8609,13 @@
             "description": "Whether the school is currently within ADR-0015's post-expiry grace window."
           }
         },
-        "required": ["plan", "status", "startAt", "expiresAt", "inGracePeriod"]
+        "required": [
+          "plan",
+          "status",
+          "startAt",
+          "expiresAt",
+          "inGracePeriod"
+        ]
       },
       "RequestLogoUploadDto": {
         "type": "object",
@@ -7448,7 +8633,11 @@
             "description": "Used to pin Content-Length on the presigned PUT."
           }
         },
-        "required": ["filename", "declaredMimeType", "declaredSizeBytes"]
+        "required": [
+          "filename",
+          "declaredMimeType",
+          "declaredSizeBytes"
+        ]
       },
       "BrandTokensDto": {
         "type": "object",
@@ -7537,7 +8726,11 @@
             "type": "string"
           }
         },
-        "required": ["reason", "requestedHex", "appliedHex"]
+        "required": [
+          "reason",
+          "requestedHex",
+          "appliedHex"
+        ]
       },
       "DerivedPaletteDto": {
         "type": "object",
@@ -7558,7 +8751,11 @@
             ]
           }
         },
-        "required": ["brand", "neutral", "adjustment"]
+        "required": [
+          "brand",
+          "neutral",
+          "adjustment"
+        ]
       },
       "SchoolBrandingResponseDto": {
         "type": "object",
@@ -7583,7 +8780,11 @@
             ]
           }
         },
-        "required": ["logoUrl", "primaryColor", "palette"]
+        "required": [
+          "logoUrl",
+          "primaryColor",
+          "palette"
+        ]
       },
       "UpdateSchoolBrandingDto": {
         "type": "object",
@@ -7605,29 +8806,49 @@
         "properties": {
           "resultPolicy": {
             "type": "string",
-            "enum": ["TEACHER", "SCHOOL_ADMIN", "AUTOMATIC"]
+            "enum": [
+              "TEACHER",
+              "SCHOOL_ADMIN",
+              "AUTOMATIC"
+            ]
           },
           "resultDetailVisibility": {
             "type": "string",
-            "enum": ["SCORE_ONLY", "SCORE_AND_COUNTS", "FULL_REVIEW"]
+            "enum": [
+              "SCORE_ONLY",
+              "SCORE_AND_COUNTS",
+              "FULL_REVIEW"
+            ]
           },
           "resultPolicyLocked": {
             "type": "boolean"
           }
         },
-        "required": ["resultPolicy", "resultDetailVisibility", "resultPolicyLocked"]
+        "required": [
+          "resultPolicy",
+          "resultDetailVisibility",
+          "resultPolicyLocked"
+        ]
       },
       "UpdateSchoolResultPolicyDto": {
         "type": "object",
         "properties": {
           "resultPolicy": {
             "type": "string",
-            "enum": ["TEACHER", "SCHOOL_ADMIN", "AUTOMATIC"],
+            "enum": [
+              "TEACHER",
+              "SCHOOL_ADMIN",
+              "AUTOMATIC"
+            ],
             "description": "Who releases a result by default: TEACHER / SCHOOL_ADMIN / AUTOMATIC (05 §47)."
           },
           "resultDetailVisibility": {
             "type": "string",
-            "enum": ["SCORE_ONLY", "SCORE_AND_COUNTS", "FULL_REVIEW"],
+            "enum": [
+              "SCORE_ONLY",
+              "SCORE_AND_COUNTS",
+              "FULL_REVIEW"
+            ],
             "description": "What a student sees once a result is released (ADR-0010’s second axis)."
           },
           "resultPolicyLocked": {
@@ -7656,7 +8877,11 @@
             }
           }
         },
-        "required": ["completedAt", "currentStep", "skippedSteps"]
+        "required": [
+          "completedAt",
+          "currentStep",
+          "skippedSteps"
+        ]
       },
       "UpdateOnboardingProgressDto": {
         "type": "object",
@@ -7673,7 +8898,9 @@
             }
           }
         },
-        "required": ["currentStep"]
+        "required": [
+          "currentStep"
+        ]
       },
       "CurrentSessionSummaryDto": {
         "type": "object",
@@ -7686,10 +8913,20 @@
           },
           "status": {
             "type": "string",
-            "enum": ["DRAFT", "UPCOMING", "CURRENT", "CLOSED", "ARCHIVED"]
+            "enum": [
+              "DRAFT",
+              "UPCOMING",
+              "CURRENT",
+              "CLOSED",
+              "ARCHIVED"
+            ]
           }
         },
-        "required": ["id", "name", "status"]
+        "required": [
+          "id",
+          "name",
+          "status"
+        ]
       },
       "CurrentTermSummaryDto": {
         "type": "object",
@@ -7705,10 +8942,21 @@
           },
           "status": {
             "type": "string",
-            "enum": ["DRAFT", "UPCOMING", "CURRENT", "CLOSED", "ARCHIVED"]
+            "enum": [
+              "DRAFT",
+              "UPCOMING",
+              "CURRENT",
+              "CLOSED",
+              "ARCHIVED"
+            ]
           }
         },
-        "required": ["id", "name", "sequence", "status"]
+        "required": [
+          "id",
+          "name",
+          "sequence",
+          "status"
+        ]
       },
       "AcademicsContextResponseDto": {
         "type": "object",
@@ -7738,7 +8986,12 @@
             ]
           }
         },
-        "required": ["schoolId", "schoolName", "session", "term"]
+        "required": [
+          "schoolId",
+          "schoolName",
+          "session",
+          "term"
+        ]
       },
       "AcademicSessionResponseDto": {
         "type": "object",
@@ -7759,10 +9012,22 @@
           },
           "status": {
             "type": "string",
-            "enum": ["DRAFT", "UPCOMING", "CURRENT", "CLOSED", "ARCHIVED"]
+            "enum": [
+              "DRAFT",
+              "UPCOMING",
+              "CURRENT",
+              "CLOSED",
+              "ARCHIVED"
+            ]
           }
         },
-        "required": ["id", "name", "startDate", "endDate", "status"]
+        "required": [
+          "id",
+          "name",
+          "startDate",
+          "endDate",
+          "status"
+        ]
       },
       "AcademicSessionListResponseDto": {
         "type": "object",
@@ -7774,7 +9039,9 @@
             }
           }
         },
-        "required": ["sessions"]
+        "required": [
+          "sessions"
+        ]
       },
       "CreateAcademicSessionDto": {
         "type": "object",
@@ -7793,7 +9060,11 @@
             "format": "date"
           }
         },
-        "required": ["name", "startDate", "endDate"]
+        "required": [
+          "name",
+          "startDate",
+          "endDate"
+        ]
       },
       "UpdateAcademicSessionDto": {
         "type": "object",
@@ -7837,7 +9108,13 @@
           },
           "status": {
             "type": "string",
-            "enum": ["DRAFT", "UPCOMING", "CURRENT", "CLOSED", "ARCHIVED"]
+            "enum": [
+              "DRAFT",
+              "UPCOMING",
+              "CURRENT",
+              "CLOSED",
+              "ARCHIVED"
+            ]
           }
         },
         "required": [
@@ -7860,7 +9137,9 @@
             }
           }
         },
-        "required": ["terms"]
+        "required": [
+          "terms"
+        ]
       },
       "CreateAcademicTermDto": {
         "type": "object",
@@ -7884,7 +9163,12 @@
             "format": "date"
           }
         },
-        "required": ["name", "sequence", "startDate", "endDate"]
+        "required": [
+          "name",
+          "sequence",
+          "startDate",
+          "endDate"
+        ]
       },
       "UpdateAcademicTermDto": {
         "type": "object",
@@ -7917,10 +9201,18 @@
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "INACTIVE"]
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
           }
         },
-        "required": ["id", "name", "code", "status"]
+        "required": [
+          "id",
+          "name",
+          "code",
+          "status"
+        ]
       },
       "DepartmentListResponseDto": {
         "type": "object",
@@ -7932,7 +9224,9 @@
             }
           }
         },
-        "required": ["departments"]
+        "required": [
+          "departments"
+        ]
       },
       "CreateDepartmentDto": {
         "type": "object",
@@ -7948,7 +9242,10 @@
             "example": "SCI"
           }
         },
-        "required": ["name", "code"]
+        "required": [
+          "name",
+          "code"
+        ]
       },
       "UpdateDepartmentDto": {
         "type": "object",
@@ -7981,17 +9278,36 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           },
           "arm": {
             "type": "string"
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "INACTIVE", "ARCHIVED"]
+            "enum": [
+              "ACTIVE",
+              "INACTIVE",
+              "ARCHIVED"
+            ]
           }
         },
-        "required": ["id", "academicSessionId", "departmentId", "name", "level", "arm", "status"]
+        "required": [
+          "id",
+          "academicSessionId",
+          "departmentId",
+          "name",
+          "level",
+          "arm",
+          "status"
+        ]
       },
       "ClassGroupListResponseDto": {
         "type": "object",
@@ -8003,7 +9319,9 @@
             }
           }
         },
-        "required": ["classes"]
+        "required": [
+          "classes"
+        ]
       },
       "CreateClassGroupDto": {
         "type": "object",
@@ -8023,7 +9341,14 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           },
           "arm": {
             "type": "string",
@@ -8031,7 +9356,12 @@
             "example": "A"
           }
         },
-        "required": ["academicSessionId", "name", "level", "arm"]
+        "required": [
+          "academicSessionId",
+          "name",
+          "level",
+          "arm"
+        ]
       },
       "UpdateClassGroupDto": {
         "type": "object",
@@ -8046,7 +9376,14 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           },
           "arm": {
             "type": "string",
@@ -8072,10 +9409,19 @@
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "INACTIVE"]
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
           }
         },
-        "required": ["id", "name", "code", "departmentId", "status"]
+        "required": [
+          "id",
+          "name",
+          "code",
+          "departmentId",
+          "status"
+        ]
       },
       "SubjectListResponseDto": {
         "type": "object",
@@ -8087,7 +9433,9 @@
             }
           }
         },
-        "required": ["subjects"]
+        "required": [
+          "subjects"
+        ]
       },
       "CreateSubjectDto": {
         "type": "object",
@@ -8108,7 +9456,10 @@
             "description": "ADR-0001: a subject with no department falls outside every HOD's automatic review scope."
           }
         },
-        "required": ["name", "code"]
+        "required": [
+          "name",
+          "code"
+        ]
       },
       "UpdateSubjectDto": {
         "type": "object",
@@ -8150,7 +9501,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "INACTIVE"]
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
           }
         },
         "required": [
@@ -8173,7 +9527,9 @@
             }
           }
         },
-        "required": ["offerings"]
+        "required": [
+          "offerings"
+        ]
       },
       "CreateClassSubjectDto": {
         "type": "object",
@@ -8182,7 +9538,9 @@
             "type": "string"
           }
         },
-        "required": ["subjectId"]
+        "required": [
+          "subjectId"
+        ]
       },
       "HodAssignmentResponseDto": {
         "type": "object",
@@ -8210,7 +9568,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "ENDED"]
+            "enum": [
+              "ACTIVE",
+              "ENDED"
+            ]
           }
         },
         "required": [
@@ -8233,7 +9594,9 @@
             }
           }
         },
-        "required": ["assignments"]
+        "required": [
+          "assignments"
+        ]
       },
       "CreateHodAssignmentDto": {
         "type": "object",
@@ -8256,7 +9619,12 @@
             "format": "date"
           }
         },
-        "required": ["membershipId", "departmentId", "academicSessionId", "startDate"]
+        "required": [
+          "membershipId",
+          "departmentId",
+          "academicSessionId",
+          "startDate"
+        ]
       },
       "EnrollStudentDto": {
         "type": "object",
@@ -8268,7 +9636,10 @@
             "type": "string"
           }
         },
-        "required": ["academicSessionId", "classId"]
+        "required": [
+          "academicSessionId",
+          "classId"
+        ]
       },
       "StudentEnrollmentResponseDto": {
         "type": "object",
@@ -8296,7 +9667,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "TRANSFERRED", "COMPLETED", "WITHDRAWN"]
+            "enum": [
+              "ACTIVE",
+              "TRANSFERRED",
+              "COMPLETED",
+              "WITHDRAWN"
+            ]
           }
         },
         "required": [
@@ -8319,7 +9695,9 @@
             }
           }
         },
-        "required": ["enrollments"]
+        "required": [
+          "enrollments"
+        ]
       },
       "ClassRosterEntryDto": {
         "type": "object",
@@ -8341,7 +9719,13 @@
             "format": "date"
           }
         },
-        "required": ["enrollmentId", "studentProfileId", "studentId", "displayName", "startDate"]
+        "required": [
+          "enrollmentId",
+          "studentProfileId",
+          "studentId",
+          "displayName",
+          "startDate"
+        ]
       },
       "ClassRosterResponseDto": {
         "type": "object",
@@ -8353,7 +9737,9 @@
             }
           }
         },
-        "required": ["students"]
+        "required": [
+          "students"
+        ]
       },
       "MyTeacherAssignmentEntryDto": {
         "type": "object",
@@ -8404,7 +9790,9 @@
             }
           }
         },
-        "required": ["assignments"]
+        "required": [
+          "assignments"
+        ]
       },
       "TeacherAssignmentResponseDto": {
         "type": "object",
@@ -8432,7 +9820,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "ENDED"]
+            "enum": [
+              "ACTIVE",
+              "ENDED"
+            ]
           }
         },
         "required": [
@@ -8455,7 +9846,9 @@
             }
           }
         },
-        "required": ["assignments"]
+        "required": [
+          "assignments"
+        ]
       },
       "ReplaceTeacherAssignmentsDto": {
         "type": "object",
@@ -8470,7 +9863,10 @@
             }
           }
         },
-        "required": ["academicSessionId", "classSubjectIds"]
+        "required": [
+          "academicSessionId",
+          "classSubjectIds"
+        ]
       },
       "ClassTeacherEntryDto": {
         "type": "object",
@@ -8522,7 +9918,9 @@
             }
           }
         },
-        "required": ["teachers"]
+        "required": [
+          "teachers"
+        ]
       },
       "StudentSubjectRegistrationResponseDto": {
         "type": "object",
@@ -8544,7 +9942,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["REGISTERED", "DEREGISTERED"]
+            "enum": [
+              "REGISTERED",
+              "DEREGISTERED"
+            ]
           },
           "registeredAt": {
             "type": "string",
@@ -8577,7 +9978,9 @@
             }
           }
         },
-        "required": ["registrations"]
+        "required": [
+          "registrations"
+        ]
       },
       "StudentResponseDto": {
         "type": "object",
@@ -8612,11 +10015,21 @@
           },
           "userStatus": {
             "type": "string",
-            "enum": ["INVITED", "ACTIVE", "SUSPENDED", "INACTIVE"]
+            "enum": [
+              "INVITED",
+              "ACTIVE",
+              "SUSPENDED",
+              "INACTIVE"
+            ]
           },
           "profileStatus": {
             "type": "string",
-            "enum": ["ACTIVE", "GRADUATED", "WITHDRAWN", "ARCHIVED"]
+            "enum": [
+              "ACTIVE",
+              "GRADUATED",
+              "WITHDRAWN",
+              "ARCHIVED"
+            ]
           },
           "currentClassId": {
             "type": "string",
@@ -8677,7 +10090,12 @@
             "type": "number"
           }
         },
-        "required": ["students", "total", "page", "pageSize"]
+        "required": [
+          "students",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "CreateStudentDto": {
         "type": "object",
@@ -8704,7 +10122,11 @@
             "format": "date"
           }
         },
-        "required": ["firstName", "lastName", "studentId"]
+        "required": [
+          "firstName",
+          "lastName",
+          "studentId"
+        ]
       },
       "UpdateStudentDto": {
         "type": "object",
@@ -8736,7 +10158,11 @@
             "type": "string"
           }
         },
-        "required": ["membershipId", "loginIdentifier", "initialPassword"]
+        "required": [
+          "membershipId",
+          "loginIdentifier",
+          "initialPassword"
+        ]
       },
       "TeacherResponseDto": {
         "type": "object",
@@ -8771,11 +10197,19 @@
           },
           "userStatus": {
             "type": "string",
-            "enum": ["INVITED", "ACTIVE", "SUSPENDED", "INACTIVE"]
+            "enum": [
+              "INVITED",
+              "ACTIVE",
+              "SUSPENDED",
+              "INACTIVE"
+            ]
           },
           "employmentStatus": {
             "type": "string",
-            "enum": ["ACTIVE", "ENDED"]
+            "enum": [
+              "ACTIVE",
+              "ENDED"
+            ]
           },
           "isHod": {
             "type": "boolean"
@@ -8815,7 +10249,12 @@
             "type": "number"
           }
         },
-        "required": ["teachers", "total", "page", "pageSize"]
+        "required": [
+          "teachers",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "CreateTeacherDto": {
         "type": "object",
@@ -8838,7 +10277,12 @@
             "example": "STF001"
           }
         },
-        "required": ["firstName", "lastName", "email", "staffId"]
+        "required": [
+          "firstName",
+          "lastName",
+          "email",
+          "staffId"
+        ]
       },
       "UpdateTeacherDto": {
         "type": "object",
@@ -8921,7 +10365,12 @@
             "type": "number"
           }
         },
-        "required": ["hods", "total", "page", "pageSize"]
+        "required": [
+          "hods",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "PromoteHodDto": {
         "type": "object",
@@ -8930,7 +10379,9 @@
             "type": "string"
           }
         },
-        "required": ["membershipId"]
+        "required": [
+          "membershipId"
+        ]
       },
       "UpdateHodDto": {
         "type": "object",
@@ -8959,7 +10410,10 @@
             "type": "string"
           }
         },
-        "required": ["departmentId", "academicSessionId"]
+        "required": [
+          "departmentId",
+          "academicSessionId"
+        ]
       },
       "ModeratorResponseDto": {
         "type": "object",
@@ -8988,7 +10442,12 @@
           },
           "userStatus": {
             "type": "string",
-            "enum": ["INVITED", "ACTIVE", "SUSPENDED", "INACTIVE"]
+            "enum": [
+              "INVITED",
+              "ACTIVE",
+              "SUSPENDED",
+              "INACTIVE"
+            ]
           }
         },
         "required": [
@@ -9021,7 +10480,12 @@
             "type": "number"
           }
         },
-        "required": ["moderators", "total", "page", "pageSize"]
+        "required": [
+          "moderators",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "CreateModeratorDto": {
         "type": "object",
@@ -9043,7 +10507,12 @@
             "maxLength": 64
           }
         },
-        "required": ["firstName", "lastName", "email", "loginIdentifier"]
+        "required": [
+          "firstName",
+          "lastName",
+          "email",
+          "loginIdentifier"
+        ]
       },
       "UpdateModeratorDto": {
         "type": "object",
@@ -9078,7 +10547,11 @@
             "description": "Used to pin Content-Length on the presigned PUT."
           }
         },
-        "required": ["filename", "declaredMimeType", "declaredSizeBytes"]
+        "required": [
+          "filename",
+          "declaredMimeType",
+          "declaredSizeBytes"
+        ]
       },
       "RequestImportUploadResponseDto": {
         "type": "object",
@@ -9094,7 +10567,11 @@
             "format": "date-time"
           }
         },
-        "required": ["mediaAssetId", "uploadUrl", "expiresAt"]
+        "required": [
+          "mediaAssetId",
+          "uploadUrl",
+          "expiresAt"
+        ]
       },
       "CreateStudentImportDto": {
         "type": "object",
@@ -9108,7 +10585,9 @@
             "description": "Defaults to the school's current (CURRENT) academic session when omitted — every row's Class resolves against this one session."
           }
         },
-        "required": ["mediaAssetId"]
+        "required": [
+          "mediaAssetId"
+        ]
       },
       "ImportJobResponseDto": {
         "type": "object",
@@ -9118,7 +10597,11 @@
           },
           "type": {
             "type": "string",
-            "enum": ["STUDENTS", "TEACHERS", "QUESTIONS"]
+            "enum": [
+              "STUDENTS",
+              "TEACHERS",
+              "QUESTIONS"
+            ]
           },
           "status": {
             "type": "string",
@@ -9192,7 +10675,9 @@
             "description": "A completed (READY) IMPORT_SOURCE MediaAsset id."
           }
         },
-        "required": ["mediaAssetId"]
+        "required": [
+          "mediaAssetId"
+        ]
       },
       "CreateQuestionImportDto": {
         "type": "object",
@@ -9202,7 +10687,9 @@
             "description": "A completed (READY) IMPORT_SOURCE MediaAsset id."
           }
         },
-        "required": ["mediaAssetId"]
+        "required": [
+          "mediaAssetId"
+        ]
       },
       "ImportJobListResponseDto": {
         "type": "object",
@@ -9223,7 +10710,12 @@
             "type": "number"
           }
         },
-        "required": ["jobs", "total", "page", "pageSize"]
+        "required": [
+          "jobs",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "ImportRowFieldErrorDto": {
         "type": "object",
@@ -9235,7 +10727,10 @@
             "type": "string"
           }
         },
-        "required": ["field", "message"]
+        "required": [
+          "field",
+          "message"
+        ]
       },
       "ImportRowResponseDto": {
         "type": "object",
@@ -9245,7 +10740,12 @@
           },
           "status": {
             "type": "string",
-            "enum": ["VALID", "INVALID", "COMMITTED", "FAILED"]
+            "enum": [
+              "VALID",
+              "INVALID",
+              "COMMITTED",
+              "FAILED"
+            ]
           },
           "rawData": {
             "type": "object",
@@ -9259,7 +10759,12 @@
             }
           }
         },
-        "required": ["rowNumber", "status", "rawData", "errors"]
+        "required": [
+          "rowNumber",
+          "status",
+          "rawData",
+          "errors"
+        ]
       },
       "ImportJobDetailResponseDto": {
         "type": "object",
@@ -9269,7 +10774,11 @@
           },
           "type": {
             "type": "string",
-            "enum": ["STUDENTS", "TEACHERS", "QUESTIONS"]
+            "enum": [
+              "STUDENTS",
+              "TEACHERS",
+              "QUESTIONS"
+            ]
           },
           "status": {
             "type": "string",
@@ -9368,7 +10877,10 @@
             "type": "boolean"
           }
         },
-        "required": ["content", "correctFlag"]
+        "required": [
+          "content",
+          "correctFlag"
+        ]
       },
       "CreateQuestionDto": {
         "type": "object",
@@ -9378,11 +10890,21 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           },
           "questionType": {
             "type": "string",
-            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+            "enum": [
+              "SINGLE_CHOICE",
+              "TRUE_FALSE"
+            ]
           },
           "content": {
             "type": "string"
@@ -9405,7 +10927,11 @@
           },
           "difficulty": {
             "type": "string",
-            "enum": ["EASY", "MEDIUM", "HARD"]
+            "enum": [
+              "EASY",
+              "MEDIUM",
+              "HARD"
+            ]
           },
           "marks": {
             "type": "number",
@@ -9449,7 +10975,12 @@
             "type": "boolean"
           }
         },
-        "required": ["id", "content", "originalOrder", "correctFlag"]
+        "required": [
+          "id",
+          "content",
+          "originalOrder",
+          "correctFlag"
+        ]
       },
       "QuestionMediaItemResponseDto": {
         "type": "object",
@@ -9468,7 +10999,12 @@
             "type": "number"
           }
         },
-        "required": ["id", "mediaAssetId", "mediaType", "displayOrder"]
+        "required": [
+          "id",
+          "mediaAssetId",
+          "mediaType",
+          "displayOrder"
+        ]
       },
       "QuestionRevisionResponseDto": {
         "type": "object",
@@ -9481,7 +11017,10 @@
           },
           "questionType": {
             "type": "string",
-            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+            "enum": [
+              "SINGLE_CHOICE",
+              "TRUE_FALSE"
+            ]
           },
           "content": {
             "type": "string"
@@ -9504,7 +11043,11 @@
           },
           "difficulty": {
             "type": "string",
-            "enum": ["EASY", "MEDIUM", "HARD"]
+            "enum": [
+              "EASY",
+              "MEDIUM",
+              "HARD"
+            ]
           },
           "marks": {
             "type": "number"
@@ -9518,7 +11061,14 @@
           },
           "status": {
             "type": "string",
-            "enum": ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "ARCHIVED"]
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "UNDER_REVIEW",
+              "APPROVED",
+              "REJECTED",
+              "ARCHIVED"
+            ]
           },
           "createdAt": {
             "type": "string",
@@ -9575,7 +11125,14 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           },
           "topicId": {
             "type": "string",
@@ -9591,14 +11148,21 @@
           },
           "difficulty": {
             "type": "string",
-            "enum": ["EASY", "MEDIUM", "HARD"]
+            "enum": [
+              "EASY",
+              "MEDIUM",
+              "HARD"
+            ]
           },
           "marks": {
             "type": "number"
           },
           "questionType": {
             "type": "string",
-            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+            "enum": [
+              "SINGLE_CHOICE",
+              "TRUE_FALSE"
+            ]
           },
           "currentStatus": {
             "type": "string",
@@ -9680,7 +11244,14 @@
             "type": "number"
           }
         },
-        "required": ["draft", "submitted", "underReview", "approved", "rejected", "archived"]
+        "required": [
+          "draft",
+          "submitted",
+          "underReview",
+          "approved",
+          "rejected",
+          "archived"
+        ]
       },
       "QuestionListItemResponseDto": {
         "type": "object",
@@ -9696,7 +11267,14 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           },
           "topicId": {
             "type": "string",
@@ -9712,14 +11290,21 @@
           },
           "difficulty": {
             "type": "string",
-            "enum": ["EASY", "MEDIUM", "HARD"]
+            "enum": [
+              "EASY",
+              "MEDIUM",
+              "HARD"
+            ]
           },
           "marks": {
             "type": "number"
           },
           "questionType": {
             "type": "string",
-            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+            "enum": [
+              "SINGLE_CHOICE",
+              "TRUE_FALSE"
+            ]
           },
           "currentStatus": {
             "type": "string",
@@ -9785,14 +11370,22 @@
             "type": "number"
           }
         },
-        "required": ["questions", "total", "page", "pageSize"]
+        "required": [
+          "questions",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "UpdateQuestionRevisionDto": {
         "type": "object",
         "properties": {
           "questionType": {
             "type": "string",
-            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+            "enum": [
+              "SINGLE_CHOICE",
+              "TRUE_FALSE"
+            ]
           },
           "content": {
             "type": "string"
@@ -9813,7 +11406,11 @@
           },
           "difficulty": {
             "type": "string",
-            "enum": ["EASY", "MEDIUM", "HARD"]
+            "enum": [
+              "EASY",
+              "MEDIUM",
+              "HARD"
+            ]
           },
           "marks": {
             "type": "number",
@@ -9837,7 +11434,10 @@
         "properties": {
           "questionType": {
             "type": "string",
-            "enum": ["SINGLE_CHOICE", "TRUE_FALSE"]
+            "enum": [
+              "SINGLE_CHOICE",
+              "TRUE_FALSE"
+            ]
           },
           "content": {
             "type": "string"
@@ -9858,7 +11458,11 @@
           },
           "difficulty": {
             "type": "string",
-            "enum": ["EASY", "MEDIUM", "HARD"]
+            "enum": [
+              "EASY",
+              "MEDIUM",
+              "HARD"
+            ]
           },
           "marks": {
             "type": "number",
@@ -9882,7 +11486,10 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["QUESTION_IMAGE", "QUESTION_DIAGRAM"]
+            "enum": [
+              "QUESTION_IMAGE",
+              "QUESTION_DIAGRAM"
+            ]
           },
           "filename": {
             "type": "string",
@@ -9899,7 +11506,14 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           }
         },
         "required": [
@@ -9922,7 +11536,10 @@
             "type": "number"
           }
         },
-        "required": ["mediaAssetId", "displayOrder"]
+        "required": [
+          "mediaAssetId",
+          "displayOrder"
+        ]
       },
       "TopicResponseDto": {
         "type": "object",
@@ -9941,7 +11558,12 @@
             "type": "string"
           }
         },
-        "required": ["id", "subjectId", "parentTopicId", "name"]
+        "required": [
+          "id",
+          "subjectId",
+          "parentTopicId",
+          "name"
+        ]
       },
       "TopicListResponseDto": {
         "type": "object",
@@ -9953,7 +11575,9 @@
             }
           }
         },
-        "required": ["topics"]
+        "required": [
+          "topics"
+        ]
       },
       "CreateTopicDto": {
         "type": "object",
@@ -9969,7 +11593,10 @@
             "type": "string"
           }
         },
-        "required": ["subjectId", "name"]
+        "required": [
+          "subjectId",
+          "name"
+        ]
       },
       "QuestionReviewQueueItemDto": {
         "type": "object",
@@ -9985,7 +11612,14 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           },
           "authorTeacherProfileId": {
             "type": "string"
@@ -10032,7 +11666,12 @@
             }
           }
         },
-        "required": ["subjectId", "subjectName", "pendingCount", "items"]
+        "required": [
+          "subjectId",
+          "subjectName",
+          "pendingCount",
+          "items"
+        ]
       },
       "QuestionReviewQueueResponseDto": {
         "type": "object",
@@ -10044,7 +11683,9 @@
             }
           }
         },
-        "required": ["subjects"]
+        "required": [
+          "subjects"
+        ]
       },
       "QuestionReviewHistoryItemDto": {
         "type": "object",
@@ -10057,7 +11698,11 @@
           },
           "decision": {
             "type": "string",
-            "enum": ["APPROVED", "REJECTED", "REQUEST_CHANGES"]
+            "enum": [
+              "APPROVED",
+              "REJECTED",
+              "REQUEST_CHANGES"
+            ]
           },
           "comment": {
             "type": "string",
@@ -10071,7 +11716,14 @@
             "format": "date-time"
           }
         },
-        "required": ["id", "revisionNumber", "decision", "comment", "reviewerName", "createdAt"]
+        "required": [
+          "id",
+          "revisionNumber",
+          "decision",
+          "comment",
+          "reviewerName",
+          "createdAt"
+        ]
       },
       "QuestionReviewWorkspaceResponseDto": {
         "type": "object",
@@ -10087,7 +11739,14 @@
           },
           "level": {
             "type": "string",
-            "enum": ["JSS1", "JSS2", "JSS3", "SS1", "SS2", "SS3"]
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ]
           },
           "authorTeacherProfileId": {
             "type": "string"
@@ -10133,7 +11792,9 @@
             "description": "Mandatory — shown to the teacher."
           }
         },
-        "required": ["reason"]
+        "required": [
+          "reason"
+        ]
       },
       "RequestChangesQuestionReviewDto": {
         "type": "object",
@@ -10143,7 +11804,9 @@
             "description": "Mandatory — shown to the teacher."
           }
         },
-        "required": ["reason"]
+        "required": [
+          "reason"
+        ]
       },
       "QuestionReviewHistoryResponseDto": {
         "type": "object",
@@ -10155,7 +11818,9 @@
             }
           }
         },
-        "required": ["history"]
+        "required": [
+          "history"
+        ]
       },
       "NotificationResponseDto": {
         "type": "object",
@@ -10184,7 +11849,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["UNREAD", "READ"]
+            "enum": [
+              "UNREAD",
+              "READ"
+            ]
           },
           "relatedEntityType": {
             "type": "string",
@@ -10204,7 +11872,14 @@
             "nullable": true
           }
         },
-        "required": ["id", "type", "title", "content", "status", "createdAt"]
+        "required": [
+          "id",
+          "type",
+          "title",
+          "content",
+          "status",
+          "createdAt"
+        ]
       },
       "NotificationListResponseDto": {
         "type": "object",
@@ -10228,17 +11903,27 @@
             "type": "number"
           }
         },
-        "required": ["items", "total", "page", "pageSize", "unreadCount"]
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "unreadCount"
+        ]
       },
       "MarkReadResponseDto": {
         "type": "object",
         "properties": {
           "status": {
             "type": "string",
-            "enum": ["ok"]
+            "enum": [
+              "ok"
+            ]
           }
         },
-        "required": ["status"]
+        "required": [
+          "status"
+        ]
       },
       "CreateExamDto": {
         "type": "object",
@@ -10300,7 +11985,14 @@
             "type": "string"
           }
         },
-        "required": ["id", "classId", "classSubjectId", "className", "level", "arm"]
+        "required": [
+          "id",
+          "classId",
+          "classSubjectId",
+          "className",
+          "level",
+          "arm"
+        ]
       },
       "ExamQuestionResponseDto": {
         "type": "object",
@@ -10369,7 +12061,13 @@
             }
           }
         },
-        "required": ["id", "title", "sequence", "marks", "questions"]
+        "required": [
+          "id",
+          "title",
+          "sequence",
+          "marks",
+          "questions"
+        ]
       },
       "ExamResponseDto": {
         "type": "object",
@@ -10385,7 +12083,15 @@
           },
           "status": {
             "type": "string",
-            "enum": ["DRAFT", "READY", "OPEN", "CLOSED", "COMPLETED", "ARCHIVED", "CANCELLED"]
+            "enum": [
+              "DRAFT",
+              "READY",
+              "OPEN",
+              "CLOSED",
+              "COMPLETED",
+              "ARCHIVED",
+              "CANCELLED"
+            ]
           },
           "academicSessionId": {
             "type": "string"
@@ -10441,7 +12147,11 @@
           },
           "navigationPolicy": {
             "type": "string",
-            "enum": ["FREE", "SEQUENTIAL_NO_REVISIT", "SEQUENTIAL_WITH_REVISIT"]
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
           },
           "randomizeQuestions": {
             "type": "boolean"
@@ -10451,15 +12161,26 @@
           },
           "resultPolicy": {
             "type": "string",
-            "enum": ["TEACHER", "SCHOOL_ADMIN", "AUTOMATIC"]
+            "enum": [
+              "TEACHER",
+              "SCHOOL_ADMIN",
+              "AUTOMATIC"
+            ]
           },
           "resultDetailVisibility": {
             "type": "string",
-            "enum": ["SCORE_ONLY", "SCORE_AND_COUNTS", "FULL_REVIEW"]
+            "enum": [
+              "SCORE_ONLY",
+              "SCORE_AND_COUNTS",
+              "FULL_REVIEW"
+            ]
           },
           "accessMode": {
             "type": "string",
-            "enum": ["OPEN_TO_ELIGIBLE", "EXPLICIT_AUTHORIZATION"]
+            "enum": [
+              "OPEN_TO_ELIGIBLE",
+              "EXPLICIT_AUTHORIZATION"
+            ]
           },
           "generalInstructions": {
             "type": "string",
@@ -10548,7 +12269,15 @@
           },
           "status": {
             "type": "string",
-            "enum": ["DRAFT", "READY", "OPEN", "CLOSED", "COMPLETED", "ARCHIVED", "CANCELLED"]
+            "enum": [
+              "DRAFT",
+              "READY",
+              "OPEN",
+              "CLOSED",
+              "COMPLETED",
+              "ARCHIVED",
+              "CANCELLED"
+            ]
           },
           "academicSessionId": {
             "type": "string"
@@ -10636,7 +12365,12 @@
             "type": "number"
           }
         },
-        "required": ["exams", "total", "page", "pageSize"]
+        "required": [
+          "exams",
+          "total",
+          "page",
+          "pageSize"
+        ]
       },
       "UpdateExamDto": {
         "type": "object",
@@ -10678,7 +12412,9 @@
             "description": "Overrides QuestionRevision.marks for this exam only. Omit to use the default."
           }
         },
-        "required": ["questionRevisionId"]
+        "required": [
+          "questionRevisionId"
+        ]
       },
       "SetExamQuestionsDto": {
         "type": "object",
@@ -10690,7 +12426,9 @@
             }
           }
         },
-        "required": ["questions"]
+        "required": [
+          "questions"
+        ]
       },
       "UpdateExamConfigurationDto": {
         "type": "object",
@@ -10706,7 +12444,11 @@
           },
           "navigationPolicy": {
             "type": "string",
-            "enum": ["FREE", "SEQUENTIAL_NO_REVISIT", "SEQUENTIAL_WITH_REVISIT"]
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
           },
           "randomizeQuestions": {
             "type": "boolean"
@@ -10716,15 +12458,26 @@
           },
           "resultPolicy": {
             "type": "string",
-            "enum": ["TEACHER", "SCHOOL_ADMIN", "AUTOMATIC"]
+            "enum": [
+              "TEACHER",
+              "SCHOOL_ADMIN",
+              "AUTOMATIC"
+            ]
           },
           "resultDetailVisibility": {
             "type": "string",
-            "enum": ["SCORE_ONLY", "SCORE_AND_COUNTS", "FULL_REVIEW"]
+            "enum": [
+              "SCORE_ONLY",
+              "SCORE_AND_COUNTS",
+              "FULL_REVIEW"
+            ]
           },
           "accessMode": {
             "type": "string",
-            "enum": ["OPEN_TO_ELIGIBLE", "EXPLICIT_AUTHORIZATION"]
+            "enum": [
+              "OPEN_TO_ELIGIBLE",
+              "EXPLICIT_AUTHORIZATION"
+            ]
           },
           "generalInstructions": {
             "type": "string",
@@ -10777,7 +12530,12 @@
             "type": "string"
           }
         },
-        "required": ["code", "label", "passed", "message"]
+        "required": [
+          "code",
+          "label",
+          "passed",
+          "message"
+        ]
       },
       "ExamReadinessResponseDto": {
         "type": "object",
@@ -10795,7 +12553,11 @@
             }
           }
         },
-        "required": ["examId", "ready", "checks"]
+        "required": [
+          "examId",
+          "ready",
+          "checks"
+        ]
       },
       "CancelExamDto": {
         "type": "object",
@@ -10804,7 +12566,9 @@
             "type": "string"
           }
         },
-        "required": ["reason"]
+        "required": [
+          "reason"
+        ]
       },
       "StudentAttemptOptionDto": {
         "type": "object",
@@ -10820,7 +12584,11 @@
             "description": "Materialised display position, 1-indexed."
           }
         },
-        "required": ["optionId", "content", "displayPosition"]
+        "required": [
+          "optionId",
+          "content",
+          "displayPosition"
+        ]
       },
       "StudentAttemptMediaDto": {
         "type": "object",
@@ -10843,7 +12611,13 @@
             "format": "date-time"
           }
         },
-        "required": ["mediaAssetId", "displayOrder", "mediaType", "url", "urlExpiresAt"]
+        "required": [
+          "mediaAssetId",
+          "displayOrder",
+          "mediaType",
+          "url",
+          "urlExpiresAt"
+        ]
       },
       "StudentAttemptQuestionDto": {
         "type": "object",
@@ -10935,7 +12709,11 @@
           },
           "navigationPolicy": {
             "type": "string",
-            "enum": ["FREE", "SEQUENTIAL_NO_REVISIT", "SEQUENTIAL_WITH_REVISIT"]
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
           },
           "generalInstructions": {
             "type": "string",
@@ -10973,7 +12751,12 @@
         "properties": {
           "sessionType": {
             "type": "string",
-            "enum": ["STANDARD", "BATCH", "MAKEUP", "SPECIAL"]
+            "enum": [
+              "STANDARD",
+              "BATCH",
+              "MAKEUP",
+              "SPECIAL"
+            ]
           }
         }
       },
@@ -10988,11 +12771,21 @@
           },
           "sessionType": {
             "type": "string",
-            "enum": ["STANDARD", "BATCH", "MAKEUP", "SPECIAL"]
+            "enum": [
+              "STANDARD",
+              "BATCH",
+              "MAKEUP",
+              "SPECIAL"
+            ]
           },
           "status": {
             "type": "string",
-            "enum": ["OPEN", "CLOSED", "COMPLETED", "CANCELLED"]
+            "enum": [
+              "OPEN",
+              "CLOSED",
+              "COMPLETED",
+              "CANCELLED"
+            ]
           },
           "openedAt": {
             "type": "string",
@@ -11106,7 +12899,11 @@
             "nullable": true
           }
         },
-        "required": ["studentProfileId", "status", "timeRemainingSeconds"]
+        "required": [
+          "studentProfileId",
+          "status",
+          "timeRemainingSeconds"
+        ]
       },
       "ExamControlCenterStalenessDto": {
         "type": "object",
@@ -11124,7 +12921,11 @@
             "type": "number"
           }
         },
-        "required": ["isStale", "openSince", "thresholdMs"]
+        "required": [
+          "isStale",
+          "openSince",
+          "thresholdMs"
+        ]
       },
       "ExamControlCenterResponseDto": {
         "type": "object",
@@ -11134,7 +12935,15 @@
           },
           "examStatus": {
             "type": "string",
-            "enum": ["DRAFT", "READY", "OPEN", "CLOSED", "COMPLETED", "ARCHIVED", "CANCELLED"]
+            "enum": [
+              "DRAFT",
+              "READY",
+              "OPEN",
+              "CLOSED",
+              "COMPLETED",
+              "ARCHIVED",
+              "CANCELLED"
+            ]
           },
           "sessions": {
             "type": "array",
@@ -11179,7 +12988,9 @@
             }
           }
         },
-        "required": ["confirmedAbsentStudentProfileIds"]
+        "required": [
+          "confirmedAbsentStudentProfileIds"
+        ]
       },
       "EligibleStudentResponseDto": {
         "type": "object",
@@ -11204,7 +13015,10 @@
           },
           "participantStatus": {
             "type": "string",
-            "enum": ["AUTHORIZED", "REVOKED"],
+            "enum": [
+              "AUTHORIZED",
+              "REVOKED"
+            ],
             "nullable": true
           },
           "examSessionId": {
@@ -11231,7 +13045,9 @@
             }
           }
         },
-        "required": ["students"]
+        "required": [
+          "students"
+        ]
       },
       "ExamAdministratorResponseDto": {
         "type": "object",
@@ -11250,7 +13066,10 @@
           },
           "status": {
             "type": "string",
-            "enum": ["ACTIVE", "REVOKED"]
+            "enum": [
+              "ACTIVE",
+              "REVOKED"
+            ]
           },
           "assignedAt": {
             "type": "string",
@@ -11286,7 +13105,9 @@
             }
           }
         },
-        "required": ["administrators"]
+        "required": [
+          "administrators"
+        ]
       },
       "AssignExamAdministratorDto": {
         "type": "object",
@@ -11296,7 +13117,9 @@
             "description": "The delegate's SchoolMembership id."
           }
         },
-        "required": ["membershipId"]
+        "required": [
+          "membershipId"
+        ]
       },
       "AuthorizeParticipantsDto": {
         "type": "object",
@@ -11308,7 +13131,9 @@
             }
           }
         },
-        "required": ["studentProfileIds"]
+        "required": [
+          "studentProfileIds"
+        ]
       },
       "AuthorizeParticipantResultDto": {
         "type": "object",
@@ -11327,7 +13152,11 @@
             }
           }
         },
-        "required": ["studentProfileId", "authorized", "failedChecks"]
+        "required": [
+          "studentProfileId",
+          "authorized",
+          "failedChecks"
+        ]
       },
       "AuthorizeParticipantsResponseDto": {
         "type": "object",
@@ -11339,7 +13168,9 @@
             }
           }
         },
-        "required": ["results"]
+        "required": [
+          "results"
+        ]
       },
       "RevokeParticipantDto": {
         "type": "object",
@@ -11348,7 +13179,9 @@
             "type": "string"
           }
         },
-        "required": ["reason"]
+        "required": [
+          "reason"
+        ]
       },
       "GrantExtraTimeDto": {
         "type": "object",
@@ -11358,7 +13191,9 @@
             "description": "Additional seconds granted, added to Exam.durationSeconds at attempt creation."
           }
         },
-        "required": ["extraTimeSeconds"]
+        "required": [
+          "extraTimeSeconds"
+        ]
       },
       "SaveAnswerDto": {
         "type": "object",
@@ -11373,11 +13208,16 @@
           },
           "source": {
             "type": "string",
-            "enum": ["online", "offline-replay"],
+            "enum": [
+              "online",
+              "offline-replay"
+            ],
             "description": "Client-reported, informational only — never used for admissibility."
           }
         },
-        "required": ["sequenceNumber"]
+        "required": [
+          "sequenceNumber"
+        ]
       },
       "SaveAnswerResponseDto": {
         "type": "object",
@@ -11423,10 +13263,16 @@
           },
           "source": {
             "type": "string",
-            "enum": ["online", "offline-replay"]
+            "enum": [
+              "online",
+              "offline-replay"
+            ]
           }
         },
-        "required": ["examQuestionId", "sequenceNumber"]
+        "required": [
+          "examQuestionId",
+          "sequenceNumber"
+        ]
       },
       "SaveAnswerBatchDto": {
         "type": "object",
@@ -11438,7 +13284,9 @@
             }
           }
         },
-        "required": ["answers"]
+        "required": [
+          "answers"
+        ]
       },
       "BatchAnswerResultDto": {
         "type": "object",
@@ -11457,7 +13305,11 @@
             "type": "boolean"
           }
         },
-        "required": ["examQuestionId", "accepted", "gradeWindowFlag"]
+        "required": [
+          "examQuestionId",
+          "accepted",
+          "gradeWindowFlag"
+        ]
       },
       "SaveAnswerBatchResponseDto": {
         "type": "object",
@@ -11469,7 +13321,9 @@
             }
           }
         },
-        "required": ["results"]
+        "required": [
+          "results"
+        ]
       },
       "RecordAttemptEventDto": {
         "type": "object",
@@ -11494,7 +13348,10 @@
             "description": "Client-reported, untrusted metadata."
           }
         },
-        "required": ["type", "occurredAt"]
+        "required": [
+          "type",
+          "occurredAt"
+        ]
       },
       "AttemptStateResponseDto": {
         "type": "object",
@@ -11553,7 +13410,11 @@
         "properties": {
           "status": {
             "type": "string",
-            "enum": ["NOT_APPLICABLE", "PENDING", "COMPLETE"],
+            "enum": [
+              "NOT_APPLICABLE",
+              "PENDING",
+              "COMPLETE"
+            ],
             "description": "NOT_APPLICABLE while the attempt is still IN_PROGRESS (or was invalidated/cancelled — never submitted); PENDING once finalized but not yet fully marked (the queued marking job has not completed); COMPLETE once every question has a recorded result."
           },
           "questionCount": {
@@ -11629,7 +13490,13 @@
             "$ref": "#/components/schemas/AttemptMarkingStatusDto"
           }
         },
-        "required": ["attemptId", "examId", "state", "submittedAt", "marking"]
+        "required": [
+          "attemptId",
+          "examId",
+          "state",
+          "submittedAt",
+          "marking"
+        ]
       },
       "ActiveAssessmentResponseDto": {
         "type": "object",
@@ -11653,11 +13520,20 @@
           },
           "state": {
             "type": "string",
-            "enum": ["NOT_STARTED", "IN_PROGRESS"],
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS"
+            ],
             "nullable": true
           }
         },
-        "required": ["examId", "examTitle", "examSessionId", "attemptId", "state"]
+        "required": [
+          "examId",
+          "examTitle",
+          "examSessionId",
+          "attemptId",
+          "state"
+        ]
       },
       "AttemptPreviewResponseDto": {
         "type": "object",
@@ -11679,7 +13555,11 @@
           },
           "navigationPolicy": {
             "type": "string",
-            "enum": ["FREE", "SEQUENTIAL_NO_REVISIT", "SEQUENTIAL_WITH_REVISIT"]
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
           },
           "generalInstructions": {
             "type": "string",
@@ -11715,6 +13595,1000 @@
           "totalMarks"
         ]
       },
+      "ResultListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "attemptId": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentName": {
+            "type": "string"
+          },
+          "studentIdentifier": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string",
+            "nullable": true
+          },
+          "className": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PROCESSING",
+              "FINAL",
+              "ADJUSTED",
+              "VOIDED"
+            ]
+          },
+          "totalMarks": {
+            "type": "number"
+          },
+          "earnedMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "correctCount": {
+            "type": "number"
+          },
+          "incorrectCount": {
+            "type": "number"
+          },
+          "unansweredCount": {
+            "type": "number"
+          },
+          "partialCount": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string",
+            "nullable": true
+          },
+          "withheld": {
+            "type": "boolean"
+          },
+          "withheldReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "voidedReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "finalizedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "submittedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "attemptState": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "attemptId",
+          "studentProfileId",
+          "studentName",
+          "studentIdentifier",
+          "classId",
+          "className",
+          "state",
+          "totalMarks",
+          "earnedMarks",
+          "percentage",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "partialCount",
+          "grade",
+          "withheld",
+          "withheldReason",
+          "voidedReason",
+          "finalizedAt",
+          "submittedAt",
+          "attemptState"
+        ]
+      },
+      "ExamResultSummaryDto": {
+        "type": "object",
+        "properties": {
+          "resultCount": {
+            "type": "number"
+          },
+          "voidedCount": {
+            "type": "number"
+          },
+          "pendingCount": {
+            "type": "number"
+          },
+          "averagePercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "resultCount",
+          "voidedCount",
+          "pendingCount",
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate"
+        ]
+      },
+      "ExamResultClassSummaryDto": {
+        "type": "object",
+        "properties": {
+          "resultCount": {
+            "type": "number"
+          },
+          "voidedCount": {
+            "type": "number"
+          },
+          "pendingCount": {
+            "type": "number"
+          },
+          "averagePercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "number",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "number",
+            "nullable": true
+          },
+          "classId": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resultCount",
+          "voidedCount",
+          "pendingCount",
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "classId",
+          "className"
+        ]
+      },
+      "ExamResultsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultListItemDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ExamResultSummaryDto"
+          },
+          "classSummaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamResultClassSummaryDto"
+            }
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "adjustmentInProgress": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "summary",
+          "classSummaries",
+          "published",
+          "adjustmentInProgress"
+        ]
+      },
+      "ResultQuestionBreakdownDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "displaySequence": {
+            "type": "number"
+          },
+          "content": {
+            "type": "string"
+          },
+          "correctness": {
+            "type": "string"
+          },
+          "awardedMarks": {
+            "type": "number"
+          },
+          "maximumMarks": {
+            "type": "number"
+          },
+          "voided": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "displaySequence",
+          "content",
+          "correctness",
+          "awardedMarks",
+          "maximumMarks",
+          "voided"
+        ]
+      },
+      "ResultAdjustmentHistoryItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "adjustmentType": {
+            "type": "string",
+            "enum": [
+              "VOID_QUESTION",
+              "AWARD_MARK",
+              "DEDUCT_MARK",
+              "RECALCULATE",
+              "MANUAL_OVERRIDE"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "authorizedByName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "oldValue": {
+            "type": "object"
+          },
+          "newValue": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "operationId",
+          "adjustmentType",
+          "reason",
+          "authorizedByName",
+          "createdAt",
+          "oldValue",
+          "newValue"
+        ]
+      },
+      "ResultDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "attemptId": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentName": {
+            "type": "string"
+          },
+          "studentIdentifier": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string",
+            "nullable": true
+          },
+          "className": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PROCESSING",
+              "FINAL",
+              "ADJUSTED",
+              "VOIDED"
+            ]
+          },
+          "totalMarks": {
+            "type": "number"
+          },
+          "earnedMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "correctCount": {
+            "type": "number"
+          },
+          "incorrectCount": {
+            "type": "number"
+          },
+          "unansweredCount": {
+            "type": "number"
+          },
+          "partialCount": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string",
+            "nullable": true
+          },
+          "withheld": {
+            "type": "boolean"
+          },
+          "withheldReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "voidedReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "finalizedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "submittedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "attemptState": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examTitle": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "gradingScaleVersionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultQuestionBreakdownDto"
+            }
+          },
+          "adjustments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultAdjustmentHistoryItemDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "attemptId",
+          "studentProfileId",
+          "studentName",
+          "studentIdentifier",
+          "classId",
+          "className",
+          "state",
+          "totalMarks",
+          "earnedMarks",
+          "percentage",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "partialCount",
+          "grade",
+          "withheld",
+          "withheldReason",
+          "voidedReason",
+          "finalizedAt",
+          "submittedAt",
+          "attemptState",
+          "examId",
+          "examTitle",
+          "subjectName",
+          "gradingScaleVersionId",
+          "questions",
+          "adjustments"
+        ]
+      },
+      "PublishResultsDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "ResultPublicationResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PUBLISHED",
+              "UNPUBLISHED"
+            ]
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "unpublishedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "adjustmentInProgress": {
+            "type": "boolean"
+          },
+          "affectedResultCount": {
+            "type": "number",
+            "description": "Results this action made visible or hid."
+          }
+        },
+        "required": [
+          "examId",
+          "status",
+          "publishedAt",
+          "publishedByName",
+          "unpublishedAt",
+          "adjustmentInProgress",
+          "affectedResultCount"
+        ]
+      },
+      "UnpublishResultsDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Mandatory — recorded in the audit trail."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "WithholdResultDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Mandatory — why this result is held back."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "CreateResultAdjustmentDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The exam being adjusted."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "VOID_QUESTION",
+              "AWARD_MARK",
+              "DEDUCT_MARK",
+              "RECALCULATE",
+              "MANUAL_OVERRIDE"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Mandatory for every adjustment type (07 §34)."
+          },
+          "targetExamQuestionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "VOID_QUESTION only — the ExamQuestion excluded from every affected result."
+          },
+          "markDelta": {
+            "type": "number",
+            "description": "AWARD_MARK/DEDUCT_MARK only — magnitude, always positive."
+          },
+          "targetResultId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "MANUAL_OVERRIDE only — the single result being overridden."
+          },
+          "overrideEarnedMarks": {
+            "type": "number",
+            "description": "MANUAL_OVERRIDE only — the earned-marks value set outright."
+          }
+        },
+        "required": [
+          "examId",
+          "type",
+          "reason"
+        ]
+      },
+      "ResultAdjustmentOperationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "VOID_QUESTION",
+              "AWARD_MARK",
+              "DEDUCT_MARK",
+              "RECALCULATE",
+              "MANUAL_OVERRIDE"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PROCESSING",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "appliedCount": {
+            "type": "number"
+          },
+          "failedCount": {
+            "type": "number"
+          },
+          "failureReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "type",
+          "status",
+          "reason",
+          "totalCount",
+          "appliedCount",
+          "failedCount",
+          "failureReason",
+          "createdByName",
+          "createdAt",
+          "completedAt"
+        ]
+      },
+      "StudentResultListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examTitle": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "examType": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalMarks": {
+            "type": "number"
+          },
+          "earnedMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "examTitle",
+          "subjectName",
+          "examType",
+          "totalMarks",
+          "earnedMarks",
+          "percentage",
+          "grade",
+          "publishedAt"
+        ]
+      },
+      "StudentResultsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentResultListItemDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "StudentResultQuestionDto": {
+        "type": "object",
+        "properties": {
+          "displaySequence": {
+            "type": "number"
+          },
+          "content": {
+            "type": "string"
+          },
+          "correctness": {
+            "type": "string"
+          },
+          "awardedMarks": {
+            "type": "number"
+          },
+          "maximumMarks": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "displaySequence",
+          "content",
+          "correctness",
+          "awardedMarks",
+          "maximumMarks"
+        ]
+      },
+      "StudentResultDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examTitle": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "examType": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalMarks": {
+            "type": "number"
+          },
+          "earnedMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "detailVisibility": {
+            "type": "string",
+            "enum": [
+              "SCORE_ONLY",
+              "SCORE_AND_COUNTS",
+              "FULL_REVIEW"
+            ]
+          },
+          "correctCount": {
+            "type": "number",
+            "nullable": true
+          },
+          "incorrectCount": {
+            "type": "number",
+            "nullable": true
+          },
+          "unansweredCount": {
+            "type": "number",
+            "nullable": true
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentResultQuestionDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "examTitle",
+          "subjectName",
+          "examType",
+          "totalMarks",
+          "earnedMarks",
+          "percentage",
+          "grade",
+          "publishedAt",
+          "detailVisibility",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "questions"
+        ]
+      },
+      "GradingScaleBandDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "minPercentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "maxPercentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "isPassing": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "label",
+          "minPercentage",
+          "maxPercentage",
+          "isPassing"
+        ]
+      },
+      "GradingScaleVersionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "versionNumber": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "bands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleBandDto"
+            }
+          },
+          "inUse": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "versionNumber",
+          "createdAt",
+          "bands",
+          "inUse"
+        ]
+      },
+      "GradingScaleResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ],
+            "nullable": true
+          },
+          "currentVersion": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GradingScaleVersionResponseDto"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "level",
+          "currentVersion",
+          "updatedAt"
+        ]
+      },
+      "GradingScaleListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleResponseDto"
+            }
+          },
+          "defaultTemplate": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleBandDto"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "defaultTemplate"
+        ]
+      },
+      "PutGradingScaleDto": {
+        "type": "object",
+        "properties": {
+          "scaleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Omit to create a new scale; supply it to add a version to an existing one."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "JSS1",
+              "JSS2",
+              "JSS3",
+              "SS1",
+              "SS2",
+              "SS3"
+            ],
+            "nullable": true
+          },
+          "bands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleBandDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "bands"
+        ]
+      },
+      "GradingScaleVersionListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GradingScaleVersionResponseDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
       "ErrorEnvelopeErrorDto": {
         "type": "object",
         "properties": {
@@ -11741,7 +14615,12 @@
             "description": "Present for some error codes — e.g. VALIDATION_ERROR's failing fields."
           }
         },
-        "required": ["code", "message", "retryable", "correlationId"]
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "correlationId"
+        ]
       },
       "ErrorEnvelopeDto": {
         "type": "object",
@@ -11750,7 +14629,9 @@
             "$ref": "#/components/schemas/ErrorEnvelopeErrorDto"
           }
         },
-        "required": ["error"]
+        "required": [
+          "error"
+        ]
       }
     },
     "parameters": {

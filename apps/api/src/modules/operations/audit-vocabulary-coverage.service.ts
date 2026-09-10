@@ -10,10 +10,16 @@ import { AuditActionRegistry } from './audit-action.registry.js';
 const EXPECTED_DEFERRED = [
   // EXAM_OPENED/EXAM_CLOSED flipped to LIVE in B12 (real producers:
   // ExamSessionService.open()/ExamLifecycleService.closeExam()).
+  // RESULT_PUBLISHED/RESULT_ADJUSTED flipped to LIVE in B15 (real producers:
+  // ResultPublicationService, ResultWithholdingService, and apps/worker's
+  // marking consumer for the AUTOMATIC publication policy).
+  //
+  // Both remaining entries are B16's (ADR-0014's AttemptAuthorization and
+  // the invalidation path it gates). B15 builds the VOIDED result state and
+  // the transition that ATTEMPT_INVALIDATED will trigger, but deliberately
+  // ships no producer for the invalidation event itself.
   'MAKEUP_GRANTED',
   'ATTEMPT_INVALIDATED',
-  'RESULT_PUBLISHED',
-  'RESULT_ADJUSTED',
 ].sort();
 
 /**

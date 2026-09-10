@@ -177,3 +177,44 @@ export {
   ATTEMPT_MARKING_QUEUE_NAME,
   type AttemptMarkingJobPayload,
 } from './execution/attempt-marking-queue.js';
+export {
+  computePercentage,
+  computeResultTotals,
+  type ResultQuestionMarking,
+  type ResultTotals,
+} from './results/result-totals.js';
+export {
+  DEFAULT_GRADING_SCALE_NAME,
+  DEFAULT_GRADING_SCALE_TEMPLATE,
+  resolveGradeBand,
+  validateGradingBands,
+  type GradingBand,
+  type ResolvedGrade,
+  type GradingBandValidationIssue,
+} from './results/grading-scale.js';
+export {
+  RESULT_STATES,
+  NON_VOIDED_RESULT_STATES,
+  AGGREGATABLE_RESULT_STATES,
+  STUDENT_VISIBLE_RESULT_STATES,
+  resolveStudentResultVisibility,
+  isResultVisibleToStudent,
+  type ResultState,
+  type StudentResultVisibilityInput,
+  type StudentResultVisibilityReason,
+} from './results/result-visibility.js';
+export {
+  RESULT_ADJUSTMENT_TYPES,
+  applyResultAdjustment,
+  toAdjustableValues,
+  replayOriginalValues,
+  type ResultAdjustmentType,
+  type AdjustableResultValues,
+  type ResultAdjustmentSpec,
+} from './results/result-adjustment.js';
+export {
+  RESULT_ADJUSTMENT_QUEUE_NAME,
+  RESULT_ADJUSTMENT_CLAIM_TTL_MS,
+  RESULT_ADJUSTMENT_CHUNK_SIZE,
+  type ResultAdjustmentJobPayload,
+} from './results/result-adjustment-queue.js';

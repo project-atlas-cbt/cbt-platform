@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
+import { ensureProcessingResult } from '../results/result-finalization.util.js';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
@@ -367,12 +368,25 @@ export class AttemptLifecycleService {
       }
     }
 
-    const { count } = await withTenant(prisma, schoolId, (tx) =>
-      tx.examAttempt.updateMany({
+    const { count } = await withTenant(prisma, schoolId, async (tx) => {
+      const transition = await tx.examAttempt.updateMany({
         where: { schoolId, id: attemptId, state: 'IN_PROGRESS' },
         data: { state: 'SUBMITTED', submittedAt: receivedAt },
-      }),
-    );
+      });
+      // B15: the result is created PROCESSING in the SAME transaction as the
+      // transition (07 §29), so an attempt can never be finalised without a
+      // result row to account for it — see ensureProcessingResult's own doc
+      // comment for why finalisation owns this rather than the marking job.
+      if (transition.count > 0) {
+        await ensureProcessingResult(tx, {
+          schoolId,
+          attemptId,
+          examId: attempt.examId,
+          studentProfileId: attempt.studentProfileId,
+        });
+      }
+      return transition;
+    });
 
     if (count === 0) {
       // DoD item 9: a repeated identical submit is idempotent — if the
@@ -433,12 +447,21 @@ export class AttemptLifecycleService {
       });
     }
 
-    const { count } = await withTenant(prisma, schoolId, (tx) =>
-      tx.examAttempt.updateMany({
+    const { count } = await withTenant(prisma, schoolId, async (tx) => {
+      const transition = await tx.examAttempt.updateMany({
         where: { schoolId, id: attemptId, state: 'IN_PROGRESS' },
         data: { state: 'SUBMITTED', submittedAt: new Date() },
-      }),
-    );
+      });
+      if (transition.count > 0) {
+        await ensureProcessingResult(tx, {
+          schoolId,
+          attemptId,
+          examId: attempt.examId,
+          studentProfileId: attempt.studentProfileId,
+        });
+      }
+      return transition;
+    });
     if (count === 0) {
       throw new AppHttpException({
         code: 'ATTEMPT_NOT_WRITABLE',

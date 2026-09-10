@@ -361,6 +361,8 @@ model StudentProfile {
   examParticipations        ExamParticipation[]
   // B13: this student's actual attempts.
   examAttempts              ExamAttempt[]
+  // B15: this student's finalised results.
+  results                   Result[]
 
   @@unique([schoolId, membershipId])
   @@unique([schoolId, studentId])
@@ -1928,6 +1930,11 @@ model Exam {
   participations ExamParticipation[]
   // B13: the actual student attempts taken against this exam.
   attempts       ExamAttempt[]
+  // B15: results derived from those attempts, this exam's single
+  // publication row (ADR-0010), and any adjustment operations run over it.
+  results              Result[]
+  resultPublication    ResultPublication?
+  adjustmentOperations ResultAdjustmentOperation[]
 
   @@unique([schoolId, id])
   @@index([schoolId])
@@ -2426,6 +2433,9 @@ model ExamAttempt {
   answerEvents    AttemptAnswerEvent[]
   events          AttemptEvent[]
   questionResults AttemptQuestionResult[]
+  /// B15: the finalised academic record derived from this attempt. Strictly
+  /// 1:1 (07 §13) — a result cannot exist without an attempt.
+  result          Result?
 
   // Composite-FK target for every child table below.
   @@unique([schoolId, id])
@@ -2644,4 +2654,343 @@ model AttemptQuestionResult {
   @@index([schoolId])
   @@index([schoolId, attemptId])
   @@map("attempt_question_results")
+}
+
+// ---------------------------------------------------------------------------
+// B15 — Results & Publication (ADR-0010, ADR-0018, ADR-0025)
+// ---------------------------------------------------------------------------
+
+/// ADR-0010 reduces 07 §10.1's literal enum to the MARKING lifecycle only:
+/// PUBLISHED/UNPUBLISHED are removed (visibility lives in ResultPublication,
+/// one row per exam), and VOIDED is added by ADR-0025. Keeping publication
+/// here would conflate two orthogonal axes — an ADJUSTED-and-PUBLISHED result
+/// would be unrepresentable, and adjusting a published result would silently
+/// unpublish it (audit C-05).
+enum ResultState {
+  PROCESSING
+  FINAL
+  ADJUSTED
+  VOIDED
+}
+
+enum ResultPublicationStatus {
+  PUBLISHED
+  UNPUBLISHED
+}
+
+/// 07 §10.2's five types, verbatim. VOID_QUESTION excludes one question from
+/// both earned and maximum marks; AWARD_MARK/DEDUCT_MARK shift earned marks
+/// by a delta; RECALCULATE re-derives from AttemptQuestionResult (repair);
+/// MANUAL_OVERRIDE sets earned marks outright and is the most restricted
+/// operation in the product (School Admin only, mandatory reason).
+enum ResultAdjustmentType {
+  VOID_QUESTION
+  AWARD_MARK
+  DEDUCT_MARK
+  RECALCULATE
+  MANUAL_OVERRIDE
+}
+
+enum ResultAdjustmentOperationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// 07 §10.1 / 06 §54. Derived from marking, never manually entered (06 §56):
+/// there is no endpoint anywhere that writes earnedMarks outside the
+/// ResultAdjustment workflow (B15 DoD item 10).
+///
+/// Created in PROCESSING by whichever path finalises the attempt, then moved
+/// to FINAL by the marking worker once every question is marked (07 §29) —
+/// so a result left in PROCESSING is exactly B19's "pending results" signal,
+/// and a marking job that was never enqueued (B14's own documented Redis-
+/// outage residual risk) leaves a visible row rather than nothing at all.
+///
+/// grade/gradingScaleVersionId are frozen at finalisation (ADR-0018): editing
+/// a scale later creates a new version and never touches an existing result.
+/// totalMarks/earnedMarks/percentage stay authoritative regardless of whether
+/// any grading scale is configured at all (05 §46, DoD item 9).
+///
+/// VOIDED (ADR-0025) is reached only when the underlying attempt becomes
+/// INVALIDATED or CANCELLED — B16 wires that event; B15 owns the state, the
+/// transition and the shared exclusion filter. The invalidation reason is NOT
+/// duplicated here: it is read from the attempt's own invalidationReason, so
+/// there is one source of truth for it.
+model Result {
+  id               String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId         String @map("school_id") @db.Uuid
+  attemptId        String @map("attempt_id") @db.Uuid
+  examId           String @map("exam_id") @db.Uuid
+  studentProfileId String @map("student_profile_id") @db.Uuid
+
+  state ResultState @default(PROCESSING)
+
+  totalMarks       Int     @map("total_marks")
+  earnedMarks      Int     @map("earned_marks")
+  /// Percentage to two decimal places, computed by @atlas/domain's
+  /// computeResultTotals — the same function AttemptStatusService uses, so
+  /// the persisted result and the live attempt-status aggregate can never
+  /// disagree.
+  percentage       Decimal @map("percentage") @db.Decimal(5, 2)
+  correctCount     Int     @map("correct_count")
+  incorrectCount   Int     @map("incorrect_count")
+  unansweredCount  Int     @map("unanswered_count")
+  partialCount     Int     @map("partial_count")
+
+  grade                 String? @db.VarChar(16)
+  gradingScaleVersionId String? @map("grading_scale_version_id") @db.Uuid
+
+  finalizedAt DateTime? @map("finalized_at") @db.Timestamptz(6)
+
+  /// ADR-0010's individual-withholding axis: a disputed result among 40 is
+  /// held back by this flag through an audited action with a reason, rather
+  /// than by fragmenting per-exam publication.
+  withheld              Boolean   @default(false)
+  withheldReason        String?   @map("withheld_reason")
+  withheldByMembershipId String?  @map("withheld_by_membership_id") @db.Uuid
+  withheldAt            DateTime? @map("withheld_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  attempt             ExamAttempt          @relation(fields: [schoolId, attemptId], references: [schoolId, id], onDelete: Restrict)
+  exam                Exam                 @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  studentProfile      StudentProfile       @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Restrict)
+  gradingScaleVersion GradingScaleVersion? @relation(fields: [schoolId, gradingScaleVersionId], references: [schoolId, id], onDelete: Restrict)
+
+  adjustments ResultAdjustment[]
+
+  /// 07 §13's strict 1:1 — "a result cannot exist without an attempt." The
+  /// FK above makes the second half structural; this makes the first.
+  @@unique([schoolId, attemptId])
+  // Composite-FK target for ResultAdjustment.
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  // The staff results list (GET /v1/exams/:id/results) and every aggregate,
+  // both of which filter on state to exclude VOIDED (ADR-0025).
+  @@index([schoolId, examId, state])
+  // The student results list — own results, newest first.
+  @@index([schoolId, studentProfileId, state])
+  @@map("results")
+}
+
+/// 07 §10.3 / 06 §59, scoped PER EXAM by ADR-0010 (resolving audit A-09):
+/// publish and unpublish are single-row operations, and "is this exam
+/// published?" is a single-row answer.
+///
+/// adjustmentInProgress is ADR-0025's "no partially-regraded cohort is ever
+/// visible" hold. The confirmed choice between the ADR's two alternatives is
+/// to MARK results under adjustment rather than auto-unpublish them: the
+/// publication state is preserved, so completing an adjustment does not
+/// depend on someone remembering to re-publish, and a crashed operation
+/// cannot silently strand a previously-published cohort.
+model ResultPublication {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  examId   String @map("exam_id") @db.Uuid
+
+  status ResultPublicationStatus @default(UNPUBLISHED)
+
+  publishedByMembershipId   String?   @map("published_by_membership_id") @db.Uuid
+  publishedAt               DateTime? @map("published_at") @db.Timestamptz(6)
+  unpublishedByMembershipId String?   @map("unpublished_by_membership_id") @db.Uuid
+  unpublishedAt             DateTime? @map("unpublished_at") @db.Timestamptz(6)
+
+  adjustmentInProgress Boolean @default(false) @map("adjustment_in_progress")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam Exam @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, examId])
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@map("result_publications")
+}
+
+/// ADR-0025's parent half: a bulk adjustment is a SINGLE parent operation
+/// with per-result child records, processed idempotently and resumably. A
+/// single-result adjustment is the same shape with exactly one child, so
+/// bulk and single share one code path, one audit shape and one replay
+/// guarantee.
+///
+/// processingClaimedAt is the atomically-claimed, per-chunk-refreshed lease
+/// B7's import-commit already established in this codebase — it stops two
+/// overlapping executions (a BullMQ stalled-lock redelivery) from both
+/// processing the same children.
+model ResultAdjustmentOperation {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  examId   String @map("exam_id") @db.Uuid
+
+  type   ResultAdjustmentType
+  status ResultAdjustmentOperationStatus @default(PENDING)
+  reason String
+
+  /// VOID_QUESTION only — the ExamQuestion excluded from every affected
+  /// result. A bare UUID with no FK, mirroring this schema's established
+  /// convention for a selector/actor column (ExamQuestion carries no
+  /// (school_id, id) composite-FK target, and adding one would mean
+  /// altering an already-shipped B11 table for a validation the service
+  /// layer performs anyway).
+  targetExamQuestionId String? @map("target_exam_question_id") @db.Uuid
+  /// AWARD_MARK/DEDUCT_MARK: the magnitude, always positive. The type
+  /// carries the direction.
+  markDelta            Int?    @map("mark_delta")
+  /// MANUAL_OVERRIDE only — the single result being overridden.
+  targetResultId       String? @map("target_result_id") @db.Uuid
+  /// MANUAL_OVERRIDE only — the earned-marks value being set outright.
+  overrideEarnedMarks  Int?    @map("override_earned_marks")
+
+  totalCount   Int @default(0) @map("total_count")
+  appliedCount Int @default(0) @map("applied_count")
+  failedCount  Int @default(0) @map("failed_count")
+
+  failureReason String? @map("failure_reason")
+
+  createdByMembershipId String    @map("created_by_membership_id") @db.Uuid
+  processingClaimedAt   DateTime? @map("processing_claimed_at") @db.Timestamptz(6)
+  completedAt           DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam     Exam               @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  children ResultAdjustment[]
+
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  @@map("result_adjustment_operations")
+}
+
+/// 07 §10.2's entity — ADR-0025's child half, and the append-only history
+/// that makes "replaying adjustments in order reproduces the original
+/// result" (07 §38, DoD item 12) true by construction: each row carries the
+/// complete numeric before/after snapshot, so the original is recoverable by
+/// walking backwards regardless of how many adjustments followed.
+///
+/// "A result adjustment is an event, not a silent overwrite" (07 §10.2) —
+/// enforced by an unconditional immutability trigger, not by convention.
+model ResultAdjustment {
+  id          String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId    String @map("school_id") @db.Uuid
+  operationId String @map("operation_id") @db.Uuid
+  resultId    String @map("result_id") @db.Uuid
+
+  adjustmentType ResultAdjustmentType @map("adjustment_type")
+
+  /// Numeric snapshots of the result immediately before and after this
+  /// adjustment — totalMarks, earnedMarks, percentage, correctCount,
+  /// incorrectCount, unansweredCount, partialCount and grade. Written as a
+  /// flat JSON object; deliberately described without literal braces here,
+  /// since scripts/lint-schema-tenancy.mjs matches model bodies by brace
+  /// counting and a brace in a doc comment truncates its parse (the same
+  /// trap B7's ImportRow.errors comment already documents).
+  oldValue Json @map("old_value")
+  newValue Json @map("new_value")
+
+  reason                String
+  authorizedByMembershipId String @map("authorized_by_membership_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  operation ResultAdjustmentOperation @relation(fields: [schoolId, operationId], references: [schoolId, id], onDelete: Restrict)
+  result    Result                    @relation(fields: [schoolId, resultId], references: [schoolId, id], onDelete: Restrict)
+
+  /// The idempotency key: a resumed or redelivered run skips any child that
+  /// already exists rather than applying the same adjustment twice.
+  @@unique([schoolId, operationId, resultId])
+  @@index([schoolId])
+  @@index([schoolId, resultId])
+  @@map("result_adjustments")
+}
+
+/// ADR-0018 (resolving audit M-06, a gap 07 leaves entirely — there is no
+/// GradingScale anywhere in the ERD). School-owned, with OPTIONAL level
+/// scoping so a JSS scale may differ from an SS scale without forcing either.
+/// A row with level = NULL is the school-wide default.
+///
+/// Parent + versioned child, deliberately the same shape as B8's Question/
+/// QuestionRevision rather than a new pattern: editing a scale creates a new
+/// version and bands are never mutated in place, which is what keeps a
+/// historical result's grade stable and explainable (07 §42 invariant 13).
+model GradingScale {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+
+  name             String      @db.VarChar(120)
+  level            ClassLevel?
+  currentVersionId String?     @unique @map("current_version_id") @db.Uuid
+  archivedAt       DateTime?   @map("archived_at") @db.Timestamptz(6)
+
+  createdByMembershipId String? @map("created_by_membership_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  currentVersion GradingScaleVersion?  @relation("GradingScaleCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions       GradingScaleVersion[] @relation("GradingScaleVersions")
+
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, level])
+  @@map("grading_scales")
+}
+
+model GradingScaleVersion {
+  id       String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  scaleId  String @map("scale_id") @db.Uuid
+
+  versionNumber         Int     @map("version_number")
+  createdByMembershipId String? @map("created_by_membership_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  scale      GradingScale       @relation("GradingScaleVersions", fields: [schoolId, scaleId], references: [schoolId, id], onDelete: Cascade)
+  currentFor GradingScale?      @relation("GradingScaleCurrentVersion")
+  bands      GradingScaleBand[]
+  /// Results whose grade was frozen against this exact version. The FK is
+  /// Restrict, so a version that has ever graded a result can never be
+  /// deleted out from under it.
+  results    Result[]
+
+  @@unique([schoolId, scaleId, versionNumber])
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@map("grading_scale_versions")
+}
+
+/// ADR-0018: "Bands are ordered percentage ranges with a label." Inclusive
+/// on both ends; the service layer validates that a version's bands neither
+/// overlap nor leave a gap across 0–100.
+///
+/// isPassing has no source in any specification — "pass rate" is a required
+/// analytics metric (05 §55.1, 01 §44) with no threshold defined anywhere.
+/// Confirmed with the project owner: carry it per band, so the pass concept
+/// derives from the same frozen scale version that produced the grade rather
+/// than from a second, independently-driftable source of truth.
+model GradingScaleBand {
+  id        String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String @map("school_id") @db.Uuid
+  versionId String @map("version_id") @db.Uuid
+
+  label         String  @db.VarChar(16)
+  minPercentage Decimal @map("min_percentage") @db.Decimal(5, 2)
+  maxPercentage Decimal @map("max_percentage") @db.Decimal(5, 2)
+  isPassing     Boolean @default(false) @map("is_passing")
+  sortOrder     Int     @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  version GradingScaleVersion @relation(fields: [schoolId, versionId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, versionId, sortOrder])
+  @@index([schoolId])
+  @@index([schoolId, versionId])
+  @@map("grading_scale_bands")
 }

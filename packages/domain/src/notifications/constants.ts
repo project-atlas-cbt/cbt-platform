@@ -26,12 +26,15 @@ export const NOTIFICATION_TYPES = [
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
-/// The three NOTIFICATION_TYPES values with no real producer in this
-/// phase — asserted by a dedicated test so a future phase can't add a
-/// producer without this list (and the vocabulary.ts coverage mechanism's
-/// own equivalent list) being updated deliberately.
+/// The NOTIFICATION_TYPES values with no real producer yet — asserted by a
+/// dedicated test so a future phase can't add a producer without this list
+/// (and the vocabulary.ts coverage mechanism's own equivalent list) being
+/// updated deliberately.
+///
+/// RESULT_PUBLISHED left this list in B15: ResultPublicationService and
+/// apps/worker's AUTOMATIC-policy finalisation both now notify the students
+/// whose results a release actually made visible.
 export const DEFERRED_NOTIFICATION_TYPES: readonly NotificationType[] = [
-  'RESULT_PUBLISHED',
   'EXAM_OPENED',
   'MAKEUP_GRANTED',
 ];

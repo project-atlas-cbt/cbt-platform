@@ -87,7 +87,7 @@ describe('toStudentAttemptQuestions (X-05)', () => {
     expect(result[0]?.answerSequenceNumber).toBeUndefined();
   });
 
-  it('resolves media URLs from the pre-resolved map, defaulting to empty strings when unresolved', () => {
+  it('resolves media URLs from the pre-resolved map, omitting an asset that cannot be resolved', () => {
     const mediaUrls = new Map([
       ['m1', { url: 'https://signed.example/m1', expiresAt: '2026-01-01T00:00:00.000Z' }],
     ]);
@@ -96,9 +96,14 @@ describe('toStudentAttemptQuestions (X-05)', () => {
     expect(q2?.media[0]?.url).toBe('https://signed.example/m1');
     expect(q2?.media[0]?.urlExpiresAt).toBe('2026-01-01T00:00:00.000Z');
 
+    // An unresolved asset is OMITTED, not emitted with a blank url — see the
+    // mapper's own comment for why (a blank `url` is a worse contract than
+    // absence; an `<img src="">` can trigger a same-document reload). This
+    // assertion previously expected the old blank-string behaviour and went
+    // stale when that was corrected.
     const unresolved = toStudentAttemptQuestions(DOCUMENT, new Map(), new Map());
     const q2Unresolved = unresolved.find((q) => q.examQuestionId === 'eq2');
-    expect(q2Unresolved?.media[0]?.url).toBe('');
+    expect(q2Unresolved?.media).toEqual([]);
   });
 
   it("never includes the question's explanation field (marking-only metadata)", () => {

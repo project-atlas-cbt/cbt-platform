@@ -11,6 +11,33 @@
     ".prettierrc.json",
     "pnpm-workspace.yaml"
   ],
+  // Turbo 2.x defaults to STRICT env mode: a task only sees variables declared
+  // here (or in a task's own `env`/`passThroughEnv`), plus a small built-in
+  // list. Without this, `pnpm test:integration` -> `turbo run test:integration`
+  // runs the test processes with the DB/Redis URLs filtered out, and every
+  // integration file dies at import with "DATABASE_APP_URL is not set" — even
+  // though CI's job env sets it. Invisible locally, because packages/config's
+  // loadRootEnv() reads the root .env file; CI has no .env by design.
+  //
+  // passThrough (not `globalEnv`) deliberately: these are per-environment
+  // connection strings and secrets, and must not feed Turbo's cache-key hash.
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "DATABASE_APP_URL",
+    "DATABASE_AUDIT_READER_URL",
+    "DATABASE_URL_TEST",
+    "DATABASE_APP_URL_TEST",
+    "DATABASE_AUDIT_READER_URL_TEST",
+    "REDIS_URL",
+    "PRODUCT_NAME",
+    "SESSION_COOKIE_SECRET",
+    "WEB_ORIGIN",
+    "PLATFORM_ROOT_DOMAIN",
+    "COOKIE_DOMAIN",
+    "PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION",
+    "NODE_ENV",
+    "CI"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

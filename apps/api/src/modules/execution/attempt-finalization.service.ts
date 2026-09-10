@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
 import { attemptGraceWindowSeconds } from '@atlas/domain';
 import { AuditService } from '../operations/audit-event.service.js';
+import { ensureProcessingResult } from '../results/result-finalization.util.js';
 import { AttemptMarkingQueueService } from './attempt-marking-queue.service.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
 
@@ -76,12 +77,30 @@ export class AttemptFinalizationService {
   async finalizeIfExpired(schoolId: string, attemptId: string, now: Date): Promise<boolean> {
     const cutoff = new Date(now.getTime() - attemptGraceWindowSeconds() * 1000);
 
-    const { count } = await withTenant(prisma, schoolId, (tx) =>
-      tx.examAttempt.updateMany({
+    const { count } = await withTenant(prisma, schoolId, async (tx) => {
+      const transition = await tx.examAttempt.updateMany({
         where: { schoolId, id: attemptId, state: 'IN_PROGRESS', expiresAt: { lte: cutoff } },
         data: { state: 'AUTO_SUBMITTED', submittedAt: now },
-      }),
-    );
+      });
+      // B15: same transaction as the transition, so ADR-0004's opportunistic
+      // finalisation leaves a result row exactly as the interactive submit
+      // path does. This is also the case that most needs it — an auto-submit
+      // whose marking enqueue then fails would otherwise leave nothing at all
+      // for anyone downstream to notice.
+      if (transition.count > 0) {
+        const owner = await tx.examAttempt.findUniqueOrThrow({
+          where: { id: attemptId },
+          select: { examId: true, studentProfileId: true },
+        });
+        await ensureProcessingResult(tx, {
+          schoolId,
+          attemptId,
+          examId: owner.examId,
+          studentProfileId: owner.studentProfileId,
+        });
+      }
+      return transition;
+    });
     if (count === 0) return false;
 
     try {

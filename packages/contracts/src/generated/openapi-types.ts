@@ -2727,6 +2727,211 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exams/{id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scoped result list with exam summary statistics and, for a multi-class exam, a per-class breakdown (04 §48, ADR-0013). */
+        get: operations["ResultController_listForExam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One result with its per-question breakdown and full adjustment history. */
+        get: operations["ResultController_getDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/results/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release this exam's results to students. Refused when the school has locked publication to administrative release (DoD item 7). */
+        post: operations["ResultController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/results/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse publication, with a mandatory reason (05 §65). */
+        post: operations["ResultController_unpublish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/{id}/withhold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hold one disputed result back without unpublishing the cohort (ADR-0010). */
+        post: operations["ResultController_withhold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release a previously withheld result. */
+        post: operations["ResultController_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The only path by which a score changes after marking. Creates a parent operation; a worker applies it idempotently and resumably (ADR-0025). */
+        post: operations["ResultController_createAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/adjustments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Adjustment progress and outcome. */
+        get: operations["ResultController_getAdjustment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in student's own published results only (05 §51). */
+        get: operations["StudentResultController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student/results/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One result, with detail gated by the exam's own result_detail_visibility policy (ADR-0010). */
+        get: operations["StudentResultController_getDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/school/grading-scales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The school's grading scales with their current bands, plus the platform default template offered as a starting point. */
+        get: operations["GradingScaleController_list"];
+        /** Create a scale, or add a version to an existing one. Never an in-place band edit — ADR-0018 versions instead, so historical grades stay explainable. */
+        put: operations["GradingScaleController_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/school/grading-scales/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every version of a scale, newest first, each flagged with whether any result was graded against it (ADR-0018: make versioning visible). */
+        get: operations["GradingScaleController_listVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4374,6 +4579,254 @@ export interface components {
             accommodations?: string | null;
             questionCount: number;
             totalMarks: number;
+        };
+        ResultListItemDto: {
+            id: string;
+            attemptId: string;
+            studentProfileId: string;
+            studentName: string;
+            studentIdentifier: string;
+            classId: string | null;
+            className: string | null;
+            /** @enum {string} */
+            state: "PROCESSING" | "FINAL" | "ADJUSTED" | "VOIDED";
+            totalMarks: number;
+            earnedMarks: number;
+            percentage: number;
+            correctCount: number;
+            incorrectCount: number;
+            unansweredCount: number;
+            partialCount: number;
+            grade: string | null;
+            withheld: boolean;
+            withheldReason: string | null;
+            voidedReason: string | null;
+            finalizedAt: string | null;
+            submittedAt: string | null;
+            attemptState: string;
+        };
+        ExamResultSummaryDto: {
+            resultCount: number;
+            voidedCount: number;
+            pendingCount: number;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
+        };
+        ExamResultClassSummaryDto: {
+            resultCount: number;
+            voidedCount: number;
+            pendingCount: number;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
+            classId: string;
+            className: string;
+        };
+        ExamResultsResponseDto: {
+            items: components["schemas"]["ResultListItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            summary: components["schemas"]["ExamResultSummaryDto"];
+            classSummaries: components["schemas"]["ExamResultClassSummaryDto"][];
+            published: boolean;
+            adjustmentInProgress: boolean;
+        };
+        ResultQuestionBreakdownDto: {
+            examQuestionId: string;
+            displaySequence: number;
+            content: string;
+            correctness: string;
+            awardedMarks: number;
+            maximumMarks: number;
+            voided: boolean;
+        };
+        ResultAdjustmentHistoryItemDto: {
+            id: string;
+            operationId: string;
+            /** @enum {string} */
+            adjustmentType: "VOID_QUESTION" | "AWARD_MARK" | "DEDUCT_MARK" | "RECALCULATE" | "MANUAL_OVERRIDE";
+            reason: string;
+            authorizedByName: string;
+            createdAt: string;
+            oldValue: Record<string, never>;
+            newValue: Record<string, never>;
+        };
+        ResultDetailResponseDto: {
+            id: string;
+            attemptId: string;
+            studentProfileId: string;
+            studentName: string;
+            studentIdentifier: string;
+            classId: string | null;
+            className: string | null;
+            /** @enum {string} */
+            state: "PROCESSING" | "FINAL" | "ADJUSTED" | "VOIDED";
+            totalMarks: number;
+            earnedMarks: number;
+            percentage: number;
+            correctCount: number;
+            incorrectCount: number;
+            unansweredCount: number;
+            partialCount: number;
+            grade: string | null;
+            withheld: boolean;
+            withheldReason: string | null;
+            voidedReason: string | null;
+            finalizedAt: string | null;
+            submittedAt: string | null;
+            attemptState: string;
+            examId: string;
+            examTitle: string;
+            subjectName: string;
+            gradingScaleVersionId: string | null;
+            questions: components["schemas"]["ResultQuestionBreakdownDto"][];
+            adjustments: components["schemas"]["ResultAdjustmentHistoryItemDto"][];
+        };
+        PublishResultsDto: {
+            note?: string;
+        };
+        ResultPublicationResponseDto: {
+            examId: string;
+            /** @enum {string} */
+            status: "PUBLISHED" | "UNPUBLISHED";
+            publishedAt: string | null;
+            publishedByName: string | null;
+            unpublishedAt: string | null;
+            adjustmentInProgress: boolean;
+            /** @description Results this action made visible or hid. */
+            affectedResultCount: number;
+        };
+        UnpublishResultsDto: {
+            /** @description Mandatory — recorded in the audit trail. */
+            reason: string;
+        };
+        WithholdResultDto: {
+            /** @description Mandatory — why this result is held back. */
+            reason: string;
+        };
+        CreateResultAdjustmentDto: {
+            /**
+             * Format: uuid
+             * @description The exam being adjusted.
+             */
+            examId: string;
+            /** @enum {string} */
+            type: "VOID_QUESTION" | "AWARD_MARK" | "DEDUCT_MARK" | "RECALCULATE" | "MANUAL_OVERRIDE";
+            /** @description Mandatory for every adjustment type (07 §34). */
+            reason: string;
+            /**
+             * Format: uuid
+             * @description VOID_QUESTION only — the ExamQuestion excluded from every affected result.
+             */
+            targetExamQuestionId?: string;
+            /** @description AWARD_MARK/DEDUCT_MARK only — magnitude, always positive. */
+            markDelta?: number;
+            /**
+             * Format: uuid
+             * @description MANUAL_OVERRIDE only — the single result being overridden.
+             */
+            targetResultId?: string;
+            /** @description MANUAL_OVERRIDE only — the earned-marks value set outright. */
+            overrideEarnedMarks?: number;
+        };
+        ResultAdjustmentOperationResponseDto: {
+            id: string;
+            examId: string;
+            /** @enum {string} */
+            type: "VOID_QUESTION" | "AWARD_MARK" | "DEDUCT_MARK" | "RECALCULATE" | "MANUAL_OVERRIDE";
+            /** @enum {string} */
+            status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+            reason: string;
+            totalCount: number;
+            appliedCount: number;
+            failedCount: number;
+            failureReason: string | null;
+            createdByName: string;
+            createdAt: string;
+            completedAt: string | null;
+        };
+        StudentResultListItemDto: {
+            id: string;
+            examId: string;
+            examTitle: string;
+            subjectName: string;
+            examType: string | null;
+            totalMarks: number;
+            earnedMarks: number;
+            percentage: number;
+            grade: string | null;
+            publishedAt: string | null;
+        };
+        StudentResultsResponseDto: {
+            items: components["schemas"]["StudentResultListItemDto"][];
+        };
+        StudentResultQuestionDto: {
+            displaySequence: number;
+            content: string;
+            correctness: string;
+            awardedMarks: number;
+            maximumMarks: number;
+        };
+        StudentResultDetailDto: {
+            id: string;
+            examId: string;
+            examTitle: string;
+            subjectName: string;
+            examType: string | null;
+            totalMarks: number;
+            earnedMarks: number;
+            percentage: number;
+            grade: string | null;
+            publishedAt: string | null;
+            /** @enum {string} */
+            detailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            correctCount: number | null;
+            incorrectCount: number | null;
+            unansweredCount: number | null;
+            questions: components["schemas"]["StudentResultQuestionDto"][];
+        };
+        GradingScaleBandDto: {
+            label: string;
+            minPercentage: number;
+            maxPercentage: number;
+            isPassing: boolean;
+        };
+        GradingScaleVersionResponseDto: {
+            id: string;
+            versionNumber: number;
+            createdAt: string;
+            bands: components["schemas"]["GradingScaleBandDto"][];
+            inUse: boolean;
+        };
+        GradingScaleResponseDto: {
+            id: string;
+            name: string;
+            /** @enum {string|null} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3" | null;
+            currentVersion: components["schemas"]["GradingScaleVersionResponseDto"] | null;
+            updatedAt: string;
+        };
+        GradingScaleListResponseDto: {
+            items: components["schemas"]["GradingScaleResponseDto"][];
+            defaultTemplate: components["schemas"]["GradingScaleBandDto"][];
+        };
+        PutGradingScaleDto: {
+            /**
+             * Format: uuid
+             * @description Omit to create a new scale; supply it to add a version to an existing one.
+             */
+            scaleId?: string;
+            name: string;
+            /** @enum {string|null} */
+            level?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3" | null;
+            bands: components["schemas"]["GradingScaleBandDto"][];
+        };
+        GradingScaleVersionListResponseDto: {
+            items: components["schemas"]["GradingScaleVersionResponseDto"][];
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -8728,6 +9181,304 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttemptPreviewResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_listForExam: {
+        parameters: {
+            query?: {
+                /** @description Student name or student ID substring. */
+                q?: string;
+                classId?: string;
+                state?: "PROCESSING" | "FINAL" | "ADJUSTED" | "VOIDED";
+                page?: number;
+                pageSize?: number;
+                sortBy?: "studentName" | "percentage" | "earnedMarks" | "finalizedAt";
+                sortDir?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResultsResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_getDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultDetailResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_publish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishResultsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultPublicationResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_unpublish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnpublishResultsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultPublicationResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_withhold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithholdResultDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_release: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WithholdResultDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_createAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateResultAdjustmentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdjustmentOperationResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_getAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultAdjustmentOperationResponseDto"];
+                };
+            };
+        };
+    };
+    StudentResultController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentResultsResponseDto"];
+                };
+            };
+        };
+    };
+    StudentResultController_getDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentResultDetailDto"];
+                };
+            };
+        };
+    };
+    GradingScaleController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScaleListResponseDto"];
+                };
+            };
+        };
+    };
+    GradingScaleController_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutGradingScaleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScaleResponseDto"];
+                };
+            };
+        };
+    };
+    GradingScaleController_listVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScaleVersionListResponseDto"];
                 };
             };
         };
