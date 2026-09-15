@@ -9,6 +9,13 @@ import {
 } from '@/lib/results/staff-mutations';
 import { StaffResultDetailScreen } from './staff-result-detail-screen';
 
+const replace = vi.fn();
+let params = new URLSearchParams();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace }),
+  usePathname: () => '/moderator/results/exam-1/result-1',
+  useSearchParams: () => params,
+}));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 vi.mock('@/lib/results/staff-queries', () => ({
   useStaffResult: vi.fn(),
@@ -35,7 +42,7 @@ const RESULT = {
   studentIdentifier: 'STU/2026/001',
   classId: 'c1',
   className: 'SS2A',
-  state: 'FINALIZED',
+  state: 'FINAL',
   totalMarks: 50,
   earnedMarks: 41,
   percentage: 82,
@@ -95,6 +102,8 @@ function renderScreen() {
 
 describe('StaffResultDetailScreen', () => {
   beforeEach(() => {
+    params = new URLSearchParams();
+    replace.mockReset();
     mockUseAdjustmentOperation.mockReturnValue({ isPending: true } as never);
     mockUseWithholdResult.mockReturnValue({ mutateAsync: vi.fn() } as never);
     mockUseReleaseResult.mockReturnValue({ mutateAsync: vi.fn() } as never);
@@ -187,6 +196,52 @@ describe('StaffResultDetailScreen', () => {
     actAs('moderator');
     renderScreen();
     expect(screen.getByText(/attempt invalidated after malpractice review/i)).toBeInTheDocument();
+  });
+
+  /**
+   * `oldValue`/`newValue` are `Record<string, unknown>`, so rendering them
+   * directly would throw "Objects are not valid as a React child" for every
+   * result that has ever been adjusted.
+   */
+  it('renders structured adjustment history values without crashing', () => {
+    mockUseStaffResult.mockReturnValue({
+      data: {
+        ...RESULT,
+        state: 'ADJUSTED',
+        adjustments: [
+          {
+            id: 'adj-1',
+            operationId: 'op-1',
+            adjustmentType: 'AWARD_MARK',
+            reason: 'Question 4 accepted both answers',
+            authorizedByName: 'Mrs Okon',
+            createdAt: '2026-09-02T09:00:00Z',
+            oldValue: { earnedMarks: 39 },
+            newValue: { earnedMarks: 41 },
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    actAs('moderator');
+    renderScreen();
+    expect(screen.getByText(/earnedMarks: 39/)).toBeInTheDocument();
+    expect(screen.getByText(/earnedMarks: 41/)).toBeInTheDocument();
+    expect(screen.getByText(/question 4 accepted both answers/i)).toBeInTheDocument();
+  });
+
+  /** A running bulk operation must survive navigation back to the roster,
+   *  so it is tracked in the URL and handed back through the Back link. */
+  it('carries a tracked adjustment operation back to the roster', () => {
+    params = new URLSearchParams('op=op-1');
+    actAs('moderator');
+    renderScreen();
+    expect(screen.getByRole('link', { name: /back to results/i })).toHaveAttribute(
+      'href',
+      '/moderator/results/exam-1?op=op-1',
+    );
   });
 
   /** DoD item 7 — marks are never directly editable; the only path to a

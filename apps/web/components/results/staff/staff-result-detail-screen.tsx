@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/error-state';
@@ -17,6 +18,26 @@ import { ResultStateBadge, WithheldBadge } from './result-state-badge';
 import { ResultReasonDialog } from './result-reason-dialog';
 import { AdjustmentDialog } from './adjustment-dialog';
 import { AdjustmentProgress } from './adjustment-progress';
+
+/**
+ * `ResultAdjustmentHistoryItemDto.oldValue`/`newValue` are
+ * `Record<string, unknown>` — a shape, not a scalar, because what changed
+ * differs by `adjustmentType` (a question's marks, a whole result's total).
+ * They must therefore be formatted rather than rendered: passing the object
+ * itself to JSX throws "Objects are not valid as a React child".
+ *
+ * Kept deliberately literal — "earnedMarks: 41" — rather than guessing at
+ * per-type prose. An audit trail that invents a friendlier label risks
+ * describing a change that did not happen; showing the recorded keys and
+ * values cannot.
+ */
+function formatAdjustmentValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value !== 'object') return String(value);
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0) return '—';
+  return entries.map(([key, entry]) => `${key}: ${String(entry)}`).join(', ');
+}
 
 /**
  * F15 — one student's result as staff see it (`04 Section 49`).
@@ -52,6 +73,10 @@ export function StaffResultDetailScreen({
   resultId: string;
   backPath: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const query = useStaffResult(resultId);
   const withhold = useWithholdResult(resultId);
   const release = useReleaseResult(resultId);
@@ -67,7 +92,26 @@ export function StaffResultDetailScreen({
     displaySequence: number;
   } | null>(null);
   const [overrideOpen, setOverrideOpen] = useState(false);
-  const [operationId, setOperationId] = useState<string | null>(null);
+
+  /**
+   * A raised adjustment is tracked in the URL, not in component state. A
+   * bulk operation over a whole cohort outlives this screen — staff
+   * routinely raise one and go straight back to the roster to watch it —
+   * and local state would be destroyed by that first navigation, leaving a
+   * running operation with no progress anywhere. `ExamResultsScreen` reads
+   * the same `op` param, so the Back link below hands the operation over.
+   */
+  const operationId = searchParams?.get('op') ?? null;
+
+  function trackOperation(id: string) {
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    params.set('op', id);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
+  const backHref = operationId
+    ? `${backPath}?op=${encodeURIComponent(operationId)}`
+    : backPath;
 
   if (query.isPending) {
     return (
@@ -84,7 +128,7 @@ export function StaffResultDetailScreen({
       <ErrorState
         error={query.error}
         onRetry={() => void query.refetch()}
-        title="Couldn\u2019t load this result"
+        title="Couldn’t load this result"
       />
     );
   }
@@ -94,14 +138,14 @@ export function StaffResultDetailScreen({
   return (
     <div className="space-y-6">
       <div>
-        <Link href={backPath} className="text-xs text-text-muted hover:underline">
+        <Link href={backHref} className="text-xs text-text-muted hover:underline">
           Back to results
         </Link>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-lg font-semibold text-text-primary">{result.studentName}</h1>
             <p className="text-xs text-text-muted">
-              {result.studentIdentifier} · {result.className} · {result.subjectName} ·{' '}
+              {result.studentIdentifier} · {result.className ?? 'No class'} · {result.subjectName} ·{' '}
               {result.examTitle}
             </p>
           </div>
@@ -116,12 +160,12 @@ export function StaffResultDetailScreen({
       {result.voidedReason ? (
         <p role="status" className="rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
           This result has been voided and is excluded from every exam aggregate and from the
-          student\u2019s own view. Reason: {result.voidedReason}
+          student’s own view. Reason: {result.voidedReason}
         </p>
       ) : null}
       {result.withheld && result.withheldReason ? (
         <p role="status" className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
-          Withheld from the student, even if this exam\u2019s results are published. Reason:{' '}
+          Withheld from the student, even if this exam’s results are published. Reason:{' '}
           {result.withheldReason}
         </p>
       ) : null}
@@ -256,7 +300,8 @@ export function StaffResultDetailScreen({
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-text-secondary">
-                  {adjustment.oldValue ?? '—'} → {adjustment.newValue ?? '—'} · authorized by{' '}
+                  {formatAdjustmentValue(adjustment.oldValue)} →{' '}
+                  {formatAdjustmentValue(adjustment.newValue)} · authorized by{' '}
                   {adjustment.authorizedByName}
                 </p>
                 <p className="mt-1 text-xs text-text-muted">{adjustment.reason}</p>
@@ -273,7 +318,7 @@ export function StaffResultDetailScreen({
           await withhold.mutateAsync(reason);
         }}
         title="Withhold this result?"
-        description="The student will not see this result even if the exam\u2019s results are published. The reason is recorded against the result."
+        description="The student will not see this result even if the exam’s results are published. The reason is recorded against the result."
         placeholder="Why is this result being withheld?"
         confirmLabel="Withhold result"
       />
@@ -284,7 +329,7 @@ export function StaffResultDetailScreen({
           await release.mutateAsync(reason);
         }}
         title="Release this result?"
-        description="The student will be able to see this result once the exam\u2019s results are published. The reason is recorded against the result."
+        description="The student will be able to see this result once the exam’s results are published. The reason is recorded against the result."
         placeholder="Why is this result being released?"
         confirmLabel="Release result"
         destructive={false}
@@ -301,7 +346,7 @@ export function StaffResultDetailScreen({
             examQuestionId: questionTarget.examQuestionId,
             displaySequence: questionTarget.displaySequence,
           }}
-          onCreated={setOperationId}
+          onCreated={trackOperation}
         />
       ) : null}
       {overrideOpen ? (
@@ -315,7 +360,7 @@ export function StaffResultDetailScreen({
             studentName: result.studentName,
             totalMarks: result.totalMarks,
           }}
-          onCreated={setOperationId}
+          onCreated={trackOperation}
         />
       ) : null}
     </div>
