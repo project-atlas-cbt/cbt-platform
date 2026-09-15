@@ -182,6 +182,16 @@ export class ExamControlController {
     // Center in this school, and a bad/cross-school id would have already
     // committed a 200 SSE response before the 404 was ever known.
     await this.stream.assertAccess(user.schoolId, actorFromAuthenticatedUser(user), id);
+    // Raw SSE responses bypass Fastify's normal response pipeline, so the
+    // CORS plugin cannot add these headers after `writeHead()` runs. Without
+    // them, a valid cross-origin EventSource connection is reported by the
+    // browser as a network failure and enters the permanent-loss state.
+    const origin = req.headers.origin;
+    if (typeof origin === 'string') {
+      reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+      reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+      reply.raw.setHeader('Vary', 'Origin');
+    }
     reply.raw.writeHead(HttpStatus.OK, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
