@@ -52,17 +52,62 @@ describe('parseImportFile — CSV', () => {
     ]);
   });
 
+  it('parses version marker when spreadsheet software adds trailing commas or quotes', async () => {
+    const buffer = csvBuffer([
+      '# template-version: 1,,,,',
+      'Student ID,First Name,Last Name,Class,Department',
+      'ST001,Ahmed,Bello,SS1A,Science',
+      'ST002,David,John,SS1A,Science',
+    ]);
+    const parsed = await parseImportFile(buffer, 'text/csv');
+    expect(parsed.version).toBe(1);
+    expect(parsed.headers).toEqual([
+      'Student ID',
+      'First Name',
+      'Last Name',
+      'Class',
+      'Department',
+    ]);
+    expect(parsed.rows).toHaveLength(2);
+  });
+
+  it('parses version marker when quoted with trailing commas', async () => {
+    const buffer = csvBuffer([
+      '"# template-version: 1",,,,',
+      'Student ID,First Name,Last Name,Class,Department',
+      'ST001,Ahmed,Bello,SS1A,Science',
+    ]);
+    const parsed = await parseImportFile(buffer, 'text/csv');
+    expect(parsed.version).toBe(1);
+    expect(parsed.headers).toEqual([
+      'Student ID',
+      'First Name',
+      'Last Name',
+      'Class',
+      'Department',
+    ]);
+    expect(parsed.rows).toHaveLength(1);
+  });
+
   it('returns version null when the marker line is missing or malformed', async () => {
     const buffer = csvBuffer(['Student ID,First Name', 'ST001,Ahmed']);
     const parsed = await parseImportFile(buffer, 'text/csv');
     expect(parsed.version).toBeNull();
+    expect(parsed.headers).toEqual(['Student ID', 'First Name']);
+    expect(parsed.rows).toEqual([{ 'Student ID': 'ST001', 'First Name': 'Ahmed' }]);
   });
 
-  it('strips a leading UTF-8 BOM from the header row', async () => {
-    const withoutBom = csvBuffer(['# template-version: 1', 'Student ID,First Name', 'ST001,Ahmed']);
+  it('strips a leading UTF-8 BOM from the header row and version marker', async () => {
+    const withoutBom = csvBuffer([
+      '# template-version: 1,,,,',
+      'Student ID,First Name',
+      'ST001,Ahmed',
+    ]);
     const withBom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), withoutBom]);
     const parsed = await parseImportFile(withBom, 'text/csv');
+    expect(parsed.version).toBe(1);
     expect(parsed.headers[0]).toBe('Student ID');
+    expect(parsed.rows[0]?.['Student ID']).toBe('ST001');
   });
 
   it('handles quoted cells containing commas', async () => {
@@ -73,6 +118,21 @@ describe('parseImportFile — CSV', () => {
     ]);
     const parsed = await parseImportFile(buffer, 'text/csv');
     expect(parsed.rows[0]?.['Staff ID']).toBe('STF,001');
+  });
+
+  it('handles fields containing unescaped/embedded quotes', async () => {
+    const buffer = csvBuffer([
+      '# template-version: 1,,,,,,,,,,',
+      'Question,Option A,Option B,Option C,Option D,Correct Answer,Subject,Class,Topic,Difficulty,Marks',
+      'Who wrote "Things Fall Apart"?,Chinua Achebe,Wole Soyinka,Buchi Emecheta,Amos Tutuola,A,English,SS1A,Nigerian Literature,MEDIUM,4',
+      'What is the past tense of "go"?,going,gone,went,goes,C,English,JSS1A,Verb Tenses,EASY,2',
+    ]);
+    const parsed = await parseImportFile(buffer, 'text/csv');
+    expect(parsed.version).toBe(1);
+    expect(parsed.rows).toHaveLength(2);
+    expect(parsed.rows[0]?.['Question']).toBe('Who wrote "Things Fall Apart"?');
+    expect(parsed.rows[0]?.['Option A']).toBe('Chinua Achebe');
+    expect(parsed.rows[1]?.['Question']).toBe('What is the past tense of "go"?');
   });
 
   it('throws ImportParseError for a file with no header row', async () => {

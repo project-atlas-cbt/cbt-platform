@@ -24,10 +24,11 @@ export interface ParsedImportFile {
   rows: Record<string, string>[];
 }
 
-const VERSION_MARKER_PATTERN = /^#\s*template-version:\s*(\d+)\s*$/;
+const VERSION_MARKER_PATTERN = /^["']?#\s*template-version:\s*(\d+)["']?(?:[,;\t\s].*)?$/i;
 
 function extractVersion(markerText: string): number | null {
-  const match = VERSION_MARKER_PATTERN.exec(markerText.trim());
+  const trimmed = markerText.replace(/^[\uFEFF\s]+|[\s]+$/g, '');
+  const match = VERSION_MARKER_PATTERN.exec(trimmed);
   return match ? Number(match[1]) : null;
 }
 
@@ -39,48 +40,87 @@ function rowToRecord(headers: string[], cells: string[]): Record<string, string>
   return record;
 }
 
+function getCellString(cell: ExcelJS.Cell): string {
+  const value = cell.value;
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'object') {
+    if ('richText' in value && Array.isArray(value.richText)) {
+      return value.richText.map((item: { text?: string }) => item.text ?? '').join('');
+    }
+    if ('result' in value && value.result !== undefined && value.result !== null) {
+      const result = value.result;
+      if (typeof result === 'string') return result;
+      if (typeof result === 'number' || typeof result === 'boolean') return String(result);
+      if (result instanceof Date) return result.toISOString();
+      return '';
+    }
+    if ('text' in value && typeof value.text === 'string') {
+      return value.text;
+    }
+  }
+  return cell.text ?? '';
+}
+
 /**
  * The version marker is line 1 (never fed to the CSV parser as data — a
  * comment line, not a template column), the real header row is line 2, and
- * data starts on line 3. `csv-parse` handles quoting/escaping for
- * everything from line 2 onward; the marker line itself is a plain string
- * match, never CSV-parsed.
+ * data starts on line 3.
+ *
+ * When opened and saved in spreadsheet applications (e.g. Microsoft Excel,
+ * Google Sheets, LibreOffice), row 1 often receives trailing delimiter
+ * commas (e.g. `# template-version: 1,,,,`), surrounding quotes, or BOM.
+ * `parseCsvSync` with `relax_column_count: true` parses row 1 cleanly so
+ * cell 1 can be extracted without trailing commas breaking version extraction.
  */
 function parseCsv(buffer: Buffer): ParsedImportFile {
   const text = buffer.toString('utf-8');
-  const newlineIndex = text.indexOf('\n');
-  if (newlineIndex === -1) {
-    throw new ImportParseError('The file has no header row.');
-  }
-  const version = extractVersion(text.slice(0, newlineIndex));
-  const remainder = text.slice(newlineIndex + 1);
-
   let records: string[][];
   try {
     // bom: true strips a leading UTF-8 byte-order mark, which spreadsheet
-    // software commonly writes and would otherwise corrupt the first
-    // header cell's name.
-    records = parseCsvSync(remainder, { bom: true, skip_empty_lines: true });
+    // software commonly writes and would otherwise corrupt the first cell.
+    // relax_quotes: true allows unescaped quotes inside fields (e.g.
+    // questions like: Who wrote "Things Fall Apart"?).
+    records = parseCsvSync(text, {
+      bom: true,
+      skip_empty_lines: true,
+      relax_column_count: true,
+      relax_quotes: true,
+      trim: true,
+    });
   } catch (error) {
     throw new ImportParseError(`Could not parse the file as CSV: ${(error as Error).message}`);
   }
   if (records.length === 0) {
     throw new ImportParseError('The file has no header row.');
   }
-  // Safe: the length check above guarantees index 0 exists.
-  const headers = records[0]!;
-  const dataRows = records.slice(1);
+
+  const firstRowFirstCell = (records[0]?.[0] ?? '').trim();
+  const version = extractVersion(firstRowFirstCell);
+
+  let headerRowIndex = 0;
+  if (version !== null || firstRowFirstCell.startsWith('#')) {
+    headerRowIndex = 1;
+  }
+
+  if (records.length <= headerRowIndex) {
+    throw new ImportParseError('The file has no header row.');
+  }
+
+  const headers = records[headerRowIndex]!.map((h) => h.trim()).filter((h) => h.length > 0);
+  if (headers.length === 0) {
+    throw new ImportParseError('The file has no header row.');
+  }
+
+  const dataRows = records.slice(headerRowIndex + 1);
   return { version, headers, rows: dataRows.map((cells) => rowToRecord(headers, cells)) };
 }
 
 /**
- * Same three-line convention as CSV (version marker / headers / data), just
- * across the first three worksheet rows instead of the first three text
- * lines. `cell.text` reads a formula cell's *cached* value, never
- * evaluating the formula itself — the roadmap's own Deferred item ("Direct
- * Excel formula evaluation — parse values only") is satisfied by exceljs's
- * own default behaviour here, not by anything this function does
- * specially.
+ * Same convention as CSV (version marker / headers / data), across worksheet
+ * rows. Handles formula cells, rich text, and optional leading version marker.
  */
 async function parseXlsx(buffer: Buffer): Promise<ParsedImportFile> {
   const workbook = new Workbook();
@@ -95,21 +135,55 @@ async function parseXlsx(buffer: Buffer): Promise<ParsedImportFile> {
     throw new ImportParseError('The file has no worksheet.');
   }
 
-  const version = extractVersion(String(worksheet.getRow(1).getCell(1).text ?? ''));
+  // Find the first non-empty row index
+  let firstRowNumber = 1;
+  while (firstRowNumber <= worksheet.rowCount) {
+    const row = worksheet.getRow(firstRowNumber);
+    let hasContent = false;
+    for (let c = 1; c <= row.cellCount; c++) {
+      if (getCellString(row.getCell(c)).trim() !== '') {
+        hasContent = true;
+        break;
+      }
+    }
+    if (hasContent) break;
+    firstRowNumber++;
+  }
+
+  if (firstRowNumber > worksheet.rowCount) {
+    throw new ImportParseError('The file has no header row.');
+  }
+
+  const firstRowCell1 = getCellString(worksheet.getRow(firstRowNumber).getCell(1)).trim();
+  const version = extractVersion(firstRowCell1);
+
+  let headerRowNumber = firstRowNumber;
+  if (version !== null || firstRowCell1.startsWith('#')) {
+    headerRowNumber = firstRowNumber + 1;
+  }
+
+  if (headerRowNumber > worksheet.rowCount) {
+    throw new ImportParseError('The file has no header row.');
+  }
 
   const headers: string[] = [];
-  worksheet.getRow(2).eachCell({ includeEmpty: false }, (cell) => {
-    headers.push(String(cell.text ?? '').trim());
-  });
+  const headerRow = worksheet.getRow(headerRowNumber);
+  for (let c = 1; c <= headerRow.cellCount; c++) {
+    const text = getCellString(headerRow.getCell(c)).trim();
+    if (text) {
+      headers.push(text);
+    }
+  }
+
   if (headers.length === 0) {
     throw new ImportParseError('The file has no header row.');
   }
 
   const rows: Record<string, string>[] = [];
-  for (let r = 3; r <= worksheet.rowCount; r++) {
+  for (let r = headerRowNumber + 1; r <= worksheet.rowCount; r++) {
     const row = worksheet.getRow(r);
-    const cells = headers.map((_, i) => String(row.getCell(i + 1).text ?? ''));
-    if (cells.every((cell) => cell.trim() === '')) continue; // skip a fully blank row
+    const cells = headers.map((_, i) => getCellString(row.getCell(i + 1)).trim());
+    if (cells.every((cell) => cell === '')) continue; // skip a fully blank row
     rows.push(rowToRecord(headers, cells));
   }
   return { version, headers, rows };
