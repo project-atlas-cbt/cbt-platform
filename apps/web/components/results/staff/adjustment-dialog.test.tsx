@@ -10,6 +10,13 @@ vi.mock('@/lib/results/staff-mutations', () => ({
 const mockUseCreateResultAdjustment = vi.mocked(useCreateResultAdjustment);
 const mutateAsync = vi.fn();
 
+const OVERRIDE_MODE = {
+  kind: 'override',
+  resultId: 'result-1',
+  studentName: 'Ada Bello',
+  totalMarks: 50,
+} as const;
+
 describe('AdjustmentDialog', () => {
   beforeEach(() => {
     mutateAsync.mockReset();
@@ -86,12 +93,7 @@ describe('AdjustmentDialog', () => {
         open
         onOpenChange={vi.fn()}
         examId="exam-1"
-        mode={{
-          kind: 'override',
-          resultId: 'result-1',
-          studentName: 'Ada Bello',
-          totalMarks: 50,
-        }}
+        mode={OVERRIDE_MODE}
         onCreated={vi.fn()}
       />,
     );
@@ -112,18 +114,41 @@ describe('AdjustmentDialog', () => {
     );
   });
 
+  /**
+   * `max` on a number input does not stop a typed or pasted value, and the
+   * DTO only enforces a non-negative integer — so without this check an
+   * override above the exam total would be stored as a percentage over 100.
+   */
+  it('refuses an override above the exam total and says why', () => {
+    render(
+      <AdjustmentDialog
+        open
+        onOpenChange={vi.fn()}
+        examId="exam-1"
+        mode={OVERRIDE_MODE}
+        onCreated={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Remarked after appeal' },
+    });
+    fireEvent.change(screen.getByLabelText('Marks awarded'), { target: { value: '80' } });
+
+    expect(screen.getByRole('button', { name: /apply adjustment/i })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('out of 50 marks');
+
+    fireEvent.change(screen.getByLabelText('Marks awarded'), { target: { value: '50' } });
+    expect(screen.getByRole('button', { name: /apply adjustment/i })).toBeEnabled();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
   it('does not offer an adjustment type choice in override mode', () => {
     render(
       <AdjustmentDialog
         open
         onOpenChange={vi.fn()}
         examId="exam-1"
-        mode={{
-          kind: 'override',
-          resultId: 'result-1',
-          studentName: 'Ada Bello',
-          totalMarks: 50,
-        }}
+        mode={OVERRIDE_MODE}
         onCreated={vi.fn()}
       />,
     );
