@@ -37,7 +37,7 @@ export function AdjustmentProgress({ operationId }: { operationId: string }) {
       <ErrorState
         error={query.error}
         onRetry={() => void query.refetch()}
-        title="Couldn\u2019t load adjustment progress"
+        title="Couldn’t load adjustment progress"
       />
     );
   }
