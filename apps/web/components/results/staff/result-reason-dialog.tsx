@@ -139,7 +139,7 @@ export function ResultReasonDialog({
               </Button>
               <Button
                 type="submit"
-                variant={destructive ? 'destructive' : 'default'}
+                variant={destructive ? 'destructive' : 'primary'}
                 loading={form.formState.isSubmitting}
               >
                 {confirmLabel}

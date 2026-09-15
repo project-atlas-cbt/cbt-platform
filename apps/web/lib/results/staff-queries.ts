@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import type { ResultState } from '@atlas/domain';
 import { apiClient, unwrap } from '@/lib/api';
 
 /**
@@ -19,7 +20,9 @@ export interface ExamResultsFilters {
   pageSize: number;
   q?: string;
   classId?: string;
-  state?: string;
+  /** `RESULT_STATES` from `@atlas/domain`, not a free string: the API
+   *  validates this with `IsIn(RESULT_STATES)` and 400s anything else. */
+  state?: ResultState;
   sortBy?: ExamResultSortBy;
   sortDir?: 'asc' | 'desc';
 }
@@ -68,7 +71,9 @@ export function useStaffResult(resultId: string | undefined) {
  * on either terminal status, rather than leaving a permanent background
  * timer running on a screen staff may sit on for an entire marking
  * session. `PENDING` is polled as well as `PROCESSING`: a queued operation
- * that the worker has not picked up yet is still going to change.
+ * that the worker has not picked up yet is still going to change. (These
+ * are the *operation* statuses from `ResultAdjustmentOperationResponseDto`,
+ * a different vocabulary from a result's own `RESULT_STATES`.)
  */
 export function useAdjustmentOperation(operationId: string | null) {
   return useQuery({

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { ResultAdjustmentType } from '@atlas/domain';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -31,12 +32,16 @@ import {
  * whole exam (ADR-0025: one parent operation fanning out to every affected
  * result), plus the per-result `MANUAL_OVERRIDE`, which is handled as its
  * own mode below.
+ *
+ * Typed against `ResultAdjustmentType` rather than left as loose strings, so
+ * a change to `RESULT_ADJUSTMENT_TYPES` in `@atlas/domain` breaks this list
+ * at compile time instead of at request time.
  */
-const QUESTION_TYPES = [
+const QUESTION_TYPES: ReadonlyArray<{ value: ResultAdjustmentType; label: string }> = [
   { value: 'VOID_QUESTION', label: 'Void this question for every student' },
   { value: 'AWARD_MARK', label: 'Award additional marks for this question' },
   { value: 'DEDUCT_MARK', label: 'Deduct marks for this question' },
-] as const;
+];
 
 type Mode =
   | { kind: 'question'; examQuestionId: string; displaySequence: number }
@@ -80,7 +85,7 @@ export function AdjustmentDialog({
   onCreated: (operationId: string) => void;
 }) {
   const create = useCreateResultAdjustment();
-  const [type, setType] = useState<string>(
+  const [type, setType] = useState<ResultAdjustmentType>(
     mode.kind === 'override' ? 'MANUAL_OVERRIDE' : 'VOID_QUESTION',
   );
   const [reason, setReason] = useState('');
@@ -99,10 +104,24 @@ export function AdjustmentDialog({
     setError(null);
   }
 
+  /**
+   * `max` on a number input is advisory — it does not stop a typed or
+   * pasted value, and submission here runs through a button handler rather
+   * than native form validation. `CreateResultAdjustmentDto` only enforces
+   * a non-negative integer, so an override of 80 out of 50 would have been
+   * accepted and stored as a percentage above 100. Checked here as well as
+   * shown.
+   */
+  const parsedOverride = Number.parseInt(overrideMarks, 10);
+  const overrideExceedsTotal =
+    mode.kind === 'override' &&
+    Number.isFinite(parsedOverride) &&
+    parsedOverride > mode.totalMarks;
+
   const canSubmit =
     trimmedReason.length > 0 &&
     (!needsMarkDelta || Number.parseInt(markDelta, 10) >= 1) &&
-    (mode.kind !== 'override' || Number.parseInt(overrideMarks, 10) >= 0);
+    (mode.kind !== 'override' || (parsedOverride >= 0 && !overrideExceedsTotal));
 
   async function onSubmit() {
     setError(null);
@@ -113,7 +132,7 @@ export function AdjustmentDialog({
             type: 'MANUAL_OVERRIDE',
             reason: trimmedReason,
             targetResultId: mode.resultId,
-            overrideEarnedMarks: Number.parseInt(overrideMarks, 10),
+            overrideEarnedMarks: parsedOverride,
           }
         : {
             examId,
@@ -159,7 +178,10 @@ export function AdjustmentDialog({
           {mode.kind === 'question' ? (
             <div>
               <Label htmlFor="adjustment-type">Adjustment</Label>
-              <Select value={type} onValueChange={setType}>
+              <Select
+                value={type}
+                onValueChange={(next) => setType(next as ResultAdjustmentType)}
+              >
                 <SelectTrigger id="adjustment-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -201,7 +223,13 @@ export function AdjustmentDialog({
                 value={overrideMarks}
                 onChange={(event) => setOverrideMarks(event.target.value)}
               />
-              <p className="mt-1 text-xs text-text-muted">Out of {mode.totalMarks}.</p>
+              {overrideExceedsTotal ? (
+                <p role="alert" className="mt-1 text-xs font-medium text-danger">
+                  This exam is out of {mode.totalMarks} marks. Enter {mode.totalMarks} or fewer.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-text-muted">Out of {mode.totalMarks}.</p>
+              )}
             </div>
           ) : null}
 

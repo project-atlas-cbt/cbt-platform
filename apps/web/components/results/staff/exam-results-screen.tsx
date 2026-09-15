@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { RESULT_STATES, type ResultState } from '@atlas/domain';
 import { ErrorState } from '@/components/ui/error-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,14 +28,30 @@ import { AdjustmentProgress } from './adjustment-progress';
 const PAGE_SIZE = 50;
 const ALL = '__all__';
 const SORTABLE = new Set<string>(['studentName', 'percentage', 'earnedMarks', 'finalizedAt']);
-const RESULT_STATE_OPTIONS = [
-  { value: 'FINALIZED', label: 'Finalized' },
-  { value: 'PENDING', label: 'Pending' },
-  { value: 'VOIDED', label: 'Voided' },
-];
+
+/**
+ * The state filter's vocabulary is `RESULT_STATES` itself, not a hand-kept
+ * copy: the API validates `state` with `IsIn(RESULT_STATES)`, so any drift
+ * between this list and the domain would surface as a 400 rather than as a
+ * missing option.
+ */
+const RESULT_STATE_LABELS: Record<ResultState, string> = {
+  PROCESSING: 'Processing',
+  FINAL: 'Final',
+  ADJUSTED: 'Adjusted',
+  VOIDED: 'Voided',
+};
 
 function asSortBy(value: string | null): ExamResultSortBy | undefined {
   return value && SORTABLE.has(value) ? (value as ExamResultSortBy) : undefined;
+}
+
+/** A junk `?state=` in a shared or hand-edited URL is dropped rather than
+ *  forwarded to the API, which would reject the whole request. */
+function asState(value: string | null): ResultState | undefined {
+  return value && (RESULT_STATES as readonly string[]).includes(value)
+    ? (value as ResultState)
+    : undefined;
 }
 
 /**
@@ -67,7 +84,7 @@ export function ExamResultsScreen({
 
   const q = searchParams.get('q') ?? '';
   const classId = searchParams.get('classId') ?? '';
-  const state = searchParams.get('state') ?? '';
+  const state = asState(searchParams.get('state'));
   const sortBy = asSortBy(searchParams.get('sortBy'));
   const sortDir = searchParams.get('sortDir') === 'desc' ? 'desc' : 'asc';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
@@ -76,7 +93,8 @@ export function ExamResultsScreen({
    * The operation id of an adjustment raised from this exam's result detail
    * screens during this session. Held in the URL rather than in state so
    * that navigating from a result back to the roster does not lose track of
-   * an operation that is still running.
+   * an operation that is still running — `StaffResultDetailScreen` writes
+   * this param and carries it back through its own Back link.
    */
   const operationId = searchParams.get('op');
   const [searchDraft, setSearchDraft] = useState(q);
@@ -120,7 +138,7 @@ export function ExamResultsScreen({
       <ErrorState
         error={results.error}
         onRetry={() => void results.refetch()}
-        title="Couldn\u2019t load results for this exam"
+        title="Couldn’t load results for this exam"
       />
     );
   }
@@ -173,7 +191,7 @@ export function ExamResultsScreen({
         <div>
           <Label htmlFor="result-state-filter">State</Label>
           <Select
-            value={state || ALL}
+            value={state ?? ALL}
             onValueChange={(next) => updateFilterParams({ state: next === ALL ? null : next })}
           >
             <SelectTrigger id="result-state-filter" className="w-40">
@@ -181,9 +199,9 @@ export function ExamResultsScreen({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All states</SelectItem>
-              {RESULT_STATE_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+              {RESULT_STATES.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {RESULT_STATE_LABELS[option]}
                 </SelectItem>
               ))}
             </SelectContent>

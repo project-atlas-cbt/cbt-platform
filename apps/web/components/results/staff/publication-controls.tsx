@@ -122,7 +122,7 @@ export function PublicationControls({
 
       {policyLocked ? (
         <p className="mt-2 text-xs text-text-muted">
-          This school\u2019s result policy is locked, so the server may refuse a manual change here.
+          This school’s result policy is locked, so the server may refuse a manual change here.
         </p>
       ) : null}
 

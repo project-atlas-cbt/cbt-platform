@@ -9,11 +9,17 @@ import { formatResultPercentage } from '@/lib/results/format';
 import { ResultGradeBadge } from '../result-grade-badge';
 import { ResultStateBadge, WithheldBadge } from './result-state-badge';
 
+/**
+ * Mirrors `ResultListItemDto`. `className` is nullable there (a result
+ * whose student has no current class enrolment still exists and must still
+ * be listed), so it is nullable here too rather than being quietly typed
+ * as a string the API does not promise.
+ */
 export interface StaffResultRow {
   id: string;
   studentName: string;
   studentIdentifier: string;
-  className: string;
+  className: string | null;
   state: string;
   earnedMarks: number;
   totalMarks: number;
@@ -91,7 +97,7 @@ export function ExamResultsTable({
         </div>
       ),
     },
-    { id: 'class', header: 'Class', cell: (row) => row.className },
+    { id: 'class', header: 'Class', cell: (row) => row.className ?? '—' },
     {
       id: 'earnedMarks',
       header: 'Marks',

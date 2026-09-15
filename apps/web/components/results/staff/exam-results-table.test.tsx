@@ -8,7 +8,7 @@ const ROWS: StaffResultRow[] = [
     studentName: 'Ada Bello',
     studentIdentifier: 'STU/2026/001',
     className: 'SS2A',
-    state: 'FINALIZED',
+    state: 'FINAL',
     earnedMarks: 41,
     totalMarks: 50,
     percentage: 82,
@@ -37,14 +37,15 @@ const ROWS: StaffResultRow[] = [
     id: 'result-3',
     studentName: 'Ngozi Eze',
     studentIdentifier: 'STU/2026/003',
-    className: 'SS2B',
-    state: 'FINALIZED',
+    className: null,
+    state: 'ADJUSTED',
     earnedMarks: 30,
     totalMarks: 50,
     percentage: 60,
     grade: 'C',
     withheld: true,
     withheldReason: 'Pending script review',
+    voidedReason: null,
     finalizedAt: '2026-09-01T10:05:00Z',
   },
 ];
@@ -77,6 +78,26 @@ describe('ExamResultsTable', () => {
     renderTable();
     expect(screen.getByText('Withheld')).toBeInTheDocument();
     expect(screen.getByText(/pending script review/i)).toBeInTheDocument();
+  });
+
+  /**
+   * `RESULT_STATES` is `PROCESSING | FINAL | ADJUSTED | VOIDED`. `ADJUSTED`
+   * must read differently from `FINAL`: a moderator looking at a disputed
+   * script needs to see that the score was changed after finalisation.
+   */
+  it('labels each domain result state distinctly', () => {
+    renderTable();
+    expect(screen.getByText('Final')).toBeInTheDocument();
+    expect(screen.getByText('Adjusted')).toBeInTheDocument();
+    expect(screen.getByText('Voided')).toBeInTheDocument();
+  });
+
+  /** `className` is nullable on `ResultListItemDto` — a result whose student
+   *  has no current class enrolment is still listed. */
+  it('renders a placeholder rather than a blank cell for a result with no class', () => {
+    renderTable();
+    expect(screen.getByText('Ngozi Eze')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
   it('displays the stored grade, including "Ungraded" when none was stored', () => {
