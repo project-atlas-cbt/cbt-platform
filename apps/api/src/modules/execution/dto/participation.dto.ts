@@ -1,9 +1,8 @@
 import { ApiProperty,ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray,IsDateString,IsNotEmpty,IsOptional,IsString,IsUUID } from 'class-validator';
-export const PARTICIPATION_STATUSES=['PENDING','ATTENDED','COMPLETED','ABSENT'] as const; export type ParticipationStatus=(typeof PARTICIPATION_STATUSES)[number];
-export const AUTHORIZATION_TYPES=['MAKEUP','RETRY'] as const; export type AuthorizationType=(typeof AUTHORIZATION_TYPES)[number];
-export const AUTHORIZATION_STATUSES=['AUTHORIZED','USED','REVOKED','EXPIRED'] as const; export type AuthorizationStatus=(typeof AUTHORIZATION_STATUSES)[number];
-export const PARTICIPATION_CLASSIFICATIONS=['PENDING','IN_PROGRESS','COMPLETED','INCOMPLETE','ABSENT','INVALIDATED'] as const; export type ParticipationClassification=(typeof PARTICIPATION_CLASSIFICATIONS)[number];
+import { ATTEMPT_AUTHORIZATION_STATUSES as AUTHORIZATION_STATUSES,ATTEMPT_AUTHORIZATION_TYPES as AUTHORIZATION_TYPES,ATTEMPT_PARTICIPATION_CLASSIFICATIONS as PARTICIPATION_CLASSIFICATIONS,PARTICIPATION_STATUSES,type AttemptAuthorizationStatus as AuthorizationStatus,type AttemptAuthorizationType as AuthorizationType,type AttemptParticipationClassification as ParticipationClassification,type ParticipationStatus } from '@atlas/domain';
+export { AUTHORIZATION_STATUSES,AUTHORIZATION_TYPES,PARTICIPATION_CLASSIFICATIONS,PARTICIPATION_STATUSES };
+export type { AuthorizationStatus,AuthorizationType,ParticipationClassification,ParticipationStatus };
 export class ParticipationRowDto{@ApiProperty()studentProfileId!:string;@ApiProperty()examSessionId!:string;@ApiProperty({enum:PARTICIPATION_STATUSES})participationStatus!:ParticipationStatus;@ApiProperty({enum:PARTICIPATION_CLASSIFICATIONS})classification!:ParticipationClassification;@ApiProperty({nullable:true})attemptId!:string|null;@ApiProperty({nullable:true})attemptState!:string|null}
 export class ExamParticipationResponseDto{@ApiProperty({type:[ParticipationRowDto]})items!:ParticipationRowDto[];@ApiProperty()studentCount!:number;@ApiProperty()absentCount!:number;@ApiProperty()incompleteCount!:number}
 export class ConfirmAbsencesDto{@ApiProperty({format:'uuid'})@IsUUID()examSessionId!:string;@ApiProperty({type:[String]})@IsArray()@IsUUID(undefined,{each:true})studentProfileIds!:string[];@ApiPropertyOptional()@IsOptional()@IsString()reason?:string}
