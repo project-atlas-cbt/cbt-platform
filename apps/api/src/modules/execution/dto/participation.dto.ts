@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsDateString, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import {
   ATTEMPT_AUTHORIZATION_STATUSES as AUTHORIZATION_STATUSES,
   ATTEMPT_AUTHORIZATION_TYPES as AUTHORIZATION_TYPES,
@@ -48,6 +56,7 @@ export class ConfirmAbsencesDto {
 
   @ApiProperty({ type: [String], minItems: 1 })
   @IsArray()
+  @ArrayNotEmpty()
   @IsUUID(undefined, { each: true })
   studentProfileIds!: string[];
 

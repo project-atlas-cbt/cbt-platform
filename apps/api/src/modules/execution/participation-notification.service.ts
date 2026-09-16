@@ -13,11 +13,10 @@ export class ParticipationNotificationService {
    * transaction commits. A notification outage must not turn a successfully
    * persisted grant into an apparent failed request that callers then repeat.
    */
-  async authorizationGranted(
+  async makeupGranted(
     schoolId: string,
     studentProfileId: string,
     examId: string,
-    type: 'MAKEUP',
   ): Promise<void> {
     try {
       const profile = await withTenant(prisma, schoolId, (tx) =>
