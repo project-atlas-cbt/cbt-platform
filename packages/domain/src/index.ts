@@ -178,6 +178,17 @@ export {
   type AttemptMarkingJobPayload,
 } from './execution/attempt-marking-queue.js';
 export {
+  PARTICIPATION_STATUSES,
+  ATTEMPT_AUTHORIZATION_TYPES,
+  ATTEMPT_AUTHORIZATION_STATUSES,
+  ATTEMPT_PARTICIPATION_CLASSIFICATIONS,
+  classifyAttemptParticipation,
+  type ParticipationStatus,
+  type AttemptAuthorizationType,
+  type AttemptAuthorizationStatus,
+  type AttemptParticipationClassification,
+} from './execution/participation.js';
+export {
   computePercentage,
   computeResultTotals,
   type ResultQuestionMarking,
