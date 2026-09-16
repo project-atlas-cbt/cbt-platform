@@ -79,7 +79,7 @@ export class ParticipationController {
   }
 
   @Get('student/participation')
-  @Authorized('results.viewExamResults')
+  @Authorized('analytics.studentHistory')
   studentHistory(@Req() request: FastifyRequest) {
     const current = user(request);
     return this.studentParticipation.list(current.schoolId, actorFromAuthenticatedUser(current));

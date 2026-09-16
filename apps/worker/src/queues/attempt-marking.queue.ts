@@ -17,11 +17,6 @@ export interface AttemptMarkingWorkerDeps {
   onBeforeUpsert?: (index: number) => void;
 }
 
-/**
- * Marks only submitted attempts. INVALIDATED and CANCELLED are deliberate
- * terminal outcomes, so a delayed or retried queue job must become a no-op
- * rather than recreate marking evidence or finalize a voided result.
- */
 export async function runAttemptMarking(
   deps: AttemptMarkingWorkerDeps,
   payload: AttemptMarkingJobPayload,
@@ -31,18 +26,20 @@ export async function runAttemptMarking(
   let published = false;
 
   await withTenant(prisma, schoolId, async (tx) => {
-    const attempt = await tx.examAttempt.findUniqueOrThrow({
-      where: { id: attemptId },
-      select: { state: true },
-    });
-
-    if (attempt.state === 'INVALIDATED' || attempt.state === 'CANCELLED') {
-      return;
-    }
-    if (attempt.state !== 'SUBMITTED' && attempt.state !== 'AUTO_SUBMITTED') {
-      throw new Error(
-        `attempt ${attemptId} is ${attempt.state} — refusing to mark before submission`,
-      );
+    // Serialize against administrative invalidation. If invalidation wins,
+    // this job is a no-op; if marking wins, invalidation waits and then voids
+    // the committed result in its own transaction.
+    const locked = await tx.$queryRaw<{ state: string }[]>`
+      SELECT state::text AS state
+      FROM exam_attempts
+      WHERE school_id = ${schoolId}::uuid AND id = ${attemptId}::uuid
+      FOR UPDATE
+    `;
+    const state = locked[0]?.state;
+    if (!state) throw new Error(`attempt ${attemptId} was not found`);
+    if (state === 'INVALIDATED' || state === 'CANCELLED') return;
+    if (state !== 'SUBMITTED' && state !== 'AUTO_SUBMITTED') {
+      throw new Error(`attempt ${attemptId} is ${state} — refusing to mark before submission`);
     }
 
     const snapshot = await tx.attemptQuestionSnapshot.findUniqueOrThrow({
@@ -53,10 +50,7 @@ export async function runAttemptMarking(
       select: { examQuestionId: true, selectedOptionId: true },
     });
     const answersByExamQuestionId = new Map(
-      answers.map((answer) => [
-        answer.examQuestionId,
-        { selectedOptionId: answer.selectedOptionId },
-      ]),
+      answers.map((answer) => [answer.examQuestionId, { selectedOptionId: answer.selectedOptionId }]),
     );
     const document = snapshot.document as unknown as AttemptSnapshotDocumentV1;
     const results = computeAttemptQuestionMarkingResults(document, answersByExamQuestionId);
@@ -71,14 +65,7 @@ export async function runAttemptMarking(
             examQuestionId: result.examQuestionId,
           },
         },
-        create: {
-          schoolId,
-          attemptId,
-          examQuestionId: result.examQuestionId,
-          correctness: result.correctness,
-          awardedMarks: result.awardedMarks,
-          maximumMarks: result.maximumMarks,
-        },
+        create: { schoolId, attemptId, ...result },
         update: {
           correctness: result.correctness,
           awardedMarks: result.awardedMarks,
@@ -97,10 +84,7 @@ export async function runAttemptMarking(
     const outcome = finalized;
     try {
       const exam = await withTenant(prisma, schoolId, (tx) =>
-        tx.exam.findUniqueOrThrow({
-          where: { id: outcome.examId },
-          select: { title: true },
-        }),
+        tx.exam.findUniqueOrThrow({ where: { id: outcome.examId }, select: { title: true } }),
       );
       await recordAutoPublication(schoolId, outcome, exam.title, outcome.studentUserId);
     } catch (error) {
@@ -117,9 +101,7 @@ export function createAttemptMarkingWorker(
 ): Worker<AttemptMarkingJobPayload> {
   return new Worker<AttemptMarkingJobPayload>(
     ATTEMPT_MARKING_QUEUE_NAME,
-    async (job) => {
-      await runAttemptMarking(deps, job.data);
-    },
+    async (job) => runAttemptMarking(deps, job.data),
     { connection },
   );
 }
