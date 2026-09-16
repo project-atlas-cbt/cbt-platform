@@ -1,0 +1,42 @@
+// B16 models whose database constraints are owned by the hand-written B16 migrations.
+// Provenance is intentionally scalar-only here: composite cross-table constraints,
+// partial uniqueness and lifecycle guards are represented in migration SQL.
+enum AttemptAuthorizationType {
+  MAKEUP
+  RETRY
+}
+
+enum AttemptAuthorizationStatus {
+  AUTHORIZED
+  USED
+  REVOKED
+  EXPIRED
+}
+
+model AttemptAuthorization {
+  id                       String                     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId                 String                     @map("school_id") @db.Uuid
+  examId                   String                     @map("exam_id") @db.Uuid
+  studentProfileId         String                     @map("student_profile_id") @db.Uuid
+  type                     AttemptAuthorizationType
+  status                   AttemptAuthorizationStatus @default(AUTHORIZED)
+  reason                   String?
+  authorizedByMembershipId String                     @map("authorized_by_membership_id") @db.Uuid
+  authorizedAt             DateTime                   @default(now()) @map("authorized_at") @db.Timestamptz(6)
+  expiresAt                DateTime?                  @map("expires_at") @db.Timestamptz(6)
+  sourceExamSessionId      String?                    @map("source_exam_session_id") @db.Uuid
+  sourceParticipationId    String?                    @map("source_participation_id") @db.Uuid
+  sourceAttemptId          String?                    @map("source_attempt_id") @db.Uuid
+  usedByAttemptId          String?                    @unique(map: "attempt_authorizations_used_attempt_key") @map("used_by_attempt_id") @db.Uuid
+  usedAt                   DateTime?                  @map("used_at") @db.Timestamptz(6)
+  revokedByMembershipId    String?                    @map("revoked_by_membership_id") @db.Uuid
+  revokedAt                DateTime?                  @map("revoked_at") @db.Timestamptz(6)
+  revokedReason            String?                    @map("revoked_reason")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([schoolId, sourceParticipationId, type], map: "attempt_authorizations_source_participation_type_key")
+  @@index([schoolId, examId, studentProfileId, status], map: "attempt_authorizations_lookup_idx")
+  @@index([schoolId, sourceExamSessionId], map: "attempt_authorizations_source_session_idx")
+  @@map("attempt_authorizations")
+}
