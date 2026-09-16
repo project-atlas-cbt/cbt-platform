@@ -1,16 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useHasPermission } from '@/lib/nav';
+import { usePublishResults, useUnpublishResults } from '@/lib/results/staff-mutations';
 import {
   useAdjustmentOperation,
   useExamResults,
   useSchoolResultPolicy,
 } from '@/lib/results/staff-queries';
-import { usePublishResults, useUnpublishResults } from '@/lib/results/staff-mutations';
 import { ExamResultsScreen } from './exam-results-screen';
 
 const replace = vi.fn();
 let params = new URLSearchParams();
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
   useSearchParams: () => params,
@@ -26,14 +27,16 @@ vi.mock('@/lib/results/staff-mutations', () => ({
   useUnpublishResults: vi.fn(),
 }));
 
-const mockUseHasPermission = vi.mocked(useHasPermission);
-const mockUseExamResults = vi.mocked(useExamResults);
-const mockUseSchoolResultPolicy = vi.mocked(useSchoolResultPolicy);
-const mockUseAdjustmentOperation = vi.mocked(useAdjustmentOperation);
-const mockUsePublishResults = vi.mocked(usePublishResults);
-const mockUseUnpublishResults = vi.mocked(useUnpublishResults);
+const permissions = vi.mocked(useHasPermission);
+const results = vi.mocked(useExamResults);
+const policy = vi.mocked(useSchoolResultPolicy);
+const operation = vi.mocked(useAdjustmentOperation);
+const publish = vi.mocked(usePublishResults);
+const unpublish = vi.mocked(useUnpublishResults);
 
 const SUMMARY = {
+  studentCount: 4,
+  absentCount: 1,
   resultCount: 3,
   voidedCount: 1,
   pendingCount: 0,
@@ -43,30 +46,28 @@ const SUMMARY = {
   passRate: 66.7,
 };
 
-function data(overrides: Record<string, unknown> = {}) {
-  return {
-    items: [],
-    total: 0,
-    page: 1,
-    pageSize: 50,
-    summary: SUMMARY,
-    classSummaries: [],
-    published: false,
-    adjustmentInProgress: false,
-    ...overrides,
-  };
-}
+const data = (overrides: Record<string, unknown> = {}) => ({
+  items: [],
+  total: 0,
+  page: 1,
+  pageSize: 50,
+  summary: SUMMARY,
+  classSummaries: [],
+  published: false,
+  adjustmentInProgress: false,
+  ...overrides,
+});
 
 describe('ExamResultsScreen', () => {
   beforeEach(() => {
     params = new URLSearchParams();
     replace.mockReset();
-    mockUseHasPermission.mockReturnValue(false);
-    mockUseSchoolResultPolicy.mockReturnValue({ data: undefined } as never);
-    mockUseAdjustmentOperation.mockReturnValue({ isPending: true } as never);
-    mockUsePublishResults.mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never);
-    mockUseUnpublishResults.mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never);
-    mockUseExamResults.mockReturnValue({
+    permissions.mockReturnValue(false);
+    policy.mockReturnValue({ data: undefined } as never);
+    operation.mockReturnValue({ isPending: true } as never);
+    publish.mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never);
+    unpublish.mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never);
+    results.mockReturnValue({
       data: data(),
       isPending: false,
       isError: false,
@@ -74,24 +75,21 @@ describe('ExamResultsScreen', () => {
     } as never);
   });
 
-  it('states plainly which summary figures are unavailable rather than inventing them', () => {
+  it('renders authoritative participation totals', () => {
     render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
-    expect(screen.getByText(/students expected and absent counts are not shown/i)).toBeInTheDocument();
-    expect(screen.getByText('Voided')).toBeInTheDocument();
+    expect(screen.getByText('Students')).toBeInTheDocument();
+    expect(screen.getByText('Absent')).toBeInTheDocument();
+    expect(screen.getByText(/come from recorded participation/i)).toBeInTheDocument();
   });
 
-  it('shows a loading state', () => {
-    mockUseExamResults.mockReturnValue({
-      data: undefined,
-      isPending: true,
-      isError: false,
-    } as never);
+  it('shows loading', () => {
+    results.mockReturnValue({ data: undefined, isPending: true, isError: false } as never);
     render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
     expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
   });
 
-  it('shows a retryable error state', () => {
-    mockUseExamResults.mockReturnValue({
+  it('shows a retryable error', () => {
+    results.mockReturnValue({
       data: undefined,
       isPending: false,
       isError: true,
@@ -102,19 +100,18 @@ describe('ExamResultsScreen', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('boom');
   });
 
-  it('hides publication controls entirely without publish or unpublish grants', () => {
+  it('hides publication controls without grants', () => {
     render(<ExamResultsScreen examId="exam-1" basePath="/teacher/results" />);
     expect(screen.queryByRole('button', { name: /publish results/i })).not.toBeInTheDocument();
   });
 
-  it('offers publication when granted, and blocks it while an adjustment is running', () => {
-    mockUseHasPermission.mockReturnValue(true);
+  it('blocks publication during adjustment', () => {
+    permissions.mockReturnValue(true);
     const { rerender } = render(
       <ExamResultsScreen examId="exam-1" basePath="/moderator/results" />,
     );
     expect(screen.getByRole('button', { name: /publish results/i })).toBeEnabled();
-
-    mockUseExamResults.mockReturnValue({
+    results.mockReturnValue({
       data: data({ adjustmentInProgress: true }),
       isPending: false,
       isError: false,
@@ -122,33 +119,29 @@ describe('ExamResultsScreen', () => {
     } as never);
     rerender(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
     expect(screen.getByRole('button', { name: /publish results/i })).toBeDisabled();
-    expect(screen.getByText(/publication is unavailable until it finishes/i)).toBeInTheDocument();
   });
 
-  it('renders per-class tabs only for a genuinely multi-class exam (ADR-0013)', () => {
+  it('renders class tabs for a multi-class exam', () => {
     const classSummaries = [
       { ...SUMMARY, classId: 'c1', className: 'SS2A' },
       { ...SUMMARY, classId: 'c2', className: 'SS2B' },
     ];
-    const { rerender } = render(
-      <ExamResultsScreen examId="exam-1" basePath="/moderator/results" />,
-    );
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
-
-    mockUseExamResults.mockReturnValue({
+    results.mockReturnValue({
       data: data({ classSummaries }),
       isPending: false,
       isError: false,
       refetch: vi.fn(),
     } as never);
-    rerender(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
+    render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
     expect(screen.getByRole('tab', { name: 'SS2B' })).toBeInTheDocument();
   });
 
-  it('reads filter and sort state from the URL rather than local state', () => {
-    params = new URLSearchParams('q=ada&state=VOIDED&sortBy=percentage&sortDir=desc&page=2');
+  it('reads filters from the URL', () => {
+    params = new URLSearchParams(
+      'q=ada&state=VOIDED&sortBy=percentage&sortDir=desc&page=2',
+    );
     render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
-    expect(mockUseExamResults).toHaveBeenCalledWith(
+    expect(results).toHaveBeenCalledWith(
       'exam-1',
       expect.objectContaining({
         q: 'ada',

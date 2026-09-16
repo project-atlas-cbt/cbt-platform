@@ -6,14 +6,6 @@ import { AuthorizationService } from '../authorization/authorization.service.js'
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { resolveMembershipDisplayNames } from '../execution/exam-control-mappers.js';
 import { loadExamOrThrow } from '../exams/exam-mappers.js';
-import {
-  RESULT_LIST_INCLUDE,
-  decimalToNumber,
-  toAdjustmentHistoryItemDto,
-  toResultListItemDto,
-} from './result-mappers.js';
-import { isExamCreator, resolveResultResourceContext } from './result-scope.util.js';
-import { aggregatableResultWhere } from './result-visibility.util.js';
 import type {
   ExamResultClassSummaryDto,
   ExamResultSummaryDto,
@@ -22,17 +14,20 @@ import type {
   ResultDetailResponseDto,
   ResultQuestionBreakdownDto,
 } from './dto/result.dto.js';
+import {
+  RESULT_LIST_INCLUDE,
+  decimalToNumber,
+  toAdjustmentHistoryItemDto,
+  toResultListItemDto,
+} from './result-mappers.js';
+import { isExamCreator, resolveResultResourceContext } from './result-scope.util.js';
+import { aggregatableResultWhere } from './result-visibility.util.js';
 
-/**
- * `results.v1`'s read half — the staff results list (04 §48/§49) and the
- * individual result with its per-question breakdown and adjustment history.
- *
- * Scope is resolved through the EXAM, never the result: `02`'s Results rows
- * grade exactly like the exam that produced them, so a teacher sees their
- * own exams' results, an HOD their department's, School Admin/Moderator the
- * school's. See `result-scope.util.ts` for why that resolution mirrors
- * `ExamService`'s rather than inventing a second scheme.
- */
+type ParticipationCounts = {
+  studentCount: bigint | number;
+  absentCount: bigint | number;
+};
+
 @Injectable()
 export class ResultQueryService {
   constructor(private readonly authz: AuthorizationService) {}
@@ -50,31 +45,33 @@ export class ResultQueryService {
     const pageSize = query.pageSize ?? 25;
     const sortBy = query.sortBy ?? 'studentName';
     const sortDir = query.sortDir ?? 'asc';
+    const filters: Prisma.ResultWhereInput[] = [];
+
+    if (query.classId !== undefined) {
+      filters.push({
+        studentProfile: {
+          enrollments: { some: { schoolId, classId: query.classId, status: 'ACTIVE' } },
+        },
+      });
+    }
+    if (query.q !== undefined && query.q.trim() !== '') {
+      const search = query.q.trim();
+      filters.push({
+        studentProfile: {
+          OR: [
+            { studentId: { contains: search, mode: 'insensitive' } },
+            { membership: { user: { displayName: { contains: search, mode: 'insensitive' } } } },
+          ],
+        },
+      });
+    }
 
     const where: Prisma.ResultWhereInput = {
       schoolId,
       examId,
       ...(query.state !== undefined && { state: query.state }),
-      ...(query.classId !== undefined && {
-        studentProfile: {
-          enrollments: { some: { schoolId, classId: query.classId, status: 'ACTIVE' } },
-        },
-      }),
-      ...(query.q !== undefined &&
-        query.q.trim() !== '' && {
-          studentProfile: {
-            OR: [
-              { studentId: { contains: query.q.trim(), mode: 'insensitive' } },
-              {
-                membership: {
-                  user: { displayName: { contains: query.q.trim(), mode: 'insensitive' } },
-                },
-              },
-            ],
-          },
-        }),
+      ...(filters.length > 0 && { AND: filters }),
     };
-
     const orderBy: Prisma.ResultOrderByWithRelationInput =
       sortBy === 'studentName'
         ? { studentProfile: { membership: { user: { displayName: sortDir } } } }
@@ -84,7 +81,7 @@ export class ResultQueryService {
             ? { earnedMarks: sortDir }
             : { finalizedAt: sortDir };
 
-    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
+    const [rows, total, publication] = await withTenant(prisma, schoolId, (tx) =>
       Promise.all([
         tx.result.findMany({
           where,
@@ -94,11 +91,8 @@ export class ResultQueryService {
           take: pageSize,
         }),
         tx.result.count({ where }),
+        tx.resultPublication.findUnique({ where: { schoolId_examId: { schoolId, examId } } }),
       ]),
-    );
-
-    const publication = await withTenant(prisma, schoolId, (tx) =>
-      tx.resultPublication.findUnique({ where: { schoolId_examId: { schoolId, examId } } }),
     );
 
     return {
@@ -106,7 +100,7 @@ export class ResultQueryService {
       total,
       page,
       pageSize,
-      summary: await this.computeSummary(schoolId, examId),
+      summary: await this.summaryFor(schoolId, examId),
       classSummaries: await this.computeClassSummaries(schoolId, exam),
       published: publication?.status === 'PUBLISHED',
       adjustmentInProgress: publication?.adjustmentInProgress ?? false,
@@ -126,9 +120,7 @@ export class ResultQueryService {
           exam: { select: { id: true, title: true, subject: { select: { name: true } } } },
           adjustments: {
             orderBy: { createdAt: 'asc' },
-            include: {
-              operation: { select: { targetExamQuestionId: true, type: true } },
-            },
+            include: { operation: { select: { targetExamQuestionId: true, type: true } } },
           },
         },
       }),
@@ -138,13 +130,16 @@ export class ResultQueryService {
     }
 
     const exam = await loadExamOrThrow(schoolId, result.examId);
-    await this.assertCanViewExamResults(schoolId, actor, exam, 'results.viewIndividualResult');
+    await this.assertCanViewExamResults(
+      schoolId,
+      actor,
+      exam,
+      'results.viewIndividualResult',
+    );
 
     const [questionResults, snapshot, actorNames] = await Promise.all([
       withTenant(prisma, schoolId, (tx) =>
-        tx.attemptQuestionResult.findMany({
-          where: { schoolId, attemptId: result.attemptId },
-        }),
+        tx.attemptQuestionResult.findMany({ where: { schoolId, attemptId: result.attemptId } }),
       ),
       withTenant(prisma, schoolId, (tx) =>
         tx.attemptQuestionSnapshot.findUnique({
@@ -154,40 +149,34 @@ export class ResultQueryService {
       ),
       resolveMembershipDisplayNames(
         schoolId,
-        result.adjustments.map((a) => a.authorizedByMembershipId),
+        result.adjustments.map((adjustment) => adjustment.authorizedByMembershipId),
       ),
     ]);
 
-    // Questions voided by an adjustment stay in the breakdown, flagged —
-    // 07 §38 keeps the marking evidence immutable, so the honest view is
-    // "this question was asked and then excluded", never a silently
-    // shortened paper.
     const voidedQuestionIds = new Set(
       result.adjustments
-        .filter((a) => a.adjustmentType === 'VOID_QUESTION')
-        .map((a) => a.operation.targetExamQuestionId)
+        .filter((adjustment) => adjustment.adjustmentType === 'VOID_QUESTION')
+        .map((adjustment) => adjustment.operation.targetExamQuestionId)
         .filter((id): id is string => id !== null),
     );
-
     const document = snapshot?.document as unknown as AttemptSnapshotDocumentV1 | undefined;
     const questionsById = new Map(
-      (document?.questions ?? []).map((q) => [q.examQuestionId, q] as const),
+      (document?.questions ?? []).map((question) => [question.examQuestionId, question] as const),
     );
-
     const questions: ResultQuestionBreakdownDto[] = questionResults
-      .map((qr) => {
-        const snapshotQuestion = questionsById.get(qr.examQuestionId);
+      .map((questionResult) => {
+        const question = questionsById.get(questionResult.examQuestionId);
         return {
-          examQuestionId: qr.examQuestionId,
-          displaySequence: snapshotQuestion?.displaySequence ?? 0,
-          content: snapshotQuestion?.content ?? '',
-          correctness: qr.correctness,
-          awardedMarks: qr.awardedMarks,
-          maximumMarks: qr.maximumMarks,
-          voided: voidedQuestionIds.has(qr.examQuestionId),
+          examQuestionId: questionResult.examQuestionId,
+          displaySequence: question?.displaySequence ?? 0,
+          content: question?.content ?? '',
+          correctness: questionResult.correctness,
+          awardedMarks: questionResult.awardedMarks,
+          maximumMarks: questionResult.maximumMarks,
+          voided: voidedQuestionIds.has(questionResult.examQuestionId),
         };
       })
-      .sort((a, b) => a.displaySequence - b.displaySequence);
+      .sort((left, right) => left.displaySequence - right.displaySequence);
 
     return {
       ...toResultListItemDto(result),
@@ -196,33 +185,36 @@ export class ResultQueryService {
       subjectName: result.exam.subject.name,
       gradingScaleVersionId: result.gradingScaleVersionId,
       questions,
-      adjustments: result.adjustments.map((a) =>
+      adjustments: result.adjustments.map((adjustment) =>
         toAdjustmentHistoryItemDto({
-          ...a,
-          authorizedByName: actorNames.get(a.authorizedByMembershipId) ?? 'Unknown',
+          ...adjustment,
+          authorizedByName:
+            actorNames.get(adjustment.authorizedByMembershipId) ?? 'Unknown',
         }),
       ),
     };
   }
 
-  /**
-   * 04 §48's exam header block. Every figure runs through
-   * `aggregatableResultWhere`, which is ADR-0025's shared filter — VOIDED
-   * results are counted separately and excluded from every average.
-   */
   async computeSummary(schoolId: string, examId: string): Promise<ExamResultSummaryDto> {
-    return this.summaryFor(schoolId, aggregatableResultWhere(schoolId, examId), examId);
+    return this.summaryFor(schoolId, examId);
   }
 
   private async summaryFor(
     schoolId: string,
-    where: Prisma.ResultWhereInput,
     examId: string,
-    extraWhere?: Prisma.ResultWhereInput,
+    classId?: string,
   ): Promise<ExamResultSummaryDto> {
-    const scoped: Prisma.ResultWhereInput = extraWhere ? { AND: [where, extraWhere] } : where;
+    const classWhere: Prisma.ResultWhereInput | undefined = classId
+      ? {
+          studentProfile: {
+            enrollments: { some: { schoolId, classId, status: 'ACTIVE' } },
+          },
+        }
+      : undefined;
+    const base = aggregatableResultWhere(schoolId, examId);
+    const scoped: Prisma.ResultWhereInput = classWhere ? { AND: [base, classWhere] } : base;
 
-    const [aggregate, voidedCount, pendingCount, passingRows] = await withTenant(
+    const [aggregate, voidedCount, pendingCount, passingRows, counts] = await withTenant(
       prisma,
       schoolId,
       (tx) =>
@@ -235,28 +227,59 @@ export class ResultQueryService {
             _min: { percentage: true },
           }),
           tx.result.count({
-            where: { ...(extraWhere ?? {}), schoolId, examId, state: 'VOIDED' },
+            where: { schoolId, examId, state: 'VOIDED', ...(classWhere ?? {}) },
           }),
           tx.result.count({
-            where: { ...(extraWhere ?? {}), schoolId, examId, state: 'PROCESSING' },
+            where: { schoolId, examId, state: 'PROCESSING', ...(classWhere ?? {}) },
           }),
-          // Pass rate derives from the STORED grade's band (B15's confirmed
-          // `isPassing` decision), never from a hard-coded percentage — so a
-          // school that grades on its own scale gets its own pass rule, and a
-          // school with no scale at all gets `null` rather than an invented
-          // threshold.
           tx.result.findMany({
             where: { AND: [scoped, { grade: { not: null } }] },
             select: { grade: true, gradingScaleVersionId: true },
           }),
+          tx.$queryRaw<ParticipationCounts[]>`
+            SELECT
+              COUNT(DISTINCT participant.student_profile_id)::bigint AS "studentCount",
+              COUNT(DISTINCT participant.student_profile_id) FILTER (
+                WHERE EXISTS (
+                  SELECT 1 FROM exam_participations absent
+                  WHERE absent.school_id = participant.school_id
+                    AND absent.exam_id = session.exam_id
+                    AND absent.student_profile_id = participant.student_profile_id
+                    AND absent.status = 'ABSENT'
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM exam_participations completed
+                  WHERE completed.school_id = participant.school_id
+                    AND completed.exam_id = session.exam_id
+                    AND completed.student_profile_id = participant.student_profile_id
+                    AND completed.status = 'COMPLETED'
+                )
+              )::bigint AS "absentCount"
+            FROM exam_session_participants participant
+            JOIN exam_sessions session
+              ON session.school_id = participant.school_id
+             AND session.id = participant.exam_session_id
+            WHERE participant.school_id = ${schoolId}::uuid
+              AND session.exam_id = ${examId}::uuid
+              AND participant.status = 'AUTHORIZED'
+              AND (
+                ${classId ?? null}::uuid IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM student_enrollments enrollment
+                  WHERE enrollment.school_id = participant.school_id
+                    AND enrollment.student_profile_id = participant.student_profile_id
+                    AND enrollment.class_id = ${classId ?? null}::uuid
+                    AND enrollment.status = 'ACTIVE'
+                )
+              )
+          `,
         ]),
     );
 
-    const resultCount = aggregate._count._all;
-    const passRate = await this.computePassRate(schoolId, passingRows);
-
     return {
-      resultCount,
+      studentCount: Number(counts[0]?.studentCount ?? 0),
+      absentCount: Number(counts[0]?.absentCount ?? 0),
+      resultCount: aggregate._count._all,
       voidedCount,
       pendingCount,
       averagePercentage:
@@ -267,7 +290,7 @@ export class ResultQueryService {
         aggregate._max.percentage === null ? null : decimalToNumber(aggregate._max.percentage),
       lowestPercentage:
         aggregate._min.percentage === null ? null : decimalToNumber(aggregate._min.percentage),
-      passRate,
+      passRate: await this.computePassRate(schoolId, passingRows),
     };
   }
 
@@ -276,9 +299,12 @@ export class ResultQueryService {
     rows: { grade: string | null; gradingScaleVersionId: string | null }[],
   ): Promise<number | null> {
     if (rows.length === 0) return null;
-
     const versionIds = [
-      ...new Set(rows.map((r) => r.gradingScaleVersionId).filter((id): id is string => !!id)),
+      ...new Set(
+        rows
+          .map((row) => row.gradingScaleVersionId)
+          .filter((id): id is string => id !== null),
+      ),
     ];
     if (versionIds.length === 0) return null;
 
@@ -288,31 +314,24 @@ export class ResultQueryService {
         select: { versionId: true, label: true, isPassing: true },
       }),
     );
-
     const passingByVersion = new Map<string, Set<string>>();
     for (const band of bands) {
       if (!band.isPassing) continue;
-      const set = passingByVersion.get(band.versionId) ?? new Set<string>();
-      set.add(band.label);
-      passingByVersion.set(band.versionId, set);
+      const labels = passingByVersion.get(band.versionId) ?? new Set<string>();
+      labels.add(band.label);
+      passingByVersion.set(band.versionId, labels);
     }
     if (passingByVersion.size === 0) return null;
 
     const passed = rows.filter(
-      (r) =>
-        r.gradingScaleVersionId !== null &&
-        r.grade !== null &&
-        passingByVersion.get(r.gradingScaleVersionId)?.has(r.grade) === true,
+      (row) =>
+        row.gradingScaleVersionId !== null &&
+        row.grade !== null &&
+        passingByVersion.get(row.gradingScaleVersionId)?.has(row.grade) === true,
     ).length;
-
     return Math.round((passed / rows.length) * 10000) / 100;
   }
 
-  /**
-   * ADR-0013: "results and analytics aggregate across the exam WITH per-class
-   * breakdown available." An exam may target several arms of the same level,
-   * so the whole-exam average alone hides a class that did markedly worse.
-   */
   private async computeClassSummaries(
     schoolId: string,
     exam: {
@@ -320,37 +339,27 @@ export class ResultQueryService {
       classes: { classSubject: { classGroupSession: { id: string; name: string } } }[];
     },
   ): Promise<ExamResultClassSummaryDto[]> {
-    const classes = exam.classes.map((c) => c.classSubject.classGroupSession);
+    const classes = exam.classes.map((item) => item.classSubject.classGroupSession);
     if (classes.length <= 1) return [];
-
     return Promise.all(
       classes.map(async (classGroup) => ({
         classId: classGroup.id,
         className: classGroup.name,
-        ...(await this.summaryFor(schoolId, aggregatableResultWhere(schoolId, exam.id), exam.id, {
-          studentProfile: {
-            enrollments: { some: { schoolId, classId: classGroup.id, status: 'ACTIVE' } },
-          },
-        })),
+        ...(await this.summaryFor(schoolId, exam.id, classGroup.id)),
       })),
     );
   }
 
-  /**
-   * Shared gate for every staff-side read. A caller outside scope gets
-   * `NOT_FOUND`, not `FORBIDDEN`: an exam's existence within another
-   * department is not information this actor is entitled to, and
-   * `ExamService` already established this response for the same reason.
-   */
   private async assertCanViewExamResults(
     schoolId: string,
     actor: AuthorizedActor,
     exam: Parameters<typeof resolveResultResourceContext>[2] & { id: string },
-    permissionId:
-      'results.viewExamResults' | 'results.viewIndividualResult' = 'results.viewExamResults',
+    permission:
+      | 'results.viewExamResults'
+      | 'results.viewIndividualResult' = 'results.viewExamResults',
   ): Promise<void> {
     const resource = await resolveResultResourceContext(schoolId, actor, exam);
-    const decision = await this.authz.evaluate(actor, permissionId, resource);
+    const decision = await this.authz.evaluate(actor, permission, resource);
     if (!decision.allowed && !isExamCreator(actor, exam)) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Result not found.' });
     }

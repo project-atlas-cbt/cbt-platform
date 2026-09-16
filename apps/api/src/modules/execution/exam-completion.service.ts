@@ -4,13 +4,13 @@ import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
-import { AuditService } from '../operations/audit-event.service.js';
-import { requireSchoolActor } from '../questions/question-scope.util.js';
 import type { ExamResponseDto } from '../exams/dto/exam.dto.js';
 import { toExamResponseDtoFresh } from '../exams/exam.util.js';
+import { AuditService } from '../operations/audit-event.service.js';
+import { requireSchoolActor } from '../questions/question-scope.util.js';
+import type { CompleteExamDto } from './dto/exam-control-center.dto.js';
 import { loadParentExamOrThrow } from './exam-control-mappers.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
-import type { CompleteExamDto } from './dto/exam-control-center.dto.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -24,21 +24,10 @@ type CompleteOutcome =
   | { kind: 'NOT_COMPLETABLE' }
   | { kind: 'OK'; absentCount: number };
 
-/** B13 supersedes the B12-era stub (which always returned 0, no
- * `ExamAttempt` existing yet) with the real check — A-14's "zero
- * IN_PROGRESS attempts" precondition for End Examination. */
-async function countInProgressAttempts(schoolId: string, examId: string): Promise<number> {
-  return withTenant(prisma, schoolId, (tx) =>
-    tx.examAttempt.count({ where: { schoolId, examId, state: 'IN_PROGRESS' } }),
-  );
-}
-
-/** `POST /v1/exams/:id/complete` — End Examination (A-14): an explicit,
- * audited, never-automatic operator action. Every check and write below
- * runs inside one transaction so the "no session left OPEN" / "absentee
- * list matches the server's own current pending set" preconditions can
- * never be raced by a session opening or a participant being authorized
- * between the check and the write. */
+/**
+ * End Examination remains one atomic operator action. B16 changes the
+ * participation authority from exam-wide to one row per exam sitting.
+ */
 @Injectable()
 export class ExamCompletionService {
   constructor(
@@ -61,118 +50,94 @@ export class ExamCompletionService {
       examId: exam.id,
       ...(exam.departmentId !== null && { departmentId: exam.departmentId }),
     };
-    const controlDecision = await this.authz.evaluate(actor, 'examAdmin.controlCenter', resource);
-    if (!controlDecision.allowed) {
+    if (!(await this.authz.evaluate(actor, 'examAdmin.controlCenter', resource)).allowed) {
       throw new AppHttpException({
         code: 'FORBIDDEN',
         message: 'You do not have permission to end this examination.',
       });
     }
-    const absenceDecision = await this.authz.evaluate(actor, 'examAdmin.markAbsence', resource);
-    if (!absenceDecision.allowed) {
+    if (!(await this.authz.evaluate(actor, 'examAdmin.markAbsence', resource)).allowed) {
       throw new AppHttpException({
         code: 'FORBIDDEN',
         message: 'You do not have permission to confirm absences for this exam.',
       });
     }
 
-    if ((await countInProgressAttempts(schoolId, examId)) > 0) {
-      // Fast-fail only — deliberately NOT the real guarantee. See the
-      // re-check inside the transaction below for why this alone isn't
-      // sufficient.
-      throw new AppHttpException({
-        code: 'EXAM_HAS_IN_PROGRESS_ATTEMPTS',
-        message: 'This exam still has attempts in progress.',
-      });
-    }
+    const member = requireSchoolActor(actor);
+    const submittedStudentIds = new Set(dto.confirmedAbsentStudentProfileIds);
+    const outcome = await withTenant(
+      prisma,
+      schoolId,
+      async (tx): Promise<CompleteOutcome> => {
+        await tx.$queryRaw`
+          SELECT id FROM exams
+          WHERE id = ${examId}::uuid AND school_id = ${schoolId}::uuid
+          FOR UPDATE
+        `;
 
-    const schoolActor = requireSchoolActor(actor);
-    const submittedIds = new Set(dto.confirmedAbsentStudentProfileIds);
-
-    const outcome = await withTenant(prisma, schoolId, async (tx): Promise<CompleteOutcome> => {
-      // Serializes against ExamSessionService.open()'s own identical
-      // `SELECT ... FOR UPDATE` on this same exam row — see that method's
-      // own comment for the full race this closes in both directions.
-      // Found in review: without this lock, a session opened by a
-      // concurrent request after the reads below (but while this exam is
-      // still OPEN, which open() only requires) could be swept into
-      // COMPLETED by the final writes further down without its own
-      // participants ever being accounted for here.
-      await tx.$queryRaw`
-        SELECT id FROM exams WHERE id = ${examId}::uuid AND school_id = ${schoolId}::uuid FOR UPDATE
-      `;
-
-      // Found in review (B13 gap closure): the pre-transaction check above
-      // is a fast-fail only, not the real guarantee — AttemptLifecycleService
-      // .start() does not participate in this same exam-row lock (it takes
-      // its own advisory lock scoped to (school, exam, student) instead),
-      // so a fresh attempt can be created in the window between that
-      // pre-check and this lock's acquisition. Re-verified here, under the
-      // lock, exactly like openSessionCount immediately below — this is
-      // what makes the real guarantee hold regardless of that gap.
-      const inProgressAttemptCount = await tx.examAttempt.count({
-        where: { schoolId, examId, state: 'IN_PROGRESS' },
-      });
-      if (inProgressAttemptCount > 0) return { kind: 'ATTEMPTS_STILL_IN_PROGRESS' };
-
-      const openSessionCount = await tx.examSession.count({
-        where: { schoolId, examId, status: 'OPEN' },
-      });
-      if (openSessionCount > 0) return { kind: 'SESSIONS_STILL_OPEN' };
-
-      const sessions = await tx.examSession.findMany({
-        where: { schoolId, examId },
-        select: { id: true },
-      });
-      const sessionIds = sessions.map((s) => s.id);
-      const authorizedParticipants =
-        sessionIds.length === 0
-          ? []
-          : await tx.examSessionParticipant.findMany({
-              where: { schoolId, examSessionId: { in: sessionIds }, status: 'AUTHORIZED' },
-              orderBy: { authorizedAt: 'desc' },
-              select: { studentProfileId: true, examSessionId: true },
-              distinct: ['studentProfileId'],
-            });
-      const existingParticipation = await tx.examParticipation.findMany({
-        where: { schoolId, examId },
-        select: { studentProfileId: true },
-      });
-      const alreadyMarked = new Set(existingParticipation.map((p) => p.studentProfileId));
-      const pending = authorizedParticipants.filter((p) => !alreadyMarked.has(p.studentProfileId));
-      const pendingIds = new Set(pending.map((p) => p.studentProfileId));
-
-      const matches =
-        pendingIds.size === submittedIds.size &&
-        [...pendingIds].every((id) => submittedIds.has(id));
-      if (!matches) return { kind: 'STALE_ABSENTEE_LIST' };
-
-      const claim = await tx.exam.updateMany({
-        where: { id: examId, status: { in: ['OPEN', 'CLOSED'] } },
-        data: { status: 'COMPLETED' },
-      });
-      if (claim.count === 0) return { kind: 'NOT_COMPLETABLE' };
-
-      await tx.examSession.updateMany({
-        where: { schoolId, examId, status: { in: ['OPEN', 'CLOSED'] } },
-        data: { status: 'COMPLETED', completedAt: new Date() },
-      });
-
-      if (pending.length > 0) {
-        await tx.examParticipation.createMany({
-          data: pending.map((p) => ({
-            schoolId,
-            examId,
-            examSessionId: p.examSessionId,
-            studentProfileId: p.studentProfileId,
-            status: 'ABSENT',
-            markedByMembershipId: schoolActor.membershipId,
-          })),
+        const inProgressAttempts = await tx.examAttempt.count({
+          where: { schoolId, examId, state: 'IN_PROGRESS' },
         });
-      }
+        if (inProgressAttempts > 0) return { kind: 'ATTEMPTS_STILL_IN_PROGRESS' };
 
-      return { kind: 'OK', absentCount: pending.length };
-    });
+        const openSessions = await tx.examSession.count({
+          where: { schoolId, examId, status: 'OPEN' },
+        });
+        if (openSessions > 0) return { kind: 'SESSIONS_STILL_OPEN' };
+
+        const participants = await tx.examSessionParticipant.findMany({
+          where: {
+            schoolId,
+            status: 'AUTHORIZED',
+            session: { schoolId, examId },
+          },
+          select: { studentProfileId: true, examSessionId: true },
+        });
+        const existingParticipation = await tx.examParticipation.findMany({
+          where: { schoolId, examId },
+          select: { studentProfileId: true, examSessionId: true },
+        });
+        const markedSittings = new Set(
+          existingParticipation.map(
+            (row) => `${row.examSessionId}:${row.studentProfileId}`,
+          ),
+        );
+        const pendingSittings = participants.filter(
+          (row) => !markedSittings.has(`${row.examSessionId}:${row.studentProfileId}`),
+        );
+        const pendingStudentIds = new Set(
+          pendingSittings.map((row) => row.studentProfileId),
+        );
+        const absenteeListMatches =
+          pendingStudentIds.size === submittedStudentIds.size &&
+          [...pendingStudentIds].every((id) => submittedStudentIds.has(id));
+        if (!absenteeListMatches) return { kind: 'STALE_ABSENTEE_LIST' };
+
+        const claim = await tx.exam.updateMany({
+          where: { schoolId, id: examId, status: { in: ['OPEN', 'CLOSED'] } },
+          data: { status: 'COMPLETED' },
+        });
+        if (claim.count === 0) return { kind: 'NOT_COMPLETABLE' };
+
+        await tx.examSession.updateMany({
+          where: { schoolId, examId, status: { in: ['OPEN', 'CLOSED'] } },
+          data: { status: 'COMPLETED', completedAt: new Date() },
+        });
+        if (pendingSittings.length > 0) {
+          await tx.examParticipation.createMany({
+            data: pendingSittings.map((row) => ({
+              schoolId,
+              examId,
+              examSessionId: row.examSessionId,
+              studentProfileId: row.studentProfileId,
+              status: 'ABSENT',
+              markedByMembershipId: member.membershipId,
+            })),
+          });
+        }
+        return { kind: 'OK', absentCount: pendingSittings.length };
+      },
+    );
 
     if (outcome.kind === 'SESSIONS_STILL_OPEN') {
       throw new AppHttpException({
@@ -220,7 +185,6 @@ export class ExamCompletionService {
       });
     }
     await this.stream.publishUpdate(schoolId, examId);
-
     return toExamResponseDtoFresh(schoolId, examId);
   }
 }
