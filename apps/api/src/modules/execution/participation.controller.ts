@@ -22,6 +22,7 @@ import {
   GrantAttemptAuthorizationDto,
   InvalidateAttemptDto,
   RevokeAttemptAuthorizationDto,
+  StudentParticipationHistoryResponseDto,
 } from './dto/participation.dto.js';
 import { ParticipationNotificationService } from './participation-notification.service.js';
 import { ParticipationService } from './participation.service.js';
@@ -137,6 +138,7 @@ export class ParticipationController {
 
   @Get('student/participation')
   @Authorized('analytics.studentHistory')
+  @ApiOkResponse({ type: StudentParticipationHistoryResponseDto })
   studentHistory(@Req() request: FastifyRequest) {
     const current = user(request);
     return this.studentParticipation.list(

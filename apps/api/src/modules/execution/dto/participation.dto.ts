@@ -49,6 +49,27 @@ export class ExamParticipationResponseDto {
   @ApiProperty() incompleteCount!: number;
 }
 
+export class StudentParticipationHistoryItemDto {
+  @ApiProperty({ format: 'uuid' }) examId!: string;
+  @ApiProperty() examTitle!: string;
+  @ApiProperty() subjectName!: string;
+  @ApiProperty({ format: 'uuid' }) examSessionId!: string;
+  @ApiProperty({ enum: PARTICIPATION_STATUSES }) participationStatus!: ParticipationStatus;
+  @ApiProperty({ enum: PARTICIPATION_CLASSIFICATIONS })
+  classification!: ParticipationClassification;
+  @ApiProperty({ nullable: true }) attemptState!: string | null;
+  @ApiProperty({ enum: AUTHORIZATION_TYPES, nullable: true })
+  authorizationType!: AuthorizationType | null;
+  @ApiProperty({ enum: AUTHORIZATION_STATUSES, nullable: true })
+  authorizationStatus!: AuthorizationStatus | null;
+  @ApiProperty({ format: 'date-time', nullable: true }) markedAt!: string | null;
+}
+
+export class StudentParticipationHistoryResponseDto {
+  @ApiProperty({ type: [StudentParticipationHistoryItemDto] })
+  items!: StudentParticipationHistoryItemDto[];
+}
+
 export class ConfirmAbsencesDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
