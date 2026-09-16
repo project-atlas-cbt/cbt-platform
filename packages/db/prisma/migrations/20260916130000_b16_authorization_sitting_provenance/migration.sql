@@ -18,7 +18,12 @@ ALTER TABLE "attempt_authorizations"
   ADD CONSTRAINT "attempt_authorizations_source_attempt_fkey"
   FOREIGN KEY ("school_id", "source_attempt_id")
   REFERENCES "exam_attempts"("school_id", "id")
-  ON DELETE RESTRICT ON UPDATE CASCADE,
+  ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- Existing rows created by the earlier B16 draft have no source columns.
+-- NOT VALID preserves those historical rows while enforcing the shape for
+-- every new or subsequently updated authorization.
+ALTER TABLE "attempt_authorizations"
   ADD CONSTRAINT "attempt_authorizations_source_shape"
   CHECK (
     ("type" = 'MAKEUP' AND "source_exam_session_id" IS NOT NULL
@@ -26,7 +31,7 @@ ALTER TABLE "attempt_authorizations"
     OR
     ("type" = 'RETRY' AND "source_attempt_id" IS NOT NULL
       AND "source_participation_id" IS NULL)
-  );
+  ) NOT VALID;
 
 CREATE INDEX "attempt_authorizations_source_session_idx"
   ON "attempt_authorizations"("school_id", "source_exam_session_id", "student_profile_id");
