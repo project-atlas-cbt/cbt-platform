@@ -1,20 +1,300 @@
 import { Injectable } from '@nestjs/common';
-import { prisma,withTenant } from '@atlas/db';
+import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
-import { AuthorizationService } from '../authorization/authorization.service.js'; import type { AuthorizedActor } from '../authorization/authorization.types.js';
-import { AuditService } from '../operations/audit-event.service.js'; import { requireSchoolActor } from '../questions/question-scope.util.js'; import { loadExamOrThrow } from '../exams/exam-mappers.js';
-import type { AttemptAuthorizationResponseDto,AuthorizationType,ConfirmAbsencesDto,ExamParticipationResponseDto,GrantAttemptAuthorizationDto,InvalidateAttemptDto,ParticipationClassification,ParticipationStatus,RevokeAttemptAuthorizationDto } from './dto/participation.dto.js';
-type PRow={studentProfileId:string;examSessionId:string;participationStatus:ParticipationStatus;attemptId:string|null;attemptState:string|null};
-type ARow={id:string;examId:string;studentProfileId:string;type:AuthorizationType;status:'AUTHORIZED'|'USED'|'REVOKED'|'EXPIRED';reason:string;expiresAt:Date|null};
-const classification=(p:PRow):ParticipationClassification=>p.participationStatus==='ABSENT'?'ABSENT':p.attemptState==='INVALIDATED'?'INVALIDATED':p.attemptState==='SUBMITTED'||p.attemptState==='AUTO_SUBMITTED'||p.participationStatus==='COMPLETED'?'COMPLETED':p.attemptState==='IN_PROGRESS'?'IN_PROGRESS':p.attemptState==='CANCELLED'||p.participationStatus==='ATTENDED'?'INCOMPLETE':'PENDING';
-@Injectable() export class ParticipationService{
- constructor(private readonly authz:AuthorizationService,private readonly audit:AuditService){}
- private async allow(schoolId:string,actor:AuthorizedActor,examId:string,permission:'examAdmin.viewRegisteredStudents'|'examAdmin.markAbsence'|'examAdmin.grantMakeup'|'examAdmin.invalidateAttempt'){const exam=await loadExamOrThrow(schoolId,examId);const d=await this.authz.evaluate(actor,permission,{schoolId,examId,ownerMembershipId:exam.createdByMembershipId,...(exam.departmentId!==null&&{departmentId:exam.departmentId})});if(!d.allowed)throw new AppHttpException({code:'FORBIDDEN',message:'You do not have permission to manage participation for this exam.'})}
- private role(actor:AuthorizedActor):Role{return actor.roles[0]??'STUDENT'}
- async list(schoolId:string,actor:AuthorizedActor,examId:string):Promise<ExamParticipationResponseDto>{await this.allow(schoolId,actor,examId,'examAdmin.viewRegisteredStudents');const rows=await withTenant(prisma,schoolId,tx=>tx.$queryRaw<PRow[]>`SELECT p.student_profile_id AS "studentProfileId",p.exam_session_id AS "examSessionId",COALESCE(ep.status::text,'PENDING') AS "participationStatus",a.id AS "attemptId",a.state::text AS "attemptState" FROM exam_session_participants p JOIN exam_sessions s ON s.school_id=p.school_id AND s.id=p.exam_session_id LEFT JOIN exam_participations ep ON ep.school_id=p.school_id AND ep.exam_id=s.exam_id AND ep.exam_session_id=p.exam_session_id AND ep.student_profile_id=p.student_profile_id LEFT JOIN LATERAL(SELECT id,state FROM exam_attempts a WHERE a.school_id=p.school_id AND a.exam_id=s.exam_id AND a.exam_session_id=p.exam_session_id AND a.student_profile_id=p.student_profile_id ORDER BY attempt_number DESC LIMIT 1)a ON true WHERE p.school_id=${schoolId}::uuid AND s.exam_id=${examId}::uuid AND p.status='AUTHORIZED'`);const items=rows.map(r=>({...r,classification:classification(r)}));return{items,studentCount:new Set(items.map(i=>i.studentProfileId)).size,absentCount:items.filter(i=>i.classification==='ABSENT').length,incompleteCount:items.filter(i=>i.classification==='INCOMPLETE').length}}
- async confirmAbsences(schoolId:string,actor:AuthorizedActor,examId:string,dto:ConfirmAbsencesDto){await this.allow(schoolId,actor,examId,'examAdmin.markAbsence');const member=requireSchoolActor(actor);await withTenant(prisma,schoolId,async tx=>{for(const studentId of new Set(dto.studentProfileIds)){const eligible=await tx.$queryRaw<{ok:boolean}[]>`SELECT EXISTS(SELECT 1 FROM exam_session_participants p JOIN exam_sessions s ON s.school_id=p.school_id AND s.id=p.exam_session_id WHERE p.school_id=${schoolId}::uuid AND p.exam_session_id=${dto.examSessionId}::uuid AND p.student_profile_id=${studentId}::uuid AND p.status='AUTHORIZED' AND s.exam_id=${examId}::uuid AND NOT EXISTS(SELECT 1 FROM exam_attempts a WHERE a.school_id=p.school_id AND a.exam_session_id=p.exam_session_id AND a.student_profile_id=p.student_profile_id)) AS ok`;if(!eligible[0]?.ok)throw new AppHttpException({code:'STALE_ABSENTEE_LIST',message:'A selected student is no longer pending.'});await tx.$executeRaw`INSERT INTO exam_participations(id,school_id,exam_id,exam_session_id,student_profile_id,status,marked_by_membership_id,reason) VALUES(uuidv7(),${schoolId}::uuid,${examId}::uuid,${dto.examSessionId}::uuid,${studentId}::uuid,'ABSENT',${member.membershipId}::uuid,${dto.reason??null}) ON CONFLICT(school_id,exam_id,exam_session_id,student_profile_id) DO UPDATE SET status='ABSENT',marked_at=CURRENT_TIMESTAMP,marked_by_membership_id=EXCLUDED.marked_by_membership_id,reason=EXCLUDED.reason`}});await this.audit.record({schoolId,actorUserId:actor.userId,actorRole:this.role(actor),action:'EXAM_PARTICIPATION_MARKED_ABSENT',entityType:'Exam',entityId:examId,metadata:{examSessionId:dto.examSessionId,absentCount:dto.studentProfileIds.length}});return this.list(schoolId,actor,examId)}
- async grant(schoolId:string,actor:AuthorizedActor,examId:string,type:AuthorizationType,dto:GrantAttemptAuthorizationDto):Promise<AttemptAuthorizationResponseDto>{await this.allow(schoolId,actor,examId,'examAdmin.grantMakeup');const member=requireSchoolActor(actor);const row=await withTenant(prisma,schoolId,async tx=>{await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${schoolId}:${examId}:${dto.studentProfileId}:authorization`}))`;const rows=await tx.$queryRaw<ARow[]>`INSERT INTO attempt_authorizations(id,school_id,exam_id,student_profile_id,type,reason,authorized_by_membership_id,expires_at) VALUES(uuidv7(),${schoolId}::uuid,${examId}::uuid,${dto.studentProfileId}::uuid,${type}::"AttemptAuthorizationType",${dto.reason},${dto.expiresAt?new Date(dto.expiresAt):null}) ON CONFLICT(school_id,exam_id,student_profile_id,type) WHERE status='AUTHORIZED' DO UPDATE SET reason=EXCLUDED.reason,expires_at=EXCLUDED.expires_at,updated_at=CURRENT_TIMESTAMP RETURNING id,exam_id AS "examId",student_profile_id AS "studentProfileId",type,status,reason,expires_at AS "expiresAt"`;return rows[0]!});await this.audit.record({schoolId,actorUserId:actor.userId,actorRole:this.role(actor),action:type==='MAKEUP'?'MAKEUP_GRANTED':'ATTEMPT_RETRY_AUTHORIZED',entityType:'AttemptAuthorization',entityId:row.id,metadata:{examId,studentProfileId:dto.studentProfileId}});return{...row,expiresAt:row.expiresAt?.toISOString()??null}}
- async revoke(schoolId:string,actor:AuthorizedActor,id:string,dto:RevokeAttemptAuthorizationDto){const rows=await withTenant(prisma,schoolId,tx=>tx.$queryRaw<{examId:string}[]>`SELECT exam_id AS "examId" FROM attempt_authorizations WHERE school_id=${schoolId}::uuid AND id=${id}::uuid`);if(!rows[0])throw new AppHttpException({code:'NOT_FOUND',message:'Authorization not found.'});await this.allow(schoolId,actor,rows[0].examId,'examAdmin.grantMakeup');const m=requireSchoolActor(actor);const n=await withTenant(prisma,schoolId,tx=>tx.$executeRaw`UPDATE attempt_authorizations SET status='REVOKED',revoked_at=CURRENT_TIMESTAMP,revoked_by_membership_id=${m.membershipId}::uuid,revoked_reason=${dto.reason} WHERE school_id=${schoolId}::uuid AND id=${id}::uuid AND status='AUTHORIZED'`);if(!n)throw new AppHttpException({code:'CONFLICT',message:'Only an unused authorization may be revoked.'})}
- async invalidate(schoolId:string,actor:AuthorizedActor,id:string,dto:InvalidateAttemptDto){const attempt=await withTenant(prisma,schoolId,tx=>tx.examAttempt.findUnique({where:{id},select:{examId:true}}));if(!attempt)throw new AppHttpException({code:'NOT_FOUND',message:'Attempt not found.'});await this.allow(schoolId,actor,attempt.examId,'examAdmin.invalidateAttempt');const m=requireSchoolActor(actor);const changed=await withTenant(prisma,schoolId,async tx=>{const r=await tx.examAttempt.updateMany({where:{schoolId,id,state:{in:['IN_PROGRESS','SUBMITTED','AUTO_SUBMITTED']}},data:{state:'INVALIDATED',invalidationReason:dto.reason,invalidatedAt:new Date(),invalidatedByMembershipId:m.membershipId}});if(r.count)await tx.result.updateMany({where:{schoolId,attemptId:id,state:{not:'VOIDED'}},data:{state:'VOIDED'}});return r.count});if(!changed)throw new AppHttpException({code:'CONFLICT',message:'Attempt cannot be invalidated.'});await this.audit.record({schoolId,actorUserId:actor.userId,actorRole:this.role(actor),action:'ATTEMPT_INVALIDATED',entityType:'ExamAttempt',entityId:id,metadata:{reason:dto.reason}});return{status:'ok' as const}}
+import { AuthorizationService } from '../authorization/authorization.service.js';
+import type { AuthorizedActor } from '../authorization/authorization.types.js';
+import { loadExamOrThrow } from '../exams/exam-mappers.js';
+import { AuditService } from '../operations/audit-event.service.js';
+import { requireSchoolActor } from '../questions/question-scope.util.js';
+import type {
+  AttemptAuthorizationResponseDto,
+  AuthorizationType,
+  ConfirmAbsencesDto,
+  ExamParticipationResponseDto,
+  GrantAttemptAuthorizationDto,
+  InvalidateAttemptDto,
+  ParticipationClassification,
+  ParticipationStatus,
+  RevokeAttemptAuthorizationDto,
+} from './dto/participation.dto.js';
+
+type ParticipationRow = {
+  studentProfileId: string;
+  examSessionId: string;
+  participationStatus: ParticipationStatus;
+  attemptId: string | null;
+  attemptState: string | null;
+};
+type AuthorizationRow = {
+  id: string;
+  examId: string;
+  studentProfileId: string;
+  type: AuthorizationType;
+  status: 'AUTHORIZED' | 'USED' | 'REVOKED' | 'EXPIRED';
+  reason: string;
+  expiresAt: Date | null;
+};
+
+function classify(row: ParticipationRow): ParticipationClassification {
+  if (row.participationStatus === 'ABSENT') return 'ABSENT';
+  if (row.attemptState === 'INVALIDATED') return 'INVALIDATED';
+  if (
+    row.attemptState === 'SUBMITTED' ||
+    row.attemptState === 'AUTO_SUBMITTED' ||
+    row.participationStatus === 'COMPLETED'
+  )
+    return 'COMPLETED';
+  if (row.attemptState === 'IN_PROGRESS') return 'IN_PROGRESS';
+  if (row.attemptState === 'CANCELLED' || row.participationStatus === 'ATTENDED')
+    return 'INCOMPLETE';
+  return 'PENDING';
+}
+
+@Injectable()
+export class ParticipationService {
+  constructor(
+    private readonly authz: AuthorizationService,
+    private readonly audit: AuditService,
+  ) {}
+
+  private async allow(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examId: string,
+    permission:
+      | 'examAdmin.viewRegisteredStudents'
+      | 'examAdmin.markAbsence'
+      | 'examAdmin.grantMakeup'
+      | 'examAdmin.invalidateAttempt',
+  ): Promise<void> {
+    const exam = await loadExamOrThrow(schoolId, examId);
+    const decision = await this.authz.evaluate(actor, permission, {
+      schoolId,
+      examId,
+      ownerMembershipId: exam.createdByMembershipId,
+      ...(exam.departmentId !== null && { departmentId: exam.departmentId }),
+    });
+    if (!decision.allowed) {
+      throw new AppHttpException({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to manage participation for this exam.',
+      });
+    }
+  }
+
+  private role(actor: AuthorizedActor): Role {
+    return actor.roles[0] ?? 'STUDENT';
+  }
+
+  async list(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examId: string,
+  ): Promise<ExamParticipationResponseDto> {
+    await this.allow(schoolId, actor, examId, 'examAdmin.viewRegisteredStudents');
+    const rows = await withTenant(prisma, schoolId, (tx) =>
+      tx.$queryRaw<ParticipationRow[]>`
+        SELECT p.student_profile_id AS "studentProfileId",
+               p.exam_session_id AS "examSessionId",
+               COALESCE(ep.status::text, 'PENDING') AS "participationStatus",
+               a.id AS "attemptId", a.state::text AS "attemptState"
+        FROM exam_session_participants p
+        JOIN exam_sessions s ON s.school_id = p.school_id AND s.id = p.exam_session_id
+        LEFT JOIN exam_participations ep
+          ON ep.school_id = p.school_id AND ep.exam_id = s.exam_id
+         AND ep.exam_session_id = p.exam_session_id
+         AND ep.student_profile_id = p.student_profile_id
+        LEFT JOIN LATERAL (
+          SELECT id, state FROM exam_attempts a
+          WHERE a.school_id = p.school_id AND a.exam_id = s.exam_id
+            AND a.exam_session_id = p.exam_session_id
+            AND a.student_profile_id = p.student_profile_id
+          ORDER BY attempt_number DESC LIMIT 1
+        ) a ON true
+        WHERE p.school_id = ${schoolId}::uuid AND s.exam_id = ${examId}::uuid
+          AND p.status = 'AUTHORIZED'
+      `,
+    );
+    const items = rows.map((row) => ({ ...row, classification: classify(row) }));
+    return {
+      items,
+      studentCount: new Set(items.map((item) => item.studentProfileId)).size,
+      absentCount: items.filter((item) => item.classification === 'ABSENT').length,
+      incompleteCount: items.filter((item) => item.classification === 'INCOMPLETE').length,
+    };
+  }
+
+  async confirmAbsences(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examId: string,
+    dto: ConfirmAbsencesDto,
+  ): Promise<ExamParticipationResponseDto> {
+    await this.allow(schoolId, actor, examId, 'examAdmin.markAbsence');
+    const member = requireSchoolActor(actor);
+    await withTenant(prisma, schoolId, async (tx) => {
+      for (const studentId of new Set(dto.studentProfileIds)) {
+        const eligible = await tx.$queryRaw<{ ok: boolean }[]>`
+          SELECT EXISTS(
+            SELECT 1 FROM exam_session_participants p
+            JOIN exam_sessions s ON s.school_id=p.school_id AND s.id=p.exam_session_id
+            WHERE p.school_id=${schoolId}::uuid
+              AND p.exam_session_id=${dto.examSessionId}::uuid
+              AND p.student_profile_id=${studentId}::uuid
+              AND p.status='AUTHORIZED' AND s.exam_id=${examId}::uuid
+              AND NOT EXISTS(
+                SELECT 1 FROM exam_attempts a
+                WHERE a.school_id=p.school_id AND a.exam_session_id=p.exam_session_id
+                  AND a.student_profile_id=p.student_profile_id
+              )
+          ) AS ok
+        `;
+        if (!eligible[0]?.ok) {
+          throw new AppHttpException({
+            code: 'STALE_ABSENTEE_LIST',
+            message: 'A selected student is no longer pending.',
+          });
+        }
+        await tx.$executeRaw`
+          INSERT INTO exam_participations
+            (id, school_id, exam_id, exam_session_id, student_profile_id,
+             status, marked_by_membership_id, reason)
+          VALUES
+            (uuidv7(), ${schoolId}::uuid, ${examId}::uuid, ${dto.examSessionId}::uuid,
+             ${studentId}::uuid, 'ABSENT', ${member.membershipId}::uuid, ${dto.reason ?? null})
+          ON CONFLICT (school_id, exam_id, exam_session_id, student_profile_id)
+          DO UPDATE SET status='ABSENT', marked_at=CURRENT_TIMESTAMP,
+            marked_by_membership_id=EXCLUDED.marked_by_membership_id,
+            reason=EXCLUDED.reason
+        `;
+      }
+    });
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.userId,
+      actorRole: this.role(actor),
+      action: 'EXAM_PARTICIPATION_MARKED_ABSENT',
+      entityType: 'Exam',
+      entityId: examId,
+      metadata: { examSessionId: dto.examSessionId, absentCount: dto.studentProfileIds.length },
+    });
+    return this.list(schoolId, actor, examId);
+  }
+
+  async grant(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examId: string,
+    type: AuthorizationType,
+    dto: GrantAttemptAuthorizationDto,
+  ): Promise<AttemptAuthorizationResponseDto> {
+    await this.allow(schoolId, actor, examId, 'examAdmin.grantMakeup');
+    const member = requireSchoolActor(actor);
+    const row = await withTenant(prisma, schoolId, async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${schoolId}:${examId}:${dto.studentProfileId}:authorization`}))`;
+      const rows = await tx.$queryRaw<AuthorizationRow[]>`
+        INSERT INTO attempt_authorizations
+          (id, school_id, exam_id, student_profile_id, type, reason,
+           authorized_by_membership_id, expires_at)
+        VALUES
+          (uuidv7(), ${schoolId}::uuid, ${examId}::uuid, ${dto.studentProfileId}::uuid,
+           ${type}::"AttemptAuthorizationType", ${dto.reason}, ${member.membershipId}::uuid,
+           ${dto.expiresAt ? new Date(dto.expiresAt) : null})
+        ON CONFLICT (school_id, exam_id, student_profile_id, type)
+          WHERE status='AUTHORIZED'
+        DO UPDATE SET reason=EXCLUDED.reason, expires_at=EXCLUDED.expires_at,
+          updated_at=CURRENT_TIMESTAMP
+        RETURNING id, exam_id AS "examId", student_profile_id AS "studentProfileId",
+          type, status, reason, expires_at AS "expiresAt"
+      `;
+      return rows[0]!;
+    });
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.userId,
+      actorRole: this.role(actor),
+      action: type === 'MAKEUP' ? 'MAKEUP_GRANTED' : 'ATTEMPT_RETRY_AUTHORIZED',
+      entityType: 'AttemptAuthorization',
+      entityId: row.id,
+      metadata: { examId, studentProfileId: dto.studentProfileId },
+    });
+    return { ...row, expiresAt: row.expiresAt?.toISOString() ?? null };
+  }
+
+  async revoke(
+    schoolId: string,
+    actor: AuthorizedActor,
+    id: string,
+    dto: RevokeAttemptAuthorizationDto,
+  ): Promise<void> {
+    const rows = await withTenant(prisma, schoolId, (tx) =>
+      tx.$queryRaw<{ examId: string }[]>`
+        SELECT exam_id AS "examId" FROM attempt_authorizations
+        WHERE school_id=${schoolId}::uuid AND id=${id}::uuid
+      `,
+    );
+    if (!rows[0])
+      throw new AppHttpException({ code: 'NOT_FOUND', message: 'Authorization not found.' });
+    await this.allow(schoolId, actor, rows[0].examId, 'examAdmin.grantMakeup');
+    const member = requireSchoolActor(actor);
+    const changed = await withTenant(prisma, schoolId, (tx) =>
+      tx.$executeRaw`
+        UPDATE attempt_authorizations SET status='REVOKED', revoked_at=CURRENT_TIMESTAMP,
+          revoked_by_membership_id=${member.membershipId}::uuid, revoked_reason=${dto.reason}
+        WHERE school_id=${schoolId}::uuid AND id=${id}::uuid AND status='AUTHORIZED'
+      `,
+    );
+    if (!changed) {
+      throw new AppHttpException({
+        code: 'CONFLICT',
+        message: 'Only an unused authorization may be revoked.',
+      });
+    }
+  }
+
+  async invalidate(
+    schoolId: string,
+    actor: AuthorizedActor,
+    id: string,
+    dto: InvalidateAttemptDto,
+  ): Promise<{ status: 'ok' }> {
+    const attempt = await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.findUnique({ where: { id }, select: { examId: true } }),
+    );
+    if (!attempt)
+      throw new AppHttpException({ code: 'NOT_FOUND', message: 'Attempt not found.' });
+    await this.allow(schoolId, actor, attempt.examId, 'examAdmin.invalidateAttempt');
+    const member = requireSchoolActor(actor);
+    const changed = await withTenant(prisma, schoolId, async (tx) => {
+      const result = await tx.examAttempt.updateMany({
+        where: { schoolId, id, state: { in: ['IN_PROGRESS', 'SUBMITTED', 'AUTO_SUBMITTED'] } },
+        data: {
+          state: 'INVALIDATED',
+          invalidationReason: dto.reason,
+          invalidatedAt: new Date(),
+          invalidatedByMembershipId: member.membershipId,
+        },
+      });
+      if (result.count) {
+        await tx.result.updateMany({
+          where: { schoolId, attemptId: id, state: { not: 'VOIDED' } },
+          data: { state: 'VOIDED' },
+        });
+      }
+      return result.count;
+    });
+    if (!changed)
+      throw new AppHttpException({ code: 'CONFLICT', message: 'Attempt cannot be invalidated.' });
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.userId,
+      actorRole: this.role(actor),
+      action: 'ATTEMPT_INVALIDATED',
+      entityType: 'ExamAttempt',
+      entityId: id,
+      metadata: { reason: dto.reason },
+    });
+    return { status: 'ok' };
+  }
 }
