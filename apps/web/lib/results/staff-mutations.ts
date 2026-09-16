@@ -94,15 +94,9 @@ export function useReleaseResult(resultId: string) {
   });
 }
 
-export interface CreateResultAdjustmentBody {
-  examId: string;
-  type: string;
-  reason: string;
-  targetExamQuestionId?: string;
-  markDelta?: number;
-  targetResultId?: string;
-  overrideEarnedMarks?: number;
-}
+import type { ApiComponents } from '@atlas/contracts';
+
+export type CreateResultAdjustmentBody = ApiComponents['schemas']['CreateResultAdjustmentDto'];
 
 /**
  * `POST /results/adjustments` — returns the parent operation immediately
