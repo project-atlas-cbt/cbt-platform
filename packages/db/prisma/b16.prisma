@@ -1,6 +1,6 @@
-// B16 models whose database constraints are owned by the hand-written B16 migrations.
-// Provenance is intentionally scalar-only here: composite cross-table constraints,
-// partial uniqueness and lifecycle guards are represented in migration SQL.
+// B16 model whose database constraints are owned by the hand-written B16 migrations.
+// Provenance is intentionally scalar-only here: composite foreign keys, partial
+// uniqueness, RLS and lifecycle guards cannot be represented faithfully in Prisma.
 enum AttemptAuthorizationType {
   MAKEUP
   RETRY
@@ -27,7 +27,7 @@ model AttemptAuthorization {
   sourceExamSessionId      String?                    @map("source_exam_session_id") @db.Uuid
   sourceParticipationId    String?                    @map("source_participation_id") @db.Uuid
   sourceAttemptId          String?                    @map("source_attempt_id") @db.Uuid
-  usedByAttemptId          String?                    @unique(map: "attempt_authorizations_used_attempt_key") @map("used_by_attempt_id") @db.Uuid
+  usedByAttemptId          String?                    @map("used_by_attempt_id") @db.Uuid
   usedAt                   DateTime?                  @map("used_at") @db.Timestamptz(6)
   revokedByMembershipId    String?                    @map("revoked_by_membership_id") @db.Uuid
   revokedAt                DateTime?                  @map("revoked_at") @db.Timestamptz(6)
@@ -35,8 +35,8 @@ model AttemptAuthorization {
   createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  @@unique([schoolId, sourceParticipationId, type], map: "attempt_authorizations_source_participation_type_key")
+  // The matching database indexes are partial; ordinary @@unique declarations
+  // here would strengthen their semantics incorrectly and cause migration drift.
   @@index([schoolId, examId, studentProfileId, status], map: "attempt_authorizations_lookup_idx")
-  @@index([schoolId, sourceExamSessionId], map: "attempt_authorizations_source_session_idx")
   @@map("attempt_authorizations")
 }
