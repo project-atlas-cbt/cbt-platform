@@ -715,6 +715,44 @@ Claude should append meaningful project-state changes here rather than rewriting
 - Implementation has not started.
 - Roadmap generation is the immediate next activity.
 
+### 2026-09-15 — F15 (Staff Results & Publication)
+
+**F15 — Staff Results & Publication: complete.** Delivered the staff side of `results.v1`
+across all four school-side roles (Teacher, School Admin, HOD, Moderator): an exam picker, the
+exam results list with summary and per-class statistics, individual result detail with the
+per-question breakdown, publish/unpublish, individual withhold/release, and the audited
+adjustment workflow with progress polling.
+
+- **One screen set, four role roots.** `ExamResultsScreen`, `StaffResultDetailScreen`, and
+  `ResultsExamPickerScreen` take a `basePath` and are otherwise role-agnostic — F10's pattern,
+  reused. Twelve thin `'use client'` route files under
+  `app/(school)/{teacher,school,hod,moderator}/results/`.
+- **`/moderator/results` added**, per F15's own Scope line ("scoped for Teacher, HOD, Moderator,
+  and School Admin") and `permission-table.md`'s school-wide Moderator grant — the phase's route
+  table never listed it. Same precedent as F11/F12's confirmed all-four-roles extension.
+- **No standalone `/school/results/adjustments/new`.** Adjustments launch in context from the
+  exam results screen or an individual result, because ADR-0025's workflow needs the exam — and
+  often the question — already chosen.
+- **Withhold/release built here**, not deferred: ADR-0010 assigns "publication and withholding"
+  to F15 explicitly.
+- **DoD item 7 is structurally satisfied, not merely reviewed.** `results.v1` exposes no
+  score-write endpoint, so every marks change goes through `POST /results/adjustments`; the
+  screen tests assert no marks `spinbutton`/`textbox` exists outside the adjustment dialog.
+- **Two honest partials, by phase boundary.** Roster ("students") and absence figures have no
+  data source until `B16` — the summary panel says so rather than inferring a roster from the
+  result count, and nothing renders a zero in their place.
+- **Statistics came from `results.v1`, not `analytics.v1`.** F15's own API-dependency list named
+  B17 for summary statistics; B15's `ExamResultsResponseDto.summary` already carries everything
+  `04 §48` asks for except roster/absence, so the phase consumed that instead of waiting on an
+  unbuilt phase.
+- **No backend gap-closure needed** — unusual for a paired frontend phase in this project.
+- ADR-0025 (voided results visible to staff with reason, excluded from aggregates), ADR-0018
+  (stored grade displayed, never recomputed), ADR-0013 (multi-class exams), and
+  `ui-ux-principles.md` §13 (no optimistic UI for publication) each asserted by test.
+- Docs: `frontend-roadmap.md`'s F15 section (status, route-table deviations, annotated DoD,
+  implementation notes, deferrals) and `roadmap-index.md` v1.29. F14's stale `NOT STARTED` rows
+  in the Phase Map and Phase Completion Tracking table were corrected in the same pass.
+
 ### 2026-08-24 — Specification audit and roadmaps
 
 - All nine specifications (18,271 lines) read and cross-audited.

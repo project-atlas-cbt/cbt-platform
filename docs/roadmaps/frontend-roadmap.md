@@ -67,8 +67,8 @@ The student exam route runs its own client-side runtime inside the shared shell 
 | F11 | Exam Builder                           | B11            | No                                           | COMPLETE    |
 | F12 | Exam Control Center                    | B12            | No                                           | COMPLETE    |
 | F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | COMPLETE    |
-| F14 | Student Results & Profile              | B15            | No                                           | NOT STARTED |
-| F15 | Staff Results & Publication            | B15            | No                                           | NOT STARTED |
+| F14 | Student Results & Profile              | B15            | No                                           | COMPLETE    |
+| F15 | Staff Results & Publication            | B15            | No                                           | COMPLETE    |
 | F16 | Participation, Absence & Makeup        | B16            | No                                           | NOT STARTED |
 | F17 | Dashboards & Analytics                 | B17            | Layout yes                                   | NOT STARTED |
 | F18 | Reporting, Export & Search             | B18            | No                                           | NOT STARTED |
@@ -2554,7 +2554,7 @@ supersede the `[...slug]` catch-all automatically.
 
 # F15 — Staff Results & Publication
 
-**Status:** NOT STARTED · **Backend pair:** B15
+**Status:** COMPLETE (2026-09-15) · **Backend pair:** B15 · **Honoured ADRs:** 0010, 0013, 0018, 0025
 
 ## Objective
 
@@ -2579,14 +2579,27 @@ Deliver staff result views, publication control, and the audited adjustment work
 
 ## Screens / routes / components
 
-| Route                                   | Screen                       |
-| --------------------------------------- | ---------------------------- |
-| `/teacher/results`                      | My exam results (`RES-01`)   |
-| `/teacher/results/:examId`              | Exam results with statistics |
-| `/teacher/results/:examId/students/:id` | Individual result            |
-| `/school/results`                       | School-wide results          |
-| `/hod/results`                          | Department results           |
-| `/school/results/adjustments/new`       | Adjustment workflow          |
+| Route                               | Screen                                |
+| ----------------------------------- | ------------------------------------- |
+| `/<role>/results`                   | Exam picker (`RES-01`)                |
+| `/<role>/results/:examId`           | Exam results with statistics          |
+| `/<role>/results/:examId/:resultId` | Individual result + adjustment launch |
+
+`<role>` is each of `teacher`, `school`, `hod`, and `moderator` — twelve real route
+files, all thin `'use client'` wrappers over one screen set parameterised by
+`basePath`. Two deliberate, recorded deviations from the table this section
+originally carried:
+
+- **`/moderator/results` was added.** This phase's own Scope line requires result
+  views "scoped for Teacher, HOD, Moderator, and School Admin" (`05 §48`–`§50`),
+  and `permission-table.md` grants Moderator school-wide `results.viewExamResults`;
+  the original route table simply never listed it. Same precedent as F11/F12's
+  confirmed all-four-school-roles extension.
+- **There is no `/school/results/adjustments/new`.** An adjustment is always
+  launched in context — from the exam results screen (question void / mark award
+  or deduct) or from an individual result (manual override) — because ADR-0025's
+  workflow needs the exam, and often the question, already chosen. A standalone
+  "new adjustment" route would have to re-ask for both.
 
 ## State management requirements
 
@@ -2618,26 +2631,103 @@ Pairs with F14. Depends on F17 for statistics.
 
 ## Definition of Done
 
-1. Exam results show students, completed, absent, average, highest, and lowest per `04 §48`.
-2. Individual result detail shows the per-question breakdown.
-3. Absent students show `ABSENT`, never a zero (`05 §54`).
-4. Voided results are visibly distinguished and excluded from statistics.
-5. Publish and unpublish work and are clearly confirmed.
-6. Publication respects the school policy, and a teacher cannot override a locked policy.
-7. **No control anywhere permits direct score editing.**
-8. The adjustment workflow requires a type and a reason and shows what will change before committing.
-9. Bulk adjustment progress is visible and its completion confirmed.
-10. Each role sees only results within its scope.
-11. Loading, error, and empty states implemented.
+1. **Partial, honestly — by phase boundary, not by omission.** Average, highest,
+   lowest, pass rate, and the result/voided/pending counts are real, straight from
+   `ExamResultSummaryDto` (`exam-result-summary-panel.tsx`), with a per-class
+   breakdown from `ExamResultClassSummaryDto`. **Students (roster size) and absent
+   cannot be real**: `results.v1`'s summary carries no roster or absence figure, and
+   no participation data source exists anywhere until `B16 — Participation, Absence
+& Makeup` ships. The panel states that explicitly rather than inferring a roster
+   from the number of results returned, which would silently under-count exactly the
+   students this figure exists to surface. Not fabricated, not silently dropped.
+2. ✅ `staff-result-detail-screen.tsx` renders the full `ResultQuestionBreakdownDto`
+   list — sequence, question content (through the existing `sanitizeQuestionHtml`),
+   correctness, awarded vs maximum marks, and a per-question voided marker.
+3. **Blocked on `B16`, same gap as item 1.** No absence vocabulary exists in
+   `results.v1`. Critically, nothing renders a zero either: a student with no result
+   has no row, so the failure mode `05 §54` guards against cannot occur through this
+   surface. The honest "awaiting B16" note carries this.
+4. ✅ ADR-0025 followed exactly: `VOIDED` results stay visible to staff with their
+   reason (`result-state-badge.tsx`), and are excluded from aggregates server-side —
+   the client never recomputes a statistic. Asserted by `exam-results-table.test.tsx`.
+5. ✅ `publication-controls.tsx` — publish takes an optional note, unpublish requires
+   a reason (`result-reason-dialog.tsx`), and neither updates optimistically (UI §13):
+   only a confirmed refetch changes what the screen shows. Individual **withhold and
+   release** are built here too, per ADR-0010's own phase assignment ("F15:
+   publication and withholding") — they are not a scope extension.
+6. ✅ Server-authoritative. `resultPolicyLocked` and the school's `resultPolicy` are
+   never re-implemented client-side; a denial comes back as a real error and is
+   surfaced in place. Controls are additionally hidden per `GET /me/permissions`
+   (`results.publish`/`unpublish`/`withhold`/`adjust`/`manualOverride`) as a
+   usability affordance only.
+7. ✅ **Structurally satisfied, not merely reviewed.** `results.v1` exposes no
+   score-write endpoint at all — every marks change goes through
+   `POST /results/adjustments`. The frontend therefore has no such call to make, and
+   the screen tests assert the absence directly: no `spinbutton` or marks `textbox`
+   exists anywhere on the results table or result detail outside the adjustment
+   dialog.
+8. ✅ `adjustment-dialog.tsx` requires an adjustment type and a reason before the
+   submit control enables, and states the blast radius in plain language before
+   committing ("applies to every student's result for this exam" for a question void
+   or mark change; single-result for a manual override).
+9. ✅ `adjustment-progress.tsx` polls `GET /results/adjustments/:id` and shows
+   status, applied/failed counts, and any `failureReason` until the operation
+   reaches `COMPLETED` or `FAILED` — ADR-0025's parent-plus-children model surfaced
+   as-is, with no client-side progress estimation.
+10. ✅ Scope is enforced server-side (`result-scope.util.ts`: Teacher owned/assigned,
+    HOD department, Moderator and School Admin school-wide). The client mirrors it
+    only in what it offers.
+11. ✅ Every screen has skeleton, error, and empty states — including the distinct
+    "this exam has no results yet" and "no results match these filters" cases, which
+    are different situations and read differently.
 
 ## Exit criteria
 
-- No-score-editing verified by review and by test.
-- Adjustment E2E green.
+- ✅ No-score-editing verified by review **and** by test — see DoD item 7. The
+  strongest form of this evidence is structural: the contract has no endpoint that
+  could serve a direct score edit.
+- ⚠️ **Adjustment E2E substituted**, exactly as the standing Playwright deferral
+  since F1 records (no browser-automation harness exists in this codebase yet).
+  Covered instead by this phase's component tests over the real hook stack plus
+  B15's own `results.integration.test.ts` recalculation cases.
+
+## Implementation notes
+
+- **One screen set, four role roots.** `ExamResultsScreen`, `StaffResultDetailScreen`,
+  and `ResultsExamPickerScreen` take a `basePath` (and a `backPath` for detail) and
+  are otherwise role-agnostic — no `scope` prop, no per-role branching. What a role
+  can _do_ comes from `GET /me/permissions`; what a role can _see_ comes from the
+  server's own scoping. This is F10's `basePath` pattern reused, including the
+  hardcoded-link bug it was introduced to prevent.
+- **Statistics came from `results.v1`, not `analytics.v1`.** This section's API
+  dependency list names `analytics.v1` (B17) for summary statistics, which would have
+  blocked F15 behind an unbuilt phase. B15's own `ExamResultsResponseDto.summary`
+  already carries every figure `04 §48` asks for except roster/absence, so the phase
+  consumed that and recorded the two genuinely missing figures against `B16` (DoD
+  items 1 and 3) instead of waiting.
+- **ADR-0018 honoured literally**: the stored `grade` is displayed, never recomputed
+  client-side, and the result detail names the `gradingScaleVersionId` the grade was
+  computed under. Asserted by `staff-result-detail-screen.test.tsx`.
+- **ADR-0013**: multi-class exams are handled throughout — a class filter on the
+  results table and per-class summary rows, rather than assuming one class per exam.
+- **No backend gap-closure was needed.** Unusually for a paired frontend phase in
+  this project, B15's frozen surface was sufficient as shipped; the two honest
+  partials are phase-boundary gaps owned by `B16`, not defects in `results.v1`.
 
 ## Deferred items
 
 - Cross-exam aggregate reporting (term averages, class position) — not specified.
+- **Roster and absence figures** (DoD items 1 and 3) — `B16`. The summary panel names
+  what unlocks them.
+- **CSV export entry point** — `F18`, which owns the export contract. This phase's own
+  Scope line delegates it there; `results.exportCsv` exists as a permission id but no
+  export endpoint does, so no button was built against a missing contract.
+- **Question-level analytics** (`04 §50`'s correct-rate-per-question drill-down) —
+  `B17`/`F17`. The per-question breakdown here is one student's result, not an
+  across-cohort statistic.
+- **Grading-scale configuration UI** — still open from `F5`'s DoD item 7. F15 reads
+  and displays grades; nothing here lets a school author a scale.
+- Real Playwright/browser E2E — standing deferral since F1; see Exit criteria.
 
 ---
 
@@ -3205,8 +3295,8 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 | F11   | COMPLETE    | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note      |
 | F12   | COMPLETE    | B12            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (Control Center for all four school-side roles); two small backend gap-closures — see B12's "Post-completion gap closure" note |
 | F13   | COMPLETE    | B13, B14       | 2026-09-05 | 2026-09-05 | Confirmed decisions: force-switch-after-timeout tab handoff; offline media eviction never blocks answering. No backend gap-closure needed.               |
-| F14   | NOT STARTED | B15            | —          | —          |                                                                                                                                                          |
-| F15   | NOT STARTED | B15            | —          | —          |                                                                                                                                                          |
+| F14   | COMPLETE    | B15            | 2026-09-10 | 2026-09-10 | Status corrected 2026-09-15 — the Phase Map and this row both still read `NOT STARTED` after F14 shipped                                                 |
+| F15   | COMPLETE    | B15            | 2026-09-15 | 2026-09-15 | `/moderator/results` added per this phase's own Scope line; withhold/release built here per ADR-0010; no backend gap-closure needed                      |
 | F16   | NOT STARTED | B16            | —          | —          |                                                                                                                                                          |
 | F17   | NOT STARTED | B17            | —          | —          | Layout may start now                                                                                                                                     |
 | F18   | NOT STARTED | B18            | —          | —          |                                                                                                                                                          |
