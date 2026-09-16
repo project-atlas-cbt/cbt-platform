@@ -1,43 +1,367 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma,prisma,withTenant } from '@atlas/db';
+import { Prisma, prisma, withTenant } from '@atlas/db';
 import type { AttemptSnapshotDocumentV1 } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
-import { AuthorizationService } from '../authorization/authorization.service.js'; import type { AuthorizedActor } from '../authorization/authorization.types.js';
-import { resolveMembershipDisplayNames } from '../execution/exam-control-mappers.js'; import { loadExamOrThrow } from '../exams/exam-mappers.js';
-import { RESULT_LIST_INCLUDE,decimalToNumber,toAdjustmentHistoryItemDto,toResultListItemDto } from './result-mappers.js';
-import { isExamCreator,resolveResultResourceContext } from './result-scope.util.js'; import { aggregatableResultWhere } from './result-visibility.util.js';
-import type { ExamResultClassSummaryDto,ExamResultSummaryDto,ExamResultsResponseDto,ListExamResultsQueryDto,ResultDetailResponseDto,ResultQuestionBreakdownDto } from './dto/result.dto.js';
+import { AuthorizationService } from '../authorization/authorization.service.js';
+import type { AuthorizedActor } from '../authorization/authorization.types.js';
+import { resolveMembershipDisplayNames } from '../execution/exam-control-mappers.js';
+import { loadExamOrThrow } from '../exams/exam-mappers.js';
+import type {
+  ExamResultClassSummaryDto,
+  ExamResultSummaryDto,
+  ExamResultsResponseDto,
+  ListExamResultsQueryDto,
+  ResultDetailResponseDto,
+  ResultQuestionBreakdownDto,
+} from './dto/result.dto.js';
+import {
+  RESULT_LIST_INCLUDE,
+  decimalToNumber,
+  toAdjustmentHistoryItemDto,
+  toResultListItemDto,
+} from './result-mappers.js';
+import { isExamCreator, resolveResultResourceContext } from './result-scope.util.js';
+import { aggregatableResultWhere } from './result-visibility.util.js';
 
-type ParticipationCounts={studentCount:bigint|number;absentCount:bigint|number};
-@Injectable() export class ResultQueryService{
- constructor(private readonly authz:AuthorizationService){}
- async listForExam(schoolId:string,actor:AuthorizedActor,examId:string,query:ListExamResultsQueryDto):Promise<ExamResultsResponseDto>{
-  const exam=await loadExamOrThrow(schoolId,examId);await this.assertCanViewExamResults(schoolId,actor,exam);
-  const page=query.page??1,pageSize=query.pageSize??25,sortBy=query.sortBy??'studentName',sortDir=query.sortDir??'asc';
-  const where:Prisma.ResultWhereInput={schoolId,examId,...(query.state!==undefined&&{state:query.state}),...(query.classId!==undefined&&{studentProfile:{enrollments:{some:{schoolId,classId:query.classId,status:'ACTIVE'}}}}),...(query.q!==undefined&&query.q.trim()!==''&&{studentProfile:{OR:[{studentId:{contains:query.q.trim(),mode:'insensitive'}},{membership:{user:{displayName:{contains:query.q.trim(),mode:'insensitive'}}}}]}})};
-  const orderBy:Prisma.ResultOrderByWithRelationInput=sortBy==='studentName'?{studentProfile:{membership:{user:{displayName:sortDir}}}}:sortBy==='percentage'?{percentage:sortDir}:sortBy==='earnedMarks'?{earnedMarks:sortDir}:{finalizedAt:sortDir};
-  const [rows,total,publication]=await withTenant(prisma,schoolId,tx=>Promise.all([tx.result.findMany({where,include:RESULT_LIST_INCLUDE,orderBy,skip:(page-1)*pageSize,take:pageSize}),tx.result.count({where}),tx.resultPublication.findUnique({where:{schoolId_examId:{schoolId,examId}}})]));
-  return{items:rows.map(toResultListItemDto),total,page,pageSize,summary:await this.summaryFor(schoolId,examId),classSummaries:await this.computeClassSummaries(schoolId,exam),published:publication?.status==='PUBLISHED',adjustmentInProgress:publication?.adjustmentInProgress??false};
- }
- async getDetail(schoolId:string,actor:AuthorizedActor,resultId:string):Promise<ResultDetailResponseDto>{
-  const result=await withTenant(prisma,schoolId,tx=>tx.result.findUnique({where:{id:resultId},include:{...RESULT_LIST_INCLUDE,exam:{select:{id:true,title:true,subject:{select:{name:true}}}},adjustments:{orderBy:{createdAt:'asc'},include:{operation:{select:{targetExamQuestionId:true,type:true}}}}}}));
-  if(!result)throw new AppHttpException({code:'NOT_FOUND',message:'Result not found.'});const exam=await loadExamOrThrow(schoolId,result.examId);await this.assertCanViewExamResults(schoolId,actor,exam,'results.viewIndividualResult');
-  const [questionResults,snapshot,actorNames]=await Promise.all([withTenant(prisma,schoolId,tx=>tx.attemptQuestionResult.findMany({where:{schoolId,attemptId:result.attemptId}})),withTenant(prisma,schoolId,tx=>tx.attemptQuestionSnapshot.findUnique({where:{schoolId_attemptId:{schoolId,attemptId:result.attemptId}},select:{document:true}})),resolveMembershipDisplayNames(schoolId,result.adjustments.map(a=>a.authorizedByMembershipId))]);
-  const voided=new Set(result.adjustments.filter(a=>a.adjustmentType==='VOID_QUESTION').map(a=>a.operation.targetExamQuestionId).filter((id):id is string=>id!==null));const document=snapshot?.document as unknown as AttemptSnapshotDocumentV1|undefined;const byId=new Map((document?.questions??[]).map(q=>[q.examQuestionId,q] as const));
-  const questions:ResultQuestionBreakdownDto[]=questionResults.map(qr=>{const q=byId.get(qr.examQuestionId);return{examQuestionId:qr.examQuestionId,displaySequence:q?.displaySequence??0,content:q?.content??'',correctness:qr.correctness,awardedMarks:qr.awardedMarks,maximumMarks:qr.maximumMarks,voided:voided.has(qr.examQuestionId)}}).sort((a,b)=>a.displaySequence-b.displaySequence);
-  return{...toResultListItemDto(result),examId:result.examId,examTitle:result.exam.title,subjectName:result.exam.subject.name,gradingScaleVersionId:result.gradingScaleVersionId,questions,adjustments:result.adjustments.map(a=>toAdjustmentHistoryItemDto({...a,authorizedByName:actorNames.get(a.authorizedByMembershipId)??'Unknown'}))};
- }
- async computeSummary(schoolId:string,examId:string):Promise<ExamResultSummaryDto>{return this.summaryFor(schoolId,examId)}
- private async summaryFor(schoolId:string,examId:string,classId?:string):Promise<ExamResultSummaryDto>{
-  const classWhere:Prisma.ResultWhereInput|undefined=classId?{studentProfile:{enrollments:{some:{schoolId,classId,status:'ACTIVE'}}}}:undefined;const base=aggregatableResultWhere(schoolId,examId);const scoped:Prisma.ResultWhereInput=classWhere?{AND:[base,classWhere]}:base;
-  const [aggregate,voidedCount,pendingCount,passingRows,counts]=await withTenant(prisma,schoolId,tx=>Promise.all([
-   tx.result.aggregate({where:scoped,_count:{_all:true},_avg:{percentage:true},_max:{percentage:true},_min:{percentage:true}}),
-   tx.result.count({where:{schoolId,examId,state:'VOIDED',...(classWhere??{})}}),tx.result.count({where:{schoolId,examId,state:'PROCESSING',...(classWhere??{})}}),tx.result.findMany({where:{AND:[scoped,{grade:{not:null}}]},select:{grade:true,gradingScaleVersionId:true}}),
-   tx.$queryRaw<ParticipationCounts[]>`SELECT COUNT(DISTINCT p.student_profile_id)::bigint AS "studentCount",COUNT(DISTINCT p.student_profile_id) FILTER(WHERE EXISTS(SELECT 1 FROM exam_participations absent WHERE absent.school_id=p.school_id AND absent.exam_id=s.exam_id AND absent.student_profile_id=p.student_profile_id AND absent.status='ABSENT') AND NOT EXISTS(SELECT 1 FROM exam_participations done WHERE done.school_id=p.school_id AND done.exam_id=s.exam_id AND done.student_profile_id=p.student_profile_id AND done.status='COMPLETED'))::bigint AS "absentCount" FROM exam_session_participants p JOIN exam_sessions s ON s.school_id=p.school_id AND s.id=p.exam_session_id WHERE p.school_id=${schoolId}::uuid AND s.exam_id=${examId}::uuid AND p.status='AUTHORIZED' AND (${classId??null}::uuid IS NULL OR EXISTS(SELECT 1 FROM student_enrollments e WHERE e.school_id=p.school_id AND e.student_profile_id=p.student_profile_id AND e.class_id=${classId??null}::uuid AND e.status='ACTIVE'))`
-  ]));
-  return{studentCount:Number(counts[0]?.studentCount??0),absentCount:Number(counts[0]?.absentCount??0),resultCount:aggregate._count._all,voidedCount,pendingCount,averagePercentage:aggregate._avg.percentage===null?null:Math.round(decimalToNumber(aggregate._avg.percentage)*100)/100,highestPercentage:aggregate._max.percentage===null?null:decimalToNumber(aggregate._max.percentage),lowestPercentage:aggregate._min.percentage===null?null:decimalToNumber(aggregate._min.percentage),passRate:await this.computePassRate(schoolId,passingRows)};
- }
- private async computePassRate(schoolId:string,rows:{grade:string|null;gradingScaleVersionId:string|null}[]):Promise<number|null>{if(!rows.length)return null;const ids=[...new Set(rows.map(r=>r.gradingScaleVersionId).filter((id):id is string=>!!id))];if(!ids.length)return null;const bands=await withTenant(prisma,schoolId,tx=>tx.gradingScaleBand.findMany({where:{schoolId,versionId:{in:ids}},select:{versionId:true,label:true,isPassing:true}}));const passing=new Map<string,Set<string>>();for(const b of bands){if(!b.isPassing)continue;const set=passing.get(b.versionId)??new Set<string>();set.add(b.label);passing.set(b.versionId,set)}if(!passing.size)return null;const passed=rows.filter(r=>r.gradingScaleVersionId&&r.grade&&passing.get(r.gradingScaleVersionId)?.has(r.grade)).length;return Math.round(passed/rows.length*10000)/100}
- private async computeClassSummaries(schoolId:string,exam:{id:string;classes:{classSubject:{classGroupSession:{id:string;name:string}}}[]}):Promise<ExamResultClassSummaryDto[]>{const classes=exam.classes.map(c=>c.classSubject.classGroupSession);if(classes.length<=1)return[];return Promise.all(classes.map(async c=>({classId:c.id,className:c.name,...await this.summaryFor(schoolId,exam.id,c.id)})))}
- private async assertCanViewExamResults(schoolId:string,actor:AuthorizedActor,exam:Parameters<typeof resolveResultResourceContext>[2]&{id:string},permission:'results.viewExamResults'|'results.viewIndividualResult'='results.viewExamResults'){const resource=await resolveResultResourceContext(schoolId,actor,exam);const decision=await this.authz.evaluate(actor,permission,resource);if(!decision.allowed&&!isExamCreator(actor,exam))throw new AppHttpException({code:'NOT_FOUND',message:'Result not found.'})}
+type ParticipationCounts = {
+  studentCount: bigint | number;
+  absentCount: bigint | number;
+};
+
+@Injectable()
+export class ResultQueryService {
+  constructor(private readonly authz: AuthorizationService) {}
+
+  async listForExam(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examId: string,
+    query: ListExamResultsQueryDto,
+  ): Promise<ExamResultsResponseDto> {
+    const exam = await loadExamOrThrow(schoolId, examId);
+    await this.assertCanViewExamResults(schoolId, actor, exam);
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const sortBy = query.sortBy ?? 'studentName';
+    const sortDir = query.sortDir ?? 'asc';
+    const filters: Prisma.ResultWhereInput[] = [];
+
+    if (query.classId !== undefined) {
+      filters.push({
+        studentProfile: {
+          enrollments: { some: { schoolId, classId: query.classId, status: 'ACTIVE' } },
+        },
+      });
+    }
+    if (query.q !== undefined && query.q.trim() !== '') {
+      const search = query.q.trim();
+      filters.push({
+        studentProfile: {
+          OR: [
+            { studentId: { contains: search, mode: 'insensitive' } },
+            { membership: { user: { displayName: { contains: search, mode: 'insensitive' } } } },
+          ],
+        },
+      });
+    }
+
+    const where: Prisma.ResultWhereInput = {
+      schoolId,
+      examId,
+      ...(query.state !== undefined && { state: query.state }),
+      ...(filters.length > 0 && { AND: filters }),
+    };
+    const orderBy: Prisma.ResultOrderByWithRelationInput =
+      sortBy === 'studentName'
+        ? { studentProfile: { membership: { user: { displayName: sortDir } } } }
+        : sortBy === 'percentage'
+          ? { percentage: sortDir }
+          : sortBy === 'earnedMarks'
+            ? { earnedMarks: sortDir }
+            : { finalizedAt: sortDir };
+
+    const [rows, total, publication] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.result.findMany({
+          where,
+          include: RESULT_LIST_INCLUDE,
+          orderBy,
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.result.count({ where }),
+        tx.resultPublication.findUnique({ where: { schoolId_examId: { schoolId, examId } } }),
+      ]),
+    );
+
+    return {
+      items: rows.map(toResultListItemDto),
+      total,
+      page,
+      pageSize,
+      summary: await this.summaryFor(schoolId, examId),
+      classSummaries: await this.computeClassSummaries(schoolId, exam),
+      published: publication?.status === 'PUBLISHED',
+      adjustmentInProgress: publication?.adjustmentInProgress ?? false,
+    };
+  }
+
+  async getDetail(
+    schoolId: string,
+    actor: AuthorizedActor,
+    resultId: string,
+  ): Promise<ResultDetailResponseDto> {
+    const result = await withTenant(prisma, schoolId, (tx) =>
+      tx.result.findUnique({
+        where: { id: resultId },
+        include: {
+          ...RESULT_LIST_INCLUDE,
+          exam: { select: { id: true, title: true, subject: { select: { name: true } } } },
+          adjustments: {
+            orderBy: { createdAt: 'asc' },
+            include: { operation: { select: { targetExamQuestionId: true, type: true } } },
+          },
+        },
+      }),
+    );
+    if (!result) {
+      throw new AppHttpException({ code: 'NOT_FOUND', message: 'Result not found.' });
+    }
+
+    const exam = await loadExamOrThrow(schoolId, result.examId);
+    await this.assertCanViewExamResults(
+      schoolId,
+      actor,
+      exam,
+      'results.viewIndividualResult',
+    );
+
+    const [questionResults, snapshot, actorNames] = await Promise.all([
+      withTenant(prisma, schoolId, (tx) =>
+        tx.attemptQuestionResult.findMany({ where: { schoolId, attemptId: result.attemptId } }),
+      ),
+      withTenant(prisma, schoolId, (tx) =>
+        tx.attemptQuestionSnapshot.findUnique({
+          where: { schoolId_attemptId: { schoolId, attemptId: result.attemptId } },
+          select: { document: true },
+        }),
+      ),
+      resolveMembershipDisplayNames(
+        schoolId,
+        result.adjustments.map((adjustment) => adjustment.authorizedByMembershipId),
+      ),
+    ]);
+
+    const voidedQuestionIds = new Set(
+      result.adjustments
+        .filter((adjustment) => adjustment.adjustmentType === 'VOID_QUESTION')
+        .map((adjustment) => adjustment.operation.targetExamQuestionId)
+        .filter((id): id is string => id !== null),
+    );
+    const document = snapshot?.document as unknown as AttemptSnapshotDocumentV1 | undefined;
+    const questionsById = new Map(
+      (document?.questions ?? []).map((question) => [question.examQuestionId, question] as const),
+    );
+    const questions: ResultQuestionBreakdownDto[] = questionResults
+      .map((questionResult) => {
+        const question = questionsById.get(questionResult.examQuestionId);
+        return {
+          examQuestionId: questionResult.examQuestionId,
+          displaySequence: question?.displaySequence ?? 0,
+          content: question?.content ?? '',
+          correctness: questionResult.correctness,
+          awardedMarks: questionResult.awardedMarks,
+          maximumMarks: questionResult.maximumMarks,
+          voided: voidedQuestionIds.has(questionResult.examQuestionId),
+        };
+      })
+      .sort((left, right) => left.displaySequence - right.displaySequence);
+
+    return {
+      ...toResultListItemDto(result),
+      examId: result.examId,
+      examTitle: result.exam.title,
+      subjectName: result.exam.subject.name,
+      gradingScaleVersionId: result.gradingScaleVersionId,
+      questions,
+      adjustments: result.adjustments.map((adjustment) =>
+        toAdjustmentHistoryItemDto({
+          ...adjustment,
+          authorizedByName:
+            actorNames.get(adjustment.authorizedByMembershipId) ?? 'Unknown',
+        }),
+      ),
+    };
+  }
+
+  async computeSummary(schoolId: string, examId: string): Promise<ExamResultSummaryDto> {
+    return this.summaryFor(schoolId, examId);
+  }
+
+  private async summaryFor(
+    schoolId: string,
+    examId: string,
+    classId?: string,
+  ): Promise<ExamResultSummaryDto> {
+    const classWhere: Prisma.ResultWhereInput | undefined = classId
+      ? {
+          studentProfile: {
+            enrollments: { some: { schoolId, classId, status: 'ACTIVE' } },
+          },
+        }
+      : undefined;
+    const base = aggregatableResultWhere(schoolId, examId);
+    const scoped: Prisma.ResultWhereInput = classWhere ? { AND: [base, classWhere] } : base;
+
+    const [aggregate, voidedCount, pendingCount, passingRows, counts] = await withTenant(
+      prisma,
+      schoolId,
+      (tx) =>
+        Promise.all([
+          tx.result.aggregate({
+            where: scoped,
+            _count: { _all: true },
+            _avg: { percentage: true },
+            _max: { percentage: true },
+            _min: { percentage: true },
+          }),
+          tx.result.count({
+            where: { schoolId, examId, state: 'VOIDED', ...(classWhere ?? {}) },
+          }),
+          tx.result.count({
+            where: { schoolId, examId, state: 'PROCESSING', ...(classWhere ?? {}) },
+          }),
+          tx.result.findMany({
+            where: { AND: [scoped, { grade: { not: null } }] },
+            select: { grade: true, gradingScaleVersionId: true },
+          }),
+          tx.$queryRaw<ParticipationCounts[]>`
+            SELECT
+              COUNT(DISTINCT participant.student_profile_id)::bigint AS "studentCount",
+              COUNT(DISTINCT participant.student_profile_id) FILTER (
+                WHERE EXISTS (
+                  SELECT 1 FROM exam_participations absent
+                  WHERE absent.school_id = participant.school_id
+                    AND absent.exam_id = session.exam_id
+                    AND absent.student_profile_id = participant.student_profile_id
+                    AND absent.status = 'ABSENT'
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM exam_participations completed
+                  WHERE completed.school_id = participant.school_id
+                    AND completed.exam_id = session.exam_id
+                    AND completed.student_profile_id = participant.student_profile_id
+                    AND completed.status = 'COMPLETED'
+                )
+              )::bigint AS "absentCount"
+            FROM exam_session_participants participant
+            JOIN exam_sessions session
+              ON session.school_id = participant.school_id
+             AND session.id = participant.exam_session_id
+            WHERE participant.school_id = ${schoolId}::uuid
+              AND session.exam_id = ${examId}::uuid
+              AND participant.status = 'AUTHORIZED'
+              AND (
+                ${classId ?? null}::uuid IS NULL
+                OR EXISTS (
+                  SELECT 1 FROM student_enrollments enrollment
+                  WHERE enrollment.school_id = participant.school_id
+                    AND enrollment.student_profile_id = participant.student_profile_id
+                    AND enrollment.class_id = ${classId ?? null}::uuid
+                    AND enrollment.status = 'ACTIVE'
+                )
+              )
+          `,
+        ]),
+    );
+
+    return {
+      studentCount: Number(counts[0]?.studentCount ?? 0),
+      absentCount: Number(counts[0]?.absentCount ?? 0),
+      resultCount: aggregate._count._all,
+      voidedCount,
+      pendingCount,
+      averagePercentage:
+        aggregate._avg.percentage === null
+          ? null
+          : Math.round(decimalToNumber(aggregate._avg.percentage) * 100) / 100,
+      highestPercentage:
+        aggregate._max.percentage === null ? null : decimalToNumber(aggregate._max.percentage),
+      lowestPercentage:
+        aggregate._min.percentage === null ? null : decimalToNumber(aggregate._min.percentage),
+      passRate: await this.computePassRate(schoolId, passingRows),
+    };
+  }
+
+  private async computePassRate(
+    schoolId: string,
+    rows: { grade: string | null; gradingScaleVersionId: string | null }[],
+  ): Promise<number | null> {
+    if (rows.length === 0) return null;
+    const versionIds = [
+      ...new Set(
+        rows
+          .map((row) => row.gradingScaleVersionId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    if (versionIds.length === 0) return null;
+
+    const bands = await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScaleBand.findMany({
+        where: { schoolId, versionId: { in: versionIds } },
+        select: { versionId: true, label: true, isPassing: true },
+      }),
+    );
+    const passingByVersion = new Map<string, Set<string>>();
+    for (const band of bands) {
+      if (!band.isPassing) continue;
+      const labels = passingByVersion.get(band.versionId) ?? new Set<string>();
+      labels.add(band.label);
+      passingByVersion.set(band.versionId, labels);
+    }
+    if (passingByVersion.size === 0) return null;
+
+    const passed = rows.filter(
+      (row) =>
+        row.gradingScaleVersionId !== null &&
+        row.grade !== null &&
+        passingByVersion.get(row.gradingScaleVersionId)?.has(row.grade) === true,
+    ).length;
+    return Math.round((passed / rows.length) * 10000) / 100;
+  }
+
+  private async computeClassSummaries(
+    schoolId: string,
+    exam: {
+      id: string;
+      classes: { classSubject: { classGroupSession: { id: string; name: string } } }[];
+    },
+  ): Promise<ExamResultClassSummaryDto[]> {
+    const classes = exam.classes.map((item) => item.classSubject.classGroupSession);
+    if (classes.length <= 1) return [];
+    return Promise.all(
+      classes.map(async (classGroup) => ({
+        classId: classGroup.id,
+        className: classGroup.name,
+        ...(await this.summaryFor(schoolId, exam.id, classGroup.id)),
+      })),
+    );
+  }
+
+  private async assertCanViewExamResults(
+    schoolId: string,
+    actor: AuthorizedActor,
+    exam: Parameters<typeof resolveResultResourceContext>[2] & { id: string },
+    permission:
+      | 'results.viewExamResults'
+      | 'results.viewIndividualResult' = 'results.viewExamResults',
+  ): Promise<void> {
+    const resource = await resolveResultResourceContext(schoolId, actor, exam);
+    const decision = await this.authz.evaluate(actor, permission, resource);
+    if (!decision.allowed && !isExamCreator(actor, exam)) {
+      throw new AppHttpException({ code: 'NOT_FOUND', message: 'Result not found.' });
+    }
+  }
 }
