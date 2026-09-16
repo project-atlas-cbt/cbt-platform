@@ -4,6 +4,9 @@ import { canStudentAccessSession, evaluateExamEligibility } from './exam-eligibi
 
 export interface AttemptEligibilityResult {
   eligible: boolean;
+  /** Machine-readable failed-check codes, matching `evaluateExamEligibility`
+   * 's own itemised philosophy — every check runs independently (no early
+   * return), so a caller gets the full set of reasons, not just the first. */
   failedChecks: string[];
 }
 
@@ -16,10 +19,20 @@ type ExamForAttemptEligibility = Pick<
 >;
 
 /**
- * Layers attempt-specific eligibility on the shared exam/session checks.
- * ADR-0014 permits one unexpired authorization to override only the
- * configured attempt-limit failure; it never bypasses enrollment, exam
- * availability, or session authorization.
+ * `AttemptLifecycleService.start()`'s own eligibility gate — layers B13's
+ * two attempt-specific clauses on top of the already-shared `evaluateExam
+ * Eligibility`/`canStudentAccessSession` predicate (ADR-0006/A-04), closing
+ * that function's own explicitly-deferred "final clause" ("under attempt
+ * limit or holding an authorization") now that `ExamAttempt` exists.
+ *
+ * Deliberately does NOT check "does an IN_PROGRESS attempt already exist
+ * for this (student, exam)" — that is not an eligibility failure, it's the
+ * service's own idempotent-return case (DoD item 2: a duplicate start
+ * yields the SAME attempt, not an error), handled by `start()` itself
+ * before this function is ever called.
+ *
+ * `AttemptAuthorization` (ADR-0014, "holding an authorization") stays
+ * B14's job — this only checks the attempt-limit half of that clause.
  */
 export async function evaluateAttemptStartEligibility(
   tx: Prisma.TransactionClient,
@@ -36,10 +49,22 @@ export async function evaluateAttemptStartEligibility(
   const base = await evaluateExamEligibility(tx, { schoolId, exam, studentProfileId });
   failedChecks.push(...base.failedChecks);
 
-  if (!(await canStudentAccessSession(tx, { schoolId, examSessionId, studentProfileId }))) {
+  const canAccessSession = await canStudentAccessSession(tx, {
+    schoolId,
+    examSessionId,
+    studentProfileId,
+  });
+  if (!canAccessSession) {
     failedChecks.push(SESSION_NOT_ACCESSIBLE);
   }
 
+  // Every terminal-but-completed attempt state counts against the limit
+  // (07 §9.1 invariant 1: "a student cannot have more completed attempts
+  // than the exam's configured attempt policy permits") — INVALIDATED/
+  // CANCELLED attempts do not consume headroom, matching this codebase's
+  // "an administratively voided attempt shouldn't cost the student their
+  // legitimate retry" reading, consistent with makeup/retry (B14) always
+  // needing an explicit new authorization regardless of raw count anyway.
   const completedCount = await tx.examAttempt.count({
     where: {
       schoolId,
@@ -48,22 +73,8 @@ export async function evaluateAttemptStartEligibility(
       state: { in: ['SUBMITTED', 'AUTO_SUBMITTED'] },
     },
   });
-
   if (completedCount >= exam.attemptLimit) {
-    const activeAuthorizations = await tx.$queryRaw<{ present: boolean }[]>`
-      SELECT EXISTS(
-        SELECT 1
-        FROM attempt_authorizations
-        WHERE school_id = ${schoolId}::uuid
-          AND exam_id = ${exam.id}::uuid
-          AND student_profile_id = ${studentProfileId}::uuid
-          AND status = 'AUTHORIZED'
-          AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
-      ) AS present
-    `;
-    if (!activeAuthorizations[0]?.present) {
-      failedChecks.push(ATTEMPT_LIMIT_EXCEEDED);
-    }
+    failedChecks.push(ATTEMPT_LIMIT_EXCEEDED);
   }
 
   return { eligible: failedChecks.length === 0, failedChecks };
