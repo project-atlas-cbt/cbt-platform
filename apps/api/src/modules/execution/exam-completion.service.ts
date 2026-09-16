@@ -13,7 +13,6 @@ import { loadParentExamOrThrow } from './exam-control-mappers.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
 interface ActorContext{actorUserId:string;actorRole:Role}
 type CompleteOutcome={kind:'SESSIONS_STILL_OPEN'|'ATTEMPTS_STILL_IN_PROGRESS'|'STALE_ABSENTEE_LIST'|'NOT_COMPLETABLE'}|{kind:'OK';absentCount:number};
-
 @Injectable()
 export class ExamCompletionService{
  constructor(private readonly authz:AuthorizationService,private readonly audit:AuditService,private readonly stream:ExamControlStreamService){}
@@ -22,7 +21,7 @@ export class ExamCompletionService{
   if(!(await this.authz.evaluate(actor,'examAdmin.controlCenter',resource)).allowed)throw new AppHttpException({code:'FORBIDDEN',message:'You do not have permission to end this examination.'});
   if(!(await this.authz.evaluate(actor,'examAdmin.markAbsence',resource)).allowed)throw new AppHttpException({code:'FORBIDDEN',message:'You do not have permission to confirm absences for this exam.'});
   const member=requireSchoolActor(actor),submitted=new Set(dto.confirmedAbsentStudentProfileIds);
-  const outcome=await withTenant(prisma,schoolId,async tx:Promise<CompleteOutcome>=>{
+  const outcome=await withTenant(prisma,schoolId,async(tx):Promise<CompleteOutcome>=>{
    await tx.$queryRaw`SELECT id FROM exams WHERE id=${examId}::uuid AND school_id=${schoolId}::uuid FOR UPDATE`;
    if(await tx.examAttempt.count({where:{schoolId,examId,state:'IN_PROGRESS'}}))return {kind:'ATTEMPTS_STILL_IN_PROGRESS'};
    if(await tx.examSession.count({where:{schoolId,examId,status:'OPEN'}}))return {kind:'SESSIONS_STILL_OPEN'};
