@@ -33,6 +33,7 @@ import { AdjustmentProgress } from './adjustment-progress';
  */
 function formatAdjustmentValue(value: unknown): string {
   if (value === null || value === undefined) return '—';
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
   if (typeof value !== 'object') return String(value);
   const entries = Object.entries(value as Record<string, unknown>);
   if (entries.length === 0) return '—';
@@ -109,9 +110,7 @@ export function StaffResultDetailScreen({
     router.replace(`${pathname}?${params.toString()}`);
   }
 
-  const backHref = operationId
-    ? `${backPath}?op=${encodeURIComponent(operationId)}`
-    : backPath;
+  const backHref = operationId ? `${backPath}?op=${encodeURIComponent(operationId)}` : backPath;
 
   if (query.isPending) {
     return (
@@ -158,13 +157,19 @@ export function StaffResultDetailScreen({
       </div>
 
       {result.voidedReason ? (
-        <p role="status" className="rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger">
+        <p
+          role="status"
+          className="rounded-md border border-danger/40 bg-danger/5 p-3 text-sm text-danger"
+        >
           This result has been voided and is excluded from every exam aggregate and from the
           student’s own view. Reason: {result.voidedReason}
         </p>
       ) : null}
       {result.withheld && result.withheldReason ? (
-        <p role="status" className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
+        <p
+          role="status"
+          className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning"
+        >
           Withheld from the student, even if this exam’s results are published. Reason:{' '}
           {result.withheldReason}
         </p>
@@ -284,9 +289,7 @@ export function StaffResultDetailScreen({
       <div className="space-y-3">
         <h2 className="text-sm font-medium text-text-primary">Adjustment history</h2>
         {result.adjustments.length === 0 ? (
-          <p className="text-sm text-text-muted">
-            No adjustments have been made to this result.
-          </p>
+          <p className="text-sm text-text-muted">No adjustments have been made to this result.</p>
         ) : (
           <ul className="space-y-2">
             {result.adjustments.map((adjustment) => (

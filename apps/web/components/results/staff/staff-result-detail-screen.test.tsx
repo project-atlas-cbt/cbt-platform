@@ -90,7 +90,7 @@ const GRANTS: Record<string, string[]> = {
 
 function actAs(role: keyof typeof GRANTS) {
   mockUseHasPermission.mockImplementation((resource: string) =>
-    GRANTS[role].includes(resource),
+    Boolean(GRANTS[role]?.includes(resource)),
   );
 }
 
@@ -178,7 +178,9 @@ describe('StaffResultDetailScreen', () => {
     actAs('teacher');
     renderScreen();
     expect(screen.getByRole('button', { name: /release to student/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /withhold from student/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /withhold from student/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/pending script review/i)).toBeInTheDocument();
   });
 
