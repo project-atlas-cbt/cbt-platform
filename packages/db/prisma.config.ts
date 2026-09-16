@@ -7,7 +7,10 @@ import { loadRootEnv } from '@atlas/config';
 loadRootEnv();
 
 export default defineConfig({
-  schema: 'prisma/schema.prisma',
+  // B16 uses Prisma's supported multi-file schema layout so its generated
+  // client model can live beside the long-established primary schema while
+  // the hand-written migrations remain the source of database constraints.
+  schema: 'prisma',
   migrations: {
     seed: 'tsx prisma/seed.ts',
   },
