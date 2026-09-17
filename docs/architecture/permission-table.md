@@ -61,7 +61,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | Manage terms (derived split: view)                           | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | SCHOOL    | —       | —         |          |
 | Manage terms (derived split: create/edit/delete)             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
 | View current academic context (school + session + term)      | —              | SELF         | SELF      | SELF      | SELF    | SELF      |          |
-| View school settings (result policy)                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
+| View school settings (result policy, grading scale)          | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —         | —       | —         |          |
 | Manage school settings                                       | PLATFORM ⚠️    | SCHOOL       | —         | —         | —       | —         |          |
 
 <details><summary>Notes</summary>
@@ -84,7 +84,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Manage academic sessions (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
 - **Manage terms (derived split: view) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manage terms (derived split: create/edit/delete) / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
-- **View school settings (result policy) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **View school settings (result policy, grading scale) / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Manage school settings / SOFTWARE_ADMIN:** R1 — see schoolConfig.department.manage.
 
 </details>
@@ -125,6 +125,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | Deactivate Teacher        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
 | Reset Teacher credentials | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
 | View students             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
+| View own student profile  | PLATFORM ⚠️    | —            | —         | —          | —        | SELF ⚠️ |                          |
 | Create Student            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
 | Edit Student              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
 | Deactivate Student        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —        | —       |                          |
@@ -150,6 +151,8 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Deactivate Teacher / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Reset Teacher credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **View students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **View own student profile / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
+- **View own student profile / STUDENT:** F14 gap-closure — GET /students/me (name, student ID, current class/department for the Profile screen, 04 §62). Distinct from users.student.view (the staff directory's broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.
 - **Create Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Deactivate Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
@@ -278,19 +281,20 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Exam Administration
 
-| Action                           | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER    | STUDENT | Awaiting                             |
-| -------------------------------- | -------------- | ------------ | --------- | ---------- | ---------- | ------- | ------------------------------------ |
-| Exam Control Center              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| View registered students         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED   | —       |                                      |
-| View live attempts               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| See who has started              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| See who has completed            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Manually allow student           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Grant makeup access              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | AttemptAuthorization (B16, ADR-0014) |
-| Mark/confirm absence             | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| End individual attempt           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Grant extra time (accommodation) | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Invalidate attempt               | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | ⏸ DEFERRED | —       | ExamAttempt (B16, ADR-0014)          |
+| Action                           | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting |
+| -------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | -------- |
+| Exam Control Center              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| View registered students         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       |          |
+| View live attempts               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| See who has started              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| See who has completed            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Manually allow student           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Grant makeup access              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Mark/confirm absence             | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Authorize exceptional reattempt  | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| End individual attempt           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Grant extra time (accommodation) | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Invalidate attempt               | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
 
 <details><summary>Notes</summary>
 
@@ -302,50 +306,53 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Manually allow student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Grant makeup access / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
 - **Mark/confirm absence / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Authorize exceptional reattempt / SOFTWARE_ADMIN:** R4: exceptional academic intervention requires break-glass.
 - **End individual attempt / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Grant extra time (accommodation) / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Invalidate attempt / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
-- **Invalidate attempt / TEACHER:** "Request/limited" names no actual mechanism in any document — not covered by ADR-0017 either. DENIED, fail-closed, pending explicit product clarification.
 
 </details>
 
 ## Student CBT
 
-| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER | STUDENT | Awaiting                           |
-| -------------------------- | -------------- | ------------ | --------- | ------ | ------- | ------- | ---------------------------------- |
-| View active assessment     | —              | —            | —         | —      | —       | SELF    |                                    |
-| Start exam                 | —              | —            | —         | —      | —       | SELF    |                                    |
-| Answer questions           | —              | —            | —         | —      | —       | SELF    |                                    |
-| Navigate questions         | —              | —            | —         | —      | —       | SELF    |                                    |
-| Submit exam                | —              | —            | —         | —      | —       | SELF    |                                    |
-| Auto-submit on timeout     | SYSTEM         | SYSTEM       | SYSTEM    | SYSTEM | SYSTEM  | SYSTEM  |                                    |
-| Resume interrupted attempt | —              | —            | —         | —      | —       | SELF    |                                    |
-| View previous results      | —              | —            | —         | —      | —       | SELF ⚠️ | Result (B15), school setting (B17) |
+| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD    | TEACHER | STUDENT | Awaiting |
+| -------------------------- | -------------- | ------------ | --------- | ------ | ------- | ------- | -------- |
+| View active assessment     | —              | —            | —         | —      | —       | SELF    |          |
+| Start exam                 | —              | —            | —         | —      | —       | SELF    |          |
+| Answer questions           | —              | —            | —         | —      | —       | SELF    |          |
+| Navigate questions         | —              | —            | —         | —      | —       | SELF    |          |
+| Submit exam                | —              | —            | —         | —      | —       | SELF    |          |
+| Auto-submit on timeout     | SYSTEM         | SYSTEM       | SYSTEM    | SYSTEM | SYSTEM  | SYSTEM  |          |
+| Resume interrupted attempt | —              | —            | —         | —      | —       | SELF    |          |
+| View previous results      | —              | —            | —         | —      | —       | SELF ⚠️ |          |
 
 <details><summary>Notes</summary>
 
-- **View previous results / STUDENT:** "Configurable" — gated by a school-level setting; B15/B17 wires it.
+- **View previous results / STUDENT:** "Configurable" — the school-level axis is Exam.resultDetailVisibility (ADR-0010), seeded from School.resultDetailVisibility; B15 wires it into GET /v1/student/results/:id.
 
 </details>
 
 ## Results
 
-| Action                         | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR  | HOD        | TEACHER     | STUDENT | Awaiting                              |
-| ------------------------------ | -------------- | ------------ | ---------- | ---------- | ----------- | ------- | ------------------------------------- |
-| Automatic marking              | SYSTEM         | SYSTEM       | SYSTEM     | SYSTEM     | SYSTEM      | —       | Result (B15)                          |
-| View exam results              | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | SELF ⚠️ | Result (B15)                          |
-| View individual student result | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | SELF    | Result (B15)                          |
-| View class performance         | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | —       | Result (B16/B17 analytics)            |
-| View subject performance       | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT | DEPARTMENT | ASSIGNED ⚠️ | —       | Result (B16/B17 analytics)            |
-| View question performance      | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT | DEPARTMENT | OWNED ⚠️    | —       | Result/Question analytics (B16/B17)   |
-| Export CSV                     | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       | Result (B15)                          |
-| Publish results                | —              | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       | ResultPublication (B15/B17, ADR-0010) |
-| Unpublish results              | —              | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       | ResultPublication (B15/B17, ADR-0010) |
+| Action                                   | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR  | HOD        | TEACHER     | STUDENT | Awaiting                            |
+| ---------------------------------------- | -------------- | ------------ | ---------- | ---------- | ----------- | ------- | ----------------------------------- |
+| Automatic marking                        | SYSTEM         | SYSTEM       | SYSTEM     | SYSTEM     | SYSTEM      | —       |                                     |
+| View exam results                        | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | SELF ⚠️ |                                     |
+| View individual student result           | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | SELF    |                                     |
+| View class performance                   | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | —       | Result (B16/B17 analytics)          |
+| View subject performance                 | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT | DEPARTMENT | ASSIGNED ⚠️ | —       | Result (B16/B17 analytics)          |
+| View question performance                | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT | DEPARTMENT | OWNED ⚠️    | —       | Result/Question analytics (B16/B17) |
+| Export CSV                               | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       |                                     |
+| Publish results                          | —              | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       |                                     |
+| Unpublish results                        | —              | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       |                                     |
+| Withhold or release an individual result | —              | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | —       |                                     |
+| Create a result adjustment               | —              | SCHOOL       | SCHOOL     | DEPARTMENT | —           | —       |                                     |
+| Manually override a result score         | —              | SCHOOL       | —          | —          | —           | —       |                                     |
 
 <details><summary>Notes</summary>
 
 - **View exam results / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
-- **View exam results / STUDENT:** "Own published results" — gated by ResultPublication (ADR-0010); B17 wires the publication-state check.
+- **View exam results / STUDENT:** "Own published results" — gated by ResultPublication (ADR-0010); B15 wires the publication-state check via @atlas/domain's shared visibility helper.
 - **View individual student result / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View class performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View subject performance / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
@@ -364,7 +371,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | School-wide analytics        | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | —          | —        | —       | B16/B17 analytics                     |
 | Department analytics         | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT ⚠️ | DEPARTMENT | —        | —       | B16/B17 analytics                     |
 | Class analytics              | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | ASSIGNED | —       | B16/B17 analytics                     |
-| Student performance history  | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | ASSIGNED | SELF    | Result (B15), B16/B17 analytics       |
+| Student performance history  | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | ASSIGNED | SELF    | B16/B17 analytics                     |
 | Question difficulty analysis | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT    | DEPARTMENT | OWNED    | —       | Question/Result analytics (B16/B17)   |
 | Exam completion statistics   | PLATFORM ⚠️    | SCHOOL       | SCHOOL        | DEPARTMENT | OWNED    | —       | ExamParticipation analytics (B16/B17) |
 
@@ -385,7 +392,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting                                                                                          |
 | -------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | ------------------------------------------------------------------------------------------------- |
 | Export school data         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED    | —       | B18 reporting                                                                                     |
-| Export exam results        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | Result (B15), B18 reporting                                                                       |
+| Export exam results        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | B18 reporting                                                                                     |
 | Export student list        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED    | —       | B18 reporting                                                                                     |
 | Export question bank       | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED ⚠️ | —       | Question (B8), B18 reporting                                                                      |
 | Generate printable reports | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | SELF ⚠️ | ADR-0030 defers server-rendered PDF reporting to a later phase; B18 gains the rendering pipeline. |

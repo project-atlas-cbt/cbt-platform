@@ -20,6 +20,7 @@ import {
   CreateStudentDto,
   ListStudentsQueryDto,
   StudentListResponseDto,
+  StudentOwnProfileResponseDto,
   StudentResponseDto,
   UpdateStudentDto,
 } from './dto/student.dto.js';
@@ -47,6 +48,21 @@ export class StudentController {
     @Query() query: ListStudentsQueryDto,
   ): Promise<StudentListResponseDto> {
     return this.students.list(currentUser(req).schoolId, query);
+  }
+
+  // F14 gap-closure — registered *before* `:id` below: 'me' is a literal
+  // path segment, and without this ordering Nest/Fastify would match
+  // `/students/me` against `:id` first (the same literal-before-dynamic
+  // rule this codebase's other `.../me`-style routes already rely on).
+  @Get('me')
+  @Authorized('users.student.viewOwnProfile')
+  @ApiOperation({
+    summary: "The signed-in student's own name, student ID, class and department (04 §62).",
+  })
+  @ApiOkResponse({ type: StudentOwnProfileResponseDto })
+  async getOwnProfile(@Req() req: FastifyRequest): Promise<StudentOwnProfileResponseDto> {
+    const user = currentUser(req);
+    return this.students.getOwnProfile(user.schoolId, user.membershipId);
   }
 
   @Get(':id')

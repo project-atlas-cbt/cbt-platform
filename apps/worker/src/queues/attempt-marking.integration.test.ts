@@ -294,6 +294,33 @@ async function cleanupSchool(schoolId: string): Promise<void> {
   // deleteMany always fails; inside one shared transaction that failure
   // would abort every other delete alongside it. Matches
   // attempt.integration.test.ts's (apps/api) own established precedent.
+  // B15: marking now also finalises a Result (and may create a
+  // ResultPublication), so both must clear before the attempt rows they
+  // reference.
+  await withTenant(prisma, schoolId, (tx) => tx.result.deleteMany({ where: { schoolId } })).catch(
+    () => undefined,
+  );
+  await withTenant(prisma, schoolId, (tx) =>
+    tx.resultPublication.deleteMany({ where: { schoolId } }),
+  ).catch(() => undefined);
+  await withTenant(prisma, schoolId, (tx) =>
+    tx.gradingScale.updateMany({ where: { schoolId }, data: { currentVersionId: null } }),
+  ).catch(() => undefined);
+  await withTenant(prisma, schoolId, (tx) =>
+    tx.gradingScaleBand.deleteMany({ where: { schoolId } }),
+  ).catch(() => undefined);
+  await withTenant(prisma, schoolId, (tx) =>
+    tx.gradingScaleVersion.deleteMany({ where: { schoolId } }),
+  ).catch(() => undefined);
+  await withTenant(prisma, schoolId, (tx) =>
+    tx.gradingScale.deleteMany({ where: { schoolId } }),
+  ).catch(() => undefined);
+  await withTenant(prisma, schoolId, (tx) =>
+    tx.notification.deleteMany({ where: { schoolId } }),
+  ).catch(() => undefined);
+  await withTenant(prisma, schoolId, (tx) =>
+    tx.auditEvent.deleteMany({ where: { schoolId } }),
+  ).catch(() => undefined);
   await withTenant(prisma, schoolId, (tx) =>
     tx.attemptQuestionResult.deleteMany({ where: { schoolId } }),
   ).catch(() => undefined);
@@ -497,6 +524,36 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
     expect(results).toHaveLength(0);
   });
 
+  it('B16: ignores a stale marking job after the submitted attempt is invalidated', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+      { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+    ]);
+
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.examAttempt.update({
+        where: { id: attemptId },
+        data: { state: 'INVALIDATED', invalidationReason: 'Verified irregularity' },
+      }),
+    );
+
+    await expect(
+      runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId }),
+    ).resolves.toBeUndefined();
+
+    const [questionResultCount, result] = await withTenant(prisma, fixture.schoolId, (tx) =>
+      Promise.all([
+        tx.attemptQuestionResult.count({ where: { schoolId: fixture.schoolId, attemptId } }),
+        tx.result.findUnique({
+          where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId } },
+        }),
+      ]),
+    );
+    expect(questionResultCount).toBe(0);
+    expect(result).toBeNull();
+  });
+
   it('the database trigger itself blocks writing a result while the parent attempt is IN_PROGRESS, independent of the service layer', async () => {
     const fixture = await createFixtureSchool();
     schools.push(fixture.schoolId);
@@ -529,5 +586,196 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+
+  // -------------------------------------------------------------------
+  // B15 — result finalisation and automatic publication, which now ride
+  // inside this same marking transaction.
+  // -------------------------------------------------------------------
+
+  it('B15 DoD 1/2: finalises the result in the same transaction, after every question is marked', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+      { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+      { examQuestionId: Q2, selectedOptionId: OPT_10MINUS6_WRONG },
+      { examQuestionId: Q3, selectedOptionId: null },
+    ]);
+    // The result is created PROCESSING by whichever path finalises the
+    // attempt (apps/api); this fixture builds the attempt directly, so it
+    // stands in for that here.
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.create({
+        data: {
+          schoolId: fixture.schoolId,
+          attemptId,
+          examId: fixture.examId,
+          studentProfileId: fixture.studentProfileId,
+          state: 'PROCESSING',
+          totalMarks: 0,
+          earnedMarks: 0,
+          percentage: 0,
+          correctCount: 0,
+          incorrectCount: 0,
+          unansweredCount: 0,
+          partialCount: 0,
+        },
+      }),
+    );
+
+    await runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId });
+
+    const result = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.findUniqueOrThrow({
+        where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId } },
+      }),
+    );
+    expect(result.state).toBe('FINAL');
+    expect(result.finalizedAt).not.toBeNull();
+    // 5 of 10: Q1 correct (5), Q2 wrong (0/3), Q3 unanswered (0/2).
+    expect(result.totalMarks).toBe(10);
+    expect(result.earnedMarks).toBe(5);
+    expect(Number(result.percentage)).toBe(50);
+    expect(result.correctCount).toBe(1);
+    expect(result.incorrectCount).toBe(1);
+    expect(result.unansweredCount).toBe(1);
+  });
+
+  it('B15 DoD 8: freezes the grade AND its scale version at finalisation', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+
+    const version = await withTenant(prisma, fixture.schoolId, async (tx) => {
+      const scale = await tx.gradingScale.create({
+        data: { schoolId: fixture.schoolId, name: 'Default' },
+      });
+      const v = await tx.gradingScaleVersion.create({
+        data: { schoolId: fixture.schoolId, scaleId: scale.id, versionNumber: 1 },
+      });
+      await tx.gradingScaleBand.createMany({
+        data: [
+          {
+            schoolId: fixture.schoolId,
+            versionId: v.id,
+            label: 'P',
+            minPercentage: 50,
+            maxPercentage: 100,
+            isPassing: true,
+            sortOrder: 0,
+          },
+          {
+            schoolId: fixture.schoolId,
+            versionId: v.id,
+            label: 'F',
+            minPercentage: 0,
+            maxPercentage: 49.99,
+            isPassing: false,
+            sortOrder: 1,
+          },
+        ],
+      });
+      await tx.gradingScale.update({
+        where: { id: scale.id },
+        data: { currentVersionId: v.id },
+      });
+      return v;
+    });
+
+    const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+      { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+      { examQuestionId: Q2, selectedOptionId: OPT_10MINUS6_WRONG },
+      { examQuestionId: Q3, selectedOptionId: null },
+    ]);
+    await runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId });
+
+    const result = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.findUniqueOrThrow({
+        where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId } },
+      }),
+    );
+    expect(result.grade).toBe('P');
+    expect(result.gradingScaleVersionId).toBe(version.id);
+
+    // ADR-0018: a version that has graded a result is frozen — editing its
+    // bands in place would silently rewrite this student's grade.
+    await expect(
+      withTenant(prisma, fixture.schoolId, (tx) =>
+        tx.gradingScaleBand.updateMany({
+          where: { schoolId: fixture.schoolId, versionId: version.id, label: 'P' },
+          data: { minPercentage: 90 },
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('B15 DoD 6: an AUTOMATIC-policy exam publishes its results at finalisation', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.exam.update({ where: { id: fixture.examId }, data: { resultPolicy: 'AUTOMATIC' } }),
+    );
+
+    const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+      { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+      { examQuestionId: Q2, selectedOptionId: OPT_10MINUS6_RIGHT },
+      { examQuestionId: Q3, selectedOptionId: OPT_TRUEFALSE_RIGHT },
+    ]);
+    await runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId });
+
+    const publication = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultPublication.findUniqueOrThrow({
+        where: { schoolId_examId: { schoolId: fixture.schoolId, examId: fixture.examId } },
+      }),
+    );
+    expect(publication.status).toBe('PUBLISHED');
+
+    // B10 declared RESULT_PUBLISHED and left this producer to B15.
+    const notifications = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.notification.findMany({
+        where: { schoolId: fixture.schoolId, type: 'RESULT_PUBLISHED' },
+      }),
+    );
+    expect(notifications).toHaveLength(1);
+    const audits = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.auditEvent.findMany({
+        where: { schoolId: fixture.schoolId, action: 'RESULT_PUBLISHED' },
+      }),
+    );
+    expect(audits).toHaveLength(1);
+  });
+
+  it("B15: automatic publication never overrides a human's decision to unpublish", async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.exam.update({ where: { id: fixture.examId }, data: { resultPolicy: 'AUTOMATIC' } }),
+    );
+    // A staff member has already pulled this exam's results back.
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultPublication.create({
+        data: {
+          schoolId: fixture.schoolId,
+          examId: fixture.examId,
+          status: 'UNPUBLISHED',
+          unpublishedAt: new Date(),
+        },
+      }),
+    );
+
+    const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+      { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+      { examQuestionId: Q2, selectedOptionId: OPT_10MINUS6_RIGHT },
+      { examQuestionId: Q3, selectedOptionId: OPT_TRUEFALSE_RIGHT },
+    ]);
+    await runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId });
+
+    const publication = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultPublication.findUniqueOrThrow({
+        where: { schoolId_examId: { schoolId: fixture.schoolId, examId: fixture.examId } },
+      }),
+    );
+    // "Automatic" means released without waiting for a person — not
+    // overriding one.
+    expect(publication.status).toBe('UNPUBLISHED');
   });
 });

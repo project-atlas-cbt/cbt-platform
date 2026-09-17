@@ -602,9 +602,16 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     // view/manage pairing, since Moderator's confirmed posture here is
     // read-only (not the "exact writable subset TBD" placeholder this row
     // used to carry).
+    // B15 reuses this pair for grading-scale configuration rather than
+    // adding a `schoolConfig.gradingScale.*` row: `04 §19` puts grading under
+    // School Settings alongside Result Visibility, `02`'s only matching
+    // matrix row is the same "Manage school settings" one this pair already
+    // encodes, and F5 established the precedent by putting the sibling
+    // result-policy axis here. A second row would grade identically and
+    // split one settings screen across two permission ids for no gain.
     id: 'schoolConfig.settings.view',
     section: 'School Configuration',
-    label: 'View school settings (result policy)',
+    label: 'View school settings (result policy, grading scale)',
     action: 'READ',
     grants: {
       SOFTWARE_ADMIN: platformRead(),
@@ -924,6 +931,25 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       HOD: denied(),
       TEACHER: denied(),
       STUDENT: denied(),
+    },
+  },
+  {
+    id: 'users.student.viewOwnProfile',
+    section: 'User Management',
+    label: 'View own student profile',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: platformRead(),
+      SCHOOL_ADMIN: denied(),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: granted(
+        'SELF',
+        'F14 gap-closure — GET /students/me (name, student ID, current class/department for the ' +
+          "Profile screen, 04 §62). Distinct from users.student.view (the staff directory's " +
+          "broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.",
+      ),
     },
   },
   {
@@ -1869,11 +1895,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    // B14 stale-tag correction (confirmed decision, this planning session):
-    // ADR-0014 itself states "Blocks phases: B16", and its own Required-
-    // changes list never names B14 — AttemptAuthorization/grantMakeup/
-    // invalidateAttempt are deferred to B16, not built in B14.
-    awaitingResource: 'AttemptAuthorization (B16, ADR-0014)',
   },
   {
     id: 'examAdmin.markAbsence',
@@ -1882,6 +1903,20 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'EXECUTE',
     grants: {
       SOFTWARE_ADMIN: breakGlassWrite(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('DEPARTMENT'),
+      TEACHER: granted('OWNED'),
+      STUDENT: denied(),
+    },
+  },
+  {
+    id: 'examAdmin.authorizeRetry',
+    section: 'Exam Administration',
+    label: 'Authorize exceptional reattempt',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: breakGlass('R4: exceptional academic intervention requires break-glass.'),
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
@@ -1932,14 +1967,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
-      TEACHER: deferred(
-        '"Request/limited" names no actual mechanism in any document — not covered by ADR-0017 either. DENIED, fail-closed, pending explicit product clarification.',
-      ),
+      TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    // B14 stale-tag correction — see examAdmin.grantMakeup's own comment
-    // immediately above for the full reasoning: deferred to B16, not B14.
-    awaitingResource: 'ExamAttempt (B16, ADR-0014)',
   },
 
   // ------------------------------------------------------------------
@@ -2066,22 +2096,23 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted(
         'SELF',
-        '"Configurable" — gated by a school-level setting; B15/B17 wires it.',
+        '"Configurable" — the school-level axis is Exam.resultDetailVisibility (ADR-0010), seeded from School.resultDetailVisibility; B15 wires it into GET /v1/student/results/:id.',
       ),
     },
-    awaitingResource: 'Result (B15), school setting (B17)',
   },
 
   // ------------------------------------------------------------------
   // Results
   // ------------------------------------------------------------------
   {
-    // B14: the marking MECHANISM is now real (AttemptQuestionResult per
-    // question, read from the frozen snapshot, idempotent/upsert-based).
-    // awaitingResource narrowed rather than cleared — this row is named
-    // after the `Result` entity, which still genuinely doesn't exist until
-    // B15 (this phase's own confirmed decision: B14 stays entity-free for
-    // `Result` — see AttemptQuestionResult's own schema doc comment).
+    // B14 built the marking MECHANISM (AttemptQuestionResult per question,
+    // read from the frozen snapshot, idempotent/upsert-based) and left this
+    // row tagged, since the `Result` entity it is named after did not exist
+    // yet. B15 built `Result` and the finalisation that produces it, so the
+    // tag is cleared. SYSTEM for every staff role throughout: marking is
+    // never an action a person performs, which is exactly what makes "no
+    // endpoint permits direct score modification" (B15 DoD item 10) a
+    // property of the permission table and not only of the controllers.
     id: 'results.automaticMarking',
     section: 'Results',
     label: 'Automatic marking',
@@ -2094,7 +2125,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: system(),
       STUDENT: denied(),
     },
-    awaitingResource: 'Result (B15)',
   },
   {
     id: 'results.viewExamResults',
@@ -2109,10 +2139,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: granted(
         'SELF',
-        '"Own published results" — gated by ResultPublication (ADR-0010); B17 wires the publication-state check.',
+        '"Own published results" — gated by ResultPublication (ADR-0010); B15 wires the publication-state check via @atlas/domain\'s shared visibility helper.',
       ),
     },
-    awaitingResource: 'Result (B15)',
   },
   {
     id: 'results.viewIndividualResult',
@@ -2127,7 +2156,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'Result (B15)',
   },
   {
     id: 'results.viewClassPerformance',
@@ -2187,7 +2215,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Result (B15)',
   },
   {
     id: 'results.publish',
@@ -2202,7 +2229,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ResultPublication (B15/B17, ADR-0010)',
   },
   {
     id: 'results.unpublish',
@@ -2217,7 +2243,74 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'ResultPublication (B15/B17, ADR-0010)',
+  },
+  {
+    // NEW IN B15 — `02`'s matrix carries no withholding row at all, because
+    // withholding is ADR-0010's own invention: it is how a single disputed
+    // result among forty is held back WITHOUT fragmenting per-exam
+    // publication (audit A-09's recommended interpretation). Graded exactly
+    // like `results.publish`, since it is the same authority applied at
+    // per-result rather than per-exam granularity — anyone who may release a
+    // cohort may hold one of its results back. Same precedent as B11's
+    // `exam.cancel`, a row `02` also never listed.
+    id: 'results.withhold',
+    section: 'Results',
+    label: 'Withhold or release an individual result',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: denied(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('DEPARTMENT'),
+      TEACHER: granted('OWNED'),
+      STUDENT: denied(),
+    },
+  },
+  {
+    // NEW IN B15. `02`'s matrix has no adjustment row either, but `02 §6` is
+    // unambiguous about the one grant that matters here: Teacher is
+    // "Edit score ❌", because objective CBT scores are automatically
+    // calculated. A correction is an administrative act, so TEACHER is
+    // denied outright rather than scoped — a teacher who spots a bad
+    // question raises it; they do not regrade their own cohort.
+    //
+    // SOFTWARE_ADMIN is denied, not break-glass: ADR-0012 denies platform
+    // staff content authorship, and changing a school's academic scores is
+    // further inside that boundary than anything the ADR names as a
+    // break-glass example.
+    id: 'results.adjust',
+    section: 'Results',
+    label: 'Create a result adjustment',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: denied(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('DEPARTMENT'),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
+  {
+    // NEW IN B15, and deliberately narrower than `results.adjust`. Every
+    // other adjustment type is derived arithmetic the system performs
+    // against immutable marking evidence; MANUAL_OVERRIDE is the single
+    // operation that sets a score to a number a human chose. The roadmap
+    // calls it "the most restricted operation in the product — School Admin
+    // only, reason mandatory, elevated audit event", and 06 §58 agrees
+    // ("Manual override should be heavily restricted").
+    id: 'results.manualOverride',
+    section: 'Results',
+    label: 'Manually override a result score',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: denied(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
   },
 
   // ------------------------------------------------------------------
@@ -2299,7 +2392,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('ASSIGNED'),
       STUDENT: granted('SELF'),
     },
-    awaitingResource: 'Result (B15), B16/B17 analytics',
+    awaitingResource: 'B16/B17 analytics',
   },
   {
     id: 'analytics.questionDifficulty',
@@ -2363,7 +2456,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    awaitingResource: 'Result (B15), B18 reporting',
+    awaitingResource: 'B18 reporting',
   },
   {
     id: 'reporting.exportStudentList',

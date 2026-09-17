@@ -689,6 +689,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/schools/{schoolId}/attempts/{attemptId}/invalidate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Break-glass invalidate an attempt for a school; reason is mandatory and audited. */
+        post: operations["PlatformAttemptAdministrationController_invalidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/academics/context": {
         parameters: {
             query?: never;
@@ -1233,6 +1250,595 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exams/{id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start (or idempotently resume) this student's attempt — the highest-integrity transaction in the product (07 §23-24, 09 §47). */
+        post: operations["ExamControlController_startAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close the whole exam — cascades every OPEN session to CLOSED. ADR-0009: this is "Pause." */
+        post: operations["ExamControlController_closeExam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen the exam so new sessions may be opened again. Does not auto-reopen closed sessions. */
+        post: operations["ExamControlController_reopenExam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a new ExamSession (DoD items 1-4). */
+        post: operations["ExamControlController_openSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Control Center aggregates + session list (DoD items 8-9, 13). */
+        get: operations["ExamControlController_getControl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/participation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExamControlController_participation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/makeup-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ExamControlController_grantMakeup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/retry-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ExamControlController_grantRetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/control/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** SSE live updates — Last-Event-ID reconnection replay (DoD item 10). */
+        get: operations["ExamControlController_streamControl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End Examination — confirm absences (DoD item 12, A-14). */
+        post: operations["ExamControlController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/participation/confirm-absences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ExamControlController_confirmAbsences"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/eligible-students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The exam's full targeted-class roster with live eligibility (A-04). */
+        get: operations["ExamControlController_eligibleStudents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/administrators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every delegation (any status) for this exam — F12 gap closure. */
+        get: operations["ExamControlController_listAdministrators"];
+        put?: never;
+        /** Delegate exam administration (ADR-0012/M-15). */
+        post: operations["ExamControlController_assignAdministrator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exams/{id}/administrators/{membershipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a delegated administrator. */
+        delete: operations["ExamControlController_revokeAdministrator"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close this session for new starts. Running attempts continue (ADR-0009). */
+        post: operations["ExamSessionController_close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen this session for new starts (ADR-0009). */
+        post: operations["ExamSessionController_reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/participants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Batch-authorize students for this session (DoD items 2/4). */
+        post: operations["ExamSessionController_authorizeParticipants"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/participants/{studentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke access before start — refused after start (DoD item 7, X-13). */
+        delete: operations["ExamSessionController_revokeParticipant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exam-sessions/{id}/participants/{studentId}/extra-time": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Grant a per-student accommodation (extra time) — B13 decision 2, X-11. Frozen into ExamAttempt.durationGrantedSeconds at attempt creation. */
+        post: operations["ExamSessionController_grantExtraTime"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/invalidate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AttemptController_invalidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume: full state, projected snapshot, saved answers, server-computed remaining time (DoD item 5). */
+        get: operations["AttemptController_resume"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/answers/{questionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save one answer — idempotent, sequenced (ADR-0003/ADR-0007). */
+        put: operations["AttemptController_saveAnswer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/answers/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Flush an offline answer queue — never all-or-nothing. */
+        post: operations["AttemptController_saveAnswerBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Liveness (ADR-0020) plus the decision-1 device/session-binding signal — never blocks or delays answering. */
+        post: operations["AttemptController_heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Integrity signals (ADR-0020) — counts, never judgements. Off the critical path. */
+        post: operations["AttemptController_recordEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Normal submission — state transition and answer freeze only, never marking (B14). */
+        post: operations["AttemptController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Staff-initiated end of a running attempt. */
+        post: operations["AttemptController_end"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempts/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** B14: post-submission status for the confirmation screen — live-aggregated marking output, never a Result (B15). */
+        get: operations["AttemptController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attempt-authorizations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["AttemptAuthorizationController_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/makeup-authorizations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["AttemptAuthorizationController_revokeLegacy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student/assessment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The single available assessment for the caller, or none. */
+        get: operations["StudentAssessmentController_getActive"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student/assessment/{examId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instructions and rules before starting (03 §32-36). */
+        get: operations["StudentAssessmentController_getPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Current user's notifications, newest first, plus unread count (B10). */
+        get: operations["NotificationController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark one notification read (B10). */
+        post: operations["NotificationController_markRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark every unread notification read (B10). */
+        post: operations["NotificationController_markAllRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/students": {
         parameters: {
             query?: never;
@@ -1245,6 +1851,23 @@ export interface paths {
         put?: never;
         /** Create a student. */
         post: operations["StudentController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in student's own name, student ID, class and department (04 §62). */
+        get: operations["StudentController_getOwnProfile"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2094,57 +2717,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/notifications": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Current user's notifications, newest first, plus unread count (B10). */
-        get: operations["NotificationController_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/notifications/{id}/read": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark one notification read (B10). */
-        post: operations["NotificationController_markRead"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/notifications/read-all": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mark every unread notification read (B10). */
-        post: operations["NotificationController_markAllRead"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/exams": {
         parameters: {
             query?: never;
@@ -2301,83 +2873,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/exams/{id}/attempts": {
+    "/exams/{id}/results": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Start (or idempotently resume) this student's attempt — the highest-integrity transaction in the product (07 §23-24, 09 §47). */
-        post: operations["ExamControlController_startAttempt"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exams/{id}/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Close the whole exam — cascades every OPEN session to CLOSED. ADR-0009: this is "Pause." */
-        post: operations["ExamControlController_closeExam"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exams/{id}/reopen": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reopen the exam so new sessions may be opened again. Does not auto-reopen closed sessions. */
-        post: operations["ExamControlController_reopenExam"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exams/{id}/sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Open a new ExamSession (DoD items 1-4). */
-        post: operations["ExamControlController_openSession"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exams/{id}/control": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Control Center aggregates + session list (DoD items 8-9, 13). */
-        get: operations["ExamControlController_getControl"];
+        /** Scoped result list with exam summary statistics and, for a multi-class exam, a per-class breakdown (04 §48, ADR-0013). */
+        get: operations["ResultController_listForExam"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2386,15 +2890,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/exams/{id}/control/stream": {
+    "/results/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** SSE live updates — Last-Event-ID reconnection replay (DoD item 10). */
-        get: operations["ExamControlController_streamControl"];
+        /** One result with its per-question breakdown and full adjustment history. */
+        get: operations["ResultController_getDetail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2403,7 +2907,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/exams/{id}/complete": {
+    "/exams/{id}/results/publish": {
         parameters: {
             query?: never;
             header?: never;
@@ -2412,23 +2916,91 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** End Examination — confirm absences (DoD item 12, A-14). */
-        post: operations["ExamControlController_complete"];
+        /** Release this exam's results to students. Refused when the school has locked publication to administrative release (DoD item 7). */
+        post: operations["ResultController_publish"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/exams/{id}/eligible-students": {
+    "/exams/{id}/results/unpublish": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** The exam's full targeted-class roster with live eligibility (A-04). */
-        get: operations["ExamControlController_eligibleStudents"];
+        get?: never;
+        put?: never;
+        /** Reverse publication, with a mandatory reason (05 §65). */
+        post: operations["ResultController_unpublish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/{id}/withhold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hold one disputed result back without unpublishing the cohort (ADR-0010). */
+        post: operations["ResultController_withhold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/{id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release a previously withheld result. */
+        post: operations["ResultController_release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The only path by which a score changes after marking. Creates a parent operation; a worker applies it idempotently and resumably (ADR-0025). */
+        post: operations["ResultController_createAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/results/adjustments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Adjustment progress and outcome. */
+        get: operations["ResultController_getAdjustment"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2437,135 +3009,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/exams/{id}/administrators": {
+    "/student/results": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List every delegation (any status) for this exam — F12 gap closure. */
-        get: operations["ExamControlController_listAdministrators"];
-        put?: never;
-        /** Delegate exam administration (ADR-0012/M-15). */
-        post: operations["ExamControlController_assignAdministrator"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exams/{id}/administrators/{membershipId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Revoke a delegated administrator. */
-        delete: operations["ExamControlController_revokeAdministrator"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exam-sessions/{id}/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Close this session for new starts. Running attempts continue (ADR-0009). */
-        post: operations["ExamSessionController_close"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exam-sessions/{id}/reopen": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reopen this session for new starts (ADR-0009). */
-        post: operations["ExamSessionController_reopen"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exam-sessions/{id}/participants": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Batch-authorize students for this session (DoD items 2/4). */
-        post: operations["ExamSessionController_authorizeParticipants"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exam-sessions/{id}/participants/{studentId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Revoke access before start — refused after start (DoD item 7, X-13). */
-        delete: operations["ExamSessionController_revokeParticipant"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/exam-sessions/{id}/participants/{studentId}/extra-time": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Grant a per-student accommodation (extra time) — B13 decision 2, X-11. Frozen into ExamAttempt.durationGrantedSeconds at attempt creation. */
-        post: operations["ExamSessionController_grantExtraTime"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/attempts/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Resume: full state, projected snapshot, saved answers, server-computed remaining time (DoD item 5). */
-        get: operations["AttemptController_resume"];
+        /** The signed-in student's own published results only (05 §51). */
+        get: operations["StudentResultController_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2574,117 +3026,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/attempts/{id}/answers/{questionId}": {
+    "/student/results/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        /** Save one answer — idempotent, sequenced (ADR-0003/ADR-0007). */
-        put: operations["AttemptController_saveAnswer"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/attempts/{id}/answers/batch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Flush an offline answer queue — never all-or-nothing. */
-        post: operations["AttemptController_saveAnswerBatch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/attempts/{id}/heartbeat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Liveness (ADR-0020) plus the decision-1 device/session-binding signal — never blocks or delays answering. */
-        post: operations["AttemptController_heartbeat"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/attempts/{id}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Integrity signals (ADR-0020) — counts, never judgements. Off the critical path. */
-        post: operations["AttemptController_recordEvent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/attempts/{id}/submit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Normal submission — state transition and answer freeze only, never marking (B14). */
-        post: operations["AttemptController_submit"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/attempts/{id}/end": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Staff-initiated end of a running attempt. */
-        post: operations["AttemptController_end"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/attempts/{id}/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** B14: post-submission status for the confirmation screen — live-aggregated marking output, never a Result (B15). */
-        get: operations["AttemptController_status"];
+        /** One result, with detail gated by the exam's own result_detail_visibility policy (ADR-0010). */
+        get: operations["StudentResultController_getDetail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2693,16 +3043,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/student/assessment": {
+    "/school/grading-scales": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** The single available assessment for the caller, or none. */
-        get: operations["StudentAssessmentController_getActive"];
-        put?: never;
+        /** The school's grading scales with their current bands, plus the platform default template offered as a starting point. */
+        get: operations["GradingScaleController_list"];
+        /** Create a scale, or add a version to an existing one. Never an in-place band edit — ADR-0018 versions instead, so historical grades stay explainable. */
+        put: operations["GradingScaleController_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2710,15 +3061,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/student/assessment/{examId}/preview": {
+    "/school/grading-scales/{id}/versions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Instructions and rules before starting (03 §32-36). */
-        get: operations["StudentAssessmentController_getPreview"];
+        /** Every version of a scale, newest first, each flagged with whether any result was graded against it (ADR-0018: make versioning visible). */
+        get: operations["GradingScaleController_listVersions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3144,6 +3495,9 @@ export interface components {
             currentStep: number;
             skippedSteps?: number[];
         };
+        InvalidateAttemptDto: {
+            reason: string;
+        };
         CurrentSessionSummaryDto: {
             id: string;
             name: string;
@@ -3431,6 +3785,424 @@ export interface components {
         StudentSubjectRegistrationListResponseDto: {
             registrations: components["schemas"]["StudentSubjectRegistrationResponseDto"][];
         };
+        StudentAttemptOptionDto: {
+            optionId: string;
+            content: string;
+            /** @description Materialised display position, 1-indexed. */
+            displayPosition: number;
+        };
+        StudentAttemptMediaDto: {
+            mediaAssetId: string;
+            displayOrder: number;
+            mediaType: string;
+            /** @description A freshly-signed download URL, generated at read time (never stored — ADR-0021 only requires it to outlive the initial download window). */
+            url: string;
+            /** Format: date-time */
+            urlExpiresAt: string;
+        };
+        StudentAttemptQuestionDto: {
+            examQuestionId: string;
+            /** @description Materialised display order, 1-indexed. */
+            displaySequence: number;
+            marks: number;
+            questionType: string;
+            /** @description Sanitized rich-text HTML. */
+            content: string;
+            options: components["schemas"]["StudentAttemptOptionDto"][];
+            media: components["schemas"]["StudentAttemptMediaDto"][];
+            /** @description This attempt's currently-saved selection for this question, if any. */
+            selectedOptionId?: string | null;
+            /** @description This question's own current answer sequence number, for the client's offline queue to continue from. */
+            answerSequenceNumber?: number;
+        };
+        AttemptPackageResponseDto: {
+            attemptId: string;
+            examId: string;
+            examSessionId: string;
+            /** @enum {string} */
+            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /**
+             * Format: date-time
+             * @description The server's own current clock, alongside `expiresAt` — the client derives remaining time from the DIFFERENCE between the two, never from its own local clock alone (08 §11.4: the client displays the timer but never defines the authoritative deadline).
+             */
+            serverTime: string;
+            /** @enum {string} */
+            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            generalInstructions?: string | null;
+            navigationInstructions?: string | null;
+            questions: components["schemas"]["StudentAttemptQuestionDto"][];
+            invalidationReason?: string | null;
+        };
+        ExamClassResponseDto: {
+            id: string;
+            classId: string;
+            classSubjectId: string;
+            className: string;
+            level: string;
+            arm: string;
+        };
+        ExamQuestionResponseDto: {
+            id: string;
+            questionId: string;
+            questionRevisionId: string;
+            sequence: number;
+            marks: number;
+            content: string;
+            questionType: string;
+            difficulty: string;
+            topicName: string | null;
+        };
+        ExamSectionResponseDto: {
+            id: string;
+            title: string;
+            sequence: number;
+            /** @description Derived — SUM of this section's ExamQuestion.marks (ADR-0029), never stored. */
+            marks: number;
+            questions: components["schemas"]["ExamQuestionResponseDto"][];
+        };
+        ExamResponseDto: {
+            id: string;
+            title: string;
+            examType: string;
+            /** @enum {string} */
+            status: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+            academicSessionId: string;
+            sessionName: string;
+            academicTermId: string;
+            termName: string;
+            subjectId: string;
+            subjectName: string;
+            departmentId: string | null;
+            departmentName: string | null;
+            createdByMembershipId: string;
+            createdByName: string;
+            classes: components["schemas"]["ExamClassResponseDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            durationSeconds: number;
+            attemptLimit: number;
+            /** @enum {string} */
+            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            randomizeQuestions: boolean;
+            randomizeOptions: boolean;
+            /** @enum {string} */
+            resultPolicy: "TEACHER" | "SCHOOL_ADMIN" | "AUTOMATIC";
+            /** @enum {string} */
+            resultDetailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            /** @enum {string} */
+            accessMode: "OPEN_TO_ELIGIBLE" | "EXPLICIT_AUTHORIZATION";
+            generalInstructions: string | null;
+            navigationInstructions: string | null;
+            submissionInstructions: string | null;
+            accommodations: string | null;
+            cancelledReason: string | null;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            /** Format: date-time */
+            archivedAt: string | null;
+            sections: components["schemas"]["ExamSectionResponseDto"][];
+        };
+        OpenExamSessionDto: {
+            /** @enum {string} */
+            sessionType?: "STANDARD" | "BATCH" | "MAKEUP" | "SPECIAL";
+        };
+        ExamSessionResponseDto: {
+            id: string;
+            examId: string;
+            /** @enum {string} */
+            sessionType: "STANDARD" | "BATCH" | "MAKEUP" | "SPECIAL";
+            /** @enum {string} */
+            status: "OPEN" | "CLOSED" | "COMPLETED" | "CANCELLED";
+            /** Format: date-time */
+            openedAt: string;
+            openedByMembershipId: string;
+            /** @description The opener's display name. */
+            openedByName: string;
+            /** Format: date-time */
+            closedAt: string | null;
+            closedByMembershipId: string | null;
+            /** @description The closer's display name. */
+            closedByName: string | null;
+            /** Format: date-time */
+            reopenedAt: string | null;
+            /** Format: date-time */
+            completedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ExamControlCenterAggregateDto: {
+            /** @description AUTHORIZED ExamSessionParticipant count — real. */
+            authorizedCount: number;
+            /** @description Real in B12, but degenerate: always equals authorizedCount (no attempts exist). */
+            notStartedCount: number;
+            /** @description PLACEHOLDER — always 0 until B13 ships ExamAttempt. */
+            inProgressCount: number;
+            /** @description PLACEHOLDER — always 0 until B13 ships ExamAttempt. */
+            submittedCount: number;
+            /** @description Real, but only ever non-zero after End Examination (ExamParticipation). */
+            absentCount: number;
+            /** @description False in B12 — lets the frontend distinguish a real "0" from "not yet real" for inProgressCount/submittedCount/liveAttempts. */
+            attemptDataAvailable: boolean;
+        };
+        ExamLiveAttemptRowDto: {
+            studentProfileId: string;
+            status: string;
+            timeRemainingSeconds: number | null;
+        };
+        ExamControlCenterStalenessDto: {
+            isStale: boolean;
+            /**
+             * Format: date-time
+             * @description The earliest openedAt/reopenedAt across this exam's currently-OPEN sessions.
+             */
+            openSince: string | null;
+            thresholdMs: number;
+        };
+        ExamControlCenterResponseDto: {
+            examId: string;
+            /** @enum {string} */
+            examStatus: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+            sessions: components["schemas"]["ExamSessionResponseDto"][];
+            aggregate: components["schemas"]["ExamControlCenterAggregateDto"];
+            liveAttempts: components["schemas"]["ExamLiveAttemptRowDto"][];
+            staleness: components["schemas"]["ExamControlCenterStalenessDto"];
+            /** Format: date-time */
+            computedAt: string;
+        };
+        ParticipationSessionFactDto: {
+            examSessionId: string;
+            status: string;
+            attemptId?: Record<string, never> | null;
+            resultId?: Record<string, never> | null;
+        };
+        ParticipationStudentDto: {
+            studentProfileId: string;
+            studentName: string;
+            rollupStatus: string;
+            sessions: components["schemas"]["ParticipationSessionFactDto"][];
+        };
+        ExamParticipationResponseDto: {
+            examId: string;
+            students: components["schemas"]["ParticipationStudentDto"][];
+        };
+        GrantMakeupAuthorizationDto: {
+            studentProfileIds: string[];
+            reason: string;
+            /** Format: date-time */
+            expiresAt?: string;
+        };
+        GrantRetryAuthorizationDto: {
+            studentProfileId: string;
+            reason: string;
+            /** Format: date-time */
+            expiresAt?: string;
+        };
+        ConfirmAbsentParticipationDto: {
+            examSessionId: string;
+            studentProfileId: string;
+        };
+        CompleteExamDto: {
+            confirmedAbsentStudentProfileIds?: string[];
+            confirmedAbsentParticipations?: components["schemas"]["ConfirmAbsentParticipationDto"][];
+        };
+        EligibleStudentResponseDto: {
+            studentProfileId: string;
+            studentIdNumber: string;
+            studentName: string;
+            eligible: boolean;
+            failedChecks: string[];
+            /** @enum {string|null} */
+            participantStatus: "AUTHORIZED" | "REVOKED" | null;
+            examSessionId?: string | null;
+        };
+        EligibleStudentsResponseDto: {
+            students: components["schemas"]["EligibleStudentResponseDto"][];
+        };
+        ExamAdministratorResponseDto: {
+            id: string;
+            examId: string;
+            membershipId: string;
+            memberName: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            assignedAt: string;
+            assignedByMembershipId: string;
+            /** Format: date-time */
+            revokedAt: string | null;
+        };
+        ExamAdministratorListResponseDto: {
+            administrators: components["schemas"]["ExamAdministratorResponseDto"][];
+        };
+        AssignExamAdministratorDto: {
+            /** @description The delegate's SchoolMembership id. */
+            membershipId: string;
+        };
+        AuthorizeParticipantsDto: {
+            studentProfileIds: string[];
+        };
+        AuthorizeParticipantResultDto: {
+            studentProfileId: string;
+            authorized: boolean;
+            /** @description Empty when authorized === true. */
+            failedChecks: string[];
+        };
+        AuthorizeParticipantsResponseDto: {
+            results: components["schemas"]["AuthorizeParticipantResultDto"][];
+        };
+        RevokeParticipantDto: {
+            reason: string;
+        };
+        GrantExtraTimeDto: {
+            /** @description Additional seconds granted, added to Exam.durationSeconds at attempt creation. */
+            extraTimeSeconds: number;
+        };
+        SaveAnswerDto: {
+            selectedOptionId?: string | null;
+            /** @description Client-assigned, monotonic per (attempt, question) — ADR-0007. A write whose sequence is <= the currently stored value is rejected. */
+            sequenceNumber: number;
+            /**
+             * @description Client-reported, informational only — never used for admissibility.
+             * @enum {string}
+             */
+            source?: "online" | "offline-replay";
+        };
+        SaveAnswerResponseDto: {
+            examQuestionId: string;
+            accepted: boolean;
+            sequenceNumber: number;
+            /** @description True when this write landed inside the ADR-0003 post-expiry grace window. */
+            gradeWindowFlag: boolean;
+            /** Format: date-time */
+            answeredAt: string;
+        };
+        BatchAnswerItemDto: {
+            examQuestionId: string;
+            selectedOptionId?: string | null;
+            sequenceNumber: number;
+            /** @enum {string} */
+            source?: "online" | "offline-replay";
+        };
+        SaveAnswerBatchDto: {
+            answers: components["schemas"]["BatchAnswerItemDto"][];
+        };
+        BatchAnswerResultDto: {
+            examQuestionId: string;
+            accepted: boolean;
+            /** @description The rejection error code, if not accepted. */
+            rejectionCode?: string;
+            gradeWindowFlag: boolean;
+        };
+        SaveAnswerBatchResponseDto: {
+            results: components["schemas"]["BatchAnswerResultDto"][];
+        };
+        RecordAttemptEventDto: {
+            /** @enum {string} */
+            type: "WINDOW_BLUR" | "FULLSCREEN_EXIT" | "TAB_HIDDEN" | "RECONNECTED" | "RESUMED" | "BINDING_MISMATCH";
+            /** Format: date-time */
+            occurredAt: string;
+            /** @description Client-reported, untrusted metadata. */
+            metadata?: Record<string, never>;
+        };
+        AttemptStateResponseDto: {
+            attemptId: string;
+            examId: string;
+            examSessionId: string;
+            /** @enum {string} */
+            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            invalidationReason: string | null;
+        };
+        AttemptMarkingStatusDto: {
+            /**
+             * @description NOT_APPLICABLE while the attempt is still IN_PROGRESS (or was invalidated/cancelled — never submitted); PENDING once finalized but not yet fully marked (the queued marking job has not completed); COMPLETE once every question has a recorded result.
+             * @enum {string}
+             */
+            status: "NOT_APPLICABLE" | "PENDING" | "COMPLETE";
+            questionCount: number;
+            markedCount: number;
+            correctCount: number;
+            incorrectCount: number;
+            unansweredCount: number;
+            /** @description Always 0 this phase — PARTIAL is reserved for a future non-objective type. */
+            partialCount: number;
+            awardedMarks: number;
+            maximumMarks: number;
+            /** @description null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE. */
+            percentage: number | null;
+        };
+        AttemptStatusResponseDto: {
+            attemptId: string;
+            examId: string;
+            /** @enum {string} */
+            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
+            /** Format: date-time */
+            submittedAt: string | null;
+            marking: components["schemas"]["AttemptMarkingStatusDto"];
+        };
+        ActiveAssessmentResponseDto: {
+            examId: string | null;
+            examTitle: string | null;
+            examSessionId: string | null;
+            /** @description Set only when an attempt is already IN_PROGRESS — the client should resume, not start. */
+            attemptId: string | null;
+            /** @enum {string|null} */
+            state: "NOT_STARTED" | "IN_PROGRESS" | null;
+        };
+        AttemptPreviewResponseDto: {
+            examId: string;
+            title: string;
+            examType: string;
+            durationSeconds: number;
+            attemptLimit: number;
+            /** @enum {string} */
+            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            generalInstructions?: string | null;
+            navigationInstructions?: string | null;
+            submissionInstructions?: string | null;
+            accommodations?: string | null;
+            questionCount: number;
+            totalMarks: number;
+        };
+        NotificationResponseDto: {
+            id: string;
+            /** @enum {string} */
+            type: "QUESTION_APPROVED" | "QUESTION_REJECTED" | "QUESTION_CHANGES_REQUESTED" | "RESULT_PUBLISHED" | "EXAM_OPENED" | "MAKEUP_GRANTED" | "SUBSCRIPTION_EXPIRING" | "STUDENTS_UNASSIGNED";
+            title: string;
+            content: string;
+            /** @enum {string} */
+            status: "UNREAD" | "READ";
+            relatedEntityType?: string | null;
+            relatedEntityId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            readAt?: string | null;
+        };
+        NotificationListResponseDto: {
+            items: components["schemas"]["NotificationResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            unreadCount: number;
+        };
+        MarkReadResponseDto: {
+            /** @enum {string} */
+            status: "ok";
+        };
         StudentResponseDto: {
             membershipId: string;
             userId: string;
@@ -3456,6 +4228,12 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        StudentOwnProfileResponseDto: {
+            displayName: string;
+            studentId: string;
+            currentClassName: string | null;
+            departmentName: string | null;
         };
         CreateStudentDto: {
             firstName: string;
@@ -3898,32 +4676,6 @@ export interface components {
         QuestionReviewHistoryResponseDto: {
             history: components["schemas"]["QuestionReviewHistoryItemDto"][];
         };
-        NotificationResponseDto: {
-            id: string;
-            /** @enum {string} */
-            type: "QUESTION_APPROVED" | "QUESTION_REJECTED" | "QUESTION_CHANGES_REQUESTED" | "RESULT_PUBLISHED" | "EXAM_OPENED" | "MAKEUP_GRANTED" | "SUBSCRIPTION_EXPIRING" | "STUDENTS_UNASSIGNED";
-            title: string;
-            content: string;
-            /** @enum {string} */
-            status: "UNREAD" | "READ";
-            relatedEntityType?: string | null;
-            relatedEntityId?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            readAt?: string | null;
-        };
-        NotificationListResponseDto: {
-            items: components["schemas"]["NotificationResponseDto"][];
-            total: number;
-            page: number;
-            pageSize: number;
-            unreadCount: number;
-        };
-        MarkReadResponseDto: {
-            /** @enum {string} */
-            status: "ok";
-        };
         CreateExamDto: {
             academicSessionId: string;
             academicTermId: string;
@@ -3933,77 +4685,6 @@ export interface components {
             examType: string;
             /** @description ClassGroup ids this exam targets — at least one. All must share school, session, and level with each other and with this exam (ADR-0013). */
             classIds: string[];
-        };
-        ExamClassResponseDto: {
-            id: string;
-            classId: string;
-            classSubjectId: string;
-            className: string;
-            level: string;
-            arm: string;
-        };
-        ExamQuestionResponseDto: {
-            id: string;
-            questionId: string;
-            questionRevisionId: string;
-            sequence: number;
-            marks: number;
-            content: string;
-            questionType: string;
-            difficulty: string;
-            topicName: string | null;
-        };
-        ExamSectionResponseDto: {
-            id: string;
-            title: string;
-            sequence: number;
-            /** @description Derived — SUM of this section's ExamQuestion.marks (ADR-0029), never stored. */
-            marks: number;
-            questions: components["schemas"]["ExamQuestionResponseDto"][];
-        };
-        ExamResponseDto: {
-            id: string;
-            title: string;
-            examType: string;
-            /** @enum {string} */
-            status: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
-            academicSessionId: string;
-            sessionName: string;
-            academicTermId: string;
-            termName: string;
-            subjectId: string;
-            subjectName: string;
-            departmentId: string | null;
-            departmentName: string | null;
-            createdByMembershipId: string;
-            createdByName: string;
-            classes: components["schemas"]["ExamClassResponseDto"][];
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            durationSeconds: number;
-            attemptLimit: number;
-            /** @enum {string} */
-            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
-            randomizeQuestions: boolean;
-            randomizeOptions: boolean;
-            /** @enum {string} */
-            resultPolicy: "TEACHER" | "SCHOOL_ADMIN" | "AUTOMATIC";
-            /** @enum {string} */
-            resultDetailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
-            /** @enum {string} */
-            accessMode: "OPEN_TO_ELIGIBLE" | "EXPLICIT_AUTHORIZATION";
-            generalInstructions: string | null;
-            navigationInstructions: string | null;
-            submissionInstructions: string | null;
-            accommodations: string | null;
-            cancelledReason: string | null;
-            /** Format: date-time */
-            cancelledAt: string | null;
-            /** Format: date-time */
-            archivedAt: string | null;
-            sections: components["schemas"]["ExamSectionResponseDto"][];
         };
         ExamListItemResponseDto: {
             id: string;
@@ -4087,293 +4768,257 @@ export interface components {
         CancelExamDto: {
             reason: string;
         };
-        StudentAttemptOptionDto: {
-            optionId: string;
-            content: string;
-            /** @description Materialised display position, 1-indexed. */
-            displayPosition: number;
-        };
-        StudentAttemptMediaDto: {
-            mediaAssetId: string;
-            displayOrder: number;
-            mediaType: string;
-            /** @description A freshly-signed download URL, generated at read time (never stored — ADR-0021 only requires it to outlive the initial download window). */
-            url: string;
-            /** Format: date-time */
-            urlExpiresAt: string;
-        };
-        StudentAttemptQuestionDto: {
-            examQuestionId: string;
-            /** @description Materialised display order, 1-indexed. */
-            displaySequence: number;
-            marks: number;
-            questionType: string;
-            /** @description Sanitized rich-text HTML. */
-            content: string;
-            options: components["schemas"]["StudentAttemptOptionDto"][];
-            media: components["schemas"]["StudentAttemptMediaDto"][];
-            /** @description This attempt's currently-saved selection for this question, if any. */
-            selectedOptionId?: string | null;
-            /** @description This question's own current answer sequence number, for the client's offline queue to continue from. */
-            answerSequenceNumber?: number;
-        };
-        AttemptPackageResponseDto: {
-            attemptId: string;
-            examId: string;
-            examSessionId: string;
-            /** @enum {string} */
-            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
-            /** Format: date-time */
-            startedAt: string;
-            /** Format: date-time */
-            expiresAt: string;
-            /**
-             * Format: date-time
-             * @description The server's own current clock, alongside `expiresAt` — the client derives remaining time from the DIFFERENCE between the two, never from its own local clock alone (08 §11.4: the client displays the timer but never defines the authoritative deadline).
-             */
-            serverTime: string;
-            /** @enum {string} */
-            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
-            generalInstructions?: string | null;
-            navigationInstructions?: string | null;
-            questions: components["schemas"]["StudentAttemptQuestionDto"][];
-            invalidationReason?: string | null;
-        };
-        OpenExamSessionDto: {
-            /** @enum {string} */
-            sessionType?: "STANDARD" | "BATCH" | "MAKEUP" | "SPECIAL";
-        };
-        ExamSessionResponseDto: {
+        ResultListItemDto: {
             id: string;
-            examId: string;
-            /** @enum {string} */
-            sessionType: "STANDARD" | "BATCH" | "MAKEUP" | "SPECIAL";
-            /** @enum {string} */
-            status: "OPEN" | "CLOSED" | "COMPLETED" | "CANCELLED";
-            /** Format: date-time */
-            openedAt: string;
-            openedByMembershipId: string;
-            /** @description The opener's display name. */
-            openedByName: string;
-            /** Format: date-time */
-            closedAt: string | null;
-            closedByMembershipId: string | null;
-            /** @description The closer's display name. */
-            closedByName: string | null;
-            /** Format: date-time */
-            reopenedAt: string | null;
-            /** Format: date-time */
-            completedAt: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        ExamControlCenterAggregateDto: {
-            /** @description AUTHORIZED ExamSessionParticipant count — real. */
-            authorizedCount: number;
-            /** @description Real in B12, but degenerate: always equals authorizedCount (no attempts exist). */
-            notStartedCount: number;
-            /** @description PLACEHOLDER — always 0 until B13 ships ExamAttempt. */
-            inProgressCount: number;
-            /** @description PLACEHOLDER — always 0 until B13 ships ExamAttempt. */
-            submittedCount: number;
-            /** @description Real, but only ever non-zero after End Examination (ExamParticipation). */
-            absentCount: number;
-            /** @description False in B12 — lets the frontend distinguish a real "0" from "not yet real" for inProgressCount/submittedCount/liveAttempts. */
-            attemptDataAvailable: boolean;
-        };
-        ExamLiveAttemptRowDto: {
+            attemptId: string;
             studentProfileId: string;
-            status: string;
-            timeRemainingSeconds: number | null;
-        };
-        ExamControlCenterStalenessDto: {
-            isStale: boolean;
-            /**
-             * Format: date-time
-             * @description The earliest openedAt/reopenedAt across this exam's currently-OPEN sessions.
-             */
-            openSince: string | null;
-            thresholdMs: number;
-        };
-        ExamControlCenterResponseDto: {
-            examId: string;
-            /** @enum {string} */
-            examStatus: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
-            sessions: components["schemas"]["ExamSessionResponseDto"][];
-            aggregate: components["schemas"]["ExamControlCenterAggregateDto"];
-            liveAttempts: components["schemas"]["ExamLiveAttemptRowDto"][];
-            staleness: components["schemas"]["ExamControlCenterStalenessDto"];
-            /** Format: date-time */
-            computedAt: string;
-        };
-        CompleteExamDto: {
-            confirmedAbsentStudentProfileIds: string[];
-        };
-        EligibleStudentResponseDto: {
-            studentProfileId: string;
-            studentIdNumber: string;
             studentName: string;
-            eligible: boolean;
-            failedChecks: string[];
-            /** @enum {string|null} */
-            participantStatus: "AUTHORIZED" | "REVOKED" | null;
-            examSessionId?: string | null;
-        };
-        EligibleStudentsResponseDto: {
-            students: components["schemas"]["EligibleStudentResponseDto"][];
-        };
-        ExamAdministratorResponseDto: {
-            id: string;
-            examId: string;
-            membershipId: string;
-            memberName: string;
+            studentIdentifier: string;
+            classId: string | null;
+            className: string | null;
             /** @enum {string} */
-            status: "ACTIVE" | "REVOKED";
-            /** Format: date-time */
-            assignedAt: string;
-            assignedByMembershipId: string;
-            /** Format: date-time */
-            revokedAt: string | null;
-        };
-        ExamAdministratorListResponseDto: {
-            administrators: components["schemas"]["ExamAdministratorResponseDto"][];
-        };
-        AssignExamAdministratorDto: {
-            /** @description The delegate's SchoolMembership id. */
-            membershipId: string;
-        };
-        AuthorizeParticipantsDto: {
-            studentProfileIds: string[];
-        };
-        AuthorizeParticipantResultDto: {
-            studentProfileId: string;
-            authorized: boolean;
-            /** @description Empty when authorized === true. */
-            failedChecks: string[];
-        };
-        AuthorizeParticipantsResponseDto: {
-            results: components["schemas"]["AuthorizeParticipantResultDto"][];
-        };
-        RevokeParticipantDto: {
-            reason: string;
-        };
-        GrantExtraTimeDto: {
-            /** @description Additional seconds granted, added to Exam.durationSeconds at attempt creation. */
-            extraTimeSeconds: number;
-        };
-        SaveAnswerDto: {
-            selectedOptionId?: string | null;
-            /** @description Client-assigned, monotonic per (attempt, question) — ADR-0007. A write whose sequence is <= the currently stored value is rejected. */
-            sequenceNumber: number;
-            /**
-             * @description Client-reported, informational only — never used for admissibility.
-             * @enum {string}
-             */
-            source?: "online" | "offline-replay";
-        };
-        SaveAnswerResponseDto: {
-            examQuestionId: string;
-            accepted: boolean;
-            sequenceNumber: number;
-            /** @description True when this write landed inside the ADR-0003 post-expiry grace window. */
-            gradeWindowFlag: boolean;
-            /** Format: date-time */
-            answeredAt: string;
-        };
-        BatchAnswerItemDto: {
-            examQuestionId: string;
-            selectedOptionId?: string | null;
-            sequenceNumber: number;
-            /** @enum {string} */
-            source?: "online" | "offline-replay";
-        };
-        SaveAnswerBatchDto: {
-            answers: components["schemas"]["BatchAnswerItemDto"][];
-        };
-        BatchAnswerResultDto: {
-            examQuestionId: string;
-            accepted: boolean;
-            /** @description The rejection error code, if not accepted. */
-            rejectionCode?: string;
-            gradeWindowFlag: boolean;
-        };
-        SaveAnswerBatchResponseDto: {
-            results: components["schemas"]["BatchAnswerResultDto"][];
-        };
-        RecordAttemptEventDto: {
-            /** @enum {string} */
-            type: "WINDOW_BLUR" | "FULLSCREEN_EXIT" | "TAB_HIDDEN" | "RECONNECTED" | "RESUMED" | "BINDING_MISMATCH";
-            /** Format: date-time */
-            occurredAt: string;
-            /** @description Client-reported, untrusted metadata. */
-            metadata?: Record<string, never>;
-        };
-        AttemptStateResponseDto: {
-            attemptId: string;
-            examId: string;
-            examSessionId: string;
-            /** @enum {string} */
-            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
-            /** Format: date-time */
-            startedAt: string;
-            /** Format: date-time */
-            expiresAt: string;
-            /** Format: date-time */
-            submittedAt: string | null;
-            invalidationReason: string | null;
-        };
-        AttemptMarkingStatusDto: {
-            /**
-             * @description NOT_APPLICABLE while the attempt is still IN_PROGRESS (or was invalidated/cancelled — never submitted); PENDING once finalized but not yet fully marked (the queued marking job has not completed); COMPLETE once every question has a recorded result.
-             * @enum {string}
-             */
-            status: "NOT_APPLICABLE" | "PENDING" | "COMPLETE";
-            questionCount: number;
-            markedCount: number;
+            state: "PROCESSING" | "FINAL" | "ADJUSTED" | "VOIDED";
+            totalMarks: number;
+            earnedMarks: number;
+            percentage: number;
             correctCount: number;
             incorrectCount: number;
             unansweredCount: number;
-            /** @description Always 0 this phase — PARTIAL is reserved for a future non-objective type. */
             partialCount: number;
+            grade: string | null;
+            withheld: boolean;
+            withheldReason: string | null;
+            voidedReason: string | null;
+            finalizedAt: string | null;
+            submittedAt: string | null;
+            attemptState: string;
+        };
+        ExamResultSummaryDto: {
+            expectedStudentCount: number;
+            absentCount: number;
+            resultCount: number;
+            voidedCount: number;
+            pendingCount: number;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
+        };
+        ExamResultClassSummaryDto: {
+            expectedStudentCount: number;
+            absentCount: number;
+            resultCount: number;
+            voidedCount: number;
+            pendingCount: number;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
+            classId: string;
+            className: string;
+        };
+        ExamResultsResponseDto: {
+            items: components["schemas"]["ResultListItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            summary: components["schemas"]["ExamResultSummaryDto"];
+            classSummaries: components["schemas"]["ExamResultClassSummaryDto"][];
+            published: boolean;
+            adjustmentInProgress: boolean;
+        };
+        ResultQuestionBreakdownDto: {
+            examQuestionId: string;
+            displaySequence: number;
+            content: string;
+            correctness: string;
             awardedMarks: number;
             maximumMarks: number;
-            /** @description null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE. */
-            percentage: number | null;
+            voided: boolean;
         };
-        AttemptStatusResponseDto: {
+        ResultAdjustmentHistoryItemDto: {
+            id: string;
+            operationId: string;
+            /** @enum {string} */
+            adjustmentType: "VOID_QUESTION" | "AWARD_MARK" | "DEDUCT_MARK" | "RECALCULATE" | "MANUAL_OVERRIDE";
+            reason: string;
+            authorizedByName: string;
+            createdAt: string;
+            oldValue: Record<string, never>;
+            newValue: Record<string, never>;
+        };
+        ResultDetailResponseDto: {
+            id: string;
             attemptId: string;
-            examId: string;
+            studentProfileId: string;
+            studentName: string;
+            studentIdentifier: string;
+            classId: string | null;
+            className: string | null;
             /** @enum {string} */
-            state: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "INVALIDATED" | "CANCELLED";
-            /** Format: date-time */
-            submittedAt: string | null;
-            marking: components["schemas"]["AttemptMarkingStatusDto"];
-        };
-        ActiveAssessmentResponseDto: {
-            examId: string | null;
-            examTitle: string | null;
-            examSessionId: string | null;
-            /** @description Set only when an attempt is already IN_PROGRESS — the client should resume, not start. */
-            attemptId: string | null;
-            /** @enum {string|null} */
-            state: "NOT_STARTED" | "IN_PROGRESS" | null;
-        };
-        AttemptPreviewResponseDto: {
-            examId: string;
-            title: string;
-            examType: string;
-            durationSeconds: number;
-            attemptLimit: number;
-            /** @enum {string} */
-            navigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
-            generalInstructions?: string | null;
-            navigationInstructions?: string | null;
-            submissionInstructions?: string | null;
-            accommodations?: string | null;
-            questionCount: number;
+            state: "PROCESSING" | "FINAL" | "ADJUSTED" | "VOIDED";
             totalMarks: number;
+            earnedMarks: number;
+            percentage: number;
+            correctCount: number;
+            incorrectCount: number;
+            unansweredCount: number;
+            partialCount: number;
+            grade: string | null;
+            withheld: boolean;
+            withheldReason: string | null;
+            voidedReason: string | null;
+            finalizedAt: string | null;
+            submittedAt: string | null;
+            attemptState: string;
+            examId: string;
+            examTitle: string;
+            subjectName: string;
+            gradingScaleVersionId: string | null;
+            questions: components["schemas"]["ResultQuestionBreakdownDto"][];
+            adjustments: components["schemas"]["ResultAdjustmentHistoryItemDto"][];
+        };
+        PublishResultsDto: {
+            note?: string;
+        };
+        ResultPublicationResponseDto: {
+            examId: string;
+            /** @enum {string} */
+            status: "PUBLISHED" | "UNPUBLISHED";
+            publishedAt: string | null;
+            publishedByName: string | null;
+            unpublishedAt: string | null;
+            adjustmentInProgress: boolean;
+            /** @description Results this action made visible or hid. */
+            affectedResultCount: number;
+        };
+        UnpublishResultsDto: {
+            /** @description Mandatory — recorded in the audit trail. */
+            reason: string;
+        };
+        WithholdResultDto: {
+            /** @description Mandatory — why this result is held back. */
+            reason: string;
+        };
+        CreateResultAdjustmentDto: {
+            /**
+             * Format: uuid
+             * @description The exam being adjusted.
+             */
+            examId: string;
+            /** @enum {string} */
+            type: "VOID_QUESTION" | "AWARD_MARK" | "DEDUCT_MARK" | "RECALCULATE" | "MANUAL_OVERRIDE";
+            /** @description Mandatory for every adjustment type (07 §34). */
+            reason: string;
+            /**
+             * Format: uuid
+             * @description VOID_QUESTION only — the ExamQuestion excluded from every affected result.
+             */
+            targetExamQuestionId?: string;
+            /** @description AWARD_MARK/DEDUCT_MARK only — magnitude, always positive. */
+            markDelta?: number;
+            /**
+             * Format: uuid
+             * @description MANUAL_OVERRIDE only — the single result being overridden.
+             */
+            targetResultId?: string;
+            /** @description MANUAL_OVERRIDE only — the earned-marks value set outright. */
+            overrideEarnedMarks?: number;
+        };
+        ResultAdjustmentOperationResponseDto: {
+            id: string;
+            examId: string;
+            /** @enum {string} */
+            type: "VOID_QUESTION" | "AWARD_MARK" | "DEDUCT_MARK" | "RECALCULATE" | "MANUAL_OVERRIDE";
+            /** @enum {string} */
+            status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+            reason: string;
+            totalCount: number;
+            appliedCount: number;
+            failedCount: number;
+            failureReason: string | null;
+            createdByName: string;
+            createdAt: string;
+            completedAt: string | null;
+        };
+        StudentResultListItemDto: {
+            id: string;
+            examId: string;
+            examTitle: string;
+            subjectName: string;
+            examType: string | null;
+            totalMarks: number;
+            earnedMarks: number;
+            percentage: number;
+            grade: string | null;
+            publishedAt: string | null;
+        };
+        StudentResultsResponseDto: {
+            items: components["schemas"]["StudentResultListItemDto"][];
+        };
+        StudentResultQuestionDto: {
+            displaySequence: number;
+            content: string;
+            correctness: string;
+            awardedMarks: number;
+            maximumMarks: number;
+        };
+        StudentResultDetailDto: {
+            id: string;
+            examId: string;
+            examTitle: string;
+            subjectName: string;
+            examType: string | null;
+            totalMarks: number;
+            earnedMarks: number;
+            percentage: number;
+            grade: string | null;
+            publishedAt: string | null;
+            /** @enum {string} */
+            detailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            correctCount: number | null;
+            incorrectCount: number | null;
+            unansweredCount: number | null;
+            questions: components["schemas"]["StudentResultQuestionDto"][];
+        };
+        GradingScaleBandDto: {
+            label: string;
+            minPercentage: number;
+            maxPercentage: number;
+            isPassing: boolean;
+        };
+        GradingScaleVersionResponseDto: {
+            id: string;
+            versionNumber: number;
+            createdAt: string;
+            bands: components["schemas"]["GradingScaleBandDto"][];
+            inUse: boolean;
+        };
+        GradingScaleResponseDto: {
+            id: string;
+            name: string;
+            /** @enum {string|null} */
+            level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3" | null;
+            currentVersion: components["schemas"]["GradingScaleVersionResponseDto"] | null;
+            updatedAt: string;
+        };
+        GradingScaleListResponseDto: {
+            items: components["schemas"]["GradingScaleResponseDto"][];
+            defaultTemplate: components["schemas"]["GradingScaleBandDto"][];
+        };
+        PutGradingScaleDto: {
+            /**
+             * Format: uuid
+             * @description Omit to create a new scale; supply it to add a version to an existing one.
+             */
+            scaleId?: string;
+            name: string;
+            /** @enum {string|null} */
+            level?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3" | null;
+            bands: components["schemas"]["GradingScaleBandDto"][];
+        };
+        GradingScaleVersionListResponseDto: {
+            items: components["schemas"]["GradingScaleVersionResponseDto"][];
         };
         ErrorEnvelopeErrorDto: {
             /**
@@ -5372,6 +6017,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditListResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAttemptAdministrationController_invalidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: string;
+                attemptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvalidateAttemptDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
                 };
             };
         };
@@ -6420,6 +7091,801 @@ export interface operations {
             };
         };
     };
+    ExamControlController_startAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptPackageResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_closeExam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_reopenExam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_openSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenExamSessionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSessionResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_getControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamControlCenterResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_participation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamParticipationResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_grantMakeup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantMakeupAuthorizationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExamControlController_grantRetry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantRetryAuthorizationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExamControlController_streamControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExamControlController_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteExamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_confirmAbsences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteExamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExamControlController_eligibleStudents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EligibleStudentsResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_listAdministrators: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamAdministratorListResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_assignAdministrator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignExamAdministratorDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamAdministratorResponseDto"];
+                };
+            };
+        };
+    };
+    ExamControlController_revokeAdministrator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                membershipId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSessionResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_reopen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamSessionResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_authorizeParticipants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorizeParticipantsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizeParticipantsResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_revokeParticipant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeParticipantDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    ExamSessionController_grantExtraTime: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantExtraTimeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_invalidate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InvalidateAttemptDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AttemptController_resume: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptPackageResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_saveAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAnswerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveAnswerResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_saveAnswerBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAnswerBatchDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveAnswerBatchResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_heartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_recordEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordAttemptEventDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptStateResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_end: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptStateResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptStatusResponseDto"];
+                };
+            };
+        };
+    };
+    AttemptAuthorizationController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AttemptAuthorizationController_revokeLegacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StudentAssessmentController_getActive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveAssessmentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentAssessmentController_getPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                examId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttemptPreviewResponseDto"];
+                };
+            };
+        };
+    };
+    NotificationController_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationListResponseDto"];
+                };
+            };
+        };
+    };
+    NotificationController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponseDto"];
+                };
+            };
+        };
+    };
+    NotificationController_markAllRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkReadResponseDto"];
+                };
+            };
+        };
+    };
     StudentController_list: {
         parameters: {
             query?: {
@@ -6466,6 +7932,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StudentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_getOwnProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentOwnProfileResponseDto"];
                 };
             };
         };
@@ -7800,68 +9285,6 @@ export interface operations {
             };
         };
     };
-    NotificationController_list: {
-        parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NotificationListResponseDto"];
-                };
-            };
-        };
-    };
-    NotificationController_markRead: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MarkReadResponseDto"];
-                };
-            };
-        };
-    };
-    NotificationController_markAllRead: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MarkReadResponseDto"];
-                };
-            };
-        };
-    };
     ExamController_list: {
         parameters: {
             query?: {
@@ -8150,7 +9573,37 @@ export interface operations {
             };
         };
     };
-    ExamControlController_startAttempt: {
+    ResultController_listForExam: {
+        parameters: {
+            query?: {
+                /** @description Student name or student ID substring. */
+                q?: string;
+                classId?: string;
+                state?: "PROCESSING" | "FINAL" | "ADJUSTED" | "VOIDED";
+                page?: number;
+                pageSize?: number;
+                sortBy?: "studentName" | "percentage" | "earnedMarks" | "finalizedAt";
+                sortDir?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamResultsResponseDto"];
+                };
+            };
+        };
+    };
+    ResultController_getDetail: {
         parameters: {
             query?: never;
             header?: never;
@@ -8166,54 +9619,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AttemptPackageResponseDto"];
+                    "application/json": components["schemas"]["ResultDetailResponseDto"];
                 };
             };
         };
     };
-    ExamControlController_closeExam: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExamResponseDto"];
-                };
-            };
-        };
-    };
-    ExamControlController_reopenExam: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExamResponseDto"];
-                };
-            };
-        };
-    };
-    ExamControlController_openSession: {
+    ResultController_publish: {
         parameters: {
             query?: never;
             header?: never;
@@ -8224,7 +9635,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OpenExamSessionDto"];
+                "application/json": components["schemas"]["PublishResultsDto"];
             };
         };
         responses: {
@@ -8233,52 +9644,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ExamSessionResponseDto"];
+                    "application/json": components["schemas"]["ResultPublicationResponseDto"];
                 };
             };
         };
     };
-    ExamControlController_getControl: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExamControlCenterResponseDto"];
-                };
-            };
-        };
-    };
-    ExamControlController_streamControl: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ExamControlController_complete: {
+    ResultController_unpublish: {
         parameters: {
             query?: never;
             header?: never;
@@ -8289,7 +9660,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CompleteExamDto"];
+                "application/json": components["schemas"]["UnpublishResultsDto"];
             };
         };
         responses: {
@@ -8298,54 +9669,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ExamResponseDto"];
+                    "application/json": components["schemas"]["ResultPublicationResponseDto"];
                 };
             };
         };
     };
-    ExamControlController_eligibleStudents: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EligibleStudentsResponseDto"];
-                };
-            };
-        };
-    };
-    ExamControlController_listAdministrators: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExamAdministratorListResponseDto"];
-                };
-            };
-        };
-    };
-    ExamControlController_assignAdministrator: {
+    ResultController_withhold: {
         parameters: {
             query?: never;
             header?: never;
@@ -8356,122 +9685,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AssignExamAdministratorDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExamAdministratorResponseDto"];
-                };
-            };
-        };
-    };
-    ExamControlController_revokeAdministrator: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                membershipId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponseDto"];
-                };
-            };
-        };
-    };
-    ExamSessionController_close: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExamSessionResponseDto"];
-                };
-            };
-        };
-    };
-    ExamSessionController_reopen: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ExamSessionResponseDto"];
-                };
-            };
-        };
-    };
-    ExamSessionController_authorizeParticipants: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AuthorizeParticipantsDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthorizeParticipantsResponseDto"];
-                };
-            };
-        };
-    };
-    ExamSessionController_revokeParticipant: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                studentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RevokeParticipantDto"];
+                "application/json": components["schemas"]["WithholdResultDto"];
             };
         };
         responses: {
@@ -8485,19 +9699,18 @@ export interface operations {
             };
         };
     };
-    ExamSessionController_grantExtraTime: {
+    ResultController_release: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 id: string;
-                studentId: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["GrantExtraTimeDto"];
+                "application/json": components["schemas"]["WithholdResultDto"];
             };
         };
         responses: {
@@ -8511,40 +9724,16 @@ export interface operations {
             };
         };
     };
-    AttemptController_resume: {
+    ResultController_createAdjustment: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttemptPackageResponseDto"];
-                };
-            };
-        };
-    };
-    AttemptController_saveAnswer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                questionId: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SaveAnswerDto"];
+                "application/json": components["schemas"]["CreateResultAdjustmentDto"];
             };
         };
         responses: {
@@ -8553,37 +9742,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SaveAnswerResponseDto"];
+                    "application/json": components["schemas"]["ResultAdjustmentOperationResponseDto"];
                 };
             };
         };
     };
-    AttemptController_saveAnswerBatch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SaveAnswerBatchDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SaveAnswerBatchResponseDto"];
-                };
-            };
-        };
-    };
-    AttemptController_heartbeat: {
+    ResultController_getAdjustment: {
         parameters: {
             query?: never;
             header?: never;
@@ -8599,100 +9763,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StatusResponseDto"];
+                    "application/json": components["schemas"]["ResultAdjustmentOperationResponseDto"];
                 };
             };
         };
     };
-    AttemptController_recordEvent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecordAttemptEventDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponseDto"];
-                };
-            };
-        };
-    };
-    AttemptController_submit: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttemptStateResponseDto"];
-                };
-            };
-        };
-    };
-    AttemptController_end: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttemptStateResponseDto"];
-                };
-            };
-        };
-    };
-    AttemptController_status: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttemptStatusResponseDto"];
-                };
-            };
-        };
-    };
-    StudentAssessmentController_getActive: {
+    StudentResultController_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -8706,17 +9782,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActiveAssessmentResponseDto"];
+                    "application/json": components["schemas"]["StudentResultsResponseDto"];
                 };
             };
         };
     };
-    StudentAssessmentController_getPreview: {
+    StudentResultController_getDetail: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                examId: string;
+                id: string;
             };
             cookie?: never;
         };
@@ -8727,7 +9803,70 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AttemptPreviewResponseDto"];
+                    "application/json": components["schemas"]["StudentResultDetailDto"];
+                };
+            };
+        };
+    };
+    GradingScaleController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScaleListResponseDto"];
+                };
+            };
+        };
+    };
+    GradingScaleController_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutGradingScaleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScaleResponseDto"];
+                };
+            };
+        };
+    };
+    GradingScaleController_listVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradingScaleVersionListResponseDto"];
                 };
             };
         };

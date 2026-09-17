@@ -10,10 +10,10 @@ import { AuditActionRegistry } from './audit-action.registry.js';
 const EXPECTED_DEFERRED = [
   // EXAM_OPENED/EXAM_CLOSED flipped to LIVE in B12 (real producers:
   // ExamSessionService.open()/ExamLifecycleService.closeExam()).
-  'MAKEUP_GRANTED',
-  'ATTEMPT_INVALIDATED',
-  'RESULT_PUBLISHED',
-  'RESULT_ADJUSTED',
+  // RESULT_PUBLISHED/RESULT_ADJUSTED flipped to LIVE in B15 (real producers:
+  // ResultPublicationService, ResultWithholdingService, and apps/worker's
+  // marking consumer for the AUTOMATIC publication policy).
+  //
 ].sort();
 
 /**

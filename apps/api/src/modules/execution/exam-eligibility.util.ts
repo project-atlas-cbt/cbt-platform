@@ -110,14 +110,26 @@ export async function evaluateExamEligibility(
  */
 export async function canStudentAccessSession(
   tx: Prisma.TransactionClient,
-  params: { schoolId: string; examSessionId: string; studentProfileId: string },
+  params: {
+    schoolId: string;
+    examSessionId: string;
+    studentProfileId: string;
+    allowCompletedParentExam?: boolean;
+  },
 ): Promise<boolean> {
-  const { schoolId, examSessionId, studentProfileId } = params;
+  const { schoolId, examSessionId, studentProfileId, allowCompletedParentExam = false } = params;
   const session = await tx.examSession.findFirst({
     where: { schoolId, id: examSessionId },
     select: { status: true, exam: { select: { status: true } } },
   });
-  if (!session || session.status !== 'OPEN' || session.exam.status !== 'OPEN') return false;
+  if (
+    !session ||
+    session.status !== 'OPEN' ||
+    (session.exam.status !== 'OPEN' &&
+      !(allowCompletedParentExam && session.exam.status === 'COMPLETED'))
+  ) {
+    return false;
+  }
 
   const participant = await tx.examSessionParticipant.findFirst({
     where: { schoolId, examSessionId, studentProfileId, status: 'AUTHORIZED' },

@@ -14,6 +14,7 @@ import {
   scheduleAttemptAutoSubmitSweep,
 } from './queues/attempt-auto-submit.queue.js';
 import { createAttemptMarkingWorker } from './queues/attempt-marking.queue.js';
+import { createResultAdjustmentWorker } from './queues/result-adjustment.queue.js';
 import {
   SUBSCRIPTION_EXPIRY_QUEUE_NAME,
   createSubscriptionExpiryWorker,
@@ -156,6 +157,12 @@ async function main() {
     enqueueMarking,
   });
   const attemptAutoSubmitQueue = new Queue(ATTEMPT_AUTO_SUBMIT_QUEUE_NAME, { connection });
+
+  // B15: ADR-0025's bulk-adjustment consumer. Consumer-only in this process
+  // — apps/api's ResultAdjustmentQueueService is the sole producer, since an
+  // adjustment always originates from an authenticated, audited staff action
+  // rather than from any scheduled sweep.
+  const resultAdjustmentWorker = createResultAdjustmentWorker(connection, {});
   await scheduleAttemptAutoSubmitSweep(
     attemptAutoSubmitQueue,
     env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS,
@@ -187,6 +194,7 @@ async function main() {
     examControlRefreshWorker,
     attemptMarkingWorker,
     attemptAutoSubmitWorker,
+    resultAdjustmentWorker,
   ]) {
     worker.on('completed', (job) => {
       console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
@@ -205,7 +213,7 @@ async function main() {
   }
 
   console.log(
-    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), "${examControlRefreshWorker.name}" (sweep every ${env.EXAM_CONTROL_REFRESH_INTERVAL_MS}ms), "${attemptAutoSubmitWorker.name}" (sweep every ${env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS}ms), "${attemptMarkingWorker.name}" (per-item, no schedule), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
+    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), "${examControlRefreshWorker.name}" (sweep every ${env.EXAM_CONTROL_REFRESH_INTERVAL_MS}ms), "${attemptAutoSubmitWorker.name}" (sweep every ${env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS}ms), "${attemptMarkingWorker.name}" (per-item, no schedule), "${resultAdjustmentWorker.name}" (per-item, no schedule), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
   );
 
   const shutdown = async () => {
@@ -218,6 +226,7 @@ async function main() {
       unassignedStudentsDigestWorker.close(),
       examControlRefreshWorker.close(),
       attemptMarkingWorker.close(),
+      resultAdjustmentWorker.close(),
       attemptAutoSubmitWorker.close(),
     ]);
     await subscriptionExpiryQueue.close();

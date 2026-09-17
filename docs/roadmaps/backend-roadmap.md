@@ -60,8 +60,8 @@ If a future decision is reopened or superseded, the affected phases return to **
 | B12 | Exam Activation & Control          | 0006, 0009, 0020                   | F12           | COMPLETE    |
 | B13 | Attempt Engine                     | 0002, 0003, 0007, 0008, 0020, 0021 | F13           | COMPLETE    |
 | B14 | Submission & Marking               | 0003, 0004                         | F13           | COMPLETE    |
-| B15 | Results & Publication              | 0010, 0018, 0025                   | F15           | NOT STARTED |
-| B16 | Participation, Absence & Makeup    | 0014, 0024                         | F16           | NOT STARTED |
+| B15 | Results & Publication              | 0010, 0018, 0025                   | F15           | COMPLETE    |
+| B16 | Participation, Absence & Makeup    | 0014, 0024                         | F16           | COMPLETE    |
 | B17 | Analytics                          | 0002, 0025                         | F17           | NOT STARTED |
 | B18 | Reporting & Export                 | 0030                               | F18           | NOT STARTED |
 | B19 | Academic Session Rollover          | 0026                               | F19           | NOT STARTED |
@@ -825,7 +825,9 @@ every respect (DI shape, DTO validation via `@IsIn` against the domain-package c
 `SCHOOL_ADMIN` for the same reason `SchoolBrandingService` already does). These are _defaults_
 only — no `Exam` exists yet (`B11`) to seed from `resultPolicy`, and no `B15` marking/publication
 logic exists yet to honour `resultPolicyLocked`; this endpoint's job is exactly and only to store the
-school's chosen defaults correctly and auditably, ahead of the phases that will read them.
+school's chosen defaults correctly and auditably, ahead of the phases that will read them. **Both
+readers have since shipped**: `B11` seeds the exam's own copy at creation, and `B15` honours the lock
+on publication and adds the grading-scale half of the same School Settings screen (ADR-0018).
 
 **Permission table**: split the old placeholder `schoolConfig.settings.manage` row into a real
 `.view`/`.manage` pair, mirroring department/class/subject/session/term's own precedent —
@@ -1440,6 +1442,26 @@ password. **No backend change was needed or made** — `resetCredentials()`'s ex
 contract was already correct and sufficient; this was purely a frontend orchestration gap (the
 create flow never called it). Fixed in `apps/web` — see `frontend-roadmap.md`'s F7 section for the
 frontend-side detail.
+
+## Post-completion gap closure (2026-09-10, during `F14`)
+
+`F14`'s Profile screen (`04 §62`) needed a student's own current class/department; no such
+self-service read existed — `users.student.view` (the staff directory) is `denied()` for STUDENT
+by design. Confirmed with the project owner before implementation (`AGENTS.md` §3): a small,
+additive `GET /v1/students/me` route (`StudentController`), gated by a new permission row
+`users.student.viewOwnProfile` (`STUDENT: granted('SELF')`, every other role `denied()` — 160
+rows, up from 159). `StudentService.getOwnProfile()` resolves the caller's own `StudentProfile`
+by `(schoolId, membershipId)` and reuses the already-existing `resolveCurrentEnrollments()`
+query (now exported, unchanged otherwise) rather than duplicating it. A new, deliberately
+minimal `StudentOwnProfileResponseDto` (`displayName`, `studentId`, `currentClassName`,
+`departmentName`) is a separate DTO family from the staff `StudentResponseDto`, mirroring
+`student-result.dto.ts`'s own established precedent — no account/profile status, no ids beyond
+what the screen needs. The new route is registered **before** the controller's existing `:id`
+route (straight after `list()`) — otherwise Nest/Fastify would match the literal `me` segment
+against `:id` first. No schema change, no migration. Full detail (including the four new
+integration test cases and the real `node dist/main.js` boot confirming 209 routes checked with
+zero `PolicyCoverageService` violations) in `CLAUDE.md`'s matching 2026-09-10 Change Log entry
+and `frontend-roadmap.md`'s F14 section.
 
 ---
 
@@ -2117,7 +2139,7 @@ Every phase from B3 onward emits audit events. A coverage test asserts each voca
 3. ✅ Audit retrieval is correctly scoped for all six roles — `GET /v1/audit` (`AuditQueryService`): SCHOOL_ADMIN/MODERATOR full school read, HOD own actions + Question/QuestionRevision events in their department (the same two-hop `HODAssignment→Subject.departmentId→Question.subjectId` join B9 established), TEACHER/STUDENT own actions/account only. `GET /v1/platform/audit` (`PlatformAuditReaderService`): Software-Admin-only, genuinely cross-school in one query via the privileged `atlas_audit_reader` connection.
 4. ✅ Audit entries capture actor, role, school, action, target, timestamp, and reason — unchanged from B2's own write path (`AuditService.record`), now also readable.
 5. ✅ No credential material or full answer content appears in any audit payload — confirmed by inspecting every `AuditService.record()` call site's `metadata` literal directly; none currently pass credential/answer content.
-6. ⚠️ Notifications generate for the types that already have a real producer — question approved/rejected/changes-requested (B9's decision flow), subscription expiring (B3's worker sweep), and students-unassigned (B10's own new digest job) all fire and mark-read correctly. Result published/exam opened/makeup granted have no producer yet (B15/B12/B16 respectively) — honestly deferred, not silently dropped; `NotificationType`'s enum already declares all three so those phases only need to add a producer, not a migration.
+6. ⚠️ Notifications generate for the types that already have a real producer — question approved/rejected/changes-requested (B9's decision flow), subscription expiring (B3's worker sweep), and students-unassigned (B10's own new digest job) all fire and mark-read correctly. Result published/exam opened/makeup granted have no producer yet (B15/B12/B16 respectively) — honestly deferred, not silently dropped; `NotificationType`'s enum already declares all three so those phases only need to add a producer, not a migration. **`RESULT_PUBLISHED` gained its producer in B15** (staff release and the AUTOMATIC-policy path alike), and left `DEFERRED_NOTIFICATION_TYPES` accordingly.
 7. ✅ Out-of-band notifications dispatch through the ADR-0019 channel with real BullMQ retry (`attempts: 5`, exponential backoff) via the new shared `notification-dispatch` queue — the consumer lives in `apps/api` (started only from `main.ts`'s real `bootstrap()`, mirroring B7's import-worker precedent exactly), reusing the one shared `NOTIFICATION_CHANNEL`/`TemplateRegistry` every module already registers templates against. `apps/worker`'s subscription-expiry sweep became a cross-process _producer_ onto this same queue, closing a real pre-existing bug in the same pass (see Implementation notes).
 8. ✅ Cross-tenant audit and notification access is denied — proven directly (a second school's fixture never appears in a scoped query) for both `GET /v1/audit` and `GET /v1/notifications`/mark-read (a cross-user mark-read is a scoped no-op, not a 403/404, matching this codebase's established idempotent-updateMany idiom).
 9. ✅ Break-glass events remain distinctly typed (`breakGlass: true`, unchanged from B2) and visible to the affected school via `GET /v1/audit` (School Admin/Moderator's full-school read includes them).
@@ -2137,7 +2159,7 @@ Every phase from B3 onward emits audit events. A coverage test asserts each voca
 - `AUDITED_READ_NOTE`'s read-audit emission (ADR-0012, ~50 permission-table rows) — only ~5 live `@AuthorizedPlatform` GET routes exist as of B10, almost all other rows are `awaitingResource` placeholders for endpoints that don't exist yet. Building a shared mechanism now for a handful of live routes was judged premature; each future phase introducing a new platform-reachable GET route whose row carries this note is responsible for its own read-audit call site when it ships.
 - A Software-Admin-reachable _school-context_ session — needed for `audit.viewLog`'s/`notification.viewOwn`'s Software-Admin branches (both implemented for correctness, per the permission table) to ever be exercised in practice. Not asked for by any DoD item here.
 - `GET /v1/audit` (school-session-scoped, all six roles, real per-role scoping including the HOD department join) ships with **no frontend consumer** — built and tested at the API layer; F3's three destinations all consume `GET /v1/platform/audit` instead (Software Admin has no school session). Waiting for a future School-workspace "my activity"/"school audit" screen.
-- Question pools/exam-opened/makeup-granted/result-published notification producers — each waits on its own owning phase (B12/B15/B16) per DoD item 6.
+- Question pools/exam-opened/makeup-granted/result-published notification producers — each waits on its own owning phase (B12/B15/B16) per DoD item 6. **result-published: delivered by B15.**
 
 ## Implementation notes
 
@@ -2379,7 +2401,9 @@ same way in isolation"); `B11` touches zero files in `ImportsModule` and did not
 - `School.resultPolicyLocked` enforcement — B11 seeds `Exam.resultPolicy`/`resultDetailVisibility`
   from the school's current values at creation and allows free editing while `DRAFT`; the lock check
   itself is explicitly `B15`'s job per that field's own doc comment (`packages/domain/src/platform
-/result-policy.ts`).
+/result-policy.ts`). **Closed by B15** — `ResultPublicationService.assertPolicyPermits()` (DoD item
+  7), which reads both ADR-0010 axes and refuses a teacher-initiated release under a locked school
+  policy.
 - `ExamAdministrator` delegation into the `OWNED` resolver (ADR-0012/M-15) — `B12`'s job; this phase
   uses the plain, un-delegated `OWNED` resolver already built in `B2`.
 - Per-student accommodations — `Exam.accommodations` is one free-text field; individualised grants
@@ -3162,12 +3186,12 @@ B15 creates results from marking output. The sweeper must coordinate with B12's 
 
 - ✅ ADR-0003 and ADR-0004 decided and implemented.
 - ✅ Concurrency, timeout, and failure suites green — all merge-blocking.
-- ⚠️ `09 §39`'s full golden-path test (through B15's `Result`) can't close until B15 exists; B14's own half (submit → auto-submit → mark) is proven end to end.
+- ⚠️ `09 §39`'s full golden-path test (through B15's `Result`) can't close until B15 exists; B14's own half (submit → auto-submit → mark) is proven end to end. **B15 has since shipped `Result`**, and its own integration suite covers submit → mark → finalise → publish → student sees; the remaining half of `09 §39` (a single test spanning the student CBT client through to a published result) still waits on `F14`/`F15`.
 
 ## Deferred items
 
 - Marking of non-objective question types (essay, short answer) — out of scope for this release (`05 §15.2`); `PARTIAL` exists in the model for future use.
-- `Result`, `ResultPublication`, `GradingScale`, `ResultAdjustment` — B14 stays entity-free for `Result` by confirmed decision; B15's own job, reading `AttemptQuestionResult` as its marking-output input.
+- `Result`, `ResultPublication`, `GradingScale`, `ResultAdjustment` — B14 stays entity-free for `Result` by confirmed decision; B15's own job, reading `AttemptQuestionResult` as its marking-output input. **Delivered by B15**, which additionally moved B14's own totals arithmetic into `@atlas/domain` so the persisted result and `GET /v1/attempts/:id/status` share one computation.
 - `AttemptAuthorization` (makeup/retry), `examAdmin.invalidateAttempt`/`.grantMakeup` — confirmed deferred to B16, matching ADR-0014's own "Blocks phases: B16." Two permission-table `awaitingResource` tags and one schema comment that previously said "B14" were corrected to say B16 as part of this phase's own documentation-accuracy pass (no grant or schema shape changed).
 - The confirmation screen's unanswered-count warning UI (DoD item 2) — F13's job; the server data it needs already exists.
 - A "finalized attempt with no marking output and no pending job" reconciliation scan for the narrow case where `enqueueMarking()` itself fails after a successful finalisation transition — a known, documented residual risk (see `AttemptFinalizationService`'s own doc comment), not built this phase; a candidate for a future hardening pass or B21.
@@ -3246,7 +3270,7 @@ gap itself, no ADR involved, no roadmap phase status changed.
 
 # B15 — Results & Publication
 
-**Status:** NOT STARTED · **Decided ADRs:** 0010 (publication model), 0018 (grading), 0025 (invalidation effect)
+**Status:** COMPLETE · **Decided ADRs:** 0010 (publication model), 0018 (grading), 0025 (invalidation effect)
 
 ## Objective
 
@@ -3338,37 +3362,174 @@ B17 aggregates results and must exclude `VOIDED`. B18 exports results preserving
 
 ## Definition of Done
 
-1. Marking produces a result with correct marks, percentage, and counts.
-2. `PROCESSING → FINAL` occurs only after all question marking completes.
-3. A result cannot exist without an attempt; the 1:1 constraint holds.
-4. Invalidating an attempt moves its result to `VOIDED`; the result is retained, excluded from all aggregates, and hidden from the student while remaining visible to authorized staff with the reason.
-5. Publication makes results visible to students; unpublishing reverses it; both are audited.
-6. Automatic publication works where the policy selects it.
-7. A teacher cannot override a school-locked publication policy.
-8. Grades derive from the school's scale, are stored with the scale version, and do not change when the scale is later edited.
-9. Raw marks and percentage remain available regardless of grading configuration (`05 §46`).
-10. **No endpoint permits direct score modification.**
-11. Voiding a question across an entire exam recalculates every affected result, is auditable per result, and is resumable after a crash without partial application.
-12. Adjustment history replays to reproduce the original result.
-13. Students see only their own published results, with detail gated by the visibility policy.
-14. Cross-tenant and cross-scope access denied.
+1. ✅ Marking produces a result with correct marks, percentage, and counts —
+   `@atlas/domain`'s `computeResultTotals`, shared by the marking worker (which persists them) and
+   `AttemptStatusService` (which shows them live), so the two cannot disagree.
+2. ✅ `PROCESSING → FINAL` occurs only after all question marking completes. Structural, not
+   checked: the result is created `PROCESSING` in the same transaction that finalises the attempt
+   (`07 §29`), and moved to `FINAL` inside the marking transaction after the last per-question
+   upsert — a partial run rolls the transition back with the marks.
+3. ✅ A result cannot exist without an attempt; the 1:1 constraint holds — the FK plus a unique
+   `(school_id, attempt_id)` index, proven by a direct-Prisma-bypass test.
+4. ⚠️ **Honestly partial, by phase boundary.** B15 owns the `VOIDED` state, the transition, and the
+   exclusion from every aggregate and from student visibility (all proven); the invalidation
+   ENDPOINT is B16's, per ADR-0014's own "Blocks phases: B16". The test drives the result
+   transition directly. **Additionally, a real cross-phase conflict was found and is recorded
+   below:** B13's `exam_attempts_status_transition_guard` makes `SUBMITTED` terminal, so a
+   submitted attempt cannot currently be invalidated at all — which is precisely the case ADR-0025
+   contemplates. B16 must resolve it.
+5. ✅ Publication makes results visible to students; unpublishing reverses it; both audited
+   (`RESULT_PUBLISHED`/`RESULT_UNPUBLISHED`), with a mandatory reason on reversal (`05 §65`).
+6. ✅ Automatic publication works where the policy selects it — inside the marking transaction,
+   with the `RESULT_PUBLISHED` notification producer B10 left to this phase. Deliberately never
+   overrides a human's explicit unpublish.
+7. ✅ A teacher cannot override a school-locked publication policy — the lock check B11 explicitly
+   deferred here, reading both ADR-0010 axes.
+8. ✅ Grades derive from the school's scale, are stored with the scale version, and do not change
+   when the scale is later edited — versioned scales, plus a trigger freezing any version a result
+   has actually been graded against.
+9. ✅ Raw marks and percentage remain available regardless of grading configuration — a school with
+   no scale gets a complete, publishable result with a `null` grade.
+10. ✅ **No endpoint permits direct score modification.** `ResultAdjustment` is the only path;
+    asserted structurally against the live route table as well as behaviourally.
+11. ✅ Voiding a question across a cohort recalculates every affected result, audits per result
+    (not per operation), and is resumable after a crash without partial application — proven by a
+    forced mid-run crash and a re-run.
+12. ✅ Adjustment history replays to reproduce the original result — every child row carries the
+    complete numeric before/after, so the original is the earliest child's `oldValue`.
+13. ✅ Students see only their own published results, with detail gated by the exam's own
+    `result_detail_visibility`. `FULL_REVIEW` shows question review, never an answer key.
+14. ✅ Cross-tenant and cross-scope access denied — including a student reading another student's
+    result by id (the P14 URL-manipulation expectation).
 
 ## Exit criteria
 
-- ADR-0010, ADR-0018, ADR-0025 decided.
-- Adjustment resumability and data-integrity suites green.
-- F14 and F15 confirm their contracts.
+- ✅ ADR-0010, ADR-0018, ADR-0025 decided.
+- ✅ Adjustment resumability and data-integrity suites green.
+- ⚠️ F14 and F15 confirm their contracts — **open**, as for every backend-only phase.
+  `results.v1`/`student-results.v1` are frozen and published for them to consume.
+
+## Implementation notes
+
+**Confirmed with the project owner before implementation** (`AGENTS.md` §3), each a place where an
+ADR demands something B15's own roadmap text never named:
+
+1. **`withheld` built now.** ADR-0010 mandates it three times; the roadmap's Scope, DB work, API
+   table and all 14 DoD items never mention it. `Result.withheld` + an audited
+   `POST /results/:id/withhold`·`/release` pair, folded into the shared visibility rule.
+2. **Bulk adjustment MARKS results under adjustment rather than auto-unpublishing.** ADR-0025 offers
+   both without choosing. The marker (`ResultPublication.adjustmentInProgress`) preserves publication
+   state, so completing a run needs no re-publish step and a crashed one cannot strand a cohort.
+3. **Pass mark is an `isPassing` flag per grade band.** "Pass rate" is required by `05 §55.1` with no
+   threshold defined anywhere in the corpus; deriving it from the stored grade keeps it consistent
+   with the frozen scale version. A school with no scale reports `null`, never an invented cut-off.
+4. **ADR-0018's platform-default-scale gap closed here** — assigned to `B3`/`B5`, built by neither.
+   `DEFAULT_GRADING_SCALE_TEMPLATE` is offered by `GET /school/grading-scales` as a starting point.
+
+**Engineering decisions taken directly, with reasoning:**
+
+- **The result is created `PROCESSING` at attempt finalisation, not by the marking worker.** Follows
+  `07 §29` literally, makes DoD 2's transition observable, gives `B19` a real "pending results"
+  signal, and partly mitigates B14's own documented residual risk (a Redis outage losing the marking
+  enqueue now leaves a visible `PROCESSING` row rather than nothing).
+- **`total_marks` is summed from the frozen snapshot** (ADR-0029's B15 clause) — satisfied by summing
+  `AttemptQuestionResult.maximumMarks`, which B14 already sources from the snapshot.
+- **A single adjustment is a parent with exactly one child**, so bulk and single share one code path,
+  one audit shape and one replay guarantee.
+- **Three new permission rows** — `results.withhold`, `results.adjust`, `results.manualOverride`.
+  `02` has no adjustment rows at all, but `02 §6` is unambiguous that Teacher is "Edit score ❌", so
+  TEACHER is `denied()` on both adjustment rows; `MANUAL_OVERRIDE` is School-Admin-only. Same
+  precedent as B11's `exam.cancel`. Grading configuration reuses `schoolConfig.settings.*` rather
+  than adding a row that would grade identically (159 rows, up from 156).
+- **Database-enforced, not merely conventional:** three triggers — append-only `result_adjustments`,
+  a `Result` state-transition guard (`VOIDED` is terminal), and grading-scale bands frozen once a
+  result has been graded against their version — plus two partial unique indexes for "one active
+  grading scale per level scope".
+
+**Found by testing, not inspection:**
+
+- **Two active school-wide grading scales made grade resolution ambiguous** — row order would have
+  decided real students' grades. `GradingScaleService.put()` now versions the existing scale for a
+  level scope instead of creating a rival, backed by the partial unique indexes above.
+- **Two unscoped RLS writes in the worker's automatic-publication path.** `recordAutoPublication`
+  and the exam-title lookup used the bare `prisma` client instead of `withTenant`, so RLS silently
+  refused both and the surrounding best-effort `try/catch` swallowed the failure — the notification
+  never landed. Caught only because the test asserted the notification actually arrives.
 
 ## Deferred items
 
 - Report cards and transcripts (`01 §53` — future expansion).
-- Cross-exam aggregate grading (term averages, position in class) — not specified; record as a candidate.
+- Cross-exam aggregate grading (term averages, position in class) — not specified; record as a
+  candidate.
+- **`B16` must resolve a real conflict this phase surfaced.** ADR-0025 assumes a _submitted, marked_
+  attempt can be invalidated ("If a submitted, marked attempt is invalidated, its Result still
+  exists"), and `03 §76`/`05 §30` both allow invalidation after the student has started. But B13's
+  `exam_attempts_status_transition_guard` treats `SUBMITTED`/`AUTO_SUBMITTED` as terminal, so no
+  transition to `INVALIDATED` is possible today. B15 did not change another phase's shipped state
+  machine; B16 owns invalidation and must either widen that trigger or record an explicit decision.
+- The `withheld`/`released` distinction rides on the `RESULT_ADJUSTED` canonical action's alias list
+  rather than its own `07 §11.1` entry — the vocabulary is closed by design, and both are changes to
+  what a student may see on a result.
+- A standalone unit test for `ResultQueryService`'s summary/pass-rate arithmetic — currently proven
+  through the integration suite only. Candidate.
+
+## Post-completion gap closure: thorough implementation review, two fixes
+
+Requested explicitly, same session as B15 itself: a thorough review of the just-shipped
+implementation looking for bugs, not new scope. Read every B15 file end to end — schema/triggers,
+the shared domain arithmetic, every service, both worker queues — cross-checked against its own
+test suite. Two real issues surfaced, both fixed with regression coverage; full detail in this
+project's own Change Log.
+
+1. **Mixing adjustment types silently discarded an earlier correction.**
+   `applyResultAdjustment`'s `VOID_QUESTION`/`RECALCULATE` branches recomputed straight from the
+   raw `AttemptQuestionResult` marking evidence minus voided questions, ignoring `current` entirely
+   — so a `VOID_QUESTION` run against a result that an earlier, separate `AWARD_MARK`/
+   `DEDUCT_MARK`/`MANUAL_OVERRIDE` operation had already touched silently erased that correction.
+   Concretely: award +1 (9/10), then void an unrelated question (recomputes to 7/9 from raw,
+   losing the award) — exactly the "silent score change" DoD item 10 exists to forbid, and the
+   opposite of the domain file's own claim that the sequence is "order-independent... replayable."
+   Fixed by having `VOID_QUESTION` carry forward the delta between `current` and what the baseline
+   would have been without this void (i.e. raw minus only the prior completed `VOID_QUESTION`s),
+   applying that same delta on top of the newly-recomputed, newly-reduced baseline.
+   `RECALCULATE` is deliberately left unchanged — it is the documented, tested "repair path" that
+   resets to ground truth, so discarding a prior manual correction is its intended behaviour, not
+   a bug. New unit tests (`result-adjustment.test.ts`) cover AWARD_MARK/DEDUCT_MARK/MANUAL_OVERRIDE
+   each preserved across a later void, preservation across two successive voids, clamping a
+   preserved delta to a newly-reduced total, and confirm RECALCULATE's reset behaviour is
+   untouched. A new worker-level integration test (`result-adjustment.integration.test.ts`) proves
+   the fix end to end through the real chunked/transactional path across two separate, completed
+   operations — and was confirmed to fail with exactly the predicted buggy value (0 instead of 2)
+   against the pre-fix code before the fix was restored.
+2. **The publication policy lock was enforced on `publish` only.** `assertPolicyPermits()` (DoD
+   item 7: "a teacher cannot override a school-locked publication policy") was called only from
+   `ResultPublicationService.publish()` — never from `unpublish()`, `withhold()`, or `release()`,
+   despite the permission table's own comment on `results.withhold` claiming parity ("graded
+   exactly like `results.publish`... anyone who may release a cohort may hold one of its results
+   back") and despite DoD item 7 being marked `✅` complete. A teacher locked out of publishing
+   could still unpublish their own exam's results, or withhold/release an individual one,
+   bypassing the school's lock entirely. Fixed by calling `assertPolicyPermits()` from all four
+   actions. New integration test case proves a locked school refuses a teacher-initiated
+   unpublish/withhold/release (403, matching `publish`'s existing behaviour) while an
+   administrative actor remains unaffected, exactly as the pre-existing `publish` test already
+   established for that action alone.
+
+No schema change, no permission-table change, no product-behaviour change beyond correcting the
+two bugs themselves, no ADR involved, no roadmap phase status changed. `packages/domain`: 143/143
+unit tests (up from 137). `apps/api`: 169/169 unit, 327 integration tests (326 pass; the one
+failure, `media.integration.test.ts`'s "retrievable only via a signed URL" case, is this session's
+own already-documented `s3rver`-vs-real-MinIO environment gap, unrelated to B15). `apps/worker`:
+44/44 integration tests (up from 43). `tests/` RLS suite: 142/142. Monorepo-wide `pnpm lint &&
+pnpm typecheck` both 16/16 clean; `pnpm build` 8/9 (`@atlas/web`'s Google-Fonts-through-proxy
+failure is this session's own already-documented, pre-existing environment gap, untouched by this
+pass). `pnpm generate:permission-table-doc` confirmed a clean, zero-diff regeneration (159 rows,
+unchanged).
 
 ---
 
 # B16 — Participation, Absence & Makeup
 
-**Status:** NOT STARTED · **Decided ADRs:** 0014 (reattempt authorization), 0024 (participation roll-up)
+**Status:** COMPLETE · **Decided ADRs:** 0014 (reattempt authorization), 0024 (participation roll-up)
 
 ## Objective
 
@@ -3471,6 +3632,26 @@ B17's analytics must count participation correctly using the roll-up rule. B18's
 ## Deferred items
 
 - Excused-absence policy detail — `EXCUSED` exists in the model (`07 §9.5`) but no document defines who grants it or its reporting treatment. Record as a candidate.
+
+## Implementation notes (2026-09-17)
+
+- The B16 migration makes `ExamParticipation` session-scoped, adds the single-use
+  `AttemptAuthorization` model, removes the duplicate attempt participation column, and blocks a
+  migration if legacy participation evidence lacks a session reference.
+- Attempt creation consumes authorization under the existing per-student advisory lock and records
+  `ATTENDED` in the same transaction. A dedicated `MAKEUP`/`SPECIAL` session may be opened after
+  the parent exam is `COMPLETED`, preserving the original exam lifecycle.
+- Invalidation now transitions running or submitted attempts to `INVALIDATED`; the database trigger
+  voids an existing result while retaining its evidentiary record. Participation and Control Center
+  counts use ADR-0024's roll-up rather than raw session rows.
+- The permission table and OpenAPI/contracts are regenerated against the local Docker MinIO service.
+  The real-Postgres integration suite proves absence preservation through a makeup attempt, no
+  implied result for an absent student, single-use concurrent authorization consumption, retry
+  beyond the ordinary attempt limit, invalidated-attempt limit headroom, and database-enforced
+  result voiding. The tenant RLS suite includes `attempt_authorizations`, and a clean local reset
+  successfully reapplies all migrations through B16.
+- F16 remains the intentionally separate frontend consumer: this backend phase completes the
+  approved F15 summary extension only, not the new participation workspace.
 
 ---
 
@@ -4212,8 +4393,8 @@ Rows B0–B9 were left at their original NOT STARTED placeholder since this tabl
 | B12   | COMPLETE    | 2026-09-04 | 2026-09-04 | Decided: ADR-0006, 0009, 0020                                                                                                                                                                                                                                                    |
 | B13   | COMPLETE    | 2026-09-05 | 2026-09-05 | Decided: ADR-0002, 0003, 0007, 0008, 0020, 0021                                                                                                                                                                                                                                  |
 | B14   | COMPLETE    | 2026-09-05 | 2026-09-05 | Decided: ADR-0003, 0004                                                                                                                                                                                                                                                          |
-| B15   | NOT STARTED | —          | —          | Decided: ADR-0010, 0018, 0025                                                                                                                                                                                                                                                    |
-| B16   | NOT STARTED | —          | —          | Decided: ADR-0014, 0024                                                                                                                                                                                                                                                          |
+| B15   | COMPLETE    | 2026-09-10 | 2026-09-10 | Decided: ADR-0010, 0018, 0025                                                                                                                                                                                                                                                    |
+| B16   | COMPLETE    | 2026-09-17 | 2026-09-17 | Decided: ADR-0014, 0024; F16 remains the separate frontend consumer.                                                                                                                                                                                                             |
 | B17   | NOT STARTED | —          | —          | Decided: ADR-0002, 0025                                                                                                                                                                                                                                                          |
 | B18   | NOT STARTED | —          | —          | Decided: ADR-0030                                                                                                                                                                                                                                                                |
 | B19   | NOT STARTED | —          | —          | Decided: ADR-0026                                                                                                                                                                                                                                                                |

@@ -2030,7 +2030,7 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
  * RLS assertions need.
  */
 describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
-  'Row-Level Security tenant isolation — exam_attempts, attempt_question_snapshots, attempt_answers, attempt_answer_events, attempt_events, attempt_question_results (B13/B14, ADR-0023)',
+  'Row-Level Security tenant isolation — exam_attempts, attempt_authorizations, attempt_question_snapshots, attempt_answers, attempt_answer_events, attempt_events, attempt_question_results, results, result_publications, result_adjustment_operations, result_adjustments, grading_scales, grading_scale_versions, grading_scale_bands (B13/B14/B15/B16, ADR-0023)',
   () => {
     let owner: PrismaClient;
     let app: PrismaClient;
@@ -2038,6 +2038,8 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let schoolB: { id: string };
     let attemptA: { id: string };
     let attemptB: { id: string };
+    let authorizationA: { id: string };
+    let authorizationB: { id: string };
     let snapshotA: { id: string };
     let snapshotB: { id: string };
     let answerA: { id: string };
@@ -2048,6 +2050,20 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let eventB: { id: string };
     let resultA: { id: string };
     let resultB: { id: string };
+    let examResultA: { id: string };
+    let examResultB: { id: string };
+    let resultPublicationA: { id: string };
+    let resultPublicationB: { id: string };
+    let adjustmentOperationA: { id: string };
+    let adjustmentOperationB: { id: string };
+    let adjustmentA: { id: string };
+    let adjustmentB: { id: string };
+    let gradingScaleA: { id: string };
+    let gradingScaleB: { id: string };
+    let gradingScaleVersionA: { id: string };
+    let gradingScaleVersionB: { id: string };
+    let gradingScaleBandA: { id: string };
+    let gradingScaleBandB: { id: string };
 
     async function buildFixture(label: string) {
       const school = await owner.school.create({
@@ -2255,6 +2271,19 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           },
         }),
       );
+      const authorization = await withTenant(owner, school.id, (tx) =>
+        tx.attemptAuthorization.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            examSessionId: examSession.id,
+            studentProfileId: studentProfile.id,
+            type: 'SPECIAL',
+            reason: `RLS fixture ${label}`,
+            authorizedByMembershipId: teacherMembership.id,
+          },
+        }),
+      );
 
       // Deliberately left IN_PROGRESS — see this block's own header comment
       // on why (keeps attempt_answers cleanly deletable in teardown).
@@ -2353,7 +2382,112 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         }),
       );
 
-      return { school, attempt, secondAttempt, snapshot, answer, answerEvent, event, result };
+      // B15's seven tables. They hang off rows this fixture already builds
+      // (the exam, and the SUBMITTED second attempt a Result requires), so
+      // they extend this block rather than duplicating its whole fixture in
+      // a ninth one — the same "economy" precedent B3-B10 used. Nothing here
+      // makes teardown worse: this block's rows are already permanently
+      // undeletable via attempt_question_snapshots/attempt_answer_events.
+      const gradingScale = await withTenant(owner, school.id, (tx) =>
+        tx.gradingScale.create({ data: { schoolId: school.id, name: `RLS scale ${label}` } }),
+      );
+      const gradingScaleVersion = await withTenant(owner, school.id, (tx) =>
+        tx.gradingScaleVersion.create({
+          data: { schoolId: school.id, scaleId: gradingScale.id, versionNumber: 1 },
+        }),
+      );
+      const gradingScaleBand = await withTenant(owner, school.id, (tx) =>
+        tx.gradingScaleBand.create({
+          data: {
+            schoolId: school.id,
+            versionId: gradingScaleVersion.id,
+            label: 'A',
+            minPercentage: 0,
+            maxPercentage: 100,
+            isPassing: true,
+            sortOrder: 0,
+          },
+        }),
+      );
+      await withTenant(owner, school.id, (tx) =>
+        tx.gradingScale.update({
+          where: { id: gradingScale.id },
+          data: { currentVersionId: gradingScaleVersion.id },
+        }),
+      );
+
+      const examResult = await withTenant(owner, school.id, (tx) =>
+        tx.result.create({
+          data: {
+            schoolId: school.id,
+            attemptId: secondAttempt.id,
+            examId: exam.id,
+            studentProfileId: studentProfile.id,
+            state: 'FINAL',
+            finalizedAt: new Date(),
+            totalMarks: 2,
+            earnedMarks: 2,
+            percentage: 100,
+            correctCount: 1,
+            incorrectCount: 0,
+            unansweredCount: 0,
+            partialCount: 0,
+            grade: 'A',
+            gradingScaleVersionId: gradingScaleVersion.id,
+          },
+        }),
+      );
+      const resultPublication = await withTenant(owner, school.id, (tx) =>
+        tx.resultPublication.create({
+          data: { schoolId: school.id, examId: exam.id, status: 'UNPUBLISHED' },
+        }),
+      );
+      const adjustmentOperation = await withTenant(owner, school.id, (tx) =>
+        tx.resultAdjustmentOperation.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            type: 'AWARD_MARK',
+            reason: `RLS fixture ${label}`,
+            markDelta: 1,
+            totalCount: 1,
+            createdByMembershipId: teacherMembership.id,
+          },
+        }),
+      );
+      const adjustment = await withTenant(owner, school.id, (tx) =>
+        tx.resultAdjustment.create({
+          data: {
+            schoolId: school.id,
+            operationId: adjustmentOperation.id,
+            resultId: examResult.id,
+            adjustmentType: 'AWARD_MARK',
+            oldValue: { earnedMarks: 2 },
+            newValue: { earnedMarks: 2 },
+            reason: `RLS fixture ${label}`,
+            authorizedByMembershipId: teacherMembership.id,
+          },
+        }),
+      );
+
+      return {
+        school,
+        attempt,
+        authorization,
+        secondAttempt,
+        snapshot,
+        answer,
+        answerEvent,
+        event,
+        result,
+        examResult,
+        resultPublication,
+        adjustmentOperation,
+        adjustment,
+        gradingScale,
+        gradingScaleVersion,
+        gradingScaleBand,
+      };
     }
 
     beforeAll(async () => {
@@ -2367,6 +2501,8 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       schoolB = b.school;
       attemptA = a.attempt;
       attemptB = b.attempt;
+      authorizationA = a.authorization;
+      authorizationB = b.authorization;
       snapshotA = a.snapshot;
       snapshotB = b.snapshot;
       answerA = a.answer;
@@ -2377,10 +2513,51 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       eventB = b.event;
       resultA = a.result;
       resultB = b.result;
+      examResultA = a.examResult;
+      examResultB = b.examResult;
+      resultPublicationA = a.resultPublication;
+      resultPublicationB = b.resultPublication;
+      adjustmentOperationA = a.adjustmentOperation;
+      adjustmentOperationB = b.adjustmentOperation;
+      adjustmentA = a.adjustment;
+      adjustmentB = b.adjustment;
+      gradingScaleA = a.gradingScale;
+      gradingScaleB = b.gradingScale;
+      gradingScaleVersionA = a.gradingScaleVersion;
+      gradingScaleVersionB = b.gradingScaleVersion;
+      gradingScaleBandA = a.gradingScaleBand;
+      gradingScaleBandB = b.gradingScaleBand;
     });
 
     afterAll(async () => {
       const ids = [schoolA.id, schoolB.id];
+      // B15: result_adjustments is UNCONDITIONALLY immutable, so its own
+      // delete always fails and everything Restrict-FK'd behind it (results,
+      // the adjustment operation, the graded grading-scale version) stays
+      // too — the same permanent, harmless leftover this block already
+      // accepts for attempt_question_snapshots/attempt_answer_events.
+      await owner.resultAdjustment
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.resultAdjustmentOperation
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.result.deleteMany({ where: { schoolId: { in: ids } } }).catch(() => undefined);
+      await owner.resultPublication
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.gradingScale
+        .updateMany({ where: { schoolId: { in: ids } }, data: { currentVersionId: null } })
+        .catch(() => undefined);
+      await owner.gradingScaleBand
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.gradingScaleVersion
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.gradingScale
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
       // attempt_question_results (B14) carries no immutability trigger at
       // all — deletes cleanly regardless of the parent attempt's state.
       await owner.attemptQuestionResult
@@ -2411,6 +2588,9 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       // undeletable in practice while either survives, cascading the same
       // best-effort pattern up through every table below it.
       await owner.examAttempt
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
+      await owner.attemptAuthorization
         .deleteMany({ where: { schoolId: { in: ids } } })
         .catch(() => undefined);
       await owner.examSessionParticipant
@@ -2459,6 +2639,12 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         idB: () => attemptB.id,
       },
       {
+        label: 'attempt_authorizations',
+        table: 'attempt_authorizations',
+        idA: () => authorizationA.id,
+        idB: () => authorizationB.id,
+      },
+      {
         label: 'attempt_question_snapshots',
         table: 'attempt_question_snapshots',
         idA: () => snapshotA.id,
@@ -2487,6 +2673,43 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'attempt_question_results',
         idA: () => resultA.id,
         idB: () => resultB.id,
+      },
+      { label: 'results', table: 'results', idA: () => examResultA.id, idB: () => examResultB.id },
+      {
+        label: 'result_publications',
+        table: 'result_publications',
+        idA: () => resultPublicationA.id,
+        idB: () => resultPublicationB.id,
+      },
+      {
+        label: 'result_adjustment_operations',
+        table: 'result_adjustment_operations',
+        idA: () => adjustmentOperationA.id,
+        idB: () => adjustmentOperationB.id,
+      },
+      {
+        label: 'result_adjustments',
+        table: 'result_adjustments',
+        idA: () => adjustmentA.id,
+        idB: () => adjustmentB.id,
+      },
+      {
+        label: 'grading_scales',
+        table: 'grading_scales',
+        idA: () => gradingScaleA.id,
+        idB: () => gradingScaleB.id,
+      },
+      {
+        label: 'grading_scale_versions',
+        table: 'grading_scale_versions',
+        idA: () => gradingScaleVersionA.id,
+        idB: () => gradingScaleVersionB.id,
+      },
+      {
+        label: 'grading_scale_bands',
+        table: 'grading_scale_bands',
+        idA: () => gradingScaleBandA.id,
+        idB: () => gradingScaleBandB.id,
       },
     ];
 

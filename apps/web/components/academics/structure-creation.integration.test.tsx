@@ -234,6 +234,12 @@ describe('F6 structure creation', () => {
     });
   });
 
+  // Six full mount/interact/unmount cycles in one test — genuinely heavier
+  // than the 5s default, and this project's own established pattern for
+  // "environment flakiness under full-suite parallel load" (see CLAUDE.md's
+  // Change Log) is to give the test the headroom it needs rather than treat a
+  // slow-but-correct run as a failure. Hence the explicit 20000ms timeout
+  // passed as this it()'s third argument.
   it('creates a full academic structure end to end, each step visible to the next screen via the shared cache', async () => {
     const client = new QueryClient();
     const wrap = (ui: React.ReactElement) => (
@@ -311,9 +317,5 @@ describe('F6 structure creation', () => {
     expect(state.classSubjects).toHaveLength(1);
     expect(state.classSubjects[0]?.classId).toBe(classId);
     expect(state.classSubjects[0]?.subjectId).toBe(state.subjects[0]?.id);
-  }, // heavier than the 5s default, and this project's own established // Six full mount/interact/unmount cycles in one test — genuinely
-  // pattern for "environment flakiness under full-suite parallel load"
-  // (see CLAUDE.md's Change Log) is to give the test the headroom it
-  // needs rather than treat a slow-but-correct run as a failure.
-  20000);
+  }, 20000);
 });

@@ -35,6 +35,8 @@ import { PlatformAuditActionRegistrationProvider } from './audit-action-registra
 // reasoning.
 import { PlatformAuditReaderService } from '../operations/platform-audit-reader.service.js';
 import { PlatformAuditController } from '../operations/platform-audit.controller.js';
+import { ExecutionModule } from '../execution/execution.module.js';
+import { PlatformAttemptAdministrationController } from './platform-attempt-administration.controller.js';
 
 /**
  * Bounded domain per 08 §5: "Platform — Software Admin, schools,
@@ -54,7 +56,7 @@ import { PlatformAuditController } from '../operations/platform-audit.controller
  * way IdentityModule's own controller already relies on.
  */
 @Module({
-  imports: [IdentityModule, OperationsModule, MediaModule, AcademicsModule],
+  imports: [IdentityModule, OperationsModule, MediaModule, AcademicsModule, ExecutionModule],
   controllers: [
     PlatformAuthController,
     SchoolsAdminController,
@@ -65,6 +67,7 @@ import { PlatformAuditController } from '../operations/platform-audit.controller
     SchoolResultPolicyController,
     SchoolOnboardingController,
     PlatformAuditController,
+    PlatformAttemptAdministrationController,
   ],
   providers: [
     PlatformSessionService,

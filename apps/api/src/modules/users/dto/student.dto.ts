@@ -117,6 +117,27 @@ export class StudentResponseDto {
   departmentName!: string | null;
 }
 
+/**
+ * F14 gap-closure — `GET /students/me` (04 §62's Profile screen). A
+ * separate, deliberately minimal DTO from `StudentResponseDto` (the staff
+ * directory shape), mirroring `student-result.dto.ts`'s own "separate,
+ * audience-scoped DTO family" precedent — no account/profile status enums,
+ * no ids beyond what the screen needs.
+ */
+export class StudentOwnProfileResponseDto {
+  @ApiProperty({ type: String })
+  displayName!: string;
+
+  @ApiProperty({ type: String })
+  studentId!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  currentClassName!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  departmentName!: string | null;
+}
+
 export class StudentListResponseDto {
   @ApiProperty({ type: StudentResponseDto, isArray: true })
   students!: StudentResponseDto[];

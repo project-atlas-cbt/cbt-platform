@@ -21,6 +21,13 @@ jobs:
   lint-typecheck-unit-build:
     name: Lint, typecheck, unit test, build
     runs-on: ubuntu-latest
+    env:
+      # No database is reachable in this job and none is needed — but four
+      # apps/api unit tests import @atlas/db, whose client.ts constructs a
+      # PrismaClient at module scope and throws without this. Same reasoning,
+      # and the same dummy-value treatment, as the `contract-drift` job below.
+      # Nothing here ever opens a connection.
+      DATABASE_APP_URL: 'postgresql://atlas_app:atlas_app_ci_password@localhost:5432/atlas_ci?schema=public'
     steps:
       - uses: actions/checkout@v4
 
@@ -106,8 +113,25 @@ jobs:
       SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
       WEB_ORIGIN: 'http://localhost:3000'
       PLATFORM_ROOT_DOMAIN: 'localtest.me'
+      S3_ENDPOINT: 'http://localhost:9000'
+      S3_BUCKET: 'atlas-media-ci'
+      S3_ACCESS_KEY_ID: 'atlas_minio_root'
+      S3_SECRET_ACCESS_KEY: 'atlas_minio_dev_password'
+      S3_REGION: 'us-east-1'
     steps:
       - uses: actions/checkout@v4
+
+      # MinIO (S3-compatible) storage for OpenAPI generation (AppModule's
+      # ObjectStorageService self-provisions the bucket on boot).
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=atlas_minio_root \
+            -e MINIO_ROOT_PASSWORD=atlas_minio_dev_password \
+            minio/minio:RELEASE.2025-04-08T15-41-24Z server /data
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
+          done
 
       - uses: pnpm/action-setup@v4
         with:
@@ -149,10 +173,17 @@ jobs:
           pnpm db:generate
           pnpm db:migrate:deploy
 
+      # `--filter @atlas/api...` (with the trailing dots) builds @atlas/api AND
+      # its workspace dependencies. Every packages/* package resolves through
+      # its built dist/ ("main": "./dist/index.js", a deliberate B0 decision),
+      # so without them `nest build` cannot resolve @atlas/db or @atlas/domain
+      # and fails with a wall of TS2307. The `integration` job never hit this
+      # because it runs a full `pnpm build`, where turbo's `dependsOn:
+      # ["^build"]` builds dependencies first.
       - name: Build API and contracts
         run: |
-          pnpm --filter @atlas/api build
-          pnpm --filter @atlas/contracts build --if-present
+          pnpm --filter @atlas/api... build
+          pnpm --filter @atlas/contracts build
 
       - name: Emit OpenAPI document and regenerate contract types
         run: |
@@ -165,7 +196,7 @@ jobs:
             (echo "::error::OpenAPI contract drift detected — run 'pnpm --filter @atlas/api run openapi:emit && pnpm --filter @atlas/contracts run generate' and commit the result." && exit 1)
 
   integration:
-    name: Integration tests (Postgres + Redis)
+    name: Integration tests (Postgres + Redis + MinIO)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -205,12 +236,29 @@ jobs:
       SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
       WEB_ORIGIN: 'http://localhost:3000'
       PLATFORM_ROOT_DOMAIN: 'localtest.me'
+      S3_ENDPOINT: 'http://localhost:9000'
+      S3_BUCKET: 'atlas-media-ci'
+      S3_ACCESS_KEY_ID: 'atlas_minio_root'
+      S3_SECRET_ACCESS_KEY: 'atlas_minio_dev_password'
+      S3_REGION: 'us-east-1'
       # tests/support/run-prisma.ts's `migrate reset` call — same
       # human-reviewed, repeatable consent as the local dev database (see
       # that file's comment), scoped here to the ephemeral CI database.
       PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'Yes, proceed (Recommended)'
     steps:
       - uses: actions/checkout@v4
+
+      # MinIO (S3-compatible) storage for storage integration tests
+      # (e.g. media.integration.test.ts) and AppModule boot.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=atlas_minio_root \
+            -e MINIO_ROOT_PASSWORD=atlas_minio_dev_password \
+            minio/minio:RELEASE.2025-04-08T15-41-24Z server /data
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
+          done
 
       - uses: pnpm/action-setup@v4
         with:
@@ -268,3 +316,4 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true

@@ -887,3 +887,135 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     expect(resetRes.statusCode).toBe(403);
   });
 });
+
+describe('F14 gap closure — GET /students/me', () => {
+  let schoolId: string;
+  let host: string;
+  let admin: RequestCtx;
+
+  beforeAll(async () => {
+    const school = await createSchool();
+    schoolId = school.id;
+    host = `${school.subdomain}.${ROOT_DOMAIN}`;
+    createdSchoolIds.push(schoolId);
+    const { user } = await seedUser({
+      schoolId,
+      loginIdentifier: 'f14-admin',
+      password: 'a-real-password-123',
+      role: 'SCHOOL_ADMIN',
+    });
+    createdUserIds.push(user.id);
+    admin = await freshCtx(host, `10.${RUN}.4.1`);
+    await login(admin, 'f14-admin', 'a-real-password-123');
+  });
+
+  // Creates the student via the real `POST /students` route (so a real
+  // `StudentProfile` row exists), then sets `credentialState: 'OK'` directly
+  // via Prisma to bypass the reset-credentials flow entirely — the same
+  // convention every other test file's student/teacher/HOD login fixtures
+  // already use (see `seedUser` above and the 2026-09-03 gap-closure Change
+  // Log entry for the precedent).
+  async function seedLoggedInStudent(opts: {
+    firstName: string;
+    lastName: string;
+    password: string;
+  }) {
+    const res = await post(admin, '/students', {
+      firstName: opts.firstName,
+      lastName: opts.lastName,
+      studentId: `F14-${randomUUID().slice(0, 8)}`,
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{
+      userId: string;
+      membershipId: string;
+      studentProfileId: string;
+      displayName: string;
+      studentId: string;
+      loginIdentifier: string;
+    }>();
+    createdUserIds.push(body.userId);
+    const passwordHash = await passwords.hash(opts.password);
+    // `POST /students` leaves `User.status` at `INVITED` (B1's own account-
+    // lifecycle design) — login requires `ACTIVE`, per the 2026-08-30
+    // auth-audit gap closure's own precedent for bypassing this in a test
+    // fixture (see CLAUDE.md's Change Log entry of that date).
+    await prisma.user.update({
+      where: { id: body.userId },
+      data: { passwordHash, credentialState: 'OK', status: 'ACTIVE' },
+    });
+    return body;
+  }
+
+  it("returns the signed-in student's own name, student ID, and null class/department before enrollment", async () => {
+    const student = await seedLoggedInStudent({
+      firstName: 'Fola',
+      lastName: 'MeRoute',
+      password: 'a-real-password-123',
+    });
+    const studentCtx = await freshCtx(host, `10.${RUN}.4.2`);
+    const loginRes = await login(studentCtx, student.loginIdentifier, 'a-real-password-123');
+    expect(loginRes.statusCode).toBe(200);
+
+    // Also the route-ordering proof: if `me` were shadowed by `:id`, this
+    // would 404 with "Student not found" (StudentService.get('me')) instead
+    // of resolving the caller's own profile.
+    const res = await get(studentCtx, '/students/me');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      displayName: string;
+      studentId: string;
+      currentClassName: string | null;
+      departmentName: string | null;
+    }>();
+    expect(body.displayName).toBe(student.displayName);
+    expect(body.studentId).toBe(student.studentId);
+    expect(body.currentClassName).toBeNull();
+    expect(body.departmentName).toBeNull();
+  });
+
+  it('reflects the current class and department once enrolled', async () => {
+    const sessionRes = await post(admin, '/academics/sessions', {
+      name: `F14 Session ${randomUUID().slice(0, 8)}`,
+      startDate: '2026-09-01',
+      endDate: '2027-07-31',
+    });
+    const sessionId = sessionRes.json<{ id: string }>().id;
+    const deptRes = await post(admin, '/academics/departments', {
+      name: 'F14 Dept',
+      code: `F14D-${randomUUID().slice(0, 6)}`,
+    });
+    const departmentId = deptRes.json<{ id: string }>().id;
+    const classRes = await post(admin, '/academics/classes', {
+      academicSessionId: sessionId,
+      departmentId,
+      name: 'F14 Class',
+      level: 'SS2',
+      arm: 'A',
+    });
+    const classId = classRes.json<{ id: string }>().id;
+
+    const student = await seedLoggedInStudent({
+      firstName: 'Tomi',
+      lastName: 'MeEnrolled',
+      password: 'a-real-password-123',
+    });
+    await post(admin, `/students/${student.studentProfileId}/enrollments`, {
+      academicSessionId: sessionId,
+      classId,
+    });
+
+    const studentCtx = await freshCtx(host, `10.${RUN}.4.3`);
+    await login(studentCtx, student.loginIdentifier, 'a-real-password-123');
+    const res = await get(studentCtx, '/students/me');
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ currentClassName: string | null; departmentName: string | null }>();
+    expect(body.currentClassName).toBe('F14 Class');
+    expect(body.departmentName).toBe('F14 Dept');
+  });
+
+  it('denies a non-student actor (security boundary — this is a self-view route, not a directory read)', async () => {
+    const res = await get(admin, '/students/me');
+    expect(res.statusCode).toBe(403);
+  });
+});

@@ -82,30 +82,42 @@ export const CANONICAL_AUDIT_ACTIONS: readonly CanonicalAuditAction[] = [
   {
     id: 'MAKEUP_GRANTED',
     label: 'Makeup access granted',
-    status: 'DEFERRED',
-    aliases: [],
-    owningPhase: 'B16',
+    status: 'LIVE',
+    aliases: ['MAKEUP_GRANTED'],
   },
   {
     id: 'ATTEMPT_INVALIDATED',
     label: 'Attempt invalidated',
-    status: 'DEFERRED',
-    aliases: [],
-    owningPhase: 'B13/B14',
+    status: 'LIVE',
+    aliases: ['ATTEMPT_INVALIDATED'],
   },
   {
     id: 'RESULT_PUBLISHED',
     label: 'Result published',
-    status: 'DEFERRED',
-    aliases: [],
-    owningPhase: 'B15',
+    status: 'LIVE',
+    // B15. Three real producers write this: ResultPublicationService.publish()
+    // (a staff release), and — for Exam.resultPolicy === 'AUTOMATIC' —
+    // apps/worker's marking consumer at finalisation. RESULT_UNPUBLISHED is
+    // deliberately its own alias rather than a separate canonical entry:
+    // 07 §11.1's vocabulary names the publication event, and reversal is the
+    // same event in the other direction (05 §65: "Unpublish with audit
+    // record").
+    aliases: ['RESULT_PUBLISHED', 'RESULT_UNPUBLISHED'],
   },
   {
     id: 'RESULT_ADJUSTED',
     label: 'Result adjusted',
-    status: 'DEFERRED',
-    aliases: [],
-    owningPhase: 'B15',
+    status: 'LIVE',
+    // B15, ADR-0025: one audit event per adjusted RESULT, not one per bulk
+    // operation, so a 1,200-result void is fully reconstructable per student
+    // (07 §34's "who / why / what changed / when"). RESULT_MANUAL_OVERRIDE
+    // is aliased separately because the roadmap requires MANUAL_OVERRIDE to
+    // carry an elevated audit event distinguishable from derived arithmetic.
+    // RESULT_WITHHELD/RESULT_RELEASED are ADR-0010's per-result visibility
+    // hold — a change to what a student may see, recorded on the same
+    // canonical action so a result's whole intervention history reads as one
+    // stream.
+    aliases: ['RESULT_ADJUSTED', 'RESULT_MANUAL_OVERRIDE', 'RESULT_WITHHELD', 'RESULT_RELEASED'],
   },
   {
     id: 'USER_DEACTIVATED',

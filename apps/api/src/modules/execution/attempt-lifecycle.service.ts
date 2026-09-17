@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
+import { ensureProcessingResult } from '../results/result-finalization.util.js';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
@@ -79,6 +80,7 @@ function toSnapshotSourceQuestions(
 
 type StartOutcome =
   | { kind: 'INELIGIBLE'; failedChecks: string[] }
+  | { kind: 'AUTHORIZATION_ALREADY_CONSUMED' }
   | { kind: 'EXISTING' | 'CREATED'; attemptId: string };
 
 /**
@@ -157,20 +159,48 @@ export class AttemptLifecycleService {
       // row count and never tries.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
+      // Completion uses the same row lock. Holding it for the whole start
+      // transaction means completion either observes this new IN_PROGRESS
+      // attempt or finishes first, in which case the current session state
+      // below rejects an ordinary post-completion start.
+      await tx.$queryRaw`
+        SELECT id FROM exams
+        WHERE id = ${examId}::uuid AND school_id = ${schoolId}::uuid
+        FOR UPDATE
+      `;
+
       const existing = await tx.examAttempt.findFirst({
         where: { schoolId, examId, studentProfileId: studentProfile.id, state: 'IN_PROGRESS' },
-        select: { id: true },
+        select: { id: true, attemptAuthorizationId: true },
       });
       if (existing) {
+        // An ordinary duplicate start remains B13-idempotent. An
+        // authorization-owned start is intentionally different: ADR-0014
+        // requires exactly one successful consumption, so a racing request
+        // must not be reported as a second success merely because it can
+        // resume the newly-created attempt. The student resumes through the
+        // normal GET attempt route after the first successful start.
+        if (existing.attemptAuthorizationId !== null) {
+          return { kind: 'AUTHORIZATION_ALREADY_CONSUMED' };
+        }
         return { kind: 'EXISTING', attemptId: existing.id };
       }
 
+      // A dedicated MAKEUP/SPECIAL session remains startable after its
+      // parent exam is completed, but only when a still-valid authorization
+      // selects it below. The ordinary eligibility check continues to reject
+      // completed-parent sessions for every standard start.
       const candidateSessions = await tx.examSessionParticipant.findMany({
         where: {
           schoolId,
           studentProfileId: studentProfile.id,
           status: 'AUTHORIZED',
-          session: { schoolId, examId, status: 'OPEN' },
+          session: {
+            schoolId,
+            examId,
+            status: 'OPEN',
+            exam: { status: { in: ['OPEN', 'COMPLETED'] } },
+          },
         },
         orderBy: { authorizedAt: 'desc' },
         select: { examSessionId: true, extraTimeSeconds: true, extraTimeGrantedAt: true },
@@ -189,18 +219,47 @@ export class AttemptLifecycleService {
       // carries one (most-recently-granted wins on a genuine double
       // grant), falling back to the most-recently-authorized row only when
       // none of them do.
+      const now = new Date();
+      await tx.attemptAuthorization.updateMany({
+        where: {
+          schoolId,
+          examId,
+          studentProfileId: studentProfile.id,
+          status: 'AUTHORIZED',
+          expiresAt: { lte: now },
+        },
+        data: { status: 'EXPIRED' },
+      });
+      const authorization = await tx.attemptAuthorization.findFirst({
+        where: {
+          schoolId,
+          examId,
+          studentProfileId: studentProfile.id,
+          status: 'AUTHORIZED',
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          examSessionId: { in: candidateSessions.map((candidate) => candidate.examSessionId) },
+        },
+        orderBy: { authorizedAt: 'asc' },
+        select: { id: true, type: true, examSessionId: true },
+      });
+      const authorizedSession = authorization
+        ? candidateSessions.find(
+            (candidate) => candidate.examSessionId === authorization.examSessionId,
+          )
+        : undefined;
       const accommodatedSession = candidateSessions
         .filter((s) => s.extraTimeSeconds !== null)
         .sort(
           (a, b) => (b.extraTimeGrantedAt?.getTime() ?? 0) - (a.extraTimeGrantedAt?.getTime() ?? 0),
         )[0];
-      const session = accommodatedSession ?? candidateSessions[0]!;
+      const session = authorizedSession ?? accommodatedSession ?? candidateSessions[0]!;
 
       const eligibility = await evaluateAttemptStartEligibility(tx, {
         schoolId,
         exam,
         examSessionId: session.examSessionId,
         studentProfileId: studentProfile.id,
+        ...(authorization !== null && { authorization: { id: authorization.id } }),
       });
       if (!eligibility.eligible) {
         return { kind: 'INELIGIBLE', failedChecks: eligibility.failedChecks };
@@ -221,12 +280,35 @@ export class AttemptLifecycleService {
           where: { schoolId, examId, studentProfileId: studentProfile.id },
         }));
 
+      if (authorization !== null) {
+        const consumptionTime = new Date();
+        const consumed = await tx.attemptAuthorization.updateMany({
+          where: {
+            id: authorization.id,
+            schoolId,
+            status: 'AUTHORIZED',
+            OR: [{ expiresAt: null }, { expiresAt: { gt: consumptionTime } }],
+          },
+          data: { status: 'USED', usedAt: consumptionTime },
+        });
+        if (consumed.count !== 1) {
+          throw new AppHttpException({
+            code: 'ATTEMPT_NOT_ELIGIBLE',
+            message: 'This authorization is no longer available.',
+          });
+        }
+      }
+
       const attempt = await tx.examAttempt.create({
         data: {
           schoolId,
           examId,
           examSessionId: session.examSessionId,
           studentProfileId: studentProfile.id,
+          ...(authorization !== null && {
+            attemptAuthorizationId: authorization.id,
+            attemptType: authorization.type,
+          }),
           attemptNumber,
           state: 'IN_PROGRESS',
           startedAt,
@@ -259,6 +341,29 @@ export class AttemptLifecycleService {
         },
       });
 
+      await tx.examParticipation.upsert({
+        where: {
+          schoolId_examSessionId_studentProfileId: {
+            schoolId,
+            examSessionId: session.examSessionId,
+            studentProfileId: studentProfile.id,
+          },
+        },
+        create: {
+          schoolId,
+          examId,
+          examSessionId: session.examSessionId,
+          studentProfileId: studentProfile.id,
+          status: 'ATTENDED',
+          markedByMembershipId: schoolActor.membershipId,
+        },
+        update: {
+          status: 'ATTENDED',
+          markedAt: new Date(),
+          markedByMembershipId: schoolActor.membershipId,
+        },
+      });
+
       return { kind: 'CREATED', attemptId: attempt.id };
     });
 
@@ -267,6 +372,12 @@ export class AttemptLifecycleService {
         code: 'ATTEMPT_NOT_ELIGIBLE',
         message: 'You are not currently eligible to start this exam.',
         details: { failedChecks: outcome.failedChecks },
+      });
+    }
+    if (outcome.kind === 'AUTHORIZATION_ALREADY_CONSUMED') {
+      throw new AppHttpException({
+        code: 'ATTEMPT_NOT_ELIGIBLE',
+        message: 'The authorization has already been consumed.',
       });
     }
 
@@ -367,12 +478,25 @@ export class AttemptLifecycleService {
       }
     }
 
-    const { count } = await withTenant(prisma, schoolId, (tx) =>
-      tx.examAttempt.updateMany({
+    const { count } = await withTenant(prisma, schoolId, async (tx) => {
+      const transition = await tx.examAttempt.updateMany({
         where: { schoolId, id: attemptId, state: 'IN_PROGRESS' },
         data: { state: 'SUBMITTED', submittedAt: receivedAt },
-      }),
-    );
+      });
+      // B15: the result is created PROCESSING in the SAME transaction as the
+      // transition (07 §29), so an attempt can never be finalised without a
+      // result row to account for it — see ensureProcessingResult's own doc
+      // comment for why finalisation owns this rather than the marking job.
+      if (transition.count > 0) {
+        await ensureProcessingResult(tx, {
+          schoolId,
+          attemptId,
+          examId: attempt.examId,
+          studentProfileId: attempt.studentProfileId,
+        });
+      }
+      return transition;
+    });
 
     if (count === 0) {
       // DoD item 9: a repeated identical submit is idempotent — if the
@@ -433,12 +557,21 @@ export class AttemptLifecycleService {
       });
     }
 
-    const { count } = await withTenant(prisma, schoolId, (tx) =>
-      tx.examAttempt.updateMany({
+    const { count } = await withTenant(prisma, schoolId, async (tx) => {
+      const transition = await tx.examAttempt.updateMany({
         where: { schoolId, id: attemptId, state: 'IN_PROGRESS' },
         data: { state: 'SUBMITTED', submittedAt: new Date() },
-      }),
-    );
+      });
+      if (transition.count > 0) {
+        await ensureProcessingResult(tx, {
+          schoolId,
+          attemptId,
+          examId: attempt.examId,
+          studentProfileId: attempt.studentProfileId,
+        });
+      }
+      return transition;
+    });
     if (count === 0) {
       throw new AppHttpException({
         code: 'ATTEMPT_NOT_WRITABLE',

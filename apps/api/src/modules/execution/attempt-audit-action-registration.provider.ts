@@ -20,6 +20,10 @@ export class AttemptAuditActionRegistrationProvider implements OnModuleInit {
       'ATTEMPT_AUTO_SUBMITTED',
       'ATTEMPT_ENDED_BY_STAFF',
       'ATTEMPT_EXTRA_TIME_GRANTED',
+      'MAKEUP_GRANTED',
+      'ATTEMPT_RETRY_AUTHORIZED',
+      'ATTEMPT_AUTHORIZATION_REVOKED',
+      'ATTEMPT_INVALIDATED',
     ]);
   }
 }

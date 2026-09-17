@@ -17,9 +17,14 @@ describe('AuditVocabularyCoverageService', () => {
       'EXAM_READY',
       'EXAM_OPENED',
       'EXAM_CLOSED',
+      'MAKEUP_GRANTED',
+      'ATTEMPT_INVALIDATED',
       'STUDENT_DEACTIVATED',
       'CLASS_CHANGED',
       'TEACHER_ASSIGNMENTS_REPLACED',
+      // B15 flipped both of these from DEFERRED to LIVE.
+      'RESULT_PUBLISHED',
+      'RESULT_ADJUSTED',
     ]);
     const service = new AuditVocabularyCoverageService(registry);
     expect(() => service.assertFullCoverage()).not.toThrow();
@@ -34,8 +39,12 @@ describe('AuditVocabularyCoverageService', () => {
       'EXAM_READY',
       'EXAM_OPENED',
       'EXAM_CLOSED',
+      'MAKEUP_GRANTED',
+      'ATTEMPT_INVALIDATED',
       'STUDENT_DEACTIVATED',
       'TEACHER_ASSIGNMENTS_REPLACED',
+      'RESULT_PUBLISHED',
+      'RESULT_ADJUSTED',
     ]);
     const service = new AuditVocabularyCoverageService(registry);
     expect(() => service.assertFullCoverage()).toThrow(/CLASS_CHANGED/);
@@ -49,10 +58,15 @@ describe('AuditVocabularyCoverageService', () => {
       'EXAM_READY',
       'EXAM_OPENED',
       'EXAM_CLOSED',
+      'MAKEUP_GRANTED',
+      'ATTEMPT_INVALIDATED',
       'CLASS_CHANGED',
       'TEACHER_ASSIGNMENTS_REPLACED',
       // Only one of USER_DEACTIVATED's three real aliases — still enough.
       'MODERATOR_REMOVED',
+      // Likewise only one of RESULT_ADJUSTED's four B15 aliases.
+      'RESULT_WITHHELD',
+      'RESULT_PUBLISHED',
     ]);
     const service = new AuditVocabularyCoverageService(registry);
     expect(() => service.assertFullCoverage()).not.toThrow();
