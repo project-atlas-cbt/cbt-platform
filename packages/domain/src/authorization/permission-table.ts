@@ -1895,11 +1895,6 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    // B14 stale-tag correction (confirmed decision, this planning session):
-    // ADR-0014 itself states "Blocks phases: B16", and its own Required-
-    // changes list never names B14 — AttemptAuthorization/grantMakeup/
-    // invalidateAttempt are deferred to B16, not built in B14.
-    awaitingResource: 'AttemptAuthorization (B16, ADR-0014)',
   },
   {
     id: 'examAdmin.markAbsence',
@@ -1908,6 +1903,20 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'EXECUTE',
     grants: {
       SOFTWARE_ADMIN: breakGlassWrite(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: granted('DEPARTMENT'),
+      TEACHER: granted('OWNED'),
+      STUDENT: denied(),
+    },
+  },
+  {
+    id: 'examAdmin.authorizeRetry',
+    section: 'Exam Administration',
+    label: 'Authorize exceptional reattempt',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: breakGlass('R4: exceptional academic intervention requires break-glass.'),
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
@@ -1958,14 +1967,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
-      TEACHER: deferred(
-        '"Request/limited" names no actual mechanism in any document — not covered by ADR-0017 either. DENIED, fail-closed, pending explicit product clarification.',
-      ),
+      TEACHER: granted('OWNED'),
       STUDENT: denied(),
     },
-    // B14 stale-tag correction — see examAdmin.grantMakeup's own comment
-    // immediately above for the full reasoning: deferred to B16, not B14.
-    awaitingResource: 'ExamAttempt (B16, ADR-0014)',
   },
 
   // ------------------------------------------------------------------

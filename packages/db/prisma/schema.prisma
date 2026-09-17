@@ -359,6 +359,7 @@ model StudentProfile {
   // B12: this student's session authorizations and final per-exam outcomes.
   examSessionParticipations ExamSessionParticipant[]
   examParticipations        ExamParticipation[]
+  attemptAuthorizations     AttemptAuthorization[]
   // B13: this student's actual attempts.
   examAttempts              ExamAttempt[]
   // B15: this student's finalised results.
@@ -1928,6 +1929,7 @@ model Exam {
   examSessions   ExamSession[]
   administrators ExamAdministrator[]
   participations ExamParticipation[]
+  attemptAuthorizations AttemptAuthorization[]
   // B13: the actual student attempts taken against this exam.
   attempts       ExamAttempt[]
   // B15: results derived from those attempts, this exam's single
@@ -2097,16 +2099,26 @@ enum ExamSessionParticipantStatus {
   REVOKED
 }
 
-/// One row per (exam, student) — not per session — since "absence" is an
-/// exam-level outcome even though the student was authorized under a
-/// specific session.
+/// A session-scoped participation record. Cross-session reporting derives a
+/// student's exam-level outcome from these durable records and attempts.
 enum ExamParticipationStatus {
+  PENDING
+  ATTENDED
   ABSENT
-  /// Never written by B12 — no ExamAttempt exists yet to complete. Kept so
-  /// B13 doesn't need a migration just to add a value to a table B12
-  /// already shipped, mirroring this file's own established precedent for
-  /// shipping unused-but-spec-required vocabulary.
-  COMPLETED
+  EXCUSED
+}
+
+enum AttemptAuthorizationType {
+  MAKEUP
+  RETRY
+  SPECIAL
+}
+
+enum AttemptAuthorizationStatus {
+  AUTHORIZED
+  USED
+  REVOKED
+  EXPIRED
 }
 
 enum ExamAdministratorStatus {
@@ -2142,8 +2154,10 @@ model ExamSession {
   // DRAFT exams, which structurally can never have one.
   exam         Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
   participants ExamSessionParticipant[]
+  participations ExamParticipation[]
   // B13: attempts started under this specific session.
   attempts     ExamAttempt[]
+  attemptAuthorizations AttemptAuthorization[]
 
   // Composite-FK target for ExamSessionParticipant.
   @@unique([schoolId, id])
@@ -2203,18 +2217,15 @@ model ExamSessionParticipant {
   @@map("exam_session_participants")
 }
 
-/// The D-07 resolution: final per-student outcome, written only at End
-/// Examination (POST /v1/exams/:id/complete) — distinct from
-/// ExamSessionParticipant, which is authorization bookkeeping only and is
-/// deliberately restricted to AUTHORIZED/REVOKED (never COMPLETED/ABSENT).
+/// The participation outcome for one authorized session/student pair.
+/// Completion creates ABSENT records for unstarted participants; successful
+/// attempt creation records ATTENDED for its exact session. This remains
+/// distinct from ExamSessionParticipant's authorization bookkeeping.
 model ExamParticipation {
   id                   String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
   schoolId             String                  @map("school_id") @db.Uuid
   examId               String                  @map("exam_id") @db.Uuid
-  /// Which session this student was authorized under at completion time —
-  /// reporting metadata only, no FK/cascade behaviour attached (see this
-  /// block's header comment).
-  examSessionId        String?                 @map("exam_session_id") @db.Uuid
+  examSessionId        String                  @map("exam_session_id") @db.Uuid
   studentProfileId     String                  @map("student_profile_id") @db.Uuid
   status               ExamParticipationStatus
   markedAt             DateTime                @default(now()) @map("marked_at") @db.Timestamptz(6)
@@ -2222,13 +2233,47 @@ model ExamParticipation {
   reason               String?
 
   exam           Exam           @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  examSession    ExamSession    @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
   studentProfile StudentProfile @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Cascade)
 
-  @@unique([schoolId, examId, studentProfileId])
+  @@unique([schoolId, examSessionId, studentProfileId])
   @@index([schoolId])
   @@index([schoolId, examId])
   @@index([schoolId, examSessionId])
   @@map("exam_participations")
+}
+
+/// ADR-0014's single-use, auditable override of the ordinary attempt limit.
+/// The target session is created with the authorization so a completed parent
+/// exam never needs to be reopened for a makeup or retry.
+model AttemptAuthorization {
+  id               String                     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId         String                     @map("school_id") @db.Uuid
+  examId           String                     @map("exam_id") @db.Uuid
+  examSessionId    String                     @map("exam_session_id") @db.Uuid
+  studentProfileId String                     @map("student_profile_id") @db.Uuid
+  type             AttemptAuthorizationType
+  status           AttemptAuthorizationStatus @default(AUTHORIZED)
+  reason           String
+  authorizedByMembershipId String              @map("authorized_by_membership_id") @db.Uuid
+  authorizedAt     DateTime                    @default(now()) @map("authorized_at") @db.Timestamptz(6)
+  expiresAt        DateTime?                   @map("expires_at") @db.Timestamptz(6)
+  usedAt           DateTime?                   @map("used_at") @db.Timestamptz(6)
+  revokedAt        DateTime?                   @map("revoked_at") @db.Timestamptz(6)
+  revokedByMembershipId String?                @map("revoked_by_membership_id") @db.Uuid
+  revokedReason    String?                     @map("revoked_reason")
+  createdAt        DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exam           Exam           @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  examSession    ExamSession    @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
+  studentProfile StudentProfile @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Restrict)
+  attempt        ExamAttempt?
+
+  @@unique([schoolId, id])
+  @@index([schoolId, examId, studentProfileId, status])
+  @@index([schoolId, examSessionId])
+  @@map("attempt_authorizations")
 }
 
 /// ADR-0012/M-15: "own exam" in the permission table means created_by OR an
@@ -2324,12 +2369,8 @@ enum AttemptState {
   CANCELLED
 }
 
-/// MAKEUP/RETRY/SPECIAL are unreachable through B14 — AttemptAuthorization
-/// (ADR-0014) is B16's job, per that ADR's own "Blocks phases: B16" (a B13/
-/// B14-era comment here previously said "B14's job"; corrected during B14's
-/// own documentation-accuracy pass — no grant or schema shape changed) —
-/// shipped in full for spec fidelity, same precedent as
-/// AttemptState.NOT_STARTED above.
+/// MAKEUP/RETRY/SPECIAL are assigned only by a consumed B16
+/// AttemptAuthorization; STANDARD is the ordinary policy-governed path.
 enum AttemptType {
   STANDARD
   MAKEUP
@@ -2341,14 +2382,6 @@ enum AttemptType {
 /// distinct table/enum from B12's own ExamParticipationStatus (which lives
 /// on ExamParticipation, not ExamAttempt, and only has ABSENT/COMPLETED).
 /// Do not conflate the two.
-enum AttemptParticipationStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  ABSENT
-  EXCUSED
-}
-
 enum AttemptAnswerState {
   UNANSWERED
   ANSWERED
@@ -2380,10 +2413,10 @@ model ExamAttempt {
   examSessionId    String @map("exam_session_id") @db.Uuid
   studentProfileId String @map("student_profile_id") @db.Uuid
 
-  attemptNumber       Int                        @map("attempt_number")
-  attemptType         AttemptType                @default(STANDARD) @map("attempt_type")
-  state               AttemptState               @default(IN_PROGRESS)
-  participationStatus AttemptParticipationStatus @default(IN_PROGRESS) @map("participation_status")
+  attemptNumber       Int         @map("attempt_number")
+  attemptType         AttemptType @default(STANDARD) @map("attempt_type")
+  state               AttemptState @default(IN_PROGRESS)
+  attemptAuthorizationId String?  @map("attempt_authorization_id") @db.Uuid
 
   startedAt              DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
   /// Frozen at creation from Exam.durationSeconds +
@@ -2399,9 +2432,8 @@ model ExamAttempt {
   invalidatedAt             DateTime? @map("invalidated_at") @db.Timestamptz(6)
   /// Bare UUID, no relation — mirrors Exam.cancelledByMembershipId's own
   /// B11 precedent (denormalized actor+timestamp for cheap display; the
-  /// real audit trail of record is AuditEvent). Written only by B16
-  /// (examAdmin.invalidateAttempt stays awaitingResource through B14, per
-  /// ADR-0014's own "Blocks phases: B16").
+  /// real audit trail of record is AuditEvent). Written only by B16's
+  /// examAdmin.invalidateAttempt workflow.
   invalidatedByMembershipId String?   @map("invalidated_by_membership_id") @db.Uuid
 
   /// ADR-0020: updated by answer saves (via a separate, lightweight,
@@ -2428,6 +2460,7 @@ model ExamAttempt {
   exam            Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
   examSession     ExamSession              @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
   studentProfile  StudentProfile           @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Restrict)
+  attemptAuthorization AttemptAuthorization? @relation(fields: [schoolId, attemptAuthorizationId], references: [schoolId, id], onDelete: Restrict)
   snapshot        AttemptQuestionSnapshot?
   answers         AttemptAnswer[]
   answerEvents    AttemptAnswerEvent[]
@@ -2439,6 +2472,7 @@ model ExamAttempt {
 
   // Composite-FK target for every child table below.
   @@unique([schoolId, id])
+  @@unique([schoolId, attemptAuthorizationId])
   @@unique([schoolId, examId, studentProfileId, attemptNumber])
   @@index([schoolId])
   @@index([schoolId, examId])

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, prisma, withTenant } from '@atlas/db';
-import type { AttemptSnapshotDocumentV1 } from '@atlas/domain';
+import { rollUpParticipation, type AttemptSnapshotDocumentV1 } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
@@ -219,43 +219,107 @@ export class ResultQueryService {
     where: Prisma.ResultWhereInput,
     examId: string,
     extraWhere?: Prisma.ResultWhereInput,
+    classId?: string,
   ): Promise<ExamResultSummaryDto> {
     const scoped: Prisma.ResultWhereInput = extraWhere ? { AND: [where, extraWhere] } : where;
-
-    const [aggregate, voidedCount, pendingCount, passingRows] = await withTenant(
-      prisma,
+    const classStudentFilter: Prisma.StudentProfileWhereInput | undefined =
+      classId === undefined
+        ? undefined
+        : {
+            enrollments: { some: { schoolId, classId, status: 'ACTIVE' } },
+          };
+    const participantWhere: Prisma.ExamSessionParticipantWhereInput = {
       schoolId,
-      (tx) =>
-        Promise.all([
-          tx.result.aggregate({
-            where: scoped,
-            _count: { _all: true },
-            _avg: { percentage: true },
-            _max: { percentage: true },
-            _min: { percentage: true },
-          }),
-          tx.result.count({
-            where: { ...(extraWhere ?? {}), schoolId, examId, state: 'VOIDED' },
-          }),
-          tx.result.count({
-            where: { ...(extraWhere ?? {}), schoolId, examId, state: 'PROCESSING' },
-          }),
-          // Pass rate derives from the STORED grade's band (B15's confirmed
-          // `isPassing` decision), never from a hard-coded percentage — so a
-          // school that grades on its own scale gets its own pass rule, and a
-          // school with no scale at all gets `null` rather than an invented
-          // threshold.
-          tx.result.findMany({
-            where: { AND: [scoped, { grade: { not: null } }] },
-            select: { grade: true, gradingScaleVersionId: true },
-          }),
-        ]),
+      session: { examId },
+      ...(classStudentFilter !== undefined && { studentProfile: classStudentFilter }),
+    };
+    const participationWhere: Prisma.ExamParticipationWhereInput = {
+      schoolId,
+      examId,
+      ...(classStudentFilter !== undefined && { studentProfile: classStudentFilter }),
+    };
+    const attemptWhere: Prisma.ExamAttemptWhereInput = {
+      schoolId,
+      examId,
+      ...(classStudentFilter !== undefined && { studentProfile: classStudentFilter }),
+    };
+
+    const [
+      aggregate,
+      voidedCount,
+      pendingCount,
+      passingRows,
+      participants,
+      participations,
+      attempts,
+    ] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.result.aggregate({
+          where: scoped,
+          _count: { _all: true },
+          _avg: { percentage: true },
+          _max: { percentage: true },
+          _min: { percentage: true },
+        }),
+        tx.result.count({
+          where: { ...(extraWhere ?? {}), schoolId, examId, state: 'VOIDED' },
+        }),
+        tx.result.count({
+          where: { ...(extraWhere ?? {}), schoolId, examId, state: 'PROCESSING' },
+        }),
+        // Pass rate derives from the STORED grade's band (B15's confirmed
+        // `isPassing` decision), never from a hard-coded percentage — so a
+        // school that grades on its own scale gets its own pass rule, and a
+        // school with no scale at all gets `null` rather than an invented
+        // threshold.
+        tx.result.findMany({
+          where: { AND: [scoped, { grade: { not: null } }] },
+          select: { grade: true, gradingScaleVersionId: true },
+        }),
+        tx.examSessionParticipant.findMany({
+          where: participantWhere,
+          select: { studentProfileId: true, examSessionId: true },
+        }),
+        tx.examParticipation.findMany({
+          where: participationWhere,
+          select: { studentProfileId: true, examSessionId: true, status: true },
+        }),
+        tx.examAttempt.findMany({
+          where: attemptWhere,
+          select: { studentProfileId: true, examSessionId: true, state: true },
+        }),
+      ]),
     );
 
     const resultCount = aggregate._count._all;
+    const participantIds = new Set(participants.map((participant) => participant.studentProfileId));
+    const absentCount = [...participantIds].filter(
+      (studentProfileId) =>
+        rollUpParticipation(
+          participants
+            .filter((participant) => participant.studentProfileId === studentProfileId)
+            .map((participant) => ({
+              status:
+                participations.find(
+                  (entry) =>
+                    entry.studentProfileId === studentProfileId &&
+                    entry.examSessionId === participant.examSessionId,
+                )?.status ?? null,
+              hasNonInvalidatedAttempt: attempts.some(
+                (attempt) =>
+                  attempt.studentProfileId === studentProfileId &&
+                  attempt.examSessionId === participant.examSessionId &&
+                  attempt.state !== 'INVALIDATED' &&
+                  attempt.state !== 'CANCELLED',
+              ),
+            })),
+        ) === 'ABSENT',
+    ).length;
     const passRate = await this.computePassRate(schoolId, passingRows);
 
     return {
+      expectedStudentCount: participantIds.size,
+      absentCount,
       resultCount,
       voidedCount,
       pendingCount,
@@ -327,11 +391,17 @@ export class ResultQueryService {
       classes.map(async (classGroup) => ({
         classId: classGroup.id,
         className: classGroup.name,
-        ...(await this.summaryFor(schoolId, aggregatableResultWhere(schoolId, exam.id), exam.id, {
-          studentProfile: {
-            enrollments: { some: { schoolId, classId: classGroup.id, status: 'ACTIVE' } },
+        ...(await this.summaryFor(
+          schoolId,
+          aggregatableResultWhere(schoolId, exam.id),
+          exam.id,
+          {
+            studentProfile: {
+              enrollments: { some: { schoolId, classId: classGroup.id, status: 'ACTIVE' } },
+            },
           },
-        })),
+          classGroup.id,
+        )),
       })),
     );
   }

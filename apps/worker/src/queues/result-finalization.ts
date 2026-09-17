@@ -43,6 +43,7 @@ export async function finalizeResultAfterMarking(
     select: {
       examId: true,
       studentProfileId: true,
+      state: true,
       studentProfile: {
         select: {
           membership: { select: { userId: true } },
@@ -56,6 +57,10 @@ export async function finalizeResultAfterMarking(
       exam: { select: { resultPolicy: true } },
     },
   });
+
+  if (attempt.state !== 'SUBMITTED' && attempt.state !== 'AUTO_SUBMITTED') {
+    throw new Error(`attempt ${attemptId} is not eligible for result finalization`);
+  }
 
   const totals = computeResultTotals(questionResults);
 

@@ -2030,7 +2030,7 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
  * RLS assertions need.
  */
 describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
-  'Row-Level Security tenant isolation — exam_attempts, attempt_question_snapshots, attempt_answers, attempt_answer_events, attempt_events, attempt_question_results, results, result_publications, result_adjustment_operations, result_adjustments, grading_scales, grading_scale_versions, grading_scale_bands (B13/B14/B15, ADR-0023)',
+  'Row-Level Security tenant isolation — exam_attempts, attempt_authorizations, attempt_question_snapshots, attempt_answers, attempt_answer_events, attempt_events, attempt_question_results, results, result_publications, result_adjustment_operations, result_adjustments, grading_scales, grading_scale_versions, grading_scale_bands (B13/B14/B15/B16, ADR-0023)',
   () => {
     let owner: PrismaClient;
     let app: PrismaClient;
@@ -2038,6 +2038,8 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
     let schoolB: { id: string };
     let attemptA: { id: string };
     let attemptB: { id: string };
+    let authorizationA: { id: string };
+    let authorizationB: { id: string };
     let snapshotA: { id: string };
     let snapshotB: { id: string };
     let answerA: { id: string };
@@ -2269,6 +2271,19 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           },
         }),
       );
+      const authorization = await withTenant(owner, school.id, (tx) =>
+        tx.attemptAuthorization.create({
+          data: {
+            schoolId: school.id,
+            examId: exam.id,
+            examSessionId: examSession.id,
+            studentProfileId: studentProfile.id,
+            type: 'SPECIAL',
+            reason: `RLS fixture ${label}`,
+            authorizedByMembershipId: teacherMembership.id,
+          },
+        }),
+      );
 
       // Deliberately left IN_PROGRESS — see this block's own header comment
       // on why (keeps attempt_answers cleanly deletable in teardown).
@@ -2458,6 +2473,7 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       return {
         school,
         attempt,
+        authorization,
         secondAttempt,
         snapshot,
         answer,
@@ -2485,6 +2501,8 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       schoolB = b.school;
       attemptA = a.attempt;
       attemptB = b.attempt;
+      authorizationA = a.authorization;
+      authorizationB = b.authorization;
       snapshotA = a.snapshot;
       snapshotB = b.snapshot;
       answerA = a.answer;
@@ -2572,6 +2590,9 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
       await owner.examAttempt
         .deleteMany({ where: { schoolId: { in: ids } } })
         .catch(() => undefined);
+      await owner.attemptAuthorization
+        .deleteMany({ where: { schoolId: { in: ids } } })
+        .catch(() => undefined);
       await owner.examSessionParticipant
         .deleteMany({ where: { schoolId: { in: ids } } })
         .catch(() => undefined);
@@ -2616,6 +2637,12 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
         table: 'exam_attempts',
         idA: () => attemptA.id,
         idB: () => attemptB.id,
+      },
+      {
+        label: 'attempt_authorizations',
+        table: 'attempt_authorizations',
+        idA: () => authorizationA.id,
+        idB: () => authorizationB.id,
       },
       {
         label: 'attempt_question_snapshots',

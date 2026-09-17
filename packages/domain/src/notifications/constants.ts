@@ -19,7 +19,7 @@ export const NOTIFICATION_TYPES = [
   'RESULT_PUBLISHED',
   /// DEFERRED — no producer until B12 (Exam Activation & Control).
   'EXAM_OPENED',
-  /// DEFERRED — no producer until B16 (Participation, Absence & Makeup).
+  /// B16: written when a staff member grants makeup access.
   'MAKEUP_GRANTED',
   'SUBSCRIPTION_EXPIRING',
   'STUDENTS_UNASSIGNED',
@@ -34,10 +34,7 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 /// RESULT_PUBLISHED left this list in B15: ResultPublicationService and
 /// apps/worker's AUTOMATIC-policy finalisation both now notify the students
 /// whose results a release actually made visible.
-export const DEFERRED_NOTIFICATION_TYPES: readonly NotificationType[] = [
-  'EXAM_OPENED',
-  'MAKEUP_GRANTED',
-];
+export const DEFERRED_NOTIFICATION_TYPES: readonly NotificationType[] = ['EXAM_OPENED'];
 
 export const NOTIFICATION_STATUSES = ['UNREAD', 'READ'] as const;
 export type NotificationStatus = (typeof NOTIFICATION_STATUSES)[number];

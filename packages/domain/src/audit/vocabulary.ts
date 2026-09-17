@@ -82,16 +82,14 @@ export const CANONICAL_AUDIT_ACTIONS: readonly CanonicalAuditAction[] = [
   {
     id: 'MAKEUP_GRANTED',
     label: 'Makeup access granted',
-    status: 'DEFERRED',
-    aliases: [],
-    owningPhase: 'B16',
+    status: 'LIVE',
+    aliases: ['MAKEUP_GRANTED'],
   },
   {
     id: 'ATTEMPT_INVALIDATED',
     label: 'Attempt invalidated',
-    status: 'DEFERRED',
-    aliases: [],
-    owningPhase: 'B13/B14',
+    status: 'LIVE',
+    aliases: ['ATTEMPT_INVALIDATED'],
   },
   {
     id: 'RESULT_PUBLISHED',

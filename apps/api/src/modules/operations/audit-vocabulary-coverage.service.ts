@@ -14,12 +14,6 @@ const EXPECTED_DEFERRED = [
   // ResultPublicationService, ResultWithholdingService, and apps/worker's
   // marking consumer for the AUTOMATIC publication policy).
   //
-  // Both remaining entries are B16's (ADR-0014's AttemptAuthorization and
-  // the invalidation path it gates). B15 builds the VOIDED result state and
-  // the transition that ATTEMPT_INVALIDATED will trigger, but deliberately
-  // ships no producer for the invalidation event itself.
-  'MAKEUP_GRANTED',
-  'ATTEMPT_INVALIDATED',
 ].sort();
 
 /**

@@ -74,10 +74,13 @@ export async function runAttemptMarking(
       // Should be structurally impossible — every enqueue onto this queue
       // follows a committed finalisation transition — but a defensive
       // throw here lets BullMQ's own retry/backoff resolve a genuine race
-      // rather than mis-marking a still-live, still-writable attempt; the
-      // schema's own attempt_question_results_require_finalized_attempt
-      // trigger (B14 migration) backstops this at the database level too.
+      // rather than mis-marking a still-live, still-writable attempt.
       throw new Error(`attempt ${attemptId} is still IN_PROGRESS — refusing to mark`);
+    }
+    if (attempt.state === 'INVALIDATED' || attempt.state === 'CANCELLED') {
+      // A stale queued job must be harmless after a terminal administrative
+      // transition. These are not transient marking failures worthy of retry.
+      return;
     }
 
     const snapshot = await tx.attemptQuestionSnapshot.findUniqueOrThrow({

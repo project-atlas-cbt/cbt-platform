@@ -524,6 +524,36 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
     expect(results).toHaveLength(0);
   });
 
+  it('B16: ignores a stale marking job after the submitted attempt is invalidated', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+      { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+    ]);
+
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.examAttempt.update({
+        where: { id: attemptId },
+        data: { state: 'INVALIDATED', invalidationReason: 'Verified irregularity' },
+      }),
+    );
+
+    await expect(
+      runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId }),
+    ).resolves.toBeUndefined();
+
+    const [questionResultCount, result] = await withTenant(prisma, fixture.schoolId, (tx) =>
+      Promise.all([
+        tx.attemptQuestionResult.count({ where: { schoolId: fixture.schoolId, attemptId } }),
+        tx.result.findUnique({
+          where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId } },
+        }),
+      ]),
+    );
+    expect(questionResultCount).toBe(0);
+    expect(result).toBeNull();
+  });
+
   it('the database trigger itself blocks writing a result while the parent attempt is IN_PROGRESS, independent of the service layer', async () => {
     const fixture = await createFixtureSchool();
     schools.push(fixture.schoolId);

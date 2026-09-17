@@ -61,7 +61,7 @@ If a future decision is reopened or superseded, the affected phases return to **
 | B13 | Attempt Engine                     | 0002, 0003, 0007, 0008, 0020, 0021 | F13           | COMPLETE    |
 | B14 | Submission & Marking               | 0003, 0004                         | F13           | COMPLETE    |
 | B15 | Results & Publication              | 0010, 0018, 0025                   | F15           | COMPLETE    |
-| B16 | Participation, Absence & Makeup    | 0014, 0024                         | F16           | NOT STARTED |
+| B16 | Participation, Absence & Makeup    | 0014, 0024                         | F16           | COMPLETE    |
 | B17 | Analytics                          | 0002, 0025                         | F17           | NOT STARTED |
 | B18 | Reporting & Export                 | 0030                               | F18           | NOT STARTED |
 | B19 | Academic Session Rollover          | 0026                               | F19           | NOT STARTED |
@@ -3529,7 +3529,7 @@ unchanged).
 
 # B16 — Participation, Absence & Makeup
 
-**Status:** NOT STARTED · **Decided ADRs:** 0014 (reattempt authorization), 0024 (participation roll-up)
+**Status:** COMPLETE · **Decided ADRs:** 0014 (reattempt authorization), 0024 (participation roll-up)
 
 ## Objective
 
@@ -3632,6 +3632,26 @@ B17's analytics must count participation correctly using the roll-up rule. B18's
 ## Deferred items
 
 - Excused-absence policy detail — `EXCUSED` exists in the model (`07 §9.5`) but no document defines who grants it or its reporting treatment. Record as a candidate.
+
+## Implementation notes (2026-09-17)
+
+- The B16 migration makes `ExamParticipation` session-scoped, adds the single-use
+  `AttemptAuthorization` model, removes the duplicate attempt participation column, and blocks a
+  migration if legacy participation evidence lacks a session reference.
+- Attempt creation consumes authorization under the existing per-student advisory lock and records
+  `ATTENDED` in the same transaction. A dedicated `MAKEUP`/`SPECIAL` session may be opened after
+  the parent exam is `COMPLETED`, preserving the original exam lifecycle.
+- Invalidation now transitions running or submitted attempts to `INVALIDATED`; the database trigger
+  voids an existing result while retaining its evidentiary record. Participation and Control Center
+  counts use ADR-0024's roll-up rather than raw session rows.
+- The permission table and OpenAPI/contracts are regenerated against the local Docker MinIO service.
+  The real-Postgres integration suite proves absence preservation through a makeup attempt, no
+  implied result for an absent student, single-use concurrent authorization consumption, retry
+  beyond the ordinary attempt limit, invalidated-attempt limit headroom, and database-enforced
+  result voiding. The tenant RLS suite includes `attempt_authorizations`, and a clean local reset
+  successfully reapplies all migrations through B16.
+- F16 remains the intentionally separate frontend consumer: this backend phase completes the
+  approved F15 summary extension only, not the new participation workspace.
 
 ---
 
@@ -4374,7 +4394,7 @@ Rows B0–B9 were left at their original NOT STARTED placeholder since this tabl
 | B13   | COMPLETE    | 2026-09-05 | 2026-09-05 | Decided: ADR-0002, 0003, 0007, 0008, 0020, 0021                                                                                                                                                                                                                                  |
 | B14   | COMPLETE    | 2026-09-05 | 2026-09-05 | Decided: ADR-0003, 0004                                                                                                                                                                                                                                                          |
 | B15   | COMPLETE    | 2026-09-10 | 2026-09-10 | Decided: ADR-0010, 0018, 0025                                                                                                                                                                                                                                                    |
-| B16   | NOT STARTED | —          | —          | Decided: ADR-0014, 0024                                                                                                                                                                                                                                                          |
+| B16   | COMPLETE    | 2026-09-17 | 2026-09-17 | Decided: ADR-0014, 0024; F16 remains the separate frontend consumer.                                                                                                                                                                                                             |
 | B17   | NOT STARTED | —          | —          | Decided: ADR-0002, 0025                                                                                                                                                                                                                                                          |
 | B18   | NOT STARTED | —          | —          | Decided: ADR-0030                                                                                                                                                                                                                                                                |
 | B19   | NOT STARTED | —          | —          | Decided: ADR-0026                                                                                                                                                                                                                                                                |

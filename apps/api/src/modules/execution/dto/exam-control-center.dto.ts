@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ArrayUnique, IsArray, IsUUID } from 'class-validator';
+import { ArrayUnique, IsArray, IsOptional, IsUUID, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { EXAM_STATUSES, type ExamStatus } from '@atlas/domain';
 import { ExamSessionResponseDto } from './exam-session.dto.js';
 
@@ -12,11 +13,26 @@ import { ExamSessionResponseDto } from './exam-session.dto.js';
  * stale data. An empty array is valid when nobody was ever authorized.
  */
 export class CompleteExamDto {
-  @ApiProperty({ type: String, isArray: true })
+  @ApiProperty({ type: String, isArray: true, required: false })
+  @IsOptional()
   @IsArray()
   @ArrayUnique()
   @IsUUID('all', { each: true })
-  confirmedAbsentStudentProfileIds!: string[];
+  confirmedAbsentStudentProfileIds?: string[];
+
+  /** B16's session-scoped replacement. The legacy student-only list remains
+   * accepted by `/complete` while F16 migrates to this precise shape. */
+  @ApiProperty({ type: () => ConfirmAbsentParticipationDto, isArray: true, required: false })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ConfirmAbsentParticipationDto)
+  confirmedAbsentParticipations?: ConfirmAbsentParticipationDto[];
+}
+
+export class ConfirmAbsentParticipationDto {
+  @ApiProperty() @IsUUID() examSessionId!: string;
+  @ApiProperty() @IsUUID() studentProfileId!: string;
 }
 
 export class ExamControlCenterAggregateDto {

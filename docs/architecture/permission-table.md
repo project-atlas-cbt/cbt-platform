@@ -281,19 +281,20 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Exam Administration
 
-| Action                           | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER    | STUDENT | Awaiting                             |
-| -------------------------------- | -------------- | ------------ | --------- | ---------- | ---------- | ------- | ------------------------------------ |
-| Exam Control Center              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| View registered students         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED   | —       |                                      |
-| View live attempts               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| See who has started              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| See who has completed            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Manually allow student           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Grant makeup access              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       | AttemptAuthorization (B16, ADR-0014) |
-| Mark/confirm absence             | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| End individual attempt           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Grant extra time (accommodation) | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED      | —       |                                      |
-| Invalidate attempt               | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | ⏸ DEFERRED | —       | ExamAttempt (B16, ADR-0014)          |
+| Action                           | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting |
+| -------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | -------- |
+| Exam Control Center              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| View registered students         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | —       |          |
+| View live attempts               | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| See who has started              | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| See who has completed            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Manually allow student           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Grant makeup access              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Mark/confirm absence             | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Authorize exceptional reattempt  | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| End individual attempt           | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Grant extra time (accommodation) | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
+| Invalidate attempt               | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
 
 <details><summary>Notes</summary>
 
@@ -305,10 +306,10 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Manually allow student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Grant makeup access / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
 - **Mark/confirm absence / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Authorize exceptional reattempt / SOFTWARE_ADMIN:** R4: exceptional academic intervention requires break-glass.
 - **End individual attempt / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Grant extra time (accommodation) / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Invalidate attempt / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
-- **Invalidate attempt / TEACHER:** "Request/limited" names no actual mechanism in any document — not covered by ADR-0017 either. DENIED, fail-closed, pending explicit product clarification.
 
 </details>
 

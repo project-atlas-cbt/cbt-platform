@@ -10,6 +10,8 @@ import { AttemptAnswerService } from './attempt-answer.service.js';
 import { AttemptEventService } from './attempt-event.service.js';
 import { AttemptLifecycleService } from './attempt-lifecycle.service.js';
 import { AttemptStatusService } from './attempt-status.service.js';
+import { AttemptAdministrationService } from './attempt-administration.service.js';
+import { InvalidateAttemptDto } from './dto/participation.dto.js';
 import {
   AttemptPackageResponseDto,
   AttemptStateResponseDto,
@@ -40,7 +42,27 @@ export class AttemptController {
     private readonly answers: AttemptAnswerService,
     private readonly events: AttemptEventService,
     private readonly statusService: AttemptStatusService,
+    private readonly administration: AttemptAdministrationService,
   ) {}
+
+  @Post(':id/invalidate')
+  @HttpCode(HttpStatus.OK)
+  @Authorized('examAdmin.invalidateAttempt')
+  async invalidate(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() body: InvalidateAttemptDto,
+  ): Promise<StatusResponseDto> {
+    const user = currentUser(req);
+    await this.administration.invalidate(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      id,
+      body,
+      { actorUserId: user.userId, actorRole: resolveExamActorRole(user) },
+    );
+    return { status: 'ok' };
+  }
 
   @Get(':id')
   @Authorized('studentCbt.resume')

@@ -53,6 +53,7 @@ export class ExamCompletionService {
     examId: string,
     dto: CompleteExamDto,
     auditCtx: ActorContext,
+    options: { requireSessionScopedPairs?: boolean } = {},
   ): Promise<ExamResponseDto> {
     const exam = await loadParentExamOrThrow(schoolId, examId);
     const resource = {
@@ -76,6 +77,17 @@ export class ExamCompletionService {
       });
     }
 
+    if (
+      options.requireSessionScopedPairs &&
+      (dto.confirmedAbsentParticipations === undefined ||
+        dto.confirmedAbsentStudentProfileIds !== undefined)
+    ) {
+      throw new AppHttpException({
+        code: 'VALIDATION_ERROR',
+        message: 'confirmedAbsentParticipations is required for this endpoint.',
+      });
+    }
+
     if ((await countInProgressAttempts(schoolId, examId)) > 0) {
       // Fast-fail only — deliberately NOT the real guarantee. See the
       // re-check inside the transaction below for why this alone isn't
@@ -87,6 +99,11 @@ export class ExamCompletionService {
     }
 
     const schoolActor = requireSchoolActor(actor);
+    const submittedEntries = new Set(
+      dto.confirmedAbsentParticipations?.map(
+        (entry) => `${entry.examSessionId}:${entry.studentProfileId}`,
+      ) ?? [],
+    );
     const submittedIds = new Set(dto.confirmedAbsentStudentProfileIds);
 
     const outcome = await withTenant(prisma, schoolId, async (tx): Promise<CompleteOutcome> => {
@@ -132,19 +149,37 @@ export class ExamCompletionService {
               where: { schoolId, examSessionId: { in: sessionIds }, status: 'AUTHORIZED' },
               orderBy: { authorizedAt: 'desc' },
               select: { studentProfileId: true, examSessionId: true },
-              distinct: ['studentProfileId'],
             });
       const existingParticipation = await tx.examParticipation.findMany({
         where: { schoolId, examId },
-        select: { studentProfileId: true },
+        select: { studentProfileId: true, examSessionId: true },
       });
-      const alreadyMarked = new Set(existingParticipation.map((p) => p.studentProfileId));
-      const pending = authorizedParticipants.filter((p) => !alreadyMarked.has(p.studentProfileId));
+      const startedAttempts = await tx.examAttempt.findMany({
+        where: { schoolId, examId },
+        select: { studentProfileId: true, examSessionId: true },
+      });
+      const alreadyMarked = new Set(
+        existingParticipation.map((p) => `${p.examSessionId}:${p.studentProfileId}`),
+      );
+      const started = new Set(
+        startedAttempts.map((attempt) => `${attempt.examSessionId}:${attempt.studentProfileId}`),
+      );
+      const pending = authorizedParticipants.filter(
+        (p) =>
+          !alreadyMarked.has(`${p.examSessionId}:${p.studentProfileId}`) &&
+          !started.has(`${p.examSessionId}:${p.studentProfileId}`),
+      );
+      const pendingEntries = new Set(
+        pending.map((p) => `${p.examSessionId}:${p.studentProfileId}`),
+      );
       const pendingIds = new Set(pending.map((p) => p.studentProfileId));
 
       const matches =
-        pendingIds.size === submittedIds.size &&
-        [...pendingIds].every((id) => submittedIds.has(id));
+        dto.confirmedAbsentParticipations !== undefined
+          ? pendingEntries.size === submittedEntries.size &&
+            [...pendingEntries].every((entry) => submittedEntries.has(entry))
+          : pendingIds.size === submittedIds.size &&
+            [...pendingIds].every((id) => submittedIds.has(id));
       if (!matches) return { kind: 'STALE_ABSENTEE_LIST' };
 
       const claim = await tx.exam.updateMany({

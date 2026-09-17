@@ -96,6 +96,8 @@ export class ResultListItemDto {
  * Average: 68.7% / Highest: 94% / Lowest: 31%". Every figure excludes
  * VOIDED results (ADR-0025) and counts only finalised ones. */
 export class ExamResultSummaryDto {
+  @ApiProperty({ type: Number }) expectedStudentCount!: number;
+  @ApiProperty({ type: Number }) absentCount!: number;
   @ApiProperty({ type: Number }) resultCount!: number;
   @ApiProperty({ type: Number }) voidedCount!: number;
   @ApiProperty({ type: Number }) pendingCount!: number;

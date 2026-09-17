@@ -1445,6 +1445,55 @@
         ]
       }
     },
+    "/platform/schools/{schoolId}/attempts/{attemptId}/invalidate": {
+      "post": {
+        "operationId": "PlatformAttemptAdministrationController_invalidate",
+        "parameters": [
+          {
+            "name": "schoolId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attemptId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvalidateAttemptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Break-glass invalidate an attempt for a school; reason is mandatory and audited.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/academics/context": {
       "get": {
         "operationId": "AcademicsContextController_get",
@@ -2955,6 +3004,1221 @@
         "summary": "Regenerate and download a one-time credential sheet (CSV) for every active student in this class (audited; the plaintext passwords are never retrievable again).",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/exams/{id}/attempts": {
+      "post": {
+        "operationId": "ExamControlController_startAttempt",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptPackageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start (or idempotently resume) this student's attempt — the highest-integrity transaction in the product (07 §23-24, 09 §47).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/close": {
+      "post": {
+        "operationId": "ExamControlController_closeExam",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Close the whole exam — cascades every OPEN session to CLOSED. ADR-0009: this is \"Pause.\"",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/reopen": {
+      "post": {
+        "operationId": "ExamControlController_reopenExam",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reopen the exam so new sessions may be opened again. Does not auto-reopen closed sessions.",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/sessions": {
+      "post": {
+        "operationId": "ExamControlController_openSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenExamSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Open a new ExamSession (DoD items 1-4).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/control": {
+      "get": {
+        "operationId": "ExamControlController_getControl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamControlCenterResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Control Center aggregates + session list (DoD items 8-9, 13).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/participation": {
+      "get": {
+        "operationId": "ExamControlController_participation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamParticipationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/makeup-authorizations": {
+      "post": {
+        "operationId": "ExamControlController_grantMakeup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantMakeupAuthorizationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/retry-authorizations": {
+      "post": {
+        "operationId": "ExamControlController_grantRetry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantRetryAuthorizationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/control/stream": {
+      "get": {
+        "operationId": "ExamControlController_streamControl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "SSE live updates — Last-Event-ID reconnection replay (DoD item 10).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/complete": {
+      "post": {
+        "operationId": "ExamControlController_complete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteExamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "End Examination — confirm absences (DoD item 12, A-14).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/participation/confirm-absences": {
+      "post": {
+        "operationId": "ExamControlController_confirmAbsences",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteExamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/eligible-students": {
+      "get": {
+        "operationId": "ExamControlController_eligibleStudents",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EligibleStudentsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The exam's full targeted-class roster with live eligibility (A-04).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/administrators": {
+      "get": {
+        "operationId": "ExamControlController_listAdministrators",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamAdministratorListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List every delegation (any status) for this exam — F12 gap closure.",
+        "tags": [
+          "exam-control"
+        ]
+      },
+      "post": {
+        "operationId": "ExamControlController_assignAdministrator",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignExamAdministratorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamAdministratorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delegate exam administration (ADR-0012/M-15).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exams/{id}/administrators/{membershipId}": {
+      "delete": {
+        "operationId": "ExamControlController_revokeAdministrator",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "membershipId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revoke a delegated administrator.",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exam-sessions/{id}/close": {
+      "post": {
+        "operationId": "ExamSessionController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Close this session for new starts. Running attempts continue (ADR-0009).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exam-sessions/{id}/reopen": {
+      "post": {
+        "operationId": "ExamSessionController_reopen",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamSessionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Reopen this session for new starts (ADR-0009).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exam-sessions/{id}/participants": {
+      "post": {
+        "operationId": "ExamSessionController_authorizeParticipants",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeParticipantsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizeParticipantsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Batch-authorize students for this session (DoD items 2/4).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exam-sessions/{id}/participants/{studentId}": {
+      "delete": {
+        "operationId": "ExamSessionController_revokeParticipant",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeParticipantDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revoke access before start — refused after start (DoD item 7, X-13).",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/exam-sessions/{id}/participants/{studentId}/extra-time": {
+      "post": {
+        "operationId": "ExamSessionController_grantExtraTime",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantExtraTimeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Grant a per-student accommodation (extra time) — B13 decision 2, X-11. Frozen into ExamAttempt.durationGrantedSeconds at attempt creation.",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
+    "/attempts/{id}/invalidate": {
+      "post": {
+        "operationId": "AttemptController_invalidate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvalidateAttemptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempts/{id}": {
+      "get": {
+        "operationId": "AttemptController_resume",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptPackageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Resume: full state, projected snapshot, saved answers, server-computed remaining time (DoD item 5).",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempts/{id}/answers/{questionId}": {
+      "put": {
+        "operationId": "AttemptController_saveAnswer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "questionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveAnswerResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save one answer — idempotent, sequenced (ADR-0003/ADR-0007).",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempts/{id}/answers/batch": {
+      "post": {
+        "operationId": "AttemptController_saveAnswerBatch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAnswerBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveAnswerBatchResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Flush an offline answer queue — never all-or-nothing.",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempts/{id}/heartbeat": {
+      "post": {
+        "operationId": "AttemptController_heartbeat",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness (ADR-0020) plus the decision-1 device/session-binding signal — never blocks or delays answering.",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempts/{id}/events": {
+      "post": {
+        "operationId": "AttemptController_recordEvent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordAttemptEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Integrity signals (ADR-0020) — counts, never judgements. Off the critical path.",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempts/{id}/submit": {
+      "post": {
+        "operationId": "AttemptController_submit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptStateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Normal submission — state transition and answer freeze only, never marking (B14).",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempts/{id}/end": {
+      "post": {
+        "operationId": "AttemptController_end",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptStateResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Staff-initiated end of a running attempt.",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempts/{id}/status": {
+      "get": {
+        "operationId": "AttemptController_status",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B14: post-submission status for the confirmation screen — live-aggregated marking output, never a Result (B15).",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/attempt-authorizations/{id}": {
+      "delete": {
+        "operationId": "AttemptAuthorizationController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "attempt-authorizations"
+        ]
+      }
+    },
+    "/makeup-authorizations/{id}": {
+      "delete": {
+        "operationId": "AttemptAuthorizationController_revokeLegacy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "attempt-authorizations"
+        ]
+      }
+    },
+    "/student/assessment": {
+      "get": {
+        "operationId": "StudentAssessmentController_getActive",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveAssessmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The single available assessment for the caller, or none.",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/student/assessment/{examId}/preview": {
+      "get": {
+        "operationId": "StudentAssessmentController_getPreview",
+        "parameters": [
+          {
+            "name": "examId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptPreviewResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Instructions and rules before starting (03 §32-36).",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "NotificationController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Current user's notifications, newest first, plus unread count (B10).",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/notifications/{id}/read": {
+      "post": {
+        "operationId": "NotificationController_markRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mark one notification read (B10).",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationController_markAllRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mark every unread notification read (B10).",
+        "tags": [
+          "notifications"
         ]
       }
     },
@@ -5361,103 +6625,6 @@
         ]
       }
     },
-    "/notifications": {
-      "get": {
-        "operationId": "NotificationController_list",
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "pageSize",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 25,
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotificationListResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Current user's notifications, newest first, plus unread count (B10).",
-        "tags": [
-          "notifications"
-        ]
-      }
-    },
-    "/notifications/{id}/read": {
-      "post": {
-        "operationId": "NotificationController_markRead",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MarkReadResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Mark one notification read (B10).",
-        "tags": [
-          "notifications"
-        ]
-      }
-    },
-    "/notifications/read-all": {
-      "post": {
-        "operationId": "NotificationController_markAllRead",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MarkReadResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Mark every unread notification read (B10).",
-        "tags": [
-          "notifications"
-        ]
-      }
-    },
     "/exams": {
       "post": {
         "operationId": "ExamController_create",
@@ -6025,916 +7192,6 @@
         "summary": "Archive from DRAFT, READY, or CANCELLED.",
         "tags": [
           "exams"
-        ]
-      }
-    },
-    "/exams/{id}/attempts": {
-      "post": {
-        "operationId": "ExamControlController_startAttempt",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptPackageResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Start (or idempotently resume) this student's attempt — the highest-integrity transaction in the product (07 §23-24, 09 §47).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/close": {
-      "post": {
-        "operationId": "ExamControlController_closeExam",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Close the whole exam — cascades every OPEN session to CLOSED. ADR-0009: this is \"Pause.\"",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/reopen": {
-      "post": {
-        "operationId": "ExamControlController_reopenExam",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Reopen the exam so new sessions may be opened again. Does not auto-reopen closed sessions.",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/sessions": {
-      "post": {
-        "operationId": "ExamControlController_openSession",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OpenExamSessionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamSessionResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Open a new ExamSession (DoD items 1-4).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/control": {
-      "get": {
-        "operationId": "ExamControlController_getControl",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamControlCenterResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Control Center aggregates + session list (DoD items 8-9, 13).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/control/stream": {
-      "get": {
-        "operationId": "ExamControlController_streamControl",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "SSE live updates — Last-Event-ID reconnection replay (DoD item 10).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/complete": {
-      "post": {
-        "operationId": "ExamControlController_complete",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CompleteExamDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "End Examination — confirm absences (DoD item 12, A-14).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/eligible-students": {
-      "get": {
-        "operationId": "ExamControlController_eligibleStudents",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EligibleStudentsResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "The exam's full targeted-class roster with live eligibility (A-04).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/administrators": {
-      "get": {
-        "operationId": "ExamControlController_listAdministrators",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamAdministratorListResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "List every delegation (any status) for this exam — F12 gap closure.",
-        "tags": [
-          "exam-control"
-        ]
-      },
-      "post": {
-        "operationId": "ExamControlController_assignAdministrator",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AssignExamAdministratorDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamAdministratorResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Delegate exam administration (ADR-0012/M-15).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exams/{id}/administrators/{membershipId}": {
-      "delete": {
-        "operationId": "ExamControlController_revokeAdministrator",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "membershipId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Revoke a delegated administrator.",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exam-sessions/{id}/close": {
-      "post": {
-        "operationId": "ExamSessionController_close",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamSessionResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Close this session for new starts. Running attempts continue (ADR-0009).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exam-sessions/{id}/reopen": {
-      "post": {
-        "operationId": "ExamSessionController_reopen",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExamSessionResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Reopen this session for new starts (ADR-0009).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exam-sessions/{id}/participants": {
-      "post": {
-        "operationId": "ExamSessionController_authorizeParticipants",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthorizeParticipantsDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthorizeParticipantsResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Batch-authorize students for this session (DoD items 2/4).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exam-sessions/{id}/participants/{studentId}": {
-      "delete": {
-        "operationId": "ExamSessionController_revokeParticipant",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "studentId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RevokeParticipantDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Revoke access before start — refused after start (DoD item 7, X-13).",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/exam-sessions/{id}/participants/{studentId}/extra-time": {
-      "post": {
-        "operationId": "ExamSessionController_grantExtraTime",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "studentId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GrantExtraTimeDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Grant a per-student accommodation (extra time) — B13 decision 2, X-11. Frozen into ExamAttempt.durationGrantedSeconds at attempt creation.",
-        "tags": [
-          "exam-control"
-        ]
-      }
-    },
-    "/attempts/{id}": {
-      "get": {
-        "operationId": "AttemptController_resume",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptPackageResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Resume: full state, projected snapshot, saved answers, server-computed remaining time (DoD item 5).",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/attempts/{id}/answers/{questionId}": {
-      "put": {
-        "operationId": "AttemptController_saveAnswer",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "questionId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SaveAnswerDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SaveAnswerResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Save one answer — idempotent, sequenced (ADR-0003/ADR-0007).",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/attempts/{id}/answers/batch": {
-      "post": {
-        "operationId": "AttemptController_saveAnswerBatch",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SaveAnswerBatchDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SaveAnswerBatchResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Flush an offline answer queue — never all-or-nothing.",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/attempts/{id}/heartbeat": {
-      "post": {
-        "operationId": "AttemptController_heartbeat",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Liveness (ADR-0020) plus the decision-1 device/session-binding signal — never blocks or delays answering.",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/attempts/{id}/events": {
-      "post": {
-        "operationId": "AttemptController_recordEvent",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RecordAttemptEventDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Integrity signals (ADR-0020) — counts, never judgements. Off the critical path.",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/attempts/{id}/submit": {
-      "post": {
-        "operationId": "AttemptController_submit",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptStateResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Normal submission — state transition and answer freeze only, never marking (B14).",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/attempts/{id}/end": {
-      "post": {
-        "operationId": "AttemptController_end",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptStateResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Staff-initiated end of a running attempt.",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/attempts/{id}/status": {
-      "get": {
-        "operationId": "AttemptController_status",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptStatusResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "B14: post-submission status for the confirmation screen — live-aggregated marking output, never a Result (B15).",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/student/assessment": {
-      "get": {
-        "operationId": "StudentAssessmentController_getActive",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActiveAssessmentResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "The single available assessment for the caller, or none.",
-        "tags": [
-          "attempts"
-        ]
-      }
-    },
-    "/student/assessment/{examId}/preview": {
-      "get": {
-        "operationId": "StudentAssessmentController_getPreview",
-        "parameters": [
-          {
-            "name": "examId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AttemptPreviewResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Instructions and rules before starting (03 §32-36).",
-        "tags": [
-          "attempts"
         ]
       }
     },
@@ -8924,6 +9181,17 @@
           "currentStep"
         ]
       },
+      "InvalidateAttemptDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
       "CurrentSessionSummaryDto": {
         "type": "object",
         "properties": {
@@ -10002,6 +10270,1552 @@
         },
         "required": [
           "registrations"
+        ]
+      },
+      "StudentAttemptOptionDto": {
+        "type": "object",
+        "properties": {
+          "optionId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "displayPosition": {
+            "type": "number",
+            "description": "Materialised display position, 1-indexed."
+          }
+        },
+        "required": [
+          "optionId",
+          "content",
+          "displayPosition"
+        ]
+      },
+      "StudentAttemptMediaDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string"
+          },
+          "displayOrder": {
+            "type": "number"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "A freshly-signed download URL, generated at read time (never stored — ADR-0021 only requires it to outlive the initial download window)."
+          },
+          "urlExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "mediaAssetId",
+          "displayOrder",
+          "mediaType",
+          "url",
+          "urlExpiresAt"
+        ]
+      },
+      "StudentAttemptQuestionDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "displaySequence": {
+            "type": "number",
+            "description": "Materialised display order, 1-indexed."
+          },
+          "marks": {
+            "type": "number"
+          },
+          "questionType": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string",
+            "description": "Sanitized rich-text HTML."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentAttemptOptionDto"
+            }
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentAttemptMediaDto"
+            }
+          },
+          "selectedOptionId": {
+            "type": "string",
+            "nullable": true,
+            "description": "This attempt's currently-saved selection for this question, if any."
+          },
+          "answerSequenceNumber": {
+            "type": "number",
+            "description": "This question's own current answer sequence number, for the client's offline queue to continue from."
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "displaySequence",
+          "marks",
+          "questionType",
+          "content",
+          "options",
+          "media"
+        ]
+      },
+      "AttemptPackageResponseDto": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examSessionId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "AUTO_SUBMITTED",
+              "INVALIDATED",
+              "CANCELLED"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The server's own current clock, alongside `expiresAt` — the client derives remaining time from the DIFFERENCE between the two, never from its own local clock alone (08 §11.4: the client displays the timer but never defines the authoritative deadline)."
+          },
+          "navigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "generalInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "navigationInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentAttemptQuestionDto"
+            }
+          },
+          "invalidationReason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "attemptId",
+          "examId",
+          "examSessionId",
+          "state",
+          "startedAt",
+          "expiresAt",
+          "serverTime",
+          "navigationPolicy",
+          "questions"
+        ]
+      },
+      "ExamClassResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "classSubjectId": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "arm": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "classId",
+          "classSubjectId",
+          "className",
+          "level",
+          "arm"
+        ]
+      },
+      "ExamQuestionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "questionId": {
+            "type": "string"
+          },
+          "questionRevisionId": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "marks": {
+            "type": "number"
+          },
+          "content": {
+            "type": "string"
+          },
+          "questionType": {
+            "type": "string"
+          },
+          "difficulty": {
+            "type": "string"
+          },
+          "topicName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "questionId",
+          "questionRevisionId",
+          "sequence",
+          "marks",
+          "content",
+          "questionType",
+          "difficulty",
+          "topicName"
+        ]
+      },
+      "ExamSectionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "marks": {
+            "type": "number",
+            "description": "Derived — SUM of this section's ExamQuestion.marks (ADR-0029), never stored."
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamQuestionResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "sequence",
+          "marks",
+          "questions"
+        ]
+      },
+      "ExamResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "examType": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "READY",
+              "OPEN",
+              "CLOSED",
+              "COMPLETED",
+              "ARCHIVED",
+              "CANCELLED"
+            ]
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "sessionName": {
+            "type": "string"
+          },
+          "academicTermId": {
+            "type": "string"
+          },
+          "termName": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "departmentName": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdByMembershipId": {
+            "type": "string"
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamClassResponseDto"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "durationSeconds": {
+            "type": "number"
+          },
+          "attemptLimit": {
+            "type": "number"
+          },
+          "navigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "randomizeQuestions": {
+            "type": "boolean"
+          },
+          "randomizeOptions": {
+            "type": "boolean"
+          },
+          "resultPolicy": {
+            "type": "string",
+            "enum": [
+              "TEACHER",
+              "SCHOOL_ADMIN",
+              "AUTOMATIC"
+            ]
+          },
+          "resultDetailVisibility": {
+            "type": "string",
+            "enum": [
+              "SCORE_ONLY",
+              "SCORE_AND_COUNTS",
+              "FULL_REVIEW"
+            ]
+          },
+          "accessMode": {
+            "type": "string",
+            "enum": [
+              "OPEN_TO_ELIGIBLE",
+              "EXPLICIT_AUTHORIZATION"
+            ]
+          },
+          "generalInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "navigationInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "submissionInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "accommodations": {
+            "type": "string",
+            "nullable": true
+          },
+          "cancelledReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "cancelledAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "archivedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamSectionResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "examType",
+          "status",
+          "academicSessionId",
+          "sessionName",
+          "academicTermId",
+          "termName",
+          "subjectId",
+          "subjectName",
+          "departmentId",
+          "departmentName",
+          "createdByMembershipId",
+          "createdByName",
+          "classes",
+          "createdAt",
+          "updatedAt",
+          "durationSeconds",
+          "attemptLimit",
+          "navigationPolicy",
+          "randomizeQuestions",
+          "randomizeOptions",
+          "resultPolicy",
+          "resultDetailVisibility",
+          "accessMode",
+          "generalInstructions",
+          "navigationInstructions",
+          "submissionInstructions",
+          "accommodations",
+          "cancelledReason",
+          "cancelledAt",
+          "archivedAt",
+          "sections"
+        ]
+      },
+      "OpenExamSessionDto": {
+        "type": "object",
+        "properties": {
+          "sessionType": {
+            "type": "string",
+            "enum": [
+              "STANDARD",
+              "BATCH",
+              "MAKEUP",
+              "SPECIAL"
+            ]
+          }
+        }
+      },
+      "ExamSessionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "sessionType": {
+            "type": "string",
+            "enum": [
+              "STANDARD",
+              "BATCH",
+              "MAKEUP",
+              "SPECIAL"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "CLOSED",
+              "COMPLETED",
+              "CANCELLED"
+            ]
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "openedByMembershipId": {
+            "type": "string"
+          },
+          "openedByName": {
+            "type": "string",
+            "description": "The opener's display name."
+          },
+          "closedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "closedByMembershipId": {
+            "type": "string",
+            "nullable": true
+          },
+          "closedByName": {
+            "type": "string",
+            "nullable": true,
+            "description": "The closer's display name."
+          },
+          "reopenedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "sessionType",
+          "status",
+          "openedAt",
+          "openedByMembershipId",
+          "openedByName",
+          "closedAt",
+          "closedByMembershipId",
+          "closedByName",
+          "reopenedAt",
+          "completedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ExamControlCenterAggregateDto": {
+        "type": "object",
+        "properties": {
+          "authorizedCount": {
+            "type": "number",
+            "description": "AUTHORIZED ExamSessionParticipant count — real."
+          },
+          "notStartedCount": {
+            "type": "number",
+            "description": "Real in B12, but degenerate: always equals authorizedCount (no attempts exist)."
+          },
+          "inProgressCount": {
+            "type": "number",
+            "description": "PLACEHOLDER — always 0 until B13 ships ExamAttempt."
+          },
+          "submittedCount": {
+            "type": "number",
+            "description": "PLACEHOLDER — always 0 until B13 ships ExamAttempt."
+          },
+          "absentCount": {
+            "type": "number",
+            "description": "Real, but only ever non-zero after End Examination (ExamParticipation)."
+          },
+          "attemptDataAvailable": {
+            "type": "boolean",
+            "description": "False in B12 — lets the frontend distinguish a real \"0\" from \"not yet real\" for inProgressCount/submittedCount/liveAttempts."
+          }
+        },
+        "required": [
+          "authorizedCount",
+          "notStartedCount",
+          "inProgressCount",
+          "submittedCount",
+          "absentCount",
+          "attemptDataAvailable"
+        ]
+      },
+      "ExamLiveAttemptRowDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "timeRemainingSeconds": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "studentProfileId",
+          "status",
+          "timeRemainingSeconds"
+        ]
+      },
+      "ExamControlCenterStalenessDto": {
+        "type": "object",
+        "properties": {
+          "isStale": {
+            "type": "boolean"
+          },
+          "openSince": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "The earliest openedAt/reopenedAt across this exam's currently-OPEN sessions."
+          },
+          "thresholdMs": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "isStale",
+          "openSince",
+          "thresholdMs"
+        ]
+      },
+      "ExamControlCenterResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "examStatus": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "READY",
+              "OPEN",
+              "CLOSED",
+              "COMPLETED",
+              "ARCHIVED",
+              "CANCELLED"
+            ]
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamSessionResponseDto"
+            }
+          },
+          "aggregate": {
+            "$ref": "#/components/schemas/ExamControlCenterAggregateDto"
+          },
+          "liveAttempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamLiveAttemptRowDto"
+            }
+          },
+          "staleness": {
+            "$ref": "#/components/schemas/ExamControlCenterStalenessDto"
+          },
+          "computedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "examId",
+          "examStatus",
+          "sessions",
+          "aggregate",
+          "liveAttempts",
+          "staleness",
+          "computedAt"
+        ]
+      },
+      "ParticipationSessionFactDto": {
+        "type": "object",
+        "properties": {
+          "examSessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "attemptId": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultId": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "examSessionId",
+          "status"
+        ]
+      },
+      "ParticipationStudentDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentName": {
+            "type": "string"
+          },
+          "rollupStatus": {
+            "type": "string"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParticipationSessionFactDto"
+            }
+          }
+        },
+        "required": [
+          "studentProfileId",
+          "studentName",
+          "rollupStatus",
+          "sessions"
+        ]
+      },
+      "ExamParticipationResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParticipationStudentDto"
+            }
+          }
+        },
+        "required": [
+          "examId",
+          "students"
+        ]
+      },
+      "GrantMakeupAuthorizationDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "studentProfileIds",
+          "reason"
+        ]
+      },
+      "GrantRetryAuthorizationDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "studentProfileId",
+          "reason"
+        ]
+      },
+      "ConfirmAbsentParticipationDto": {
+        "type": "object",
+        "properties": {
+          "examSessionId": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "examSessionId",
+          "studentProfileId"
+        ]
+      },
+      "CompleteExamDto": {
+        "type": "object",
+        "properties": {
+          "confirmedAbsentStudentProfileIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confirmedAbsentParticipations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfirmAbsentParticipationDto"
+            }
+          }
+        }
+      },
+      "EligibleStudentResponseDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentIdNumber": {
+            "type": "string"
+          },
+          "studentName": {
+            "type": "string"
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "failedChecks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "participantStatus": {
+            "type": "string",
+            "enum": [
+              "AUTHORIZED",
+              "REVOKED"
+            ],
+            "nullable": true
+          },
+          "examSessionId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "studentProfileId",
+          "studentIdNumber",
+          "studentName",
+          "eligible",
+          "failedChecks",
+          "participantStatus"
+        ]
+      },
+      "EligibleStudentsResponseDto": {
+        "type": "object",
+        "properties": {
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EligibleStudentResponseDto"
+            }
+          }
+        },
+        "required": [
+          "students"
+        ]
+      },
+      "ExamAdministratorResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "membershipId": {
+            "type": "string"
+          },
+          "memberName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "REVOKED"
+            ]
+          },
+          "assignedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "assignedByMembershipId": {
+            "type": "string"
+          },
+          "revokedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "examId",
+          "membershipId",
+          "memberName",
+          "status",
+          "assignedAt",
+          "assignedByMembershipId",
+          "revokedAt"
+        ]
+      },
+      "ExamAdministratorListResponseDto": {
+        "type": "object",
+        "properties": {
+          "administrators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamAdministratorResponseDto"
+            }
+          }
+        },
+        "required": [
+          "administrators"
+        ]
+      },
+      "AssignExamAdministratorDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "description": "The delegate's SchoolMembership id."
+          }
+        },
+        "required": [
+          "membershipId"
+        ]
+      },
+      "AuthorizeParticipantsDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "studentProfileIds"
+        ]
+      },
+      "AuthorizeParticipantResultDto": {
+        "type": "object",
+        "properties": {
+          "studentProfileId": {
+            "type": "string"
+          },
+          "authorized": {
+            "type": "boolean"
+          },
+          "failedChecks": {
+            "description": "Empty when authorized === true.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "studentProfileId",
+          "authorized",
+          "failedChecks"
+        ]
+      },
+      "AuthorizeParticipantsResponseDto": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthorizeParticipantResultDto"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "RevokeParticipantDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "GrantExtraTimeDto": {
+        "type": "object",
+        "properties": {
+          "extraTimeSeconds": {
+            "type": "number",
+            "description": "Additional seconds granted, added to Exam.durationSeconds at attempt creation."
+          }
+        },
+        "required": [
+          "extraTimeSeconds"
+        ]
+      },
+      "SaveAnswerDto": {
+        "type": "object",
+        "properties": {
+          "selectedOptionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequenceNumber": {
+            "type": "number",
+            "description": "Client-assigned, monotonic per (attempt, question) — ADR-0007. A write whose sequence is <= the currently stored value is rejected."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline-replay"
+            ],
+            "description": "Client-reported, informational only — never used for admissibility."
+          }
+        },
+        "required": [
+          "sequenceNumber"
+        ]
+      },
+      "SaveAnswerResponseDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "sequenceNumber": {
+            "type": "number"
+          },
+          "gradeWindowFlag": {
+            "type": "boolean",
+            "description": "True when this write landed inside the ADR-0003 post-expiry grace window."
+          },
+          "answeredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "accepted",
+          "sequenceNumber",
+          "gradeWindowFlag",
+          "answeredAt"
+        ]
+      },
+      "BatchAnswerItemDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "selectedOptionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequenceNumber": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline-replay"
+            ]
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "sequenceNumber"
+        ]
+      },
+      "SaveAnswerBatchDto": {
+        "type": "object",
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchAnswerItemDto"
+            }
+          }
+        },
+        "required": [
+          "answers"
+        ]
+      },
+      "BatchAnswerResultDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "rejectionCode": {
+            "type": "string",
+            "description": "The rejection error code, if not accepted."
+          },
+          "gradeWindowFlag": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "accepted",
+          "gradeWindowFlag"
+        ]
+      },
+      "SaveAnswerBatchResponseDto": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BatchAnswerResultDto"
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "RecordAttemptEventDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "WINDOW_BLUR",
+              "FULLSCREEN_EXIT",
+              "TAB_HIDDEN",
+              "RECONNECTED",
+              "RESUMED",
+              "BINDING_MISMATCH"
+            ]
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Client-reported, untrusted metadata."
+          }
+        },
+        "required": [
+          "type",
+          "occurredAt"
+        ]
+      },
+      "AttemptStateResponseDto": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "examSessionId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "AUTO_SUBMITTED",
+              "INVALIDATED",
+              "CANCELLED"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "submittedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "invalidationReason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "attemptId",
+          "examId",
+          "examSessionId",
+          "state",
+          "startedAt",
+          "expiresAt",
+          "submittedAt",
+          "invalidationReason"
+        ]
+      },
+      "AttemptMarkingStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "NOT_APPLICABLE",
+              "PENDING",
+              "COMPLETE"
+            ],
+            "description": "NOT_APPLICABLE while the attempt is still IN_PROGRESS (or was invalidated/cancelled — never submitted); PENDING once finalized but not yet fully marked (the queued marking job has not completed); COMPLETE once every question has a recorded result."
+          },
+          "questionCount": {
+            "type": "number"
+          },
+          "markedCount": {
+            "type": "number"
+          },
+          "correctCount": {
+            "type": "number"
+          },
+          "incorrectCount": {
+            "type": "number"
+          },
+          "unansweredCount": {
+            "type": "number"
+          },
+          "partialCount": {
+            "type": "number",
+            "description": "Always 0 this phase — PARTIAL is reserved for a future non-objective type."
+          },
+          "awardedMarks": {
+            "type": "number"
+          },
+          "maximumMarks": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "number",
+            "nullable": true,
+            "description": "null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE."
+          }
+        },
+        "required": [
+          "status",
+          "questionCount",
+          "markedCount",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "partialCount",
+          "awardedMarks",
+          "maximumMarks",
+          "percentage"
+        ]
+      },
+      "AttemptStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "attemptId": {
+            "type": "string"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "SUBMITTED",
+              "AUTO_SUBMITTED",
+              "INVALIDATED",
+              "CANCELLED"
+            ]
+          },
+          "submittedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "marking": {
+            "$ref": "#/components/schemas/AttemptMarkingStatusDto"
+          }
+        },
+        "required": [
+          "attemptId",
+          "examId",
+          "state",
+          "submittedAt",
+          "marking"
+        ]
+      },
+      "ActiveAssessmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string",
+            "nullable": true
+          },
+          "examTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "examSessionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "attemptId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set only when an attempt is already IN_PROGRESS — the client should resume, not start."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "examId",
+          "examTitle",
+          "examSessionId",
+          "attemptId",
+          "state"
+        ]
+      },
+      "AttemptPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "examType": {
+            "type": "string"
+          },
+          "durationSeconds": {
+            "type": "number"
+          },
+          "attemptLimit": {
+            "type": "number"
+          },
+          "navigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "generalInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "navigationInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "submissionInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "accommodations": {
+            "type": "string",
+            "nullable": true
+          },
+          "questionCount": {
+            "type": "number"
+          },
+          "totalMarks": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "examId",
+          "title",
+          "examType",
+          "durationSeconds",
+          "attemptLimit",
+          "navigationPolicy",
+          "questionCount",
+          "totalMarks"
+        ]
+      },
+      "NotificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "QUESTION_APPROVED",
+              "QUESTION_REJECTED",
+              "QUESTION_CHANGES_REQUESTED",
+              "RESULT_PUBLISHED",
+              "EXAM_OPENED",
+              "MAKEUP_GRANTED",
+              "SUBSCRIPTION_EXPIRING",
+              "STUDENTS_UNASSIGNED"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "UNREAD",
+              "READ"
+            ]
+          },
+          "relatedEntityType": {
+            "type": "string",
+            "nullable": true
+          },
+          "relatedEntityId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "content",
+          "status",
+          "createdAt"
+        ]
+      },
+      "NotificationListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "unreadCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "unreadCount"
+        ]
+      },
+      "MarkReadResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          }
+        },
+        "required": [
+          "status"
         ]
       },
       "StudentResponseDto": {
@@ -11869,109 +13683,6 @@
           "history"
         ]
       },
-      "NotificationResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "QUESTION_APPROVED",
-              "QUESTION_REJECTED",
-              "QUESTION_CHANGES_REQUESTED",
-              "RESULT_PUBLISHED",
-              "EXAM_OPENED",
-              "MAKEUP_GRANTED",
-              "SUBSCRIPTION_EXPIRING",
-              "STUDENTS_UNASSIGNED"
-            ]
-          },
-          "title": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "UNREAD",
-              "READ"
-            ]
-          },
-          "relatedEntityType": {
-            "type": "string",
-            "nullable": true
-          },
-          "relatedEntityId": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "readAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "title",
-          "content",
-          "status",
-          "createdAt"
-        ]
-      },
-      "NotificationListResponseDto": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NotificationResponseDto"
-            }
-          },
-          "total": {
-            "type": "number"
-          },
-          "page": {
-            "type": "number"
-          },
-          "pageSize": {
-            "type": "number"
-          },
-          "unreadCount": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "page",
-          "pageSize",
-          "unreadCount"
-        ]
-      },
-      "MarkReadResponseDto": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "ok"
-            ]
-          }
-        },
-        "required": [
-          "status"
-        ]
-      },
       "CreateExamDto": {
         "type": "object",
         "properties": {
@@ -12008,298 +13719,6 @@
           "title",
           "examType",
           "classIds"
-        ]
-      },
-      "ExamClassResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "classId": {
-            "type": "string"
-          },
-          "classSubjectId": {
-            "type": "string"
-          },
-          "className": {
-            "type": "string"
-          },
-          "level": {
-            "type": "string"
-          },
-          "arm": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "classId",
-          "classSubjectId",
-          "className",
-          "level",
-          "arm"
-        ]
-      },
-      "ExamQuestionResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "questionId": {
-            "type": "string"
-          },
-          "questionRevisionId": {
-            "type": "string"
-          },
-          "sequence": {
-            "type": "number"
-          },
-          "marks": {
-            "type": "number"
-          },
-          "content": {
-            "type": "string"
-          },
-          "questionType": {
-            "type": "string"
-          },
-          "difficulty": {
-            "type": "string"
-          },
-          "topicName": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "questionId",
-          "questionRevisionId",
-          "sequence",
-          "marks",
-          "content",
-          "questionType",
-          "difficulty",
-          "topicName"
-        ]
-      },
-      "ExamSectionResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "sequence": {
-            "type": "number"
-          },
-          "marks": {
-            "type": "number",
-            "description": "Derived — SUM of this section's ExamQuestion.marks (ADR-0029), never stored."
-          },
-          "questions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamQuestionResponseDto"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "sequence",
-          "marks",
-          "questions"
-        ]
-      },
-      "ExamResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "examType": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "DRAFT",
-              "READY",
-              "OPEN",
-              "CLOSED",
-              "COMPLETED",
-              "ARCHIVED",
-              "CANCELLED"
-            ]
-          },
-          "academicSessionId": {
-            "type": "string"
-          },
-          "sessionName": {
-            "type": "string"
-          },
-          "academicTermId": {
-            "type": "string"
-          },
-          "termName": {
-            "type": "string"
-          },
-          "subjectId": {
-            "type": "string"
-          },
-          "subjectName": {
-            "type": "string"
-          },
-          "departmentId": {
-            "type": "string",
-            "nullable": true
-          },
-          "departmentName": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdByMembershipId": {
-            "type": "string"
-          },
-          "createdByName": {
-            "type": "string"
-          },
-          "classes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamClassResponseDto"
-            }
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "durationSeconds": {
-            "type": "number"
-          },
-          "attemptLimit": {
-            "type": "number"
-          },
-          "navigationPolicy": {
-            "type": "string",
-            "enum": [
-              "FREE",
-              "SEQUENTIAL_NO_REVISIT",
-              "SEQUENTIAL_WITH_REVISIT"
-            ]
-          },
-          "randomizeQuestions": {
-            "type": "boolean"
-          },
-          "randomizeOptions": {
-            "type": "boolean"
-          },
-          "resultPolicy": {
-            "type": "string",
-            "enum": [
-              "TEACHER",
-              "SCHOOL_ADMIN",
-              "AUTOMATIC"
-            ]
-          },
-          "resultDetailVisibility": {
-            "type": "string",
-            "enum": [
-              "SCORE_ONLY",
-              "SCORE_AND_COUNTS",
-              "FULL_REVIEW"
-            ]
-          },
-          "accessMode": {
-            "type": "string",
-            "enum": [
-              "OPEN_TO_ELIGIBLE",
-              "EXPLICIT_AUTHORIZATION"
-            ]
-          },
-          "generalInstructions": {
-            "type": "string",
-            "nullable": true
-          },
-          "navigationInstructions": {
-            "type": "string",
-            "nullable": true
-          },
-          "submissionInstructions": {
-            "type": "string",
-            "nullable": true
-          },
-          "accommodations": {
-            "type": "string",
-            "nullable": true
-          },
-          "cancelledReason": {
-            "type": "string",
-            "nullable": true
-          },
-          "cancelledAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "archivedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "sections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamSectionResponseDto"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "examType",
-          "status",
-          "academicSessionId",
-          "sessionName",
-          "academicTermId",
-          "termName",
-          "subjectId",
-          "subjectName",
-          "departmentId",
-          "departmentName",
-          "createdByMembershipId",
-          "createdByName",
-          "classes",
-          "createdAt",
-          "updatedAt",
-          "durationSeconds",
-          "attemptLimit",
-          "navigationPolicy",
-          "randomizeQuestions",
-          "randomizeOptions",
-          "resultPolicy",
-          "resultDetailVisibility",
-          "accessMode",
-          "generalInstructions",
-          "navigationInstructions",
-          "submissionInstructions",
-          "accommodations",
-          "cancelledReason",
-          "cancelledAt",
-          "archivedAt",
-          "sections"
         ]
       },
       "ExamListItemResponseDto": {
@@ -12617,1031 +14036,6 @@
           "reason"
         ]
       },
-      "StudentAttemptOptionDto": {
-        "type": "object",
-        "properties": {
-          "optionId": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string"
-          },
-          "displayPosition": {
-            "type": "number",
-            "description": "Materialised display position, 1-indexed."
-          }
-        },
-        "required": [
-          "optionId",
-          "content",
-          "displayPosition"
-        ]
-      },
-      "StudentAttemptMediaDto": {
-        "type": "object",
-        "properties": {
-          "mediaAssetId": {
-            "type": "string"
-          },
-          "displayOrder": {
-            "type": "number"
-          },
-          "mediaType": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string",
-            "description": "A freshly-signed download URL, generated at read time (never stored — ADR-0021 only requires it to outlive the initial download window)."
-          },
-          "urlExpiresAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "mediaAssetId",
-          "displayOrder",
-          "mediaType",
-          "url",
-          "urlExpiresAt"
-        ]
-      },
-      "StudentAttemptQuestionDto": {
-        "type": "object",
-        "properties": {
-          "examQuestionId": {
-            "type": "string"
-          },
-          "displaySequence": {
-            "type": "number",
-            "description": "Materialised display order, 1-indexed."
-          },
-          "marks": {
-            "type": "number"
-          },
-          "questionType": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string",
-            "description": "Sanitized rich-text HTML."
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StudentAttemptOptionDto"
-            }
-          },
-          "media": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StudentAttemptMediaDto"
-            }
-          },
-          "selectedOptionId": {
-            "type": "string",
-            "nullable": true,
-            "description": "This attempt's currently-saved selection for this question, if any."
-          },
-          "answerSequenceNumber": {
-            "type": "number",
-            "description": "This question's own current answer sequence number, for the client's offline queue to continue from."
-          }
-        },
-        "required": [
-          "examQuestionId",
-          "displaySequence",
-          "marks",
-          "questionType",
-          "content",
-          "options",
-          "media"
-        ]
-      },
-      "AttemptPackageResponseDto": {
-        "type": "object",
-        "properties": {
-          "attemptId": {
-            "type": "string"
-          },
-          "examId": {
-            "type": "string"
-          },
-          "examSessionId": {
-            "type": "string"
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "NOT_STARTED",
-              "IN_PROGRESS",
-              "SUBMITTED",
-              "AUTO_SUBMITTED",
-              "INVALIDATED",
-              "CANCELLED"
-            ]
-          },
-          "startedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "serverTime": {
-            "type": "string",
-            "format": "date-time",
-            "description": "The server's own current clock, alongside `expiresAt` — the client derives remaining time from the DIFFERENCE between the two, never from its own local clock alone (08 §11.4: the client displays the timer but never defines the authoritative deadline)."
-          },
-          "navigationPolicy": {
-            "type": "string",
-            "enum": [
-              "FREE",
-              "SEQUENTIAL_NO_REVISIT",
-              "SEQUENTIAL_WITH_REVISIT"
-            ]
-          },
-          "generalInstructions": {
-            "type": "string",
-            "nullable": true
-          },
-          "navigationInstructions": {
-            "type": "string",
-            "nullable": true
-          },
-          "questions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StudentAttemptQuestionDto"
-            }
-          },
-          "invalidationReason": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "attemptId",
-          "examId",
-          "examSessionId",
-          "state",
-          "startedAt",
-          "expiresAt",
-          "serverTime",
-          "navigationPolicy",
-          "questions"
-        ]
-      },
-      "OpenExamSessionDto": {
-        "type": "object",
-        "properties": {
-          "sessionType": {
-            "type": "string",
-            "enum": [
-              "STANDARD",
-              "BATCH",
-              "MAKEUP",
-              "SPECIAL"
-            ]
-          }
-        }
-      },
-      "ExamSessionResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "examId": {
-            "type": "string"
-          },
-          "sessionType": {
-            "type": "string",
-            "enum": [
-              "STANDARD",
-              "BATCH",
-              "MAKEUP",
-              "SPECIAL"
-            ]
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "OPEN",
-              "CLOSED",
-              "COMPLETED",
-              "CANCELLED"
-            ]
-          },
-          "openedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "openedByMembershipId": {
-            "type": "string"
-          },
-          "openedByName": {
-            "type": "string",
-            "description": "The opener's display name."
-          },
-          "closedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "closedByMembershipId": {
-            "type": "string",
-            "nullable": true
-          },
-          "closedByName": {
-            "type": "string",
-            "nullable": true,
-            "description": "The closer's display name."
-          },
-          "reopenedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "completedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "examId",
-          "sessionType",
-          "status",
-          "openedAt",
-          "openedByMembershipId",
-          "openedByName",
-          "closedAt",
-          "closedByMembershipId",
-          "closedByName",
-          "reopenedAt",
-          "completedAt",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
-      "ExamControlCenterAggregateDto": {
-        "type": "object",
-        "properties": {
-          "authorizedCount": {
-            "type": "number",
-            "description": "AUTHORIZED ExamSessionParticipant count — real."
-          },
-          "notStartedCount": {
-            "type": "number",
-            "description": "Real in B12, but degenerate: always equals authorizedCount (no attempts exist)."
-          },
-          "inProgressCount": {
-            "type": "number",
-            "description": "PLACEHOLDER — always 0 until B13 ships ExamAttempt."
-          },
-          "submittedCount": {
-            "type": "number",
-            "description": "PLACEHOLDER — always 0 until B13 ships ExamAttempt."
-          },
-          "absentCount": {
-            "type": "number",
-            "description": "Real, but only ever non-zero after End Examination (ExamParticipation)."
-          },
-          "attemptDataAvailable": {
-            "type": "boolean",
-            "description": "False in B12 — lets the frontend distinguish a real \"0\" from \"not yet real\" for inProgressCount/submittedCount/liveAttempts."
-          }
-        },
-        "required": [
-          "authorizedCount",
-          "notStartedCount",
-          "inProgressCount",
-          "submittedCount",
-          "absentCount",
-          "attemptDataAvailable"
-        ]
-      },
-      "ExamLiveAttemptRowDto": {
-        "type": "object",
-        "properties": {
-          "studentProfileId": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "timeRemainingSeconds": {
-            "type": "number",
-            "nullable": true
-          }
-        },
-        "required": [
-          "studentProfileId",
-          "status",
-          "timeRemainingSeconds"
-        ]
-      },
-      "ExamControlCenterStalenessDto": {
-        "type": "object",
-        "properties": {
-          "isStale": {
-            "type": "boolean"
-          },
-          "openSince": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time",
-            "description": "The earliest openedAt/reopenedAt across this exam's currently-OPEN sessions."
-          },
-          "thresholdMs": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "isStale",
-          "openSince",
-          "thresholdMs"
-        ]
-      },
-      "ExamControlCenterResponseDto": {
-        "type": "object",
-        "properties": {
-          "examId": {
-            "type": "string"
-          },
-          "examStatus": {
-            "type": "string",
-            "enum": [
-              "DRAFT",
-              "READY",
-              "OPEN",
-              "CLOSED",
-              "COMPLETED",
-              "ARCHIVED",
-              "CANCELLED"
-            ]
-          },
-          "sessions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamSessionResponseDto"
-            }
-          },
-          "aggregate": {
-            "$ref": "#/components/schemas/ExamControlCenterAggregateDto"
-          },
-          "liveAttempts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamLiveAttemptRowDto"
-            }
-          },
-          "staleness": {
-            "$ref": "#/components/schemas/ExamControlCenterStalenessDto"
-          },
-          "computedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "examId",
-          "examStatus",
-          "sessions",
-          "aggregate",
-          "liveAttempts",
-          "staleness",
-          "computedAt"
-        ]
-      },
-      "CompleteExamDto": {
-        "type": "object",
-        "properties": {
-          "confirmedAbsentStudentProfileIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "confirmedAbsentStudentProfileIds"
-        ]
-      },
-      "EligibleStudentResponseDto": {
-        "type": "object",
-        "properties": {
-          "studentProfileId": {
-            "type": "string"
-          },
-          "studentIdNumber": {
-            "type": "string"
-          },
-          "studentName": {
-            "type": "string"
-          },
-          "eligible": {
-            "type": "boolean"
-          },
-          "failedChecks": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "participantStatus": {
-            "type": "string",
-            "enum": [
-              "AUTHORIZED",
-              "REVOKED"
-            ],
-            "nullable": true
-          },
-          "examSessionId": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "studentProfileId",
-          "studentIdNumber",
-          "studentName",
-          "eligible",
-          "failedChecks",
-          "participantStatus"
-        ]
-      },
-      "EligibleStudentsResponseDto": {
-        "type": "object",
-        "properties": {
-          "students": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EligibleStudentResponseDto"
-            }
-          }
-        },
-        "required": [
-          "students"
-        ]
-      },
-      "ExamAdministratorResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "examId": {
-            "type": "string"
-          },
-          "membershipId": {
-            "type": "string"
-          },
-          "memberName": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "ACTIVE",
-              "REVOKED"
-            ]
-          },
-          "assignedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "assignedByMembershipId": {
-            "type": "string"
-          },
-          "revokedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "examId",
-          "membershipId",
-          "memberName",
-          "status",
-          "assignedAt",
-          "assignedByMembershipId",
-          "revokedAt"
-        ]
-      },
-      "ExamAdministratorListResponseDto": {
-        "type": "object",
-        "properties": {
-          "administrators": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamAdministratorResponseDto"
-            }
-          }
-        },
-        "required": [
-          "administrators"
-        ]
-      },
-      "AssignExamAdministratorDto": {
-        "type": "object",
-        "properties": {
-          "membershipId": {
-            "type": "string",
-            "description": "The delegate's SchoolMembership id."
-          }
-        },
-        "required": [
-          "membershipId"
-        ]
-      },
-      "AuthorizeParticipantsDto": {
-        "type": "object",
-        "properties": {
-          "studentProfileIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "studentProfileIds"
-        ]
-      },
-      "AuthorizeParticipantResultDto": {
-        "type": "object",
-        "properties": {
-          "studentProfileId": {
-            "type": "string"
-          },
-          "authorized": {
-            "type": "boolean"
-          },
-          "failedChecks": {
-            "description": "Empty when authorized === true.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "studentProfileId",
-          "authorized",
-          "failedChecks"
-        ]
-      },
-      "AuthorizeParticipantsResponseDto": {
-        "type": "object",
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AuthorizeParticipantResultDto"
-            }
-          }
-        },
-        "required": [
-          "results"
-        ]
-      },
-      "RevokeParticipantDto": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "reason"
-        ]
-      },
-      "GrantExtraTimeDto": {
-        "type": "object",
-        "properties": {
-          "extraTimeSeconds": {
-            "type": "number",
-            "description": "Additional seconds granted, added to Exam.durationSeconds at attempt creation."
-          }
-        },
-        "required": [
-          "extraTimeSeconds"
-        ]
-      },
-      "SaveAnswerDto": {
-        "type": "object",
-        "properties": {
-          "selectedOptionId": {
-            "type": "string",
-            "nullable": true
-          },
-          "sequenceNumber": {
-            "type": "number",
-            "description": "Client-assigned, monotonic per (attempt, question) — ADR-0007. A write whose sequence is <= the currently stored value is rejected."
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "online",
-              "offline-replay"
-            ],
-            "description": "Client-reported, informational only — never used for admissibility."
-          }
-        },
-        "required": [
-          "sequenceNumber"
-        ]
-      },
-      "SaveAnswerResponseDto": {
-        "type": "object",
-        "properties": {
-          "examQuestionId": {
-            "type": "string"
-          },
-          "accepted": {
-            "type": "boolean"
-          },
-          "sequenceNumber": {
-            "type": "number"
-          },
-          "gradeWindowFlag": {
-            "type": "boolean",
-            "description": "True when this write landed inside the ADR-0003 post-expiry grace window."
-          },
-          "answeredAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "examQuestionId",
-          "accepted",
-          "sequenceNumber",
-          "gradeWindowFlag",
-          "answeredAt"
-        ]
-      },
-      "BatchAnswerItemDto": {
-        "type": "object",
-        "properties": {
-          "examQuestionId": {
-            "type": "string"
-          },
-          "selectedOptionId": {
-            "type": "string",
-            "nullable": true
-          },
-          "sequenceNumber": {
-            "type": "number"
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "online",
-              "offline-replay"
-            ]
-          }
-        },
-        "required": [
-          "examQuestionId",
-          "sequenceNumber"
-        ]
-      },
-      "SaveAnswerBatchDto": {
-        "type": "object",
-        "properties": {
-          "answers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BatchAnswerItemDto"
-            }
-          }
-        },
-        "required": [
-          "answers"
-        ]
-      },
-      "BatchAnswerResultDto": {
-        "type": "object",
-        "properties": {
-          "examQuestionId": {
-            "type": "string"
-          },
-          "accepted": {
-            "type": "boolean"
-          },
-          "rejectionCode": {
-            "type": "string",
-            "description": "The rejection error code, if not accepted."
-          },
-          "gradeWindowFlag": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "examQuestionId",
-          "accepted",
-          "gradeWindowFlag"
-        ]
-      },
-      "SaveAnswerBatchResponseDto": {
-        "type": "object",
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BatchAnswerResultDto"
-            }
-          }
-        },
-        "required": [
-          "results"
-        ]
-      },
-      "RecordAttemptEventDto": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "WINDOW_BLUR",
-              "FULLSCREEN_EXIT",
-              "TAB_HIDDEN",
-              "RECONNECTED",
-              "RESUMED",
-              "BINDING_MISMATCH"
-            ]
-          },
-          "occurredAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "metadata": {
-            "type": "object",
-            "description": "Client-reported, untrusted metadata."
-          }
-        },
-        "required": [
-          "type",
-          "occurredAt"
-        ]
-      },
-      "AttemptStateResponseDto": {
-        "type": "object",
-        "properties": {
-          "attemptId": {
-            "type": "string"
-          },
-          "examId": {
-            "type": "string"
-          },
-          "examSessionId": {
-            "type": "string"
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "NOT_STARTED",
-              "IN_PROGRESS",
-              "SUBMITTED",
-              "AUTO_SUBMITTED",
-              "INVALIDATED",
-              "CANCELLED"
-            ]
-          },
-          "startedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "submittedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "invalidationReason": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "attemptId",
-          "examId",
-          "examSessionId",
-          "state",
-          "startedAt",
-          "expiresAt",
-          "submittedAt",
-          "invalidationReason"
-        ]
-      },
-      "AttemptMarkingStatusDto": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "NOT_APPLICABLE",
-              "PENDING",
-              "COMPLETE"
-            ],
-            "description": "NOT_APPLICABLE while the attempt is still IN_PROGRESS (or was invalidated/cancelled — never submitted); PENDING once finalized but not yet fully marked (the queued marking job has not completed); COMPLETE once every question has a recorded result."
-          },
-          "questionCount": {
-            "type": "number"
-          },
-          "markedCount": {
-            "type": "number"
-          },
-          "correctCount": {
-            "type": "number"
-          },
-          "incorrectCount": {
-            "type": "number"
-          },
-          "unansweredCount": {
-            "type": "number"
-          },
-          "partialCount": {
-            "type": "number",
-            "description": "Always 0 this phase — PARTIAL is reserved for a future non-objective type."
-          },
-          "awardedMarks": {
-            "type": "number"
-          },
-          "maximumMarks": {
-            "type": "number"
-          },
-          "percentage": {
-            "type": "number",
-            "nullable": true,
-            "description": "null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE."
-          }
-        },
-        "required": [
-          "status",
-          "questionCount",
-          "markedCount",
-          "correctCount",
-          "incorrectCount",
-          "unansweredCount",
-          "partialCount",
-          "awardedMarks",
-          "maximumMarks",
-          "percentage"
-        ]
-      },
-      "AttemptStatusResponseDto": {
-        "type": "object",
-        "properties": {
-          "attemptId": {
-            "type": "string"
-          },
-          "examId": {
-            "type": "string"
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "NOT_STARTED",
-              "IN_PROGRESS",
-              "SUBMITTED",
-              "AUTO_SUBMITTED",
-              "INVALIDATED",
-              "CANCELLED"
-            ]
-          },
-          "submittedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "marking": {
-            "$ref": "#/components/schemas/AttemptMarkingStatusDto"
-          }
-        },
-        "required": [
-          "attemptId",
-          "examId",
-          "state",
-          "submittedAt",
-          "marking"
-        ]
-      },
-      "ActiveAssessmentResponseDto": {
-        "type": "object",
-        "properties": {
-          "examId": {
-            "type": "string",
-            "nullable": true
-          },
-          "examTitle": {
-            "type": "string",
-            "nullable": true
-          },
-          "examSessionId": {
-            "type": "string",
-            "nullable": true
-          },
-          "attemptId": {
-            "type": "string",
-            "nullable": true,
-            "description": "Set only when an attempt is already IN_PROGRESS — the client should resume, not start."
-          },
-          "state": {
-            "type": "string",
-            "enum": [
-              "NOT_STARTED",
-              "IN_PROGRESS"
-            ],
-            "nullable": true
-          }
-        },
-        "required": [
-          "examId",
-          "examTitle",
-          "examSessionId",
-          "attemptId",
-          "state"
-        ]
-      },
-      "AttemptPreviewResponseDto": {
-        "type": "object",
-        "properties": {
-          "examId": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "examType": {
-            "type": "string"
-          },
-          "durationSeconds": {
-            "type": "number"
-          },
-          "attemptLimit": {
-            "type": "number"
-          },
-          "navigationPolicy": {
-            "type": "string",
-            "enum": [
-              "FREE",
-              "SEQUENTIAL_NO_REVISIT",
-              "SEQUENTIAL_WITH_REVISIT"
-            ]
-          },
-          "generalInstructions": {
-            "type": "string",
-            "nullable": true
-          },
-          "navigationInstructions": {
-            "type": "string",
-            "nullable": true
-          },
-          "submissionInstructions": {
-            "type": "string",
-            "nullable": true
-          },
-          "accommodations": {
-            "type": "string",
-            "nullable": true
-          },
-          "questionCount": {
-            "type": "number"
-          },
-          "totalMarks": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "examId",
-          "title",
-          "examType",
-          "durationSeconds",
-          "attemptLimit",
-          "navigationPolicy",
-          "questionCount",
-          "totalMarks"
-        ]
-      },
       "ResultListItemDto": {
         "type": "object",
         "properties": {
@@ -13753,6 +14147,12 @@
       "ExamResultSummaryDto": {
         "type": "object",
         "properties": {
+          "expectedStudentCount": {
+            "type": "number"
+          },
+          "absentCount": {
+            "type": "number"
+          },
           "resultCount": {
             "type": "number"
           },
@@ -13780,6 +14180,8 @@
           }
         },
         "required": [
+          "expectedStudentCount",
+          "absentCount",
           "resultCount",
           "voidedCount",
           "pendingCount",
@@ -13792,6 +14194,12 @@
       "ExamResultClassSummaryDto": {
         "type": "object",
         "properties": {
+          "expectedStudentCount": {
+            "type": "number"
+          },
+          "absentCount": {
+            "type": "number"
+          },
           "resultCount": {
             "type": "number"
           },
@@ -13825,6 +14233,8 @@
           }
         },
         "required": [
+          "expectedStudentCount",
+          "absentCount",
           "resultCount",
           "voidedCount",
           "pendingCount",

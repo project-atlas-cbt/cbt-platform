@@ -14,6 +14,8 @@ import { ExamSessionParticipantService } from './exam-session-participant.servic
 import { ExamSessionController } from './exam-session.controller.js';
 import { ExamSessionService } from './exam-session.service.js';
 import { AttemptAnswerService } from './attempt-answer.service.js';
+import { AttemptAdministrationService } from './attempt-administration.service.js';
+import { AttemptAuthorizationController } from './attempt-authorization.controller.js';
 import { AttemptAuditActionRegistrationProvider } from './attempt-audit-action-registration.provider.js';
 import { AttemptController } from './attempt.controller.js';
 import { AttemptEventService } from './attempt-event.service.js';
@@ -65,8 +67,10 @@ import { StudentAssessmentService } from './student-assessment.service.js';
     ExamControlController,
     ExamSessionController,
     AttemptController,
+    AttemptAuthorizationController,
     StudentAssessmentController,
   ],
+  exports: [AttemptAdministrationService],
   providers: [
     ExamLifecycleService,
     ExamSessionService,
@@ -81,6 +85,7 @@ import { StudentAssessmentService } from './student-assessment.service.js';
     // media-manifest dependency) is provided by the @Global() StorageModule
     // — no import needed here, same as MediaService's own precedent.
     AttemptLifecycleService,
+    AttemptAdministrationService,
     AttemptAnswerService,
     AttemptEventService,
     StudentAssessmentService,

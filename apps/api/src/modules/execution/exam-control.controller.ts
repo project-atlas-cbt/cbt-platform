@@ -39,6 +39,12 @@ import {
 } from './dto/exam-session.dto.js';
 import { CompleteExamDto, ExamControlCenterResponseDto } from './dto/exam-control-center.dto.js';
 import { AttemptPackageResponseDto } from './dto/attempt.dto.js';
+import { AttemptAdministrationService } from './attempt-administration.service.js';
+import {
+  ExamParticipationResponseDto,
+  GrantMakeupAuthorizationDto,
+  GrantRetryAuthorizationDto,
+} from './dto/participation.dto.js';
 
 function attemptRequestContext(
   req: FastifyRequest,
@@ -77,6 +83,7 @@ export class ExamControlController {
     private readonly stream: ExamControlStreamService,
     private readonly completion: ExamCompletionService,
     private readonly attempts: AttemptLifecycleService,
+    private readonly administration: AttemptAdministrationService,
   ) {}
 
   @Post(':id/attempts')
@@ -162,6 +169,57 @@ export class ExamControlController {
     return this.controlCenter.get(user.schoolId, actorFromAuthenticatedUser(user), id);
   }
 
+  @Get(':id/participation')
+  @Authorized('examAdmin.controlCenter')
+  @ApiOkResponse({ type: ExamParticipationResponseDto })
+  async participation(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+  ): Promise<ExamParticipationResponseDto> {
+    const user = currentUser(req);
+    return this.administration.listParticipation(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      id,
+    );
+  }
+
+  @Post(':id/makeup-authorizations')
+  @HttpCode(HttpStatus.CREATED)
+  @Authorized('examAdmin.grantMakeup')
+  async grantMakeup(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() body: GrantMakeupAuthorizationDto,
+  ) {
+    const user = currentUser(req);
+    return this.administration.grantMakeup(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      id,
+      body,
+      { actorUserId: user.userId, actorRole: resolveExamActorRole(user) },
+    );
+  }
+
+  @Post(':id/retry-authorizations')
+  @HttpCode(HttpStatus.CREATED)
+  @Authorized('examAdmin.authorizeRetry')
+  async grantRetry(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() body: GrantRetryAuthorizationDto,
+  ) {
+    const user = currentUser(req);
+    return this.administration.grantRetry(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      id,
+      body,
+      { actorUserId: user.userId, actorRole: resolveExamActorRole(user) },
+    );
+  }
+
   @Get(':id/control/stream')
   @Authorized('examAdmin.controlCenter')
   @ApiOperation({ summary: 'SSE live updates — Last-Event-ID reconnection replay (DoD item 10).' })
@@ -220,6 +278,25 @@ export class ExamControlController {
       actorUserId: user.userId,
       actorRole: resolveExamActorRole(user),
     });
+  }
+
+  @Post(':id/participation/confirm-absences')
+  @HttpCode(HttpStatus.OK)
+  @Authorized('examAdmin.controlCenter')
+  async confirmAbsences(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() body: CompleteExamDto,
+  ): Promise<ExamResponseDto> {
+    const user = currentUser(req);
+    return this.completion.complete(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      id,
+      body,
+      { actorUserId: user.userId, actorRole: resolveExamActorRole(user) },
+      { requireSessionScopedPairs: true },
+    );
   }
 
   @Get(':id/eligible-students')

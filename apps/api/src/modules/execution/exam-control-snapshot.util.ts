@@ -1,4 +1,5 @@
 import { prisma, withTenant } from '@atlas/db';
+import { rollUpParticipation } from '@atlas/domain';
 import type { ExamControlCenterSnapshot } from '@atlas/domain';
 import { resolveMembershipDisplayNames, toExamSessionResponseDto } from './exam-control-mappers.js';
 
@@ -28,30 +29,71 @@ export async function computeExamControlSnapshot(
     });
     const sessionIds = sessions.map((s) => s.id);
 
-    const authorizedCount =
+    const participants =
       sessionIds.length === 0
-        ? 0
-        : await tx.examSessionParticipant.count({
+        ? []
+        : await tx.examSessionParticipant.findMany({
             where: { schoolId, examSessionId: { in: sessionIds }, status: 'AUTHORIZED' },
+            select: { studentProfileId: true, examSessionId: true },
           });
-    const absentCount = await tx.examParticipation.count({
-      where: { schoolId, examId, status: 'ABSENT' },
-    });
+    const authorizedCount = new Set(participants.map((participant) => participant.studentProfileId))
+      .size;
 
     // B13: real ExamAttempt data — independent counts, never derived by
     // subtraction from authorizedCount (a derived `notStartedCount` could
     // go negative under a real edge case, e.g. a makeup/retry attempt from
     // a future phase; independent counts stay correct regardless).
-    const inProgressCount = await tx.examAttempt.count({
-      where: { schoolId, examId, state: 'IN_PROGRESS' },
+    const activeAttemptRows = await tx.examAttempt.findMany({
+      where: { schoolId, examId, state: { in: ['IN_PROGRESS', 'SUBMITTED', 'AUTO_SUBMITTED'] } },
+      select: { studentProfileId: true, state: true },
     });
-    const submittedCount = await tx.examAttempt.count({
-      where: { schoolId, examId, state: { in: ['SUBMITTED', 'AUTO_SUBMITTED'] } },
-    });
+    const inProgressCount = new Set(
+      activeAttemptRows
+        .filter((attempt) => attempt.state === 'IN_PROGRESS')
+        .map((attempt) => attempt.studentProfileId),
+    ).size;
+    const submittedCount = new Set(
+      activeAttemptRows
+        .filter((attempt) => attempt.state === 'SUBMITTED' || attempt.state === 'AUTO_SUBMITTED')
+        .map((attempt) => attempt.studentProfileId),
+    ).size;
     const liveAttempts = await tx.examAttempt.findMany({
       where: { schoolId, examId, state: 'IN_PROGRESS' },
       select: { studentProfileId: true, state: true, expiresAt: true },
     });
+    const allAttempts = await tx.examAttempt.findMany({
+      where: { schoolId, examId },
+      select: { studentProfileId: true, examSessionId: true, state: true },
+    });
+    const participations = await tx.examParticipation.findMany({
+      where: { schoolId, examId },
+      select: { studentProfileId: true, examSessionId: true, status: true },
+    });
+    const studentIds = new Set(participants.map((participant) => participant.studentProfileId));
+    const rollups = [...studentIds].map((studentProfileId) =>
+      rollUpParticipation(
+        participants
+          .filter((participant) => participant.studentProfileId === studentProfileId)
+          .map((participant) => {
+            const participation = participations.find(
+              (entry) =>
+                entry.studentProfileId === studentProfileId &&
+                entry.examSessionId === participant.examSessionId,
+            );
+            return {
+              status: participation?.status ?? null,
+              hasNonInvalidatedAttempt: allAttempts.some(
+                (attempt) =>
+                  attempt.studentProfileId === studentProfileId &&
+                  attempt.examSessionId === participant.examSessionId &&
+                  attempt.state !== 'INVALIDATED' &&
+                  attempt.state !== 'CANCELLED',
+              ),
+            };
+          }),
+      ),
+    );
+    const absentCount = rollups.filter((status) => status === 'ABSENT').length;
     const nowMs = Date.now();
     const names = await resolveMembershipDisplayNames(
       schoolId,
@@ -72,7 +114,7 @@ export async function computeExamControlSnapshot(
       sessions: sessions.map((s) => toExamSessionResponseDto(s, names)),
       aggregate: {
         authorizedCount,
-        notStartedCount: Math.max(0, authorizedCount - inProgressCount - submittedCount),
+        notStartedCount: rollups.filter((status) => status === 'PENDING').length,
         inProgressCount,
         submittedCount,
         absentCount,

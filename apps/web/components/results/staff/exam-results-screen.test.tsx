@@ -34,6 +34,8 @@ const mockUsePublishResults = vi.mocked(usePublishResults);
 const mockUseUnpublishResults = vi.mocked(useUnpublishResults);
 
 const SUMMARY = {
+  expectedStudentCount: 4,
+  absentCount: 1,
   resultCount: 3,
   voidedCount: 1,
   pendingCount: 0,
@@ -74,9 +76,12 @@ describe('ExamResultsScreen', () => {
     } as never);
   });
 
-  it('states plainly which summary figures are unavailable rather than inventing them', () => {
+  it('shows participation-derived expected and absent counts', () => {
     render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
-    expect(screen.getByText(/students expected and absent counts are not shown/i)).toBeInTheDocument();
+    expect(screen.getByText('Students expected')).toBeInTheDocument();
+    expect(screen.getByText('Absent')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText('Voided')).toBeInTheDocument();
   });
 

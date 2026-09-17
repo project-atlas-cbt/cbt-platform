@@ -31,8 +31,9 @@ type ExamForAttemptEligibility = Pick<
  * yields the SAME attempt, not an error), handled by `start()` itself
  * before this function is ever called.
  *
- * `AttemptAuthorization` (ADR-0014, "holding an authorization") stays
- * B14's job — this only checks the attempt-limit half of that clause.
+ * `AttemptAuthorization` (ADR-0014, "holding an authorization") is
+ * selected and consumed by the B16 start transaction; this utility checks
+ * the corresponding attempt-limit exception.
  */
 export async function evaluateAttemptStartEligibility(
   tx: Prisma.TransactionClient,
@@ -41,9 +42,10 @@ export async function evaluateAttemptStartEligibility(
     exam: ExamForAttemptEligibility;
     examSessionId: string;
     studentProfileId: string;
+    authorization?: { id: string };
   },
 ): Promise<AttemptEligibilityResult> {
-  const { schoolId, exam, examSessionId, studentProfileId } = params;
+  const { schoolId, exam, examSessionId, studentProfileId, authorization } = params;
   const failedChecks: string[] = [];
 
   const base = await evaluateExamEligibility(tx, { schoolId, exam, studentProfileId });
@@ -53,6 +55,7 @@ export async function evaluateAttemptStartEligibility(
     schoolId,
     examSessionId,
     studentProfileId,
+    allowCompletedParentExam: authorization !== undefined,
   });
   if (!canAccessSession) {
     failedChecks.push(SESSION_NOT_ACCESSIBLE);
@@ -73,7 +76,7 @@ export async function evaluateAttemptStartEligibility(
       state: { in: ['SUBMITTED', 'AUTO_SUBMITTED'] },
     },
   });
-  if (completedCount >= exam.attemptLimit) {
+  if (completedCount >= exam.attemptLimit && authorization === undefined) {
     failedChecks.push(ATTEMPT_LIMIT_EXCEEDED);
   }
 

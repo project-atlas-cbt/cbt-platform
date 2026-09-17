@@ -1545,6 +1545,299 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
   });
 
   // ---------------------------------------------------------------------
+  // B16 — participation, makeup, and result invalidation
+  // ---------------------------------------------------------------------
+
+  it('B16: preserves the original absence through makeup, consumes its authorization, and voids invalidated result evidence', async () => {
+    const examId = await buildReadyExam();
+    const originalSessionId = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+
+    const complete = await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+      confirmedAbsentParticipations: [
+        { examSessionId: originalSessionId, studentProfileId: studentAProfileId },
+        { examSessionId: originalSessionId, studentProfileId: studentBProfileId },
+      ],
+    });
+    expect(complete.statusCode).toBe(200);
+
+    const absentStudentRecords = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.examAttempt.count({ where: { schoolId, examId, studentProfileId: studentBProfileId } }),
+        tx.result.count({ where: { schoolId, examId, studentProfileId: studentBProfileId } }),
+      ]),
+    );
+    expect(absentStudentRecords).toEqual([0, 0]);
+
+    const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'Approved medical absence',
+    });
+    expect(grant.statusCode).toBe(201);
+    const authorization = grant.json<{ id: string; status: string; examSessionId: string }[]>()[0]!;
+    expect(authorization.status).toBe('AUTHORIZED');
+
+    const started = await post(studentA, `/exams/${examId}/attempts`, {});
+    expect(started.statusCode).toBe(200);
+    const makeupAttempt = started.json<AttemptPackage>();
+    expect(makeupAttempt.examSessionId).toBe(authorization.examSessionId);
+
+    const consumed = await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptAuthorization.findUniqueOrThrow({ where: { id: authorization.id } }),
+    );
+    expect(consumed.status).toBe('USED');
+    const originalAbsence = await withTenant(prisma, schoolId, (tx) =>
+      tx.examParticipation.findUniqueOrThrow({
+        where: {
+          schoolId_examSessionId_studentProfileId: {
+            schoolId,
+            examSessionId: originalSessionId,
+            studentProfileId: studentAProfileId,
+          },
+        },
+      }),
+    );
+    expect(originalAbsence.status).toBe('ABSENT');
+
+    expect(
+      (await post(studentA, `/attempts/${makeupAttempt.attemptId}/submit`, {})).statusCode,
+    ).toBe(200);
+    const result = await withTenant(prisma, schoolId, (tx) =>
+      tx.result.findUniqueOrThrow({
+        where: { schoolId_attemptId: { schoolId, attemptId: makeupAttempt.attemptId } },
+      }),
+    );
+    expect(result.state).toBe('PROCESSING');
+
+    const invalidated = await post(teacher, `/attempts/${makeupAttempt.attemptId}/invalidate`, {
+      reason: 'Verified examination irregularity',
+    });
+    expect(invalidated.statusCode).toBe(200);
+
+    const [attempt, voidedResult] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.examAttempt.findUniqueOrThrow({ where: { id: makeupAttempt.attemptId } }),
+        tx.result.findUniqueOrThrow({
+          where: { schoolId_attemptId: { schoolId, attemptId: makeupAttempt.attemptId } },
+        }),
+      ]),
+    );
+    expect(attempt.state).toBe('INVALIDATED');
+    expect(attempt.invalidationReason).toBe('Verified examination irregularity');
+    expect(voidedResult.state).toBe('VOIDED');
+  });
+
+  it('B16 concurrency: exactly one request consumes a makeup authorization', async () => {
+    const examId = await buildReadyExam();
+    const originalSessionId = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+          confirmedAbsentParticipations: [
+            { examSessionId: originalSessionId, studentProfileId: studentAProfileId },
+            { examSessionId: originalSessionId, studentProfileId: studentBProfileId },
+          ],
+        })
+      ).statusCode,
+    ).toBe(200);
+    const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'Concurrent-consumption proof',
+    });
+    expect(grant.statusCode).toBe(201);
+    const authorization = grant.json<{ id: string }[]>()[0]!;
+
+    const starts = await Promise.all([
+      post(studentA, `/exams/${examId}/attempts`, {}),
+      post(studentA, `/exams/${examId}/attempts`, {}),
+    ]);
+    expect(starts.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+
+    const [attemptCount, consumed] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.examAttempt.count({ where: { schoolId, examId, studentProfileId: studentAProfileId } }),
+        tx.attemptAuthorization.findUniqueOrThrow({ where: { id: authorization.id } }),
+      ]),
+    );
+    expect(attemptCount).toBe(1);
+    expect(consumed.status).toBe('USED');
+  });
+
+  it('B16: the canonical absence route rejects the legacy student-only payload', async () => {
+    const examId = await buildReadyExam();
+    const originalSessionId = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+
+    const response = await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+      confirmedAbsentStudentProfileIds: [studentAProfileId, studentBProfileId],
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('B16: an expired authorization is retired before a replacement grant is created', async () => {
+    const examId = await buildReadyExam();
+    const originalSessionId = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+          confirmedAbsentParticipations: [
+            { examSessionId: originalSessionId, studentProfileId: studentAProfileId },
+            { examSessionId: originalSessionId, studentProfileId: studentBProfileId },
+          ],
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const firstGrant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'Initial grant',
+    });
+    expect(firstGrant.statusCode).toBe(201);
+    const firstAuthorization = firstGrant.json<{ id: string }[]>()[0]!;
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptAuthorization.update({
+        where: { id: firstAuthorization.id },
+        data: { expiresAt: new Date(Date.now() - 1_000) },
+      }),
+    );
+
+    const replacement = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'Replacement grant',
+    });
+    expect(replacement.statusCode).toBe(201);
+    const expired = await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptAuthorization.findUniqueOrThrow({ where: { id: firstAuthorization.id } }),
+    );
+    expect(expired.status).toBe('EXPIRED');
+  });
+
+  it('B16: a consumed authorization cannot be resurrected by a direct database update', async () => {
+    const examId = await buildReadyExam();
+    const originalSessionId = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+          confirmedAbsentParticipations: [
+            { examSessionId: originalSessionId, studentProfileId: studentAProfileId },
+            { examSessionId: originalSessionId, studentProfileId: studentBProfileId },
+          ],
+        })
+      ).statusCode,
+    ).toBe(200);
+    const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'One-time grant',
+    });
+    const authorization = grant.json<{ id: string }[]>()[0]!;
+    expect((await post(studentA, `/exams/${examId}/attempts`, {})).statusCode).toBe(200);
+
+    await expect(
+      withTenant(prisma, schoolId, (tx) =>
+        tx.attemptAuthorization.update({
+          where: { id: authorization.id },
+          data: { status: 'AUTHORIZED' },
+        }),
+      ),
+    ).rejects.toThrow(/used attempt authorization .* immutable/);
+  });
+
+  it('B16: rejects a whitespace-only authorization reason', async () => {
+    const examId = await buildReadyExam();
+    const originalSessionId = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+          confirmedAbsentParticipations: [
+            { examSessionId: originalSessionId, studentProfileId: studentAProfileId },
+            { examSessionId: originalSessionId, studentProfileId: studentBProfileId },
+          ],
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: '   ',
+    });
+    expect(grant.statusCode).toBe(400);
+  });
+
+  it('B16: a retry authorization permits one post-completion attempt beyond the ordinary limit', async () => {
+    const examId = await buildReadyExam({ attemptLimit: 1 });
+    const originalSessionId = await openSession(examId);
+    const originalAttempt = (
+      await post(studentA, `/exams/${examId}/attempts`, {})
+    ).json<AttemptPackage>();
+    expect(
+      (await post(studentA, `/attempts/${originalAttempt.attemptId}/submit`, {})).statusCode,
+    ).toBe(200);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+
+    const complete = await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+      confirmedAbsentParticipations: [
+        { examSessionId: originalSessionId, studentProfileId: studentBProfileId },
+      ],
+    });
+    expect(complete.statusCode).toBe(200);
+
+    const retry = await post(teacher, `/exams/${examId}/retry-authorizations`, {
+      studentProfileId: studentAProfileId,
+      reason: 'Approved exceptional reattempt',
+    });
+    expect(retry.statusCode).toBe(201);
+    const authorization = retry.json<{ id: string; examSessionId: string }>();
+
+    const retried = await post(studentA, `/exams/${examId}/attempts`, {});
+    expect(retried.statusCode).toBe(200);
+    const retryAttempt = retried.json<AttemptPackage>();
+    expect(retryAttempt.examSessionId).toBe(authorization.examSessionId);
+
+    const persisted = await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.findUniqueOrThrow({ where: { id: retryAttempt.attemptId } }),
+    );
+    expect(persisted.attemptType).toBe('RETRY');
+    expect(persisted.attemptAuthorizationId).toBe(authorization.id);
+  });
+
+  it('B16: an invalidated submitted attempt no longer consumes ordinary attempt-limit headroom', async () => {
+    const examId = await buildReadyExam({ attemptLimit: 1 });
+    await openSession(examId);
+    const first = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await post(studentA, `/attempts/${first.attemptId}/submit`, {})).statusCode).toBe(200);
+    expect(
+      (
+        await post(teacher, `/attempts/${first.attemptId}/invalidate`, {
+          reason: 'Confirmed device failure',
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const restarted = await post(studentA, `/exams/${examId}/attempts`, {});
+    expect(restarted.statusCode).toBe(200);
+    const replacement = restarted.json<AttemptPackage>();
+    expect(replacement.attemptId).not.toBe(first.attemptId);
+  });
+
+  // ---------------------------------------------------------------------
   // Failure — no orphan attempt on a snapshot-build failure
   // ---------------------------------------------------------------------
 

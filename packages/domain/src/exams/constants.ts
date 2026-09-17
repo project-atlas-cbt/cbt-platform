@@ -77,16 +77,21 @@ export type ExamSessionStatus = (typeof EXAM_SESSION_STATUSES)[number];
 export const EXAM_SESSION_PARTICIPANT_STATUSES = ['AUTHORIZED', 'REVOKED'] as const;
 export type ExamSessionParticipantStatus = (typeof EXAM_SESSION_PARTICIPANT_STATUSES)[number];
 
-/// COMPLETED never written by B12 — no ExamAttempt exists yet to complete;
-/// kept for spec-vocabulary fidelity, mirroring this file's own precedent.
-export const EXAM_PARTICIPATION_STATUSES = ['ABSENT', 'COMPLETED'] as const;
+/// ADR-0024: participation is authoritative per (exam, session, student).
+export const EXAM_PARTICIPATION_STATUSES = ['PENDING', 'ATTENDED', 'ABSENT', 'EXCUSED'] as const;
 export type ExamParticipationStatus = (typeof EXAM_PARTICIPATION_STATUSES)[number];
+
+export const ATTEMPT_AUTHORIZATION_TYPES = ['MAKEUP', 'RETRY', 'SPECIAL'] as const;
+export type AttemptAuthorizationType = (typeof ATTEMPT_AUTHORIZATION_TYPES)[number];
+
+export const ATTEMPT_AUTHORIZATION_STATUSES = ['AUTHORIZED', 'USED', 'REVOKED', 'EXPIRED'] as const;
+export type AttemptAuthorizationStatus = (typeof ATTEMPT_AUTHORIZATION_STATUSES)[number];
 
 export const EXAM_ADMINISTRATOR_STATUSES = ['ACTIVE', 'REVOKED'] as const;
 export type ExamAdministratorStatus = (typeof EXAM_ADMINISTRATOR_STATUSES)[number];
 
 /// B13 (Attempt Engine) — mirrors schema.prisma's AttemptState/AttemptType/
-/// AttemptParticipationStatus/AttemptAnswerState/AttemptEventType enums,
+/// AttemptAnswerState/AttemptEventType enums,
 /// same const-array-plus-derived-type pattern as above.
 
 /// 07 §9.1's full six-state vocabulary carried in full. NOT_STARTED is
@@ -103,21 +108,9 @@ export const ATTEMPT_STATES = [
 export type AttemptState = (typeof ATTEMPT_STATES)[number];
 
 /// MAKEUP/RETRY/SPECIAL are unreachable in B13 — AttemptAuthorization
-/// (ADR-0014) is B14's job — shipped in full for spec fidelity.
+/// (ADR-0014) is exercised by B16's AttemptAuthorization workflow.
 export const ATTEMPT_TYPES = ['STANDARD', 'MAKEUP', 'RETRY', 'SPECIAL'] as const;
 export type AttemptType = (typeof ATTEMPT_TYPES)[number];
-
-/// Reporting-only (06 §47) — distinct from AttemptState, and distinct from
-/// EXAM_PARTICIPATION_STATUSES (which lives on ExamParticipation, not
-/// ExamAttempt, and only has ABSENT/COMPLETED). Do not conflate the two.
-export const ATTEMPT_PARTICIPATION_STATUSES = [
-  'PENDING',
-  'IN_PROGRESS',
-  'COMPLETED',
-  'ABSENT',
-  'EXCUSED',
-] as const;
-export type AttemptParticipationStatus = (typeof ATTEMPT_PARTICIPATION_STATUSES)[number];
 
 export const ATTEMPT_ANSWER_STATES = ['UNANSWERED', 'ANSWERED'] as const;
 export type AttemptAnswerState = (typeof ATTEMPT_ANSWER_STATES)[number];
