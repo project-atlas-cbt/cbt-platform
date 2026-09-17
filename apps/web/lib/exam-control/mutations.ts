@@ -23,6 +23,18 @@ function invalidateExams(client: QueryClient) {
   return client.invalidateQueries({ queryKey: ['exams'], exact: false });
 }
 
+/** F16 actions affect participation, the live Control Center, and (after an
+ * invalidation) staff results.  Invalidate/refetch is intentional: these are
+ * integrity actions and the UI must show only confirmed server truth. */
+function invalidateParticipation(client: QueryClient, examId: string) {
+  return Promise.all([
+    invalidateExamControl(client, examId),
+    invalidateExams(client),
+    client.invalidateQueries({ queryKey: ['exam-results'], exact: false }),
+    client.invalidateQueries({ queryKey: ['staff-result'], exact: false }),
+  ]);
+}
+
 /** `POST /exams/:id/sessions` — opening a session flips a `READY` exam to
  * `OPEN` in the same backend transaction, so both cache roots are
  * invalidated. */
@@ -188,5 +200,47 @@ export function useRevokeExamAdministrator(examId: string) {
       ),
     onSuccess: () =>
       client.invalidateQueries({ queryKey: ['exam-control', examId, 'administrators'] }),
+  });
+}
+
+export function useGrantMakeup(examId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { studentProfileIds: string[]; reason: string; expiresAt?: string }) =>
+      unwrap(
+        apiClient.POST('/exams/{id}/makeup-authorizations', {
+          params: { path: { id: examId } },
+          body,
+        }),
+      ),
+    onSuccess: () => invalidateParticipation(client, examId),
+  });
+}
+
+export function useGrantRetry(examId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { studentProfileId: string; reason: string; expiresAt?: string }) =>
+      unwrap(
+        apiClient.POST('/exams/{id}/retry-authorizations', {
+          params: { path: { id: examId } },
+          body,
+        }),
+      ),
+    onSuccess: () => invalidateParticipation(client, examId),
+  });
+}
+
+export function useInvalidateAttempt(examId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ attemptId, reason }: { attemptId: string; reason: string }) =>
+      unwrap(
+        apiClient.POST('/attempts/{id}/invalidate', {
+          params: { path: { id: attemptId } },
+          body: { reason },
+        }),
+      ),
+    onSuccess: () => invalidateParticipation(client, examId),
   });
 }

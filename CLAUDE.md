@@ -12,8 +12,8 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 ## Project Status
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
-architecture decisions were completed first (see below); backend phases `B0`–`B12` and every
-frontend phase through `F11` are now complete (this line itself had drifted stale — kept at
+architecture decisions were completed first (see below); backend phases `B0`–`B16` and every
+frontend phase through `F16` are now complete (this line itself had drifted stale — kept at
 "`B0`–`B6`"/"`F0`–`F7`" long after later phases shipped; corrected 2026-09-04, see "Current Phase"
 below for a note on why this section can lag and the Change Log's own dated entries are the actual
 source of truth). See "Implementation Status" and "Change Log" further down in this file for what
@@ -412,9 +412,13 @@ a genuinely long-open gap, self-service password change, that every phase since 
 entry had left unbuilt. One confirmed small additive backend gap-closure (`GET /v1/students/me`, a new
 `users.student.viewOwnProfile` permission row, 160 rows) closed the Profile screen's Class/Department
 fields; one DoD item stays honestly partial by phase boundary, not fabricated (`ABSENT` exams — no
-participation data exists until `B16`). `B16 — Participation, Absence & Makeup` is next on the backend
-critical path; `F15` (Staff Results & Publication) remains open. See this file's Change Log
-entries below (dated 2026-09-04, 2026-09-05 and 2026-09-10) for full detail on all seven phases.
+participation data exists until `B16`). **`B16 — Participation, Absence & Makeup`**,
+**`F15 — Staff Results & Publication`** are complete. **`F16 — Participation, Absence & Makeup`**
+is implemented, with browser E2E/manual visual validation still pending because this repository has
+no configured browser harness. F16 delivers the shared staff participation/makeup workspace,
+preserving original absence alongside makeup outcomes and using server-confirmed reason-bearing
+actions only; excused absence remains intentionally deferred. See this file's Change Log entries below
+(dated 2026-09-04, 2026-09-05 and 2026-09-10) for the preceding implementation detail.
 
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a

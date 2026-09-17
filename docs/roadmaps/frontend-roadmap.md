@@ -51,30 +51,30 @@ The student exam route runs its own client-side runtime inside the shared shell 
 
 ## Phase Map
 
-| ID  | Phase                                  | Backend pair   | Can start before backend?                    | Status      |
-| --- | -------------------------------------- | -------------- | -------------------------------------------- | ----------- |
-| F0  | Frontend Foundation & Design System    | B0             | Partially — design system yes, API client no | COMPLETE    |
-| F1  | Authentication & Tenant Entry          | B1             | No                                           | COMPLETE    |
-| F2  | App Shell, Navigation & Notifications  | B2, B10        | Shell yes, permissions no                    | COMPLETE    |
-| F3  | Platform Admin Workspace               | B3             | No                                           | COMPLETE    |
-| F4  | School Onboarding Wizard               | B3, B4, B5, B6 | Yes                                          | COMPLETE    |
-| F5  | School Settings & Branding             | B4             | No                                           | COMPLETE    |
-| F6  | Academic Structure Workspace           | B5             | No                                           | COMPLETE    |
-| F7  | People Management Workspace            | B6             | No                                           | COMPLETE    |
-| F8  | Bulk Import UI                         | B7             | No                                           | COMPLETE    |
-| F9  | Question Bank Workspace                | B8             | Editor shell yes                             | COMPLETE    |
-| F10 | Question Review Workspace              | B9             | No                                           | COMPLETE    |
-| F11 | Exam Builder                           | B11            | No                                           | COMPLETE    |
-| F12 | Exam Control Center                    | B12            | No                                           | COMPLETE    |
-| F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | COMPLETE    |
-| F14 | Student Results & Profile              | B15            | No                                           | COMPLETE    |
-| F15 | Staff Results & Publication            | B15            | No                                           | COMPLETE    |
-| F16 | Participation, Absence & Makeup        | B16            | No                                           | NOT STARTED |
-| F17 | Dashboards & Analytics                 | B17            | Layout yes                                   | NOT STARTED |
-| F18 | Reporting, Export & Search             | B18            | No                                           | NOT STARTED |
-| F19 | Session Rollover UI                    | B19            | No                                           | NOT STARTED |
-| F20 | Accessibility, Performance & Hardening | B20, B21       | Partially                                    | NOT STARTED |
-| F21 | Production Readiness                   | B23            | No                                           | NOT STARTED |
+| ID  | Phase                                  | Backend pair   | Can start before backend?                    | Status                    |
+| --- | -------------------------------------- | -------------- | -------------------------------------------- | ------------------------- |
+| F0  | Frontend Foundation & Design System    | B0             | Partially — design system yes, API client no | COMPLETE                  |
+| F1  | Authentication & Tenant Entry          | B1             | No                                           | COMPLETE                  |
+| F2  | App Shell, Navigation & Notifications  | B2, B10        | Shell yes, permissions no                    | COMPLETE                  |
+| F3  | Platform Admin Workspace               | B3             | No                                           | COMPLETE                  |
+| F4  | School Onboarding Wizard               | B3, B4, B5, B6 | Yes                                          | COMPLETE                  |
+| F5  | School Settings & Branding             | B4             | No                                           | COMPLETE                  |
+| F6  | Academic Structure Workspace           | B5             | No                                           | COMPLETE                  |
+| F7  | People Management Workspace            | B6             | No                                           | COMPLETE                  |
+| F8  | Bulk Import UI                         | B7             | No                                           | COMPLETE                  |
+| F9  | Question Bank Workspace                | B8             | Editor shell yes                             | COMPLETE                  |
+| F10 | Question Review Workspace              | B9             | No                                           | COMPLETE                  |
+| F11 | Exam Builder                           | B11            | No                                           | COMPLETE                  |
+| F12 | Exam Control Center                    | B12            | No                                           | COMPLETE                  |
+| F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | COMPLETE                  |
+| F14 | Student Results & Profile              | B15            | No                                           | COMPLETE                  |
+| F15 | Staff Results & Publication            | B15            | No                                           | COMPLETE                  |
+| F16 | Participation, Absence & Makeup        | B16            | No                                           | IMPLEMENTED — E2E PENDING |
+| F17 | Dashboards & Analytics                 | B17            | Layout yes                                   | NOT STARTED               |
+| F18 | Reporting, Export & Search             | B18            | No                                           | NOT STARTED               |
+| F19 | Session Rollover UI                    | B19            | No                                           | NOT STARTED               |
+| F20 | Accessibility, Performance & Hardening | B20, B21       | Partially                                    | NOT STARTED               |
+| F21 | Production Readiness                   | B23            | No                                           | NOT STARTED               |
 
 ---
 
@@ -2733,7 +2733,7 @@ Pairs with F14. Depends on F17 for statistics.
 
 # F16 — Participation, Absence & Makeup
 
-**Status:** NOT STARTED · **Backend pair:** B16
+**Status:** IMPLEMENTED — E2E PENDING · **Backend pair:** B16
 
 ## Objective
 
@@ -2813,6 +2813,13 @@ Pairs with F12's Control Center, which links here.
 ## Deferred items
 
 - Excused-absence workflow — model supports `EXCUSED` but no document defines who grants it (`B16` deferred items).
+
+## Implementation notes (2026-09-17)
+
+- Shared participation and makeup screens now serve Teacher, School Admin, Moderator, and HOD from their existing Control Center route roots. School Admin and Moderator's standalone Makeup Access navigation now starts with a completed-exam picker; Teacher and HOD reach the same exam-specific workflow from Control Center.
+- `ParticipationTable` renders B16's server-derived exam roll-up beside per-session facts, preserving an original `ABSENT` fact when a later `MAKEUP` session has an attended attempt and staff-visible result link. It never displays a score for absence.
+- Makeup (bulk), exceptional retry, and invalidation are separate mandatory-reason dialogs with no optimistic state. Successful actions invalidate participation, control-center, exam, and staff-results cache roots so the display returns only confirmed server state. `EXCUSED` is displayed if the API returns it but remains actionless, per B16's deferred policy decision.
+- Focused component/dialog tests cover original-absence preservation, absence-without-score display, bulk makeup selection, mandatory reasons, retry distinction, and invalidation's voided-result warning. Browser E2E remains a release validation task in the absence of a configured browser harness in this repository.
 
 ---
 
@@ -3279,27 +3286,27 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 
 ## Phase Completion Tracking
 
-| Phase | Status      | Backend pair   | Started    | Completed  | Notes                                                                                                                                                    |
-| ----- | ----------- | -------------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F0    | NOT STARTED | B0             | —          | —          | Design system may start now                                                                                                                              |
-| F1    | NOT STARTED | B1             | —          | —          | Decided: ADR-0005, 0022                                                                                                                                  |
-| F2    | NOT STARTED | B2, B10        | —          | —          | Shell may start now                                                                                                                                      |
-| F3    | NOT STARTED | B3             | —          | —          |                                                                                                                                                          |
-| F4    | COMPLETE    | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts`                                |
-| F5    | COMPLETE    | B4             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (ADR-0010's own B3/B5 assignment, neither built it)       |
-| F6    | COMPLETE    | B5             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `GET /v1/classes/:id/teachers`                                                                                                |
-| F7    | COMPLETE    | B6             | 2026-08-28 | 2026-08-28 | Three small backend gap-closures — see B6's "Post-completion gap closure (during F7)" note                                                               |
-| F8    | COMPLETE    | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                                                              |
-| F9    | COMPLETE    | B8             | 2026-08-29 | 2026-08-29 | Editor shell + full workspace; honestly partial on the one DoD item gated on B9                                                                          |
-| F10   | COMPLETE    | B9             | 2026-09-03 | 2026-09-03 | Two real pre-existing F9 bugs found and fixed (hardcoded, non-`basePath`-relative links)                                                                 |
-| F11   | COMPLETE    | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note      |
-| F12   | COMPLETE    | B12            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (Control Center for all four school-side roles); two small backend gap-closures — see B12's "Post-completion gap closure" note |
-| F13   | COMPLETE    | B13, B14       | 2026-09-05 | 2026-09-05 | Confirmed decisions: force-switch-after-timeout tab handoff; offline media eviction never blocks answering. No backend gap-closure needed.               |
-| F14   | COMPLETE    | B15            | 2026-09-10 | 2026-09-10 | Status corrected 2026-09-15 — the Phase Map and this row both still read `NOT STARTED` after F14 shipped                                                 |
-| F15   | COMPLETE    | B15            | 2026-09-15 | 2026-09-15 | `/moderator/results` added per this phase's own Scope line; withhold/release built here per ADR-0010; no backend gap-closure needed                      |
-| F16   | NOT STARTED | B16            | —          | —          |                                                                                                                                                          |
-| F17   | NOT STARTED | B17            | —          | —          | Layout may start now                                                                                                                                     |
-| F18   | NOT STARTED | B18            | —          | —          |                                                                                                                                                          |
-| F19   | NOT STARTED | B19            | —          | —          |                                                                                                                                                          |
-| F20   | NOT STARTED | B20, B21       | —          | —          |                                                                                                                                                          |
-| F21   | NOT STARTED | B23            | —          | —          |                                                                                                                                                          |
+| Phase | Status                    | Backend pair   | Started    | Completed  | Notes                                                                                                                                                    |
+| ----- | ------------------------- | -------------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F0    | NOT STARTED               | B0             | —          | —          | Design system may start now                                                                                                                              |
+| F1    | NOT STARTED               | B1             | —          | —          | Decided: ADR-0005, 0022                                                                                                                                  |
+| F2    | NOT STARTED               | B2, B10        | —          | —          | Shell may start now                                                                                                                                      |
+| F3    | NOT STARTED               | B3             | —          | —          |                                                                                                                                                          |
+| F4    | COMPLETE                  | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts`                                |
+| F5    | COMPLETE                  | B4             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (ADR-0010's own B3/B5 assignment, neither built it)       |
+| F6    | COMPLETE                  | B5             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `GET /v1/classes/:id/teachers`                                                                                                |
+| F7    | COMPLETE                  | B6             | 2026-08-28 | 2026-08-28 | Three small backend gap-closures — see B6's "Post-completion gap closure (during F7)" note                                                               |
+| F8    | COMPLETE                  | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                                                              |
+| F9    | COMPLETE                  | B8             | 2026-08-29 | 2026-08-29 | Editor shell + full workspace; honestly partial on the one DoD item gated on B9                                                                          |
+| F10   | COMPLETE                  | B9             | 2026-09-03 | 2026-09-03 | Two real pre-existing F9 bugs found and fixed (hardcoded, non-`basePath`-relative links)                                                                 |
+| F11   | COMPLETE                  | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note      |
+| F12   | COMPLETE                  | B12            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (Control Center for all four school-side roles); two small backend gap-closures — see B12's "Post-completion gap closure" note |
+| F13   | COMPLETE                  | B13, B14       | 2026-09-05 | 2026-09-05 | Confirmed decisions: force-switch-after-timeout tab handoff; offline media eviction never blocks answering. No backend gap-closure needed.               |
+| F14   | COMPLETE                  | B15            | 2026-09-10 | 2026-09-10 | Status corrected 2026-09-15 — the Phase Map and this row both still read `NOT STARTED` after F14 shipped                                                 |
+| F15   | COMPLETE                  | B15            | 2026-09-15 | 2026-09-15 | `/moderator/results` added per this phase's own Scope line; withhold/release built here per ADR-0010; no backend gap-closure needed                      |
+| F16   | IMPLEMENTED — E2E PENDING | B16            | 2026-09-17 | 2026-09-17 | Shared staff participation/makeup workspace implemented; browser E2E/manual visual validation remains pending because no browser harness is configured.  |
+| F17   | NOT STARTED               | B17            | —          | —          | Layout may start now                                                                                                                                     |
+| F18   | NOT STARTED               | B18            | —          | —          |                                                                                                                                                          |
+| F19   | NOT STARTED               | B19            | —          | —          |                                                                                                                                                          |
+| F20   | NOT STARTED               | B20, B21       | —          | —          |                                                                                                                                                          |
+| F21   | NOT STARTED               | B23            | —          | —          |                                                                                                                                                          |

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, History, Users } from 'lucide-react';
+import { ArrowLeft, History, Users, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
@@ -17,7 +17,11 @@ import {
   useReopenExamSession,
 } from '@/lib/exam-control/mutations';
 import { useExamControlStream } from '@/lib/exam-control/sse-client';
-import { examControlStudentsPath, examControlHistoryPath } from '@/lib/exam-control/navigation';
+import {
+  examControlStudentsPath,
+  examControlHistoryPath,
+  examControlParticipationPath,
+} from '@/lib/exam-control/navigation';
 import { ExamStatusBadge } from '@/components/exams/exam-status-badge';
 import { ConnectionStatusBanner } from './connection-status-banner';
 import { StalenessIndicator } from './staleness-indicator';
@@ -125,6 +129,11 @@ export function ExamControlCenterScreen({
           <Button variant="secondary" size="sm" asChild>
             <Link href={examControlStudentsPath(basePath, examId)}>
               <Users aria-hidden /> Manage students
+            </Link>
+          </Button>
+          <Button variant="secondary" size="sm" asChild>
+            <Link href={examControlParticipationPath(basePath, examId)}>
+              <UserCheck aria-hidden /> Participation
             </Link>
           </Button>
         </div>

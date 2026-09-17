@@ -14,6 +14,14 @@ export function examControlHistoryPath(basePath: string, examId: string): string
   return `${basePath}/${examId}/history`;
 }
 
+export function examControlParticipationPath(basePath: string, examId: string): string {
+  return `${basePath}/${examId}/participation`;
+}
+
+export function examControlMakeupPath(basePath: string, examId: string): string {
+  return `${basePath}/${examId}/makeup`;
+}
+
 /**
  * `SessionPicker`'s default when a screen is reached with no `sessionId`
  * already resolved (a deep link/bookmark/back-navigation, as opposed to a

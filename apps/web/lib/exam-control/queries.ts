@@ -70,3 +70,19 @@ export function useExamAdministrators(examId: string | undefined) {
     enabled: Boolean(examId),
   });
 }
+
+/** F16 — B16's authoritative per-session participation facts plus the
+ * ADR-0024 exam-level roll-up.  The server owns both eligibility and the
+ * roll-up; this query deliberately performs no client-side reconstruction. */
+export function useExamParticipation(examId: string | undefined) {
+  return useQuery({
+    queryKey: ['exam-control', examId, 'participation'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/exams/{id}/participation', {
+          params: { path: { id: examId as string } },
+        }),
+      ),
+    enabled: Boolean(examId),
+  });
+}
