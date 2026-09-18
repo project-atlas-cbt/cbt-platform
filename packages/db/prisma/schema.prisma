@@ -2479,6 +2479,7 @@ model ExamAttempt {
   @@index([schoolId, examSessionId])
   // Control Center aggregate + live-attempts query.
   @@index([schoolId, examId, state])
+  @@index([schoolId, examId, studentProfileId, state])
   @@index([schoolId, studentProfileId])
   @@map("exam_attempts")
 }
@@ -2687,6 +2688,7 @@ model AttemptQuestionResult {
   @@unique([schoolId, attemptId, examQuestionId])
   @@index([schoolId])
   @@index([schoolId, attemptId])
+  @@index([schoolId, examQuestionId])
   @@map("attempt_question_results")
 }
 
@@ -2805,6 +2807,7 @@ model Result {
   // The staff results list (GET /v1/exams/:id/results) and every aggregate,
   // both of which filter on state to exclude VOIDED (ADR-0025).
   @@index([schoolId, examId, state])
+  @@index([schoolId, state, finalizedAt])
   // The student results list — own results, newest first.
   @@index([schoolId, studentProfileId, state])
   @@map("results")

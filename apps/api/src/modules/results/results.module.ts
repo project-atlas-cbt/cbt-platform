@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module.js';
+import { AnalyticsModule } from '../analytics/analytics.module.js';
 import { NotificationCenterModule } from '../notification-center/notification-center.module.js';
 import { OperationsModule } from '../operations/operations.module.js';
 import { GradingScaleController } from './grading-scale.controller.js';
@@ -34,7 +35,7 @@ import { StudentResultService } from './student-result.service.js';
  * the same way, so no DI cycle exists in either direction.
  */
 @Module({
-  imports: [IdentityModule, OperationsModule, NotificationCenterModule],
+  imports: [IdentityModule, OperationsModule, NotificationCenterModule, AnalyticsModule],
   controllers: [ResultController, StudentResultController, GradingScaleController],
   providers: [
     ResultQueryService,

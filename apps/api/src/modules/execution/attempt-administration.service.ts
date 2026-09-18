@@ -6,6 +6,7 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { BreakGlassService } from '../authorization/break-glass.service.js';
+import { AnalyticsCacheService } from '../analytics/analytics-cache.service.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { NotificationService } from '../notification-center/notification.service.js';
 import { requireSchoolActor } from '../questions/question-scope.util.js';
@@ -61,6 +62,7 @@ export class AttemptAdministrationService {
     private readonly notifications: NotificationService,
     private readonly stream: ExamControlStreamService,
     private readonly breakGlass: BreakGlassService,
+    private readonly analyticsCache: AnalyticsCacheService,
   ) {}
 
   private async authorize(
@@ -373,6 +375,7 @@ export class AttemptAdministrationService {
       metadata: { examId: attempt.examId },
     });
     await this.stream.publishUpdate(schoolId, attempt.examId);
+    await this.analyticsCache.invalidateSchool(schoolId);
   }
 
   async invalidateWithBreakGlass(
@@ -427,6 +430,7 @@ export class AttemptAdministrationService {
       },
     );
     await this.stream.publishUpdate(schoolId, attempt.examId);
+    await this.analyticsCache.invalidateSchool(schoolId);
   }
 
   async listParticipation(

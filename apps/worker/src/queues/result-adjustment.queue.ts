@@ -38,6 +38,8 @@ export interface ResultAdjustmentWorkerDeps {
    * is applied — lets a test force a crash mid-run deterministically and
    * prove property 1. Never set in production. */
   onBeforeChunk?: (chunkIndex: number) => void;
+  /** B17: invoked only after a completed operation releases its cohort. */
+  invalidateAnalytics?: (schoolId: string) => Promise<void>;
 }
 
 export async function runResultAdjustment(
@@ -91,6 +93,13 @@ export async function runResultAdjustment(
   }
 
   await completeOperation(schoolId, operationId, operation.examId);
+  try {
+    await deps.invalidateAnalytics?.(schoolId);
+  } catch (error) {
+    console.error(
+      `[result-adjustment] analytics cache invalidation failed for ${schoolId}: ${String(error)}`,
+    );
+  }
 }
 
 /**

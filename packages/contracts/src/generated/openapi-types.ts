@@ -706,6 +706,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Derived platform business and usage analytics. */
+        get: operations["PlatformAnalyticsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/academics/context": {
         parameters: {
             query?: never;
@@ -1833,6 +1850,104 @@ export interface paths {
         put?: never;
         /** Mark every unread notification read (B10). */
         post: operations["NotificationController_markAllRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/exams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Derived exam performance, participation and distribution. */
+        get: operations["AnalyticsController_exam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/exams/{id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per-question correct, incorrect and unanswered rates for one fixed-selection exam. */
+        get: operations["AnalyticsController_questions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/classes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_class"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/departments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_department"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/school": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_school"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/analytics/students/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AnalyticsController_student"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3498,6 +3613,31 @@ export interface components {
         InvalidateAttemptDto: {
             reason: string;
         };
+        PlatformAnalyticsTrendDto: {
+            month: string;
+            schoolsCreated: number;
+            examsCreated: number;
+            attemptsStarted: number;
+        };
+        PlatformAnalyticsResponseDto: {
+            totalSchools: number;
+            activeSchools: number;
+            provisionalSchools: number;
+            suspendedSchools: number;
+            expiredSchools: number;
+            deactivatedSchools: number;
+            pendingSubscriptions: number;
+            activeSubscriptions: number;
+            expiringSubscriptions: number;
+            expiredSubscriptions: number;
+            students: number;
+            teachers: number;
+            exams: number;
+            attempts: number;
+            activations: number;
+            trends: components["schemas"]["PlatformAnalyticsTrendDto"][];
+            computedAt: string;
+        };
         CurrentSessionSummaryDto: {
             id: string;
             name: string;
@@ -4202,6 +4342,134 @@ export interface components {
         MarkReadResponseDto: {
             /** @enum {string} */
             status: "ok";
+        };
+        ParticipationMetricDto: {
+            expectedStudentCount: number;
+            attendedCount: number;
+            absentCount: number;
+            pendingCount: number;
+            completionRate: Record<string, never>;
+        };
+        PercentageDistributionBucketDto: {
+            lowerBound: number;
+            upperBound: number;
+            count: number;
+            percentage: Record<string, never> | null;
+        };
+        ExamAnalyticsClassDto: {
+            averagePercentage: Record<string, never> | null;
+            highestPercentage: Record<string, never> | null;
+            lowestPercentage: Record<string, never> | null;
+            passRate: Record<string, never> | null;
+            resultCount: number;
+            classId: string;
+            className: string;
+            participation: components["schemas"]["ParticipationMetricDto"];
+        };
+        ExamAnalyticsResponseDto: {
+            averagePercentage: Record<string, never> | null;
+            highestPercentage: Record<string, never> | null;
+            lowestPercentage: Record<string, never> | null;
+            passRate: Record<string, never> | null;
+            resultCount: number;
+            examId: string;
+            voidedResultCount: number;
+            participation: components["schemas"]["ParticipationMetricDto"];
+            distribution: components["schemas"]["PercentageDistributionBucketDto"][];
+            classBreakdown: components["schemas"]["ExamAnalyticsClassDto"][];
+        };
+        QuestionPerformanceDto: {
+            examQuestionId: string;
+            sequence: number;
+            questionId: string;
+            questionType: string;
+            subjectId: string;
+            topicName: Record<string, never> | null;
+            exposureCount: number;
+            correctCount: number;
+            incorrectCount: number;
+            unansweredCount: number;
+            correctRate: number;
+            incorrectRate: number;
+            unansweredRate: number;
+            voidedForScoring: boolean;
+        };
+        QuestionAnalyticsResponseDto: {
+            examId: string;
+            items: components["schemas"]["QuestionPerformanceDto"][];
+        };
+        ComparisonMetricDto: {
+            averagePercentage: Record<string, never> | null;
+            highestPercentage: Record<string, never> | null;
+            lowestPercentage: Record<string, never> | null;
+            passRate: Record<string, never> | null;
+            resultCount: number;
+            id: string;
+            name: string;
+        };
+        ClassAnalyticsResponseDto: {
+            averagePercentage: Record<string, never> | null;
+            highestPercentage: Record<string, never> | null;
+            lowestPercentage: Record<string, never> | null;
+            passRate: Record<string, never> | null;
+            resultCount: number;
+            classId: string;
+            participation: components["schemas"]["ParticipationMetricDto"];
+            subjects: components["schemas"]["ComparisonMetricDto"][];
+            exams: components["schemas"]["ComparisonMetricDto"][];
+        };
+        AnalyticsTrendDto: {
+            averagePercentage: Record<string, never> | null;
+            highestPercentage: Record<string, never> | null;
+            lowestPercentage: Record<string, never> | null;
+            passRate: Record<string, never> | null;
+            resultCount: number;
+            id: string;
+            name: string;
+            participation: components["schemas"]["ParticipationMetricDto"];
+            examCount: number;
+            attemptCount: number;
+        };
+        DepartmentAnalyticsResponseDto: {
+            averagePercentage: Record<string, never> | null;
+            highestPercentage: Record<string, never> | null;
+            lowestPercentage: Record<string, never> | null;
+            passRate: Record<string, never> | null;
+            resultCount: number;
+            departmentId: string;
+            subjects: components["schemas"]["ComparisonMetricDto"][];
+            classes: components["schemas"]["ComparisonMetricDto"][];
+            exams: components["schemas"]["ComparisonMetricDto"][];
+            termTrends: components["schemas"]["AnalyticsTrendDto"][];
+        };
+        SchoolAnalyticsResponseDto: {
+            averagePercentage: Record<string, never> | null;
+            highestPercentage: Record<string, never> | null;
+            lowestPercentage: Record<string, never> | null;
+            passRate: Record<string, never> | null;
+            resultCount: number;
+            participation: components["schemas"]["ParticipationMetricDto"];
+            examCount: number;
+            attemptCount: number;
+            departments: components["schemas"]["ComparisonMetricDto"][];
+            sessionTrends: components["schemas"]["AnalyticsTrendDto"][];
+        };
+        StudentAnalyticsHistoryItemDto: {
+            examId: string;
+            examTitle: string;
+            subjectName: string;
+            percentage: number;
+            grade: Record<string, never> | null;
+            finalizedAt: Record<string, never> | null;
+        };
+        StudentAnalyticsResponseDto: {
+            averagePercentage: Record<string, never> | null;
+            highestPercentage: Record<string, never> | null;
+            lowestPercentage: Record<string, never> | null;
+            passRate: Record<string, never> | null;
+            resultCount: number;
+            studentProfileId: string;
+            history: components["schemas"]["StudentAnalyticsHistoryItemDto"][];
         };
         StudentResponseDto: {
             membershipId: string;
@@ -6047,6 +6315,25 @@ export interface operations {
             };
         };
     };
+    PlatformAnalyticsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAnalyticsResponseDto"];
+                };
+            };
+        };
+    };
     AcademicsContextController_get: {
         parameters: {
             query?: never;
@@ -7882,6 +8169,146 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarkReadResponseDto"];
+                };
+            };
+        };
+    };
+    AnalyticsController_exam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamAnalyticsResponseDto"];
+                };
+            };
+        };
+    };
+    AnalyticsController_questions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionAnalyticsResponseDto"];
+                };
+            };
+        };
+    };
+    AnalyticsController_class: {
+        parameters: {
+            query?: {
+                academicSessionId?: string;
+                academicTermId?: string;
+                subjectId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassAnalyticsResponseDto"];
+                };
+            };
+        };
+    };
+    AnalyticsController_department: {
+        parameters: {
+            query?: {
+                academicSessionId?: string;
+                academicTermId?: string;
+                subjectId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentAnalyticsResponseDto"];
+                };
+            };
+        };
+    };
+    AnalyticsController_school: {
+        parameters: {
+            query?: {
+                academicSessionId?: string;
+                academicTermId?: string;
+                subjectId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolAnalyticsResponseDto"];
+                };
+            };
+        };
+    };
+    AnalyticsController_student: {
+        parameters: {
+            query?: {
+                academicSessionId?: string;
+                academicTermId?: string;
+                subjectId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentAnalyticsResponseDto"];
                 };
             };
         };

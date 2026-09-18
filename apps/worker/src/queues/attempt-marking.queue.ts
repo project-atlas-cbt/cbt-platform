@@ -55,6 +55,8 @@ export interface AttemptMarkingWorkerDeps {
    * prove DoD item 10's rollback/resumability guarantee. Never set in
    * production. */
   onBeforeUpsert?: (index: number) => void;
+  /** B17 cache invalidation runs only after the marking transaction commits. */
+  invalidateAnalytics?: (schoolId: string) => Promise<void>;
 }
 
 export async function runAttemptMarking(
@@ -151,6 +153,17 @@ export async function runAttemptMarking(
     } catch (error) {
       console.error(
         `[attempt-marking] result ${finalized.resultId} was published automatically but its audit/notification write failed: ${String(error)}`,
+      );
+    }
+  }
+  if (finalized) {
+    try {
+      await deps.invalidateAnalytics?.(schoolId);
+    } catch (error) {
+      // The result is already durable. A cache-version bump is retryable by
+      // the scheduled refresh and must never fail a marking job.
+      console.error(
+        `[attempt-marking] analytics cache invalidation failed for ${schoolId}: ${String(error)}`,
       );
     }
   }

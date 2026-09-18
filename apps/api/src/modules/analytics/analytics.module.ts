@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { IdentityModule } from '../identity/identity.module.js';
+import { AnalyticsController } from './analytics.controller.js';
+import { AnalyticsCacheService } from './analytics-cache.service.js';
+import { AnalyticsService } from './analytics.service.js';
 
 /**
  * Bounded domain per 08 §5: "Analytics — Derived metrics and report views;
@@ -7,5 +11,10 @@ import { Module } from '@nestjs/common';
  *
  * Deliberately empty in B0 — module boundary stubbed, no domain logic.
  */
-@Module({})
+@Module({
+  imports: [IdentityModule],
+  controllers: [AnalyticsController],
+  providers: [AnalyticsService, AnalyticsCacheService],
+  exports: [AnalyticsService, AnalyticsCacheService],
+})
 export class AnalyticsModule {}

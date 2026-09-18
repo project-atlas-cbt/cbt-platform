@@ -1494,6 +1494,28 @@
         ]
       }
     },
+    "/platform/analytics": {
+      "get": {
+        "operationId": "PlatformAnalyticsController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformAnalyticsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Derived platform business and usage analytics.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/academics/context": {
       "get": {
         "operationId": "AcademicsContextController_get",
@@ -4219,6 +4241,288 @@
         "summary": "Mark every unread notification read (B10).",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/analytics/exams/{id}": {
+      "get": {
+        "operationId": "AnalyticsController_exam",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamAnalyticsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Derived exam performance, participation and distribution.",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/exams/{id}/questions": {
+      "get": {
+        "operationId": "AnalyticsController_questions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionAnalyticsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Per-question correct, incorrect and unanswered rates for one fixed-selection exam.",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/classes/{id}": {
+      "get": {
+        "operationId": "AnalyticsController_class",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "academicSessionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "academicTermId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassAnalyticsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/departments/{id}": {
+      "get": {
+        "operationId": "AnalyticsController_department",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "academicSessionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "academicTermId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepartmentAnalyticsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/school": {
+      "get": {
+        "operationId": "AnalyticsController_school",
+        "parameters": [
+          {
+            "name": "academicSessionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "academicTermId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAnalyticsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/analytics/students/{id}": {
+      "get": {
+        "operationId": "AnalyticsController_student",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "academicSessionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "academicTermId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentAnalyticsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "analytics"
         ]
       }
     },
@@ -9192,6 +9496,107 @@
           "reason"
         ]
       },
+      "PlatformAnalyticsTrendDto": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "schoolsCreated": {
+            "type": "number"
+          },
+          "examsCreated": {
+            "type": "number"
+          },
+          "attemptsStarted": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "month",
+          "schoolsCreated",
+          "examsCreated",
+          "attemptsStarted"
+        ]
+      },
+      "PlatformAnalyticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "totalSchools": {
+            "type": "number"
+          },
+          "activeSchools": {
+            "type": "number"
+          },
+          "provisionalSchools": {
+            "type": "number"
+          },
+          "suspendedSchools": {
+            "type": "number"
+          },
+          "expiredSchools": {
+            "type": "number"
+          },
+          "deactivatedSchools": {
+            "type": "number"
+          },
+          "pendingSubscriptions": {
+            "type": "number"
+          },
+          "activeSubscriptions": {
+            "type": "number"
+          },
+          "expiringSubscriptions": {
+            "type": "number"
+          },
+          "expiredSubscriptions": {
+            "type": "number"
+          },
+          "students": {
+            "type": "number"
+          },
+          "teachers": {
+            "type": "number"
+          },
+          "exams": {
+            "type": "number"
+          },
+          "attempts": {
+            "type": "number"
+          },
+          "activations": {
+            "type": "number"
+          },
+          "trends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformAnalyticsTrendDto"
+            }
+          },
+          "computedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "totalSchools",
+          "activeSchools",
+          "provisionalSchools",
+          "suspendedSchools",
+          "expiredSchools",
+          "deactivatedSchools",
+          "pendingSubscriptions",
+          "activeSubscriptions",
+          "expiringSubscriptions",
+          "expiredSubscriptions",
+          "students",
+          "teachers",
+          "exams",
+          "attempts",
+          "activations",
+          "trends",
+          "computedAt"
+        ]
+      },
       "CurrentSessionSummaryDto": {
         "type": "object",
         "properties": {
@@ -11816,6 +12221,577 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "ParticipationMetricDto": {
+        "type": "object",
+        "properties": {
+          "expectedStudentCount": {
+            "type": "number"
+          },
+          "attendedCount": {
+            "type": "number"
+          },
+          "absentCount": {
+            "type": "number"
+          },
+          "pendingCount": {
+            "type": "number"
+          },
+          "completionRate": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "expectedStudentCount",
+          "attendedCount",
+          "absentCount",
+          "pendingCount",
+          "completionRate"
+        ]
+      },
+      "PercentageDistributionBucketDto": {
+        "type": "object",
+        "properties": {
+          "lowerBound": {
+            "type": "number"
+          },
+          "upperBound": {
+            "type": "number"
+          },
+          "count": {
+            "type": "number"
+          },
+          "percentage": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "lowerBound",
+          "upperBound",
+          "count",
+          "percentage"
+        ]
+      },
+      "ExamAnalyticsClassDto": {
+        "type": "object",
+        "properties": {
+          "averagePercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultCount": {
+            "type": "number"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string"
+          },
+          "participation": {
+            "$ref": "#/components/schemas/ParticipationMetricDto"
+          }
+        },
+        "required": [
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "resultCount",
+          "classId",
+          "className",
+          "participation"
+        ]
+      },
+      "ExamAnalyticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "averagePercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultCount": {
+            "type": "number"
+          },
+          "examId": {
+            "type": "string"
+          },
+          "voidedResultCount": {
+            "type": "number"
+          },
+          "participation": {
+            "$ref": "#/components/schemas/ParticipationMetricDto"
+          },
+          "distribution": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PercentageDistributionBucketDto"
+            }
+          },
+          "classBreakdown": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamAnalyticsClassDto"
+            }
+          }
+        },
+        "required": [
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "resultCount",
+          "examId",
+          "voidedResultCount",
+          "participation",
+          "distribution",
+          "classBreakdown"
+        ]
+      },
+      "QuestionPerformanceDto": {
+        "type": "object",
+        "properties": {
+          "examQuestionId": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "number"
+          },
+          "questionId": {
+            "type": "string"
+          },
+          "questionType": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "topicName": {
+            "type": "object",
+            "nullable": true
+          },
+          "exposureCount": {
+            "type": "number"
+          },
+          "correctCount": {
+            "type": "number"
+          },
+          "incorrectCount": {
+            "type": "number"
+          },
+          "unansweredCount": {
+            "type": "number"
+          },
+          "correctRate": {
+            "type": "number"
+          },
+          "incorrectRate": {
+            "type": "number"
+          },
+          "unansweredRate": {
+            "type": "number"
+          },
+          "voidedForScoring": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "examQuestionId",
+          "sequence",
+          "questionId",
+          "questionType",
+          "subjectId",
+          "topicName",
+          "exposureCount",
+          "correctCount",
+          "incorrectCount",
+          "unansweredCount",
+          "correctRate",
+          "incorrectRate",
+          "unansweredRate",
+          "voidedForScoring"
+        ]
+      },
+      "QuestionAnalyticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionPerformanceDto"
+            }
+          }
+        },
+        "required": [
+          "examId",
+          "items"
+        ]
+      },
+      "ComparisonMetricDto": {
+        "type": "object",
+        "properties": {
+          "averagePercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultCount": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "resultCount",
+          "id",
+          "name"
+        ]
+      },
+      "ClassAnalyticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "averagePercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultCount": {
+            "type": "number"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "participation": {
+            "$ref": "#/components/schemas/ParticipationMetricDto"
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonMetricDto"
+            }
+          },
+          "exams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonMetricDto"
+            }
+          }
+        },
+        "required": [
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "resultCount",
+          "classId",
+          "participation",
+          "subjects",
+          "exams"
+        ]
+      },
+      "AnalyticsTrendDto": {
+        "type": "object",
+        "properties": {
+          "averagePercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultCount": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "participation": {
+            "$ref": "#/components/schemas/ParticipationMetricDto"
+          },
+          "examCount": {
+            "type": "number"
+          },
+          "attemptCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "resultCount",
+          "id",
+          "name",
+          "participation",
+          "examCount",
+          "attemptCount"
+        ]
+      },
+      "DepartmentAnalyticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "averagePercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultCount": {
+            "type": "number"
+          },
+          "departmentId": {
+            "type": "string"
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonMetricDto"
+            }
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonMetricDto"
+            }
+          },
+          "exams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonMetricDto"
+            }
+          },
+          "termTrends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsTrendDto"
+            }
+          }
+        },
+        "required": [
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "resultCount",
+          "departmentId",
+          "subjects",
+          "classes",
+          "exams",
+          "termTrends"
+        ]
+      },
+      "SchoolAnalyticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "averagePercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultCount": {
+            "type": "number"
+          },
+          "participation": {
+            "$ref": "#/components/schemas/ParticipationMetricDto"
+          },
+          "examCount": {
+            "type": "number"
+          },
+          "attemptCount": {
+            "type": "number"
+          },
+          "departments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonMetricDto"
+            }
+          },
+          "sessionTrends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnalyticsTrendDto"
+            }
+          }
+        },
+        "required": [
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "resultCount",
+          "participation",
+          "examCount",
+          "attemptCount",
+          "departments",
+          "sessionTrends"
+        ]
+      },
+      "StudentAnalyticsHistoryItemDto": {
+        "type": "object",
+        "properties": {
+          "examId": {
+            "type": "string"
+          },
+          "examTitle": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "grade": {
+            "type": "object",
+            "nullable": true
+          },
+          "finalizedAt": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "examId",
+          "examTitle",
+          "subjectName",
+          "percentage",
+          "grade",
+          "finalizedAt"
+        ]
+      },
+      "StudentAnalyticsResponseDto": {
+        "type": "object",
+        "properties": {
+          "averagePercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "highestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "lowestPercentage": {
+            "type": "object",
+            "nullable": true
+          },
+          "passRate": {
+            "type": "object",
+            "nullable": true
+          },
+          "resultCount": {
+            "type": "number"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentAnalyticsHistoryItemDto"
+            }
+          }
+        },
+        "required": [
+          "averagePercentage",
+          "highestPercentage",
+          "lowestPercentage",
+          "passRate",
+          "resultCount",
+          "studentProfileId",
+          "history"
         ]
       },
       "StudentResponseDto": {

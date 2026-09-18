@@ -151,6 +151,14 @@ export const envSchema = z.object({
     .positive()
     .default(5 * 1000),
 
+  // B17 derived analytics cache-maintenance sweep. This never stores
+  // academic facts; it only keeps tenant refresh health observable.
+  ANALYTICS_REFRESH_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 60 * 1000),
+
   // B12: how long an exam may sit OPEN with no session activity before the
   // Control Center flags it as stale (A-14) — never auto-closed, only
   // surfaced. An engineering default: long enough that a normal lab-to-lab

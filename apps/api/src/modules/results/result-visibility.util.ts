@@ -52,10 +52,13 @@ export function studentVisibleResultWhere(
  * no complete score, and averaging a partial one would understate the
  * cohort.
  */
-export function aggregatableResultWhere(schoolId: string, examId: string): Prisma.ResultWhereInput {
+export function aggregatableResultWhere(
+  schoolId: string,
+  examId?: string,
+): Prisma.ResultWhereInput {
   return {
     schoolId,
-    examId,
+    ...(examId !== undefined && { examId }),
     state: { in: ['FINAL', 'ADJUSTED'] },
   };
 }

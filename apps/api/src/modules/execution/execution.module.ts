@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module.js';
+import { AnalyticsModule } from '../analytics/analytics.module.js';
 import { NotificationCenterModule } from '../notification-center/notification-center.module.js';
 import { OperationsModule } from '../operations/operations.module.js';
 import { ExamAdministratorScopeResolverProvider } from './exam-administrator-scope-resolver.provider.js';
@@ -62,7 +63,7 @@ import { StudentAssessmentService } from './student-assessment.service.js';
  * re-export already established.
  */
 @Module({
-  imports: [IdentityModule, OperationsModule, NotificationCenterModule],
+  imports: [IdentityModule, OperationsModule, NotificationCenterModule, AnalyticsModule],
   controllers: [
     ExamControlController,
     ExamSessionController,

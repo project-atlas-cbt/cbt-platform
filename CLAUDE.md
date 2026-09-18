@@ -415,7 +415,12 @@ fields; one DoD item stays honestly partial by phase boundary, not fabricated (`
 participation data exists until `B16`). **`B16 — Participation, Absence & Makeup`**,
 **`F15 — Staff Results & Publication`** are complete. **`F16 — Participation, Absence & Makeup`**
 is implemented, with browser E2E/manual visual validation still pending because this repository has
-no configured browser harness. F16 delivers the shared staff participation/makeup workspace,
+no configured browser harness. **`B17 — Analytics`** is implemented and published as
+`analytics.v1`: scoped, derived exam/question/class/department/school/student/platform
+analytics; score aggregates use the shared FINAL/ADJUSTED filter, participation uses
+ADR-0024 roll-up, and Redis snapshots are tenant/audience keyed and disposable. F17 is
+now the required paired contract consumer, so B17 remains awaiting frontend confirmation
+rather than being marked fully complete. F16 delivers the shared staff participation/makeup workspace,
 preserving original absence alongside makeup outcomes and using server-confirmed reason-bearing
 actions only; excused absence remains intentionally deferred. See this file's Change Log entries below
 (dated 2026-09-04, 2026-09-05 and 2026-09-10) for the preceding implementation detail.

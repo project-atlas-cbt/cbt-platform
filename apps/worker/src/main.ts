@@ -40,6 +40,11 @@ import {
   createExamControlRefreshWorker,
   scheduleExamControlRefreshSweep,
 } from './queues/exam-control-refresh.queue.js';
+import {
+  ANALYTICS_REFRESH_QUEUE_NAME,
+  createAnalyticsRefreshWorker,
+  scheduleAnalyticsRefresh,
+} from './queues/analytics-refresh.queue.js';
 
 async function main() {
   loadRootEnv();
@@ -125,6 +130,10 @@ async function main() {
     env.EXAM_CONTROL_REFRESH_INTERVAL_MS,
   );
 
+  const analyticsRefreshWorker = createAnalyticsRefreshWorker(connection, { redis });
+  const analyticsRefreshQueue = new Queue(ANALYTICS_REFRESH_QUEUE_NAME, { connection });
+  await scheduleAnalyticsRefresh(analyticsRefreshQueue, env.ANALYTICS_REFRESH_INTERVAL_MS);
+
   // B14: this process is a producer onto the shared marking queue — both
   // its own ADR-0004 sweeper (below) and apps/api's submit()/end()/
   // opportunistic-finalisation paths enqueue here; the marking-job
@@ -147,7 +156,12 @@ async function main() {
       removeOnFail: 10,
     });
   };
-  const attemptMarkingWorker = createAttemptMarkingWorker(connection, {});
+  const attemptMarkingWorker = createAttemptMarkingWorker(connection, {
+    invalidateAnalytics: async (schoolId) => {
+      await redis.incr(`atlas:analytics:school:${schoolId}:version`);
+      await redis.del('atlas:analytics:platform:overview');
+    },
+  });
 
   // B14: ADR-0004's sweeper — the authority half of "a background sweeper
   // as the authority, plus opportunistic finalisation, sharing one
@@ -162,7 +176,12 @@ async function main() {
   // — apps/api's ResultAdjustmentQueueService is the sole producer, since an
   // adjustment always originates from an authenticated, audited staff action
   // rather than from any scheduled sweep.
-  const resultAdjustmentWorker = createResultAdjustmentWorker(connection, {});
+  const resultAdjustmentWorker = createResultAdjustmentWorker(connection, {
+    invalidateAnalytics: async (schoolId) => {
+      await redis.incr(`atlas:analytics:school:${schoolId}:version`);
+      await redis.del('atlas:analytics:platform:overview');
+    },
+  });
   await scheduleAttemptAutoSubmitSweep(
     attemptAutoSubmitQueue,
     env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS,
@@ -176,6 +195,7 @@ async function main() {
     importExpiryQueue,
     unassignedStudentsDigestQueue,
     examControlRefreshQueue,
+    analyticsRefreshQueue,
     notificationDispatchQueue,
     attemptMarkingQueue,
     attemptAutoSubmitQueue,
@@ -192,6 +212,7 @@ async function main() {
     importExpiryWorker,
     unassignedStudentsDigestWorker,
     examControlRefreshWorker,
+    analyticsRefreshWorker,
     attemptMarkingWorker,
     attemptAutoSubmitWorker,
     resultAdjustmentWorker,
@@ -225,6 +246,7 @@ async function main() {
       importExpiryWorker.close(),
       unassignedStudentsDigestWorker.close(),
       examControlRefreshWorker.close(),
+      analyticsRefreshWorker.close(),
       attemptMarkingWorker.close(),
       resultAdjustmentWorker.close(),
       attemptAutoSubmitWorker.close(),
@@ -234,6 +256,7 @@ async function main() {
     await importExpiryQueue.close();
     await unassignedStudentsDigestQueue.close();
     await examControlRefreshQueue.close();
+    await analyticsRefreshQueue.close();
     await notificationDispatchQueue.close();
     await attemptMarkingQueue.close();
     await attemptAutoSubmitQueue.close();

@@ -5,6 +5,7 @@ import { AuthorizationService } from '../authorization/authorization.service.js'
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { loadExamOrThrow } from '../exams/exam-mappers.js';
 import { NotificationService } from '../notification-center/notification.service.js';
+import { AnalyticsCacheService } from '../analytics/analytics-cache.service.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import {
   auditRoleFor,
@@ -39,6 +40,7 @@ export class ResultPublicationService {
     private readonly authz: AuthorizationService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
+    private readonly analyticsCache: AnalyticsCacheService,
   ) {}
 
   async publish(
@@ -102,6 +104,7 @@ export class ResultPublicationService {
     });
 
     await this.notifyStudents(schoolId, examId, exam.title);
+    await this.analyticsCache.invalidateSchool(schoolId);
 
     return this.toDto(publication, affected, schoolId);
   }
@@ -142,6 +145,7 @@ export class ResultPublicationService {
       reason: dto.reason,
       metadata: { affectedResultCount: affected },
     });
+    await this.analyticsCache.invalidateSchool(schoolId);
 
     return this.toDto(publication, affected, schoolId);
   }
@@ -210,6 +214,7 @@ export class ResultPublicationService {
       entityId: resultId,
       reason,
     });
+    await this.analyticsCache.invalidateSchool(schoolId);
 
     return { status: 'ok' };
   }
