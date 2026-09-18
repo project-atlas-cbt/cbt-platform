@@ -12239,7 +12239,8 @@
             "type": "number"
           },
           "completionRate": {
-            "type": "object"
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
@@ -12263,7 +12264,7 @@
             "type": "number"
           },
           "percentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           }
         },
@@ -12278,19 +12279,19 @@
         "type": "object",
         "properties": {
           "averagePercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "highestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "lowestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "passRate": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "resultCount": {
@@ -12321,19 +12322,19 @@
         "type": "object",
         "properties": {
           "averagePercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "highestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "lowestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "passRate": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "resultCount": {
@@ -12393,7 +12394,7 @@
             "type": "string"
           },
           "topicName": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "exposureCount": {
@@ -12460,19 +12461,19 @@
         "type": "object",
         "properties": {
           "averagePercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "highestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "lowestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "passRate": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "resultCount": {
@@ -12499,19 +12500,19 @@
         "type": "object",
         "properties": {
           "averagePercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "highestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "lowestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "passRate": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "resultCount": {
@@ -12552,19 +12553,19 @@
         "type": "object",
         "properties": {
           "averagePercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "highestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "lowestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "passRate": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "resultCount": {
@@ -12603,19 +12604,19 @@
         "type": "object",
         "properties": {
           "averagePercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "highestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "lowestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "passRate": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "resultCount": {
@@ -12666,19 +12667,19 @@
         "type": "object",
         "properties": {
           "averagePercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "highestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "lowestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "passRate": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "resultCount": {
@@ -12735,11 +12736,11 @@
             "type": "number"
           },
           "grade": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "finalizedAt": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           }
         },
@@ -12756,19 +12757,19 @@
         "type": "object",
         "properties": {
           "averagePercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "highestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "lowestPercentage": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "passRate": {
-            "type": "object",
+            "type": "number",
             "nullable": true
           },
           "resultCount": {

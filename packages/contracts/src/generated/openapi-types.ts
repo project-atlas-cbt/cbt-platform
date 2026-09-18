@@ -4348,29 +4348,29 @@ export interface components {
             attendedCount: number;
             absentCount: number;
             pendingCount: number;
-            completionRate: Record<string, never>;
+            completionRate: number | null;
         };
         PercentageDistributionBucketDto: {
             lowerBound: number;
             upperBound: number;
             count: number;
-            percentage: Record<string, never> | null;
+            percentage: number | null;
         };
         ExamAnalyticsClassDto: {
-            averagePercentage: Record<string, never> | null;
-            highestPercentage: Record<string, never> | null;
-            lowestPercentage: Record<string, never> | null;
-            passRate: Record<string, never> | null;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
             resultCount: number;
             classId: string;
             className: string;
             participation: components["schemas"]["ParticipationMetricDto"];
         };
         ExamAnalyticsResponseDto: {
-            averagePercentage: Record<string, never> | null;
-            highestPercentage: Record<string, never> | null;
-            lowestPercentage: Record<string, never> | null;
-            passRate: Record<string, never> | null;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
             resultCount: number;
             examId: string;
             voidedResultCount: number;
@@ -4384,7 +4384,7 @@ export interface components {
             questionId: string;
             questionType: string;
             subjectId: string;
-            topicName: Record<string, never> | null;
+            topicName: string | null;
             exposureCount: number;
             correctCount: number;
             incorrectCount: number;
@@ -4399,19 +4399,19 @@ export interface components {
             items: components["schemas"]["QuestionPerformanceDto"][];
         };
         ComparisonMetricDto: {
-            averagePercentage: Record<string, never> | null;
-            highestPercentage: Record<string, never> | null;
-            lowestPercentage: Record<string, never> | null;
-            passRate: Record<string, never> | null;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
             resultCount: number;
             id: string;
             name: string;
         };
         ClassAnalyticsResponseDto: {
-            averagePercentage: Record<string, never> | null;
-            highestPercentage: Record<string, never> | null;
-            lowestPercentage: Record<string, never> | null;
-            passRate: Record<string, never> | null;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
             resultCount: number;
             classId: string;
             participation: components["schemas"]["ParticipationMetricDto"];
@@ -4419,10 +4419,10 @@ export interface components {
             exams: components["schemas"]["ComparisonMetricDto"][];
         };
         AnalyticsTrendDto: {
-            averagePercentage: Record<string, never> | null;
-            highestPercentage: Record<string, never> | null;
-            lowestPercentage: Record<string, never> | null;
-            passRate: Record<string, never> | null;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
             resultCount: number;
             id: string;
             name: string;
@@ -4431,10 +4431,10 @@ export interface components {
             attemptCount: number;
         };
         DepartmentAnalyticsResponseDto: {
-            averagePercentage: Record<string, never> | null;
-            highestPercentage: Record<string, never> | null;
-            lowestPercentage: Record<string, never> | null;
-            passRate: Record<string, never> | null;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
             resultCount: number;
             departmentId: string;
             subjects: components["schemas"]["ComparisonMetricDto"][];
@@ -4443,10 +4443,10 @@ export interface components {
             termTrends: components["schemas"]["AnalyticsTrendDto"][];
         };
         SchoolAnalyticsResponseDto: {
-            averagePercentage: Record<string, never> | null;
-            highestPercentage: Record<string, never> | null;
-            lowestPercentage: Record<string, never> | null;
-            passRate: Record<string, never> | null;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
             resultCount: number;
             participation: components["schemas"]["ParticipationMetricDto"];
             examCount: number;
@@ -4459,14 +4459,14 @@ export interface components {
             examTitle: string;
             subjectName: string;
             percentage: number;
-            grade: Record<string, never> | null;
-            finalizedAt: Record<string, never> | null;
+            grade: string | null;
+            finalizedAt: string | null;
         };
         StudentAnalyticsResponseDto: {
-            averagePercentage: Record<string, never> | null;
-            highestPercentage: Record<string, never> | null;
-            lowestPercentage: Record<string, never> | null;
-            passRate: Record<string, never> | null;
+            averagePercentage: number | null;
+            highestPercentage: number | null;
+            lowestPercentage: number | null;
+            passRate: number | null;
             resultCount: number;
             studentProfileId: string;
             history: components["schemas"]["StudentAnalyticsHistoryItemDto"][];

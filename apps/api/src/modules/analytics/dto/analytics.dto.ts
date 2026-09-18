@@ -24,26 +24,26 @@ export class AnalyticsContextQueryDto {
 export class ClassAnalyticsQueryDto extends AnalyticsContextQueryDto {}
 
 export class PercentageMetricDto {
-  @ApiProperty({ nullable: true }) averagePercentage!: number | null;
-  @ApiProperty({ nullable: true }) highestPercentage!: number | null;
-  @ApiProperty({ nullable: true }) lowestPercentage!: number | null;
-  @ApiProperty({ nullable: true }) passRate!: number | null;
-  @ApiProperty() resultCount!: number;
+  @ApiProperty({ type: Number, nullable: true }) averagePercentage!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) highestPercentage!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) lowestPercentage!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) passRate!: number | null;
+  @ApiProperty({ type: Number }) resultCount!: number;
 }
 
 export class ParticipationMetricDto {
-  @ApiProperty() expectedStudentCount!: number;
-  @ApiProperty() attendedCount!: number;
-  @ApiProperty() absentCount!: number;
-  @ApiProperty() pendingCount!: number;
-  @ApiProperty() completionRate!: number | null;
+  @ApiProperty({ type: Number }) expectedStudentCount!: number;
+  @ApiProperty({ type: Number }) attendedCount!: number;
+  @ApiProperty({ type: Number }) absentCount!: number;
+  @ApiProperty({ type: Number }) pendingCount!: number;
+  @ApiProperty({ type: Number, nullable: true }) completionRate!: number | null;
 }
 
 export class PercentageDistributionBucketDto {
-  @ApiProperty() lowerBound!: number;
-  @ApiProperty() upperBound!: number;
-  @ApiProperty() count!: number;
-  @ApiProperty({ nullable: true }) percentage!: number | null;
+  @ApiProperty({ type: Number }) lowerBound!: number;
+  @ApiProperty({ type: Number }) upperBound!: number;
+  @ApiProperty({ type: Number }) count!: number;
+  @ApiProperty({ type: Number, nullable: true }) percentage!: number | null;
 }
 
 export class ExamAnalyticsClassDto extends PercentageMetricDto {
@@ -62,20 +62,20 @@ export class ExamAnalyticsResponseDto extends PercentageMetricDto {
 }
 
 export class QuestionPerformanceDto {
-  @ApiProperty() examQuestionId!: string;
-  @ApiProperty() sequence!: number;
-  @ApiProperty() questionId!: string;
-  @ApiProperty() questionType!: string;
-  @ApiProperty() subjectId!: string;
-  @ApiProperty({ nullable: true }) topicName!: string | null;
-  @ApiProperty() exposureCount!: number;
-  @ApiProperty() correctCount!: number;
-  @ApiProperty() incorrectCount!: number;
-  @ApiProperty() unansweredCount!: number;
-  @ApiProperty() correctRate!: number;
-  @ApiProperty() incorrectRate!: number;
-  @ApiProperty() unansweredRate!: number;
-  @ApiProperty() voidedForScoring!: boolean;
+  @ApiProperty({ type: String }) examQuestionId!: string;
+  @ApiProperty({ type: Number }) sequence!: number;
+  @ApiProperty({ type: String }) questionId!: string;
+  @ApiProperty({ type: String }) questionType!: string;
+  @ApiProperty({ type: String }) subjectId!: string;
+  @ApiProperty({ type: String, nullable: true }) topicName!: string | null;
+  @ApiProperty({ type: Number }) exposureCount!: number;
+  @ApiProperty({ type: Number }) correctCount!: number;
+  @ApiProperty({ type: Number }) incorrectCount!: number;
+  @ApiProperty({ type: Number }) unansweredCount!: number;
+  @ApiProperty({ type: Number }) correctRate!: number;
+  @ApiProperty({ type: Number }) incorrectRate!: number;
+  @ApiProperty({ type: Number }) unansweredRate!: number;
+  @ApiProperty({ type: Boolean }) voidedForScoring!: boolean;
 }
 
 export class QuestionAnalyticsResponseDto {
@@ -84,27 +84,27 @@ export class QuestionAnalyticsResponseDto {
 }
 
 export class ComparisonMetricDto extends PercentageMetricDto {
-  @ApiProperty() id!: string;
-  @ApiProperty() name!: string;
+  @ApiProperty({ type: String }) id!: string;
+  @ApiProperty({ type: String }) name!: string;
 }
 
 export class AnalyticsTrendDto extends PercentageMetricDto {
-  @ApiProperty() id!: string;
-  @ApiProperty() name!: string;
+  @ApiProperty({ type: String }) id!: string;
+  @ApiProperty({ type: String }) name!: string;
   @ApiProperty({ type: ParticipationMetricDto }) participation!: ParticipationMetricDto;
-  @ApiProperty() examCount!: number;
-  @ApiProperty() attemptCount!: number;
+  @ApiProperty({ type: Number }) examCount!: number;
+  @ApiProperty({ type: Number }) attemptCount!: number;
 }
 
 export class ClassAnalyticsResponseDto extends PercentageMetricDto {
-  @ApiProperty() classId!: string;
+  @ApiProperty({ type: String }) classId!: string;
   @ApiProperty({ type: ParticipationMetricDto }) participation!: ParticipationMetricDto;
   @ApiProperty({ type: [ComparisonMetricDto] }) subjects!: ComparisonMetricDto[];
   @ApiProperty({ type: [ComparisonMetricDto] }) exams!: ComparisonMetricDto[];
 }
 
 export class DepartmentAnalyticsResponseDto extends PercentageMetricDto {
-  @ApiProperty() departmentId!: string;
+  @ApiProperty({ type: String }) departmentId!: string;
   @ApiProperty({ type: [ComparisonMetricDto] }) subjects!: ComparisonMetricDto[];
   @ApiProperty({ type: [ComparisonMetricDto] }) classes!: ComparisonMetricDto[];
   @ApiProperty({ type: [ComparisonMetricDto] }) exams!: ComparisonMetricDto[];
@@ -113,50 +113,50 @@ export class DepartmentAnalyticsResponseDto extends PercentageMetricDto {
 
 export class SchoolAnalyticsResponseDto extends PercentageMetricDto {
   @ApiProperty({ type: ParticipationMetricDto }) participation!: ParticipationMetricDto;
-  @ApiProperty() examCount!: number;
-  @ApiProperty() attemptCount!: number;
+  @ApiProperty({ type: Number }) examCount!: number;
+  @ApiProperty({ type: Number }) attemptCount!: number;
   @ApiProperty({ type: [ComparisonMetricDto] }) departments!: ComparisonMetricDto[];
   @ApiProperty({ type: [AnalyticsTrendDto] }) sessionTrends!: AnalyticsTrendDto[];
 }
 
 export class StudentAnalyticsHistoryItemDto {
-  @ApiProperty() examId!: string;
-  @ApiProperty() examTitle!: string;
-  @ApiProperty() subjectName!: string;
-  @ApiProperty() percentage!: number;
-  @ApiProperty({ nullable: true }) grade!: string | null;
-  @ApiProperty({ nullable: true }) finalizedAt!: string | null;
+  @ApiProperty({ type: String }) examId!: string;
+  @ApiProperty({ type: String }) examTitle!: string;
+  @ApiProperty({ type: String }) subjectName!: string;
+  @ApiProperty({ type: Number }) percentage!: number;
+  @ApiProperty({ type: String, nullable: true }) grade!: string | null;
+  @ApiProperty({ type: String, nullable: true }) finalizedAt!: string | null;
 }
 
 export class StudentAnalyticsResponseDto extends PercentageMetricDto {
-  @ApiProperty() studentProfileId!: string;
+  @ApiProperty({ type: String }) studentProfileId!: string;
   @ApiProperty({ type: [StudentAnalyticsHistoryItemDto] })
   history!: StudentAnalyticsHistoryItemDto[];
 }
 
 export class PlatformAnalyticsTrendDto {
-  @ApiProperty() month!: string;
-  @ApiProperty() schoolsCreated!: number;
-  @ApiProperty() examsCreated!: number;
-  @ApiProperty() attemptsStarted!: number;
+  @ApiProperty({ type: String }) month!: string;
+  @ApiProperty({ type: Number }) schoolsCreated!: number;
+  @ApiProperty({ type: Number }) examsCreated!: number;
+  @ApiProperty({ type: Number }) attemptsStarted!: number;
 }
 
 export class PlatformAnalyticsResponseDto {
-  @ApiProperty() totalSchools!: number;
-  @ApiProperty() activeSchools!: number;
-  @ApiProperty() provisionalSchools!: number;
-  @ApiProperty() suspendedSchools!: number;
-  @ApiProperty() expiredSchools!: number;
-  @ApiProperty() deactivatedSchools!: number;
-  @ApiProperty() pendingSubscriptions!: number;
-  @ApiProperty() activeSubscriptions!: number;
-  @ApiProperty() expiringSubscriptions!: number;
-  @ApiProperty() expiredSubscriptions!: number;
-  @ApiProperty() students!: number;
-  @ApiProperty() teachers!: number;
-  @ApiProperty() exams!: number;
-  @ApiProperty() attempts!: number;
-  @ApiProperty() activations!: number;
+  @ApiProperty({ type: Number }) totalSchools!: number;
+  @ApiProperty({ type: Number }) activeSchools!: number;
+  @ApiProperty({ type: Number }) provisionalSchools!: number;
+  @ApiProperty({ type: Number }) suspendedSchools!: number;
+  @ApiProperty({ type: Number }) expiredSchools!: number;
+  @ApiProperty({ type: Number }) deactivatedSchools!: number;
+  @ApiProperty({ type: Number }) pendingSubscriptions!: number;
+  @ApiProperty({ type: Number }) activeSubscriptions!: number;
+  @ApiProperty({ type: Number }) expiringSubscriptions!: number;
+  @ApiProperty({ type: Number }) expiredSubscriptions!: number;
+  @ApiProperty({ type: Number }) students!: number;
+  @ApiProperty({ type: Number }) teachers!: number;
+  @ApiProperty({ type: Number }) exams!: number;
+  @ApiProperty({ type: Number }) attempts!: number;
+  @ApiProperty({ type: Number }) activations!: number;
   @ApiProperty({ type: [PlatformAnalyticsTrendDto] }) trends!: PlatformAnalyticsTrendDto[];
-  @ApiProperty() computedAt!: string;
+  @ApiProperty({ type: String }) computedAt!: string;
 }

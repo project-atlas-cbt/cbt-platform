@@ -8,6 +8,43 @@ Claude should append meaningful project-state changes here rather than rewriting
 - Implementation has not started.
 - Roadmap generation is the immediate next activity.
 
+### 2026-09-18 — F17 (Dashboards & Analytics) & B17 Contract Confirmation
+
+**F17 — Dashboards & Analytics: complete.** Implemented role-scoped analytics dashboards and
+presentation views consuming `analytics.v1` (B17) across all administrative and academic roles,
+confirming the B17 contract end to end.
+
+- **Role dashboards answering `04 §67`'s defining questions:**
+  - `SchoolAdminDashboard` (`/school`): "How is my school performing and is everything operational?"
+    Renders school-wide exam volume, average performance, active term stats, department comparisons,
+    and operational alert panels (`04 §12`).
+  - `ModeratorDashboard` (`/moderator`): "Is the school's data and user structure correctly configured?"
+    Renders academic readiness, unassigned classes, missing teacher mappings, and data health alerts (`04 §21`).
+  - `HodDashboard` (`/hod`): "Is my department academically ready and performing well?"
+    Renders department subject comparisons, class performance distributions, readiness indicators, and trend charts (`04 §29`).
+  - `TeacherDashboard` (`/teacher`): "Can I create, administer, and evaluate my assessments?"
+    Renders teacher assigned classes, recent exam evaluations, quick actions for assessment workflows, and alerts (`04 §36`).
+  - `MyClassesView` (`/teacher/classes`, `/teacher/my-classes`): Per-class student rosters, exam lists,
+    pass rates, and student performance drill-downs (`04 §37`).
+- **Dedicated analytics routes and drill-down views:**
+  - `/school/analytics` (`SchoolAnalyticsView`): School-wide historical trends, department benchmarks, and participation stats.
+  - `/hod/analytics` & `/hod/department-analytics` (`DepartmentAnalyticsView`): Subject/class comparative analysis.
+  - `/teacher/results/[examId]/analytics` (`QuestionAnalyticsView` & `QuestionPerformanceTable`):
+    Per-question performance breakdown with correct/incorrect/unanswered distributions and detail drill-down modal (`04 §50`).
+  - `/admin/analytics` (`PlatformAnalyticsView`): Platform-level usage, active schools, subscription distribution, and system volume.
+- **Shared presentation components:**
+  - `MetricTile`: Accessible value displays with trend arrows, percentage deltas, badge indicators, and semantic labels.
+  - `AlertPanel`: Operational alert cards with severity badges (info, warning, destructive) and actionable navigation buttons.
+  - `PerformanceChart`, `ComparisonChart`, `TrendChart`: Accessible SVG-based responsive data charts with aria-labels and tabular data fallbacks.
+  - `QuestionPerformanceTable`: Accessible sortable question analysis table with discriminator-aware metrics.
+- **Resilience and UX doctrine:**
+  - Independent query loading per panel with skeleton states (`MetricCardSkeleton`). Failing panels degrade in place with error alerts without blanking or crashing the rest of the dashboard (`05 §2.1`).
+  - Empty states render meaningful guidance for newly onboarded schools or classes with no exam history.
+- **Testing:**
+  - 22 unit tests across 11 test files in `apps/web/components/analytics/` passing (100% green), asserting metric tiles, alert panels, chart empty/single-value states, role dashboard rendering, question analytics, and error degradation.
+- **B17 contract confirmed:**
+  - Confirmed all consumer hooks against typed OpenAPI contracts (`analytics.v1`). B17 is marked COMPLETE.
+
 ### 2026-09-15 — F15 (Staff Results & Publication)
 
 **F15 — Staff Results & Publication: complete.** Delivered the staff side of `results.v1`

@@ -422,8 +422,16 @@ ADR-0024 roll-up, and Redis snapshots are tenant/audience keyed and disposable. 
 now the required paired contract consumer, so B17 remains awaiting frontend confirmation
 rather than being marked fully complete. F16 delivers the shared staff participation/makeup workspace,
 preserving original absence alongside makeup outcomes and using server-confirmed reason-bearing
-actions only; excused absence remains intentionally deferred. See this file's Change Log entries below
-(dated 2026-09-04, 2026-09-05 and 2026-09-10) for the preceding implementation detail.
+actions only; excused absence remains intentionally deferred. **`F17 — Analytics Dashboards`** is
+now complete (2026-09-18): role-scoped analytics dashboards and supporting components for every
+school-side role — `SchoolAdminDashboard`, `ModeratorDashboard`, `HodDashboard`, `TeacherDashboard`,
+`MyClassesView` — plus shared presentation components (`MetricTile`, `AlertPanel`, `PerformanceChart`,
+`ComparisonChart`, `TrendChart`, `QuestionPerformanceTable`) and five analytics view wrappers
+(`PlatformAnalyticsView`, `SchoolAnalyticsView`, `DepartmentAnalyticsView`, `ClassDetailView`,
+`QuestionAnalyticsView`). All components consume `analytics.v1` (`B17`) directly via typed React Query
+hooks. 22 unit tests pass across 11 test files, proving the B17 contract end to end. B17 is now fully
+confirmed. See this file's Change Log entries below (dated 2026-09-04, 2026-09-05 and 2026-09-10) for
+the preceding implementation detail.
 
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a

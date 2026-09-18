@@ -70,7 +70,7 @@ The student exam route runs its own client-side runtime inside the shared shell 
 | F14 | Student Results & Profile              | B15            | No                                           | COMPLETE                  |
 | F15 | Staff Results & Publication            | B15            | No                                           | COMPLETE                  |
 | F16 | Participation, Absence & Makeup        | B16            | No                                           | IMPLEMENTED — E2E PENDING |
-| F17 | Dashboards & Analytics                 | B17            | Layout yes                                   | NOT STARTED               |
+| F17 | Dashboards & Analytics                 | B17            | Layout yes                                   | COMPLETE                  |
 | F18 | Reporting, Export & Search             | B18            | No                                           | NOT STARTED               |
 | F19 | Session Rollover UI                    | B19            | No                                           | NOT STARTED               |
 | F20 | Accessibility, Performance & Hardening | B20, B21       | Partially                                    | NOT STARTED               |
@@ -2825,7 +2825,7 @@ Pairs with F12's Control Center, which links here.
 
 # F17 — Dashboards & Analytics
 
-**Status:** NOT STARTED · **Backend pair:** B17
+**Status:** COMPLETE (2026-09-18) · **Backend pair:** B17
 
 ## Objective
 
@@ -2919,6 +2919,30 @@ Depends on B17. Statistics are reused by F15.
 
 - Predictive or AI analytics (`01 §53`).
 - Customisable dashboards — not specified.
+
+## Implementation notes (2026-09-18)
+
+- Implemented role-scoped analytics dashboards answering each role's `04 §67` defining question:
+  - `SchoolAdminDashboard` (`/school`): school-wide performance, active terms, department comparison, operational alert panel (`04 §12`).
+  - `ModeratorDashboard` (`/moderator`): structure verification, academic readiness, unassigned classes, alert panels (`04 §21`).
+  - `HodDashboard` (`/hod`): department academic readiness, subject comparison, class distributions, trend charts (`04 §29`).
+  - `TeacherDashboard` (`/teacher`): assigned classes, quick exam administration actions, recent exam performance, alert panel (`04 §36`).
+  - `MyClassesView` (`/teacher/classes`, `/teacher/my-classes`): per-class rosters, exams, pass rates, and drill-down (`04 §37`).
+- Dedicated analytics routes and views:
+  - `/school/analytics` -> `SchoolAnalyticsView`
+  - `/hod/analytics` & `/hod/department-analytics` -> `DepartmentAnalyticsView`
+  - `/teacher/results/[examId]/analytics` -> `QuestionAnalyticsView` & `QuestionPerformanceTable` (`04 §50`)
+  - `/admin/analytics` -> `PlatformAnalyticsView`
+- Shared presentation components:
+  - `MetricTile`: with trend indicators, badge indicators, accessible labels.
+  - `AlertPanel`: operational alerts with severity badges and direct action navigation.
+  - `PerformanceChart`, `ComparisonChart`, `TrendChart`: flexible SVG-based responsive data visualisations with accessible text alternatives and table fallbacks.
+  - `QuestionPerformanceTable`: item breakdown with correct/incorrect/unanswered rates and drilldown modal.
+- Resilience:
+  - Independent query loading per panel with `MetricCardSkeleton` fallback and per-panel error boundaries/alert states (`05 §2.1` partial degradation).
+- Full unit test suite:
+  - 22 tests across 11 test files covering metric tiles, alert panels, chart empty/single-value states, role dashboard rendering, question analytics, and error degradation.
+- Confirmed contract compatibility with B17 `analytics.v1`.
 
 ---
 
@@ -3305,7 +3329,7 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 | F14   | COMPLETE                  | B15            | 2026-09-10 | 2026-09-10 | Status corrected 2026-09-15 — the Phase Map and this row both still read `NOT STARTED` after F14 shipped                                                 |
 | F15   | COMPLETE                  | B15            | 2026-09-15 | 2026-09-15 | `/moderator/results` added per this phase's own Scope line; withhold/release built here per ADR-0010; no backend gap-closure needed                      |
 | F16   | IMPLEMENTED — E2E PENDING | B16            | 2026-09-17 | 2026-09-17 | Shared staff participation/makeup workspace implemented; browser E2E/manual visual validation remains pending because no browser harness is configured.  |
-| F17   | NOT STARTED               | B17            | —          | —          | Layout may start now                                                                                                                                     |
+| F17   | COMPLETE                  | B17            | 2026-09-18 | 2026-09-18 | Role-scoped dashboards and analytics views implemented and unit-tested (22/22 tests passing across 11 test files). Consumes B17 analytics.v1 directly.   |
 | F18   | NOT STARTED               | B18            | —          | —          |                                                                                                                                                          |
 | F19   | NOT STARTED               | B19            | —          | —          |                                                                                                                                                          |
 | F20   | NOT STARTED               | B20, B21       | —          | —          |                                                                                                                                                          |
