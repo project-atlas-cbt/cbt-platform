@@ -38,6 +38,7 @@ export { S3_CLIENT };
             accessKeyId: config.get('S3_ACCESS_KEY_ID', { infer: true }),
             secretAccessKey: config.get('S3_SECRET_ACCESS_KEY', { infer: true }),
           },
+          systemClockOffset: config.get('S3_SYSTEM_CLOCK_OFFSET_MS', { infer: true }),
           forcePathStyle: true,
         });
       },

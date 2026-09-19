@@ -102,6 +102,10 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional().default(''),
   S3_SECRET_ACCESS_KEY: z.string().optional().default(''),
   S3_REGION: z.string().optional().default('eu-west-1'),
+  // Local Docker Desktop can retain a stale VM clock after host sleep. An
+  // explicit signing offset keeps presigned URLs valid against that storage
+  // clock; production should leave this at the default zero.
+  S3_SYSTEM_CLOCK_OFFSET_MS: z.coerce.number().int().default(0),
 
   // B4: apps/worker's orphan-media reporting sweep interval — report only,
   // never deletes (cleanup is a future M-14 retention-policy job). Not

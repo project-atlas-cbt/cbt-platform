@@ -15,6 +15,16 @@ import type { Prisma, PrismaClient } from '../generated/client/index.js';
  */
 export const TENANT_SESSION_VARIABLE = 'app.current_school_id';
 
+// The Prisma interactive-transaction default only waits two seconds for a
+// pooled connection. Background sweeps legitimately create many short,
+// serial tenant transactions; during an API burst that default turns a
+// recoverable wait into P2028. These bounds preserve failure behavior for a
+// genuinely exhausted pool while allowing normal queue contention to drain.
+const TENANT_TRANSACTION_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 30_000,
+} as const;
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class InvalidTenantContextError extends Error {
@@ -44,7 +54,7 @@ export async function withTenant<T>(
   return client.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config(${TENANT_SESSION_VARIABLE}, ${schoolId}, true)`;
     return fn(tx);
-  });
+  }, TENANT_TRANSACTION_OPTIONS);
 }
 
 // Deliberately no withPlatformBreakGlass() here. Software Admin cross-tenant

@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
-    "migrate:deploy": "prisma migrate deploy",
+    "migrate:deploy": "tsx prisma/migrate-deploy.ts",
     "migrate:reset": "prisma migrate reset --force",
     "migrate:status": "prisma migrate status",
     "seed": "tsx prisma/seed.ts",

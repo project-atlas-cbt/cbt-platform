@@ -444,6 +444,13 @@ role-scoped school search, Software-Admin school-only search, and data-only prin
 endpoints over the existing results/analytics authorization paths. F18 owns browser print layouts,
 CSS and the final end-to-end contract confirmation.
 
+The database migration deploy wrapper reasserts the restricted `atlas_app` role's grants after every
+deployment, so new RLS-protected tables (including `export_jobs`) remain accessible only through
+their tenant policy rather than failing with a table-permission error.
+
+Long-running worker sweeps use an explicit 120-second renewable BullMQ lock (rather than the
+30-second default) so a full tenant pass cannot be reclaimed mid-run by its short refresh cadence.
+
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
 future phase, even though both `F11` and (now) `B12`/`F12` are complete and the Change Log below
