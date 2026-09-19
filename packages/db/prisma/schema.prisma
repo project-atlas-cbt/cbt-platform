@@ -126,6 +126,7 @@ model School {
   // --- B5: academic structure back-relations.
   academicSessions    AcademicSession[]
   departments         Department[]
+  exportJobs          ExportJob[]
 
   @@map("schools")
 }
@@ -3030,4 +3031,68 @@ model GradingScaleBand {
   @@index([schoolId])
   @@index([schoolId, versionId])
   @@map("grading_scale_bands")
+}
+
+// ---------------------------------------------------------------------------
+// Reporting & Export domain (05 §54, 02, ADR-0030) — B18.
+// ---------------------------------------------------------------------------
+
+enum ExportJobType {
+  EXAM_RESULTS
+  STUDENTS
+  TEACHERS
+  CLASSES
+  QUESTION_BANK
+  PARTICIPATION
+}
+
+enum ExportJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+/// B18 — Reporting & Export (05 §54, 08 §14, §15, ADR-0030). Tracks asynchronous
+/// export jobs generating scoped CSV deliverables stored in object storage.
+model ExportJob {
+  id                    String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId              String          @map("school_id") @db.Uuid
+  type                  ExportJobType
+  status                ExportJobStatus @default(PENDING)
+
+  requesterUserId       String          @map("requester_user_id") @db.Uuid
+  requesterRole         Role            @map("requester_role")
+  requesterMembershipId String?         @map("requester_membership_id") @db.Uuid
+
+  /// Immutable, validated request parameters (exam, class, department and/or
+  /// academic context).  Kept with the job so a retry cannot silently widen it.
+  scope                 Json
+
+  /// Stored S3 key: schools/SCHOOL_ID/reports/exports/JOB_ID/FILENAME
+  storageKey            String?         @map("storage_key") @db.VarChar(512)
+  originalFilename      String?         @map("original_filename") @db.VarChar(255)
+  contentType           String?         @map("content_type") @db.VarChar(127)
+  sizeBytes             Int?            @map("size_bytes")
+  rowCount              Int             @default(0) @map("row_count")
+  failureReason         String?         @map("failure_reason")
+
+  /// Rotated, hashed capability for a short-lived authenticated download.
+  /// The requester identity is still checked before the object is read.
+  downloadTokenHash     String?         @map("download_token_hash") @db.VarChar(64)
+  downloadTokenExpiresAt DateTime?      @map("download_token_expires_at") @db.Timestamptz(6)
+
+  /// Expiry for download link and artefact cleanup (default 24h)
+  expiresAt             DateTime        @map("expires_at") @db.Timestamptz(6)
+  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school                School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, id])
+  @@index([schoolId])
+  @@index([schoolId, status])
+  @@index([schoolId, requesterUserId])
+  @@map("export_jobs")
 }

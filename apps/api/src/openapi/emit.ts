@@ -33,11 +33,12 @@ import { injectSharedComponents } from './shared-components.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function main() {
+  // OpenAPI generation builds an application context only; it must never
+  // claim background jobs or establish queue consumers as a side effect.
+  process.env.ATLAS_OPENAPI_EMIT = 'true';
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
     logger: false,
   });
-  await app.init();
-
   const config = app.get(ConfigService<Env, true>);
   const productName = getProductName({ PRODUCT_NAME: config.get('PRODUCT_NAME', { infer: true }) });
   const document = SwaggerModule.createDocument(app, buildOpenApiConfig(productName), {

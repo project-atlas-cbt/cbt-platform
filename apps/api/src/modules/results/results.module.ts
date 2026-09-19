@@ -46,6 +46,6 @@ import { StudentResultService } from './student-result.service.js';
     GradingScaleService,
     ResultAuditActionRegistrationProvider,
   ],
-  exports: [GradingScaleService],
+  exports: [GradingScaleService, ResultQueryService],
 })
 export class ResultsModule {}

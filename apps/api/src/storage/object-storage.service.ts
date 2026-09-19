@@ -5,11 +5,13 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  DeleteObjectCommand,
   PutObjectCommand,
   S3ServiceException,
   type S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { Readable } from 'node:stream';
 import type { Env } from '@atlas/config';
 import { S3_CLIENT } from './storage.tokens.js';
 
@@ -164,6 +166,19 @@ export class ObjectStorageService implements OnModuleInit {
   }
 
   /**
+   * Private artefact download path.  Unlike `getObject`, this deliberately
+   * preserves backpressure all the way to Fastify so a large report never
+   * needs to fit in an API process's heap.
+   */
+  async getObjectStream(storageKey: string): Promise<Readable> {
+    const result = await this.s3.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: storageKey }),
+    );
+    if (!result.Body) throw new Error('Object storage returned an empty response body.');
+    return result.Body as Readable;
+  }
+
+  /**
    * Presigned GET. TTL is the caller's decision — 15 min for question
    * media via `GET /v1/media/:id/url`, a longer TTL for the logo URL
    * embedded in the public `GET /v1/tenant/resolve` (ADR-0021: "logo may
@@ -173,6 +188,29 @@ export class ObjectStorageService implements OnModuleInit {
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: storageKey });
     const url = await getSignedUrl(this.s3, command, { expiresIn: ttlSeconds });
     return { url, expiresAt: new Date(Date.now() + ttlSeconds * 1000) };
+  }
+
+  /** Server-generated private artefacts (exports) never use a client upload URL. */
+  async putObject(params: {
+    storageKey: string;
+    contentType: string;
+    body: Buffer | Readable;
+    contentLength?: number;
+  }): Promise<void> {
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: params.storageKey,
+        ContentType: params.contentType,
+        ...(params.contentLength !== undefined && { ContentLength: params.contentLength }),
+        Body: params.body,
+      }),
+    );
+  }
+
+  /** B18 export cleanup; callers must first transition their authoritative job row. */
+  async deleteObject(storageKey: string): Promise<void> {
+    await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: storageKey }));
   }
 
   private isNotFound(error: unknown): boolean {

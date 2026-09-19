@@ -8,19 +8,15 @@ import {
   Post,
   Query,
   Req,
-  Res,
 } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
-import type { FastifyReply, FastifyRequest } from 'fastify';
-import { prisma, withTenant } from '@atlas/db';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { SubjectListResponseDto } from '../academics/dto/subject.dto.js';
 import { resolveQuestionActorRole } from './actor.util.js';
 import { QuestionService } from './question.service.js';
-import { QUESTION_INCLUDE, deriveCurrentStatus } from './question-mappers.js';
-import { buildQuestionsExportCsv } from './question-export.util.js';
 import {
   CreateQuestionDto,
   ListQuestionsQueryDto,
@@ -77,50 +73,6 @@ export class QuestionController {
   async counts(@Req() req: FastifyRequest): Promise<QuestionCountsResponseDto> {
     const user = currentUser(req);
     return this.questions.counts(user.schoolId, actorFromAuthenticatedUser(user));
-  }
-
-  @Get('export')
-  @Authorized('questionBank.export')
-  @ApiOperation({ summary: 'Download the bank (within scope) as a re-importable CSV.' })
-  @ApiProduces('text/csv')
-  async export(
-    @Req() req: FastifyRequest,
-    @Query() query: ListQuestionsQueryDto,
-    @Res() res: FastifyReply,
-  ): Promise<void> {
-    const user = currentUser(req);
-    const actor = actorFromAuthenticatedUser(user);
-    // Not paginated — export is a full-scope download, so pageSize is
-    // pinned well above any realistic school's bank size rather than
-    // reusing the list endpoint's default page.
-    const { questions } = await this.questions.list(user.schoolId, actor, {
-      ...query,
-      page: 1,
-      pageSize: 5000,
-    });
-    const withOptions = await withTenant(prisma, user.schoolId, (tx) =>
-      Promise.all(
-        questions.map((q) =>
-          tx.question.findUniqueOrThrow({ where: { id: q.id }, include: QUESTION_INCLUDE }),
-        ),
-      ),
-    );
-    const csv = buildQuestionsExportCsv(
-      withOptions.map((q) => ({
-        content: q.currentRevision?.content ?? '',
-        options: q.currentRevision?.options ?? [],
-        subjectName: q.subject.name,
-        level: q.level,
-        topicName: q.currentRevision?.topic?.name ?? null,
-        difficulty: q.currentRevision?.difficulty ?? '',
-        marks: q.currentRevision?.marks ?? 0,
-        currentStatus: deriveCurrentStatus(q),
-      })),
-    );
-    res
-      .header('Content-Type', 'text/csv; charset=utf-8')
-      .header('Content-Disposition', 'attachment; filename="questions-export.csv"')
-      .send(csv);
   }
 
   @Get()

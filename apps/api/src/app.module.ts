@@ -26,6 +26,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module.js';
 import { OperationsModule } from './modules/operations/operations.module.js';
 import { NotificationCenterModule } from './modules/notification-center/notification-center.module.js';
 import { MediaModule } from './modules/media/media.module.js';
+import { ReportsModule } from './modules/reports/reports.module.js';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { MediaModule } from './modules/media/media.module.js';
     AnalyticsModule,
     OperationsModule,
     NotificationCenterModule,
+    ReportsModule,
   ],
   providers: [
     // Global per ADR-0033: every mutating endpoint honours Idempotency-Key

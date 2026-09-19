@@ -221,3 +221,9 @@ export {
   RESULT_ADJUSTMENT_CHUNK_SIZE,
   type ResultAdjustmentJobPayload,
 } from './results/result-adjustment-queue.js';
+export {
+  EXPORT_QUEUE_NAME,
+  EXPORT_EXPIRY_QUEUE_NAME,
+  EXPORT_ARTEFACT_TTL_MS,
+  type ExportJobPayload,
+} from './reporting/export-queue.js';

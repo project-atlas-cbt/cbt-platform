@@ -2429,6 +2429,20 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
   // Reporting / Export
   // ------------------------------------------------------------------
   {
+    id: 'reporting.search',
+    section: 'Reporting / Export',
+    label: 'Role-aware global school search (B18)',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: denied(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: denied(),
+      HOD: granted('DEPARTMENT'),
+      TEACHER: granted('ASSIGNED'),
+      STUDENT: denied(),
+    },
+  },
+  {
     id: 'reporting.exportSchoolData',
     section: 'Reporting / Export',
     label: 'Export school data',

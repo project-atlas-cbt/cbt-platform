@@ -389,13 +389,14 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Reporting / Export
 
-| Action                     | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting                                                                                          |
-| -------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | ------------------------------------------------------------------------------------------------- |
-| Export school data         | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED    | —       | B18 reporting                                                                                     |
-| Export exam results        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | B18 reporting                                                                                     |
-| Export student list        | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED    | —       | B18 reporting                                                                                     |
-| Export question bank       | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED ⚠️ | —       | Question (B8), B18 reporting                                                                      |
-| Generate printable reports | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | SELF ⚠️ | ADR-0030 defers server-rendered PDF reporting to a later phase; B18 gains the rendering pipeline. |
+| Action                                | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting                                                                                          |
+| ------------------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | ------------------------------------------------------------------------------------------------- |
+| Role-aware global school search (B18) | —              | SCHOOL       | —         | DEPARTMENT | ASSIGNED    | —       |                                                                                                   |
+| Export school data                    | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED    | —       | B18 reporting                                                                                     |
+| Export exam results                   | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | —       | B18 reporting                                                                                     |
+| Export student list                   | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED    | —       | B18 reporting                                                                                     |
+| Export question bank                  | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED ⚠️ | —       | Question (B8), B18 reporting                                                                      |
+| Generate printable reports            | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED       | SELF ⚠️ | ADR-0030 defers server-rendered PDF reporting to a later phase; B18 gains the rendering pipeline. |
 
 <details><summary>Notes</summary>
 

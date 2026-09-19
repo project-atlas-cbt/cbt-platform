@@ -31,7 +31,7 @@ function toCsvLine(cells: readonly string[]): string {
   return cells
     .map((cell) => {
       const guarded = /^[=+\-@]/.test(cell) ? `\t${cell}` : cell;
-      return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+      return /[",\r\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
     })
     .join(',');
 }

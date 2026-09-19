@@ -39,6 +39,9 @@ import { ExecutionModule } from '../execution/execution.module.js';
 import { PlatformAttemptAdministrationController } from './platform-attempt-administration.controller.js';
 import { AnalyticsModule } from '../analytics/analytics.module.js';
 import { PlatformAnalyticsController } from './platform-analytics.controller.js';
+import { PlatformSearchController } from './platform-search.controller.js';
+import { PlatformExportController } from './platform-export.controller.js';
+import { ReportsModule } from '../reports/reports.module.js';
 
 /**
  * Bounded domain per 08 §5: "Platform — Software Admin, schools,
@@ -65,6 +68,7 @@ import { PlatformAnalyticsController } from './platform-analytics.controller.js'
     AcademicsModule,
     ExecutionModule,
     AnalyticsModule,
+    ReportsModule,
   ],
   controllers: [
     PlatformAuthController,
@@ -78,6 +82,8 @@ import { PlatformAnalyticsController } from './platform-analytics.controller.js'
     PlatformAuditController,
     PlatformAttemptAdministrationController,
     PlatformAnalyticsController,
+    PlatformSearchController,
+    PlatformExportController,
   ],
   providers: [
     PlatformSessionService,

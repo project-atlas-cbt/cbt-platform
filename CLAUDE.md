@@ -433,6 +433,17 @@ hooks. 22 unit tests pass across 11 test files, proving the B17 contract end to 
 confirmed. See this file's Change Log entries below (dated 2026-09-04, 2026-09-05 and 2026-09-10) for
 the preceding implementation detail.
 
+**`B18 — Reporting & Export`** is implemented and awaiting F18 contract confirmation: `ReportsModule`
+provides tenant-RLS-bound asynchronous CSV jobs for exam results, students, teachers, classes,
+question bank and participation; private artefacts expire after 24 hours and use requester-bound,
+rotated 15-minute authenticated download capabilities rather than exposed object-store URLs. It also
+uses canonical, role-validated export scope, PostgreSQL FTS candidates followed by independent
+per-corpus scope filtering, and an explicit selected-school route for Software Admin exports; API
+downloads stream private objects rather than buffering them in request memory. It publishes
+role-scoped school search, Software-Admin school-only search, and data-only print-report
+endpoints over the existing results/analytics authorization paths. F18 owns browser print layouts,
+CSS and the final end-to-end contract confirmation.
+
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
 future phase, even though both `F11` and (now) `B12`/`F12` are complete and the Change Log below
