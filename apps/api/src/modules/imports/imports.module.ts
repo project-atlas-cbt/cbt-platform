@@ -9,6 +9,7 @@ import { ImportsService } from './imports.service.js';
 import { ImportQueueService } from './import-queue.service.js';
 import { ImportValidationService } from './import-validation.service.js';
 import { ImportCommitService } from './import-commit.service.js';
+import { ImportsAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 
 /**
  * Bounded infrastructure per `08 §5`'s "ImportModule, writing through
@@ -37,7 +38,13 @@ import { ImportCommitService } from './import-commit.service.js';
 @Module({
   imports: [IdentityModule, MediaModule, AcademicsModule, QuestionsModule, OperationsModule],
   controllers: [ImportsController],
-  providers: [ImportsService, ImportQueueService, ImportValidationService, ImportCommitService],
+  providers: [
+    ImportsService,
+    ImportQueueService,
+    ImportValidationService,
+    ImportCommitService,
+    ImportsAuditActionRegistrationProvider,
+  ],
   // ImportValidationService/ImportCommitService are exported so
   // `import-worker-bootstrap.ts` can pull the real, DI-resolved instances
   // out of the booted app via `app.get(...)` from `main.ts` — see that

@@ -41,12 +41,18 @@ const DEFAULT_PREFIX_BYTES = 4100;
 export class ObjectStorageService implements OnModuleInit {
   private readonly logger = new Logger(ObjectStorageService.name);
   private readonly bucket: string;
+  private readonly signingClockOffsetMs: number;
 
   constructor(
     @Inject(S3_CLIENT) private readonly s3: S3Client,
     private readonly config: ConfigService<Env, true>,
   ) {
     this.bucket = this.config.get('S3_BUCKET', { infer: true });
+    this.signingClockOffsetMs = this.config.get('S3_SYSTEM_CLOCK_OFFSET_MS', { infer: true });
+  }
+
+  private signingDate(): Date {
+    return new Date(Date.now() + this.signingClockOffsetMs);
   }
 
   /**
@@ -105,7 +111,10 @@ export class ObjectStorageService implements OnModuleInit {
       ContentType: params.contentType,
       ContentLength: params.contentLength,
     });
-    const uploadUrl = await getSignedUrl(this.s3, command, { expiresIn: params.ttlSeconds });
+    const uploadUrl = await getSignedUrl(this.s3, command, {
+      expiresIn: params.ttlSeconds,
+      signingDate: this.signingDate(),
+    });
     return { uploadUrl, expiresAt: new Date(Date.now() + params.ttlSeconds * 1000) };
   }
 
@@ -186,7 +195,10 @@ export class ObjectStorageService implements OnModuleInit {
    */
   async createSignedDownloadUrl(storageKey: string, ttlSeconds: number): Promise<SignedDownload> {
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: storageKey });
-    const url = await getSignedUrl(this.s3, command, { expiresIn: ttlSeconds });
+    const url = await getSignedUrl(this.s3, command, {
+      expiresIn: ttlSeconds,
+      signingDate: this.signingDate(),
+    });
     return { url, expiresAt: new Date(Date.now() + ttlSeconds * 1000) };
   }
 

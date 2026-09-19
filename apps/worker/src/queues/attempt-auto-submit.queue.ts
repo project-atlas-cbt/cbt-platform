@@ -130,7 +130,18 @@ export function createAttemptAutoSubmitWorker(
     async (_job: Job) => {
       await runAttemptAutoSubmitSweep(deps);
     },
-    { connection },
+    {
+      connection,
+      // A sweep may walk every school and enqueue marking work. Its 15s
+      // cadence must not let the default 30s BullMQ lock expire mid-pass.
+      // Serial execution preserves the idempotent compare-and-transition
+      // logic above while renewal prevents a false stalled-job reclaim.
+      concurrency: 1,
+      lockDuration: 120_000,
+      lockRenewTime: 30_000,
+      stalledInterval: 30_000,
+      maxStalledCount: 1,
+    },
   );
 }
 

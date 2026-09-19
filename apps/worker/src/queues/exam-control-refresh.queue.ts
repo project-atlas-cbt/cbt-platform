@@ -283,7 +283,20 @@ export function createExamControlRefreshWorker(
     async (_job: Job) => {
       await runExamControlRefreshSweep(deps);
     },
-    { connection },
+    {
+      connection,
+      // This is a whole-school, then whole-exam sweep. The 5s cadence is a
+      // freshness target, not a safe upper bound on its runtime. BullMQ's
+      // 30s default lock could expire mid-sweep, causing the scheduler to
+      // reclaim the job and the original worker to later log
+      // "Missing lock … moveToFinished". Keep exactly one serial pass and
+      // renew a deliberately longer lease while its I/O is in flight.
+      concurrency: 1,
+      lockDuration: 120_000,
+      lockRenewTime: 30_000,
+      stalledInterval: 30_000,
+      maxStalledCount: 1,
+    },
   );
 }
 
