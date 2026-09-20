@@ -3207,7 +3207,23 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Session close readiness.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": { "type": "string" },
+                    "sessionStatus": { "type": "string" },
+                    "activeExams": { "type": "number" },
+                    "pendingResults": { "type": "number" },
+                    "activeStudents": { "type": "number" },
+                    "ready": { "type": "boolean" }
+                  },
+                  "required": ["sessionId", "sessionStatus", "activeExams", "pendingResults", "activeStudents", "ready"]
+                }
+              }
+            }
           }
         },
         "summary": "Return academic-session close readiness.",

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Plus, MoreHorizontal, CalendarRange } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/error-state';
@@ -34,7 +35,7 @@ type ConfirmAction = { type: 'activate' | 'archive' | 'delete'; session: Session
 /** AC-01 (`05 §7.1`) — School Admin/Moderator get full manage; HOD is
  * read-only (`useHasPermission` hides every mutating control, matching F5's
  * established Moderator-view-only pattern, here applied to HOD instead). */
-export function SessionsScreen() {
+export function SessionsScreen({ basePath = '/school/academics' }: { basePath?: string }) {
   const sessions = useSessions();
   const canManage = useHasPermission('schoolConfig.session.manage');
   const activateSession = useActivateSession();
@@ -106,6 +107,16 @@ export function SessionsScreen() {
                   >
                     Archive
                   </DropdownMenuItem>
+                  {row.status === 'CURRENT' && (
+                    <DropdownMenuItem asChild>
+                      <Link href={`${basePath}/sessions/${row.id}/close`}>Close session</Link>
+                    </DropdownMenuItem>
+                  )}
+                  {row.status === 'CLOSED' && (
+                    <DropdownMenuItem asChild>
+                      <Link href={`${basePath}/rollover`}>Rollover plan</Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     onSelect={() => setConfirmAction({ type: 'delete', session: row })}
                   >

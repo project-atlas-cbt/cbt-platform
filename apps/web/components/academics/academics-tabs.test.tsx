@@ -16,7 +16,7 @@ describe('AcademicsTabs', () => {
     expect(sessionsTab).toHaveAttribute('aria-current', 'page');
     expect(sessionsTab).toHaveAttribute('href', '/school/academics/sessions');
     expect(screen.getByRole('link', { name: 'Terms' })).not.toHaveAttribute('aria-current');
-    for (const label of ['Sessions', 'Terms', 'Departments', 'Classes', 'Subjects']) {
+    for (const label of ['Sessions', 'Terms', 'Departments', 'Classes', 'Subjects', 'Rollover']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
   });

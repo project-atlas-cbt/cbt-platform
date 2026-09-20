@@ -19,6 +19,7 @@ const SECTIONS = [
   { slug: 'departments', label: 'Departments' },
   { slug: 'classes', label: 'Classes' },
   { slug: 'subjects', label: 'Subjects' },
+  { slug: 'rollover', label: 'Rollover' },
 ] as const;
 
 export function AcademicsTabs({ basePath }: { basePath: string }) {

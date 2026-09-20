@@ -221,3 +221,48 @@ export function useStudents() {
     queryFn: () => unwrap(apiClient.GET('/students', {})),
   });
 }
+
+// ---- Rollover Queries (F19 / B19) ----
+
+export interface RolloverQueryParams {
+  page?: number;
+  pageSize?: number;
+  outcome?: 'PROMOTE' | 'REPEAT' | 'CHANGE_DEPARTMENT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
+  sourceClassId?: string;
+  departmentId?: string;
+  sourceLevel?: 'JSS1' | 'JSS2' | 'JSS3' | 'SS1' | 'SS2' | 'SS3';
+  overriddenOnly?: boolean;
+}
+
+export function useCloseReadiness(sessionId: string | undefined, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['academics', 'sessions', sessionId, 'close-readiness'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/sessions/{id}/close-readiness', {
+          params: { path: { id: sessionId as string } },
+        }),
+      ),
+    enabled: Boolean(sessionId) && (options?.enabled ?? true),
+  });
+}
+
+export function useRolloverPlan(
+  planId: string | undefined,
+  params?: RolloverQueryParams,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['academics', 'rollover-plans', planId, params],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/rollovers/{id}', {
+          params: {
+            path: { id: planId as string },
+            query: params as never,
+          },
+        }),
+      ),
+    enabled: Boolean(planId) && (options?.enabled ?? true),
+  });
+}

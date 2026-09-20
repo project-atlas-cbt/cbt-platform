@@ -364,6 +364,34 @@ export class RolloverService {
           orderBy: { id: 'asc' },
           skip: (page - 1) * pageSize,
           take: pageSize,
+          include: {
+            sourceClass: { select: { id: true, name: true, level: true, arm: true } },
+            sourceEnrollment: {
+              select: {
+                id: true,
+                studentProfile: {
+                  select: {
+                    id: true,
+                    studentId: true,
+                    membership: {
+                      select: {
+                        id: true,
+                        loginIdentifier: true,
+                        user: {
+                          select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            displayName: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         }),
         tx.rolloverClassDraft.findMany({
           where: {

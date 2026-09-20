@@ -7882,11 +7882,21 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Session close readiness. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        sessionId: string;
+                        sessionStatus: string;
+                        activeExams: number;
+                        pendingResults: number;
+                        activeStudents: number;
+                        ready: boolean;
+                    };
+                };
             };
         };
     };

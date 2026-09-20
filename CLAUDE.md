@@ -12,8 +12,8 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 ## Project Status
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
-architecture decisions were completed first (see below); backend phases `B0`–`B18` and every
-frontend phase through `F18` are now complete (this line itself had drifted stale — kept at
+architecture decisions were completed first (see below); backend phases `B0`–`B19` and every
+frontend phase through `F19` are now implemented (this line itself had drifted stale — kept at
 "`B0`–`B6`"/"`F0`–`F7`" long after later phases shipped; corrected 2026-09-04, see "Current Phase"
 below for a note on why this section can lag and the Change Log's own dated entries are the actual
 source of truth). See "Implementation Status" and "Change Log" further down in this file for what
@@ -452,11 +452,26 @@ satisfying `04 § 65`), and `SearchDialog` grouping results by the per-role corp
 pass; typecheck and lint both exit 0. B18's contract is confirmed. Browser E2E (export and search)
 remains pending — no configured harness, same posture as F16. P18 is complete.
 
-**`B19 — Academic Session Rollover`** is in progress: its RLS-protected plan/draft model and
-review-first `academics.v1` endpoints are being implemented against ADR-0026. The target is an
-existing empty DRAFT/UPCOMING session; classes, offerings, and Teacher/HOD assignments remain
-non-operational drafts until an explicit, transactional commit. Validation and the historical-
-preservation/concurrency suites remain required before this phase can be marked complete.
+**`B19 — Academic Session Rollover`** is complete: RLS-protected rollover plan model and
+`academics.v1` endpoints against ADR-0026 — close-readiness check (active exams, pending results,
+active students), plan generation and structure editing (class/offering/staff draft inclusions),
+per-student decision override with reason capture, atomic commit with idempotency guard (PostgreSQL
+advisory lock), and post-commit immutability enforcement via DB trigger. Three integration tests pass
+(full lifecycle, concurrency/idempotency, historical-preservation). `@atlas/api typecheck` exits 0.
+
+**`F19 — Session Rollover UI`** is implemented (2026-09-20): full four-step rollover workflow for
+School Admin and Moderator roles — `CloseReadinessScreen` (active-exam and pending-result blockers,
+target session selector, plan generation), `RolloverPlanScreen` (structure review with
+class/offering/staff inclusion toggles and save), `StudentDecisionsScreen` (server-paginated
+candidate table, single and batch override dialogs with reason capture and class-draft selection),
+`RolloverConfirmScreen` (scale metrics, historical-integrity guarantee statement, typed-name
+confirmation gate, post-commit transition summary). Backed by typed React Query hooks in
+`lib/academics/queries.ts` / `lib/academics/mutations.ts`, a stepper breadcrumb, and routes under
+`/school/academics/sessions/[id]/close`, `/school/academics/rollover/[planId]`,
+`/school/academics/rollover/[planId]/students`, `/school/academics/rollover/[planId]/confirm`
+(mirrored under `/moderator/`). 16 unit and integration tests pass (5 test files including the full
+lifecycle integration test). `@atlas/web typecheck` and `lint` both exit 0. B19's contract is
+confirmed. Browser E2E remains pending — same posture as F16/F18 (no configured harness).
 
 The database migration deploy wrapper reasserts the restricted `atlas_app` role's grants after every
 deployment, so new RLS-protected tables (including `export_jobs`) remain accessible only through

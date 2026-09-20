@@ -182,3 +182,87 @@ export function useRemoveClassSubject() {
     onSuccess: () => invalidateAcademics(client),
   });
 }
+
+// ---- Rollover Mutations (F19 / B19) ----
+
+export function useCloseSession() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      unwrap(
+        apiClient.POST('/academics/sessions/{id}/close', {
+          params: { path: { id: sessionId } },
+        }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useCreateRolloverPlan(sourceSessionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (targetAcademicSessionId: string) =>
+      unwrap(
+        apiClient.POST('/academics/sessions/{id}/rollover/plan', {
+          params: { path: { id: sourceSessionId } },
+          body: { targetAcademicSessionId },
+        }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateRolloverDecisions(planId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      decisions: Array<{
+        decisionId: string;
+        outcome: 'PROMOTE' | 'REPEAT' | 'CHANGE_DEPARTMENT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
+        targetDraftClassId?: string | null;
+        reason: string;
+      }>;
+      version: number;
+    }) =>
+      unwrap(
+        apiClient.PATCH('/academics/rollovers/{id}/decisions', {
+          params: { path: { id: planId } },
+          body: body as never,
+        }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateRolloverStructure(planId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      classes?: Array<{ draftId: string; included: boolean }>;
+      offerings?: Array<{ draftId: string; included: boolean }>;
+      staffAssignments?: Array<{ draftId: string; confirmed: boolean }>;
+      version: number;
+    }) =>
+      unwrap(
+        apiClient.PATCH('/academics/rollovers/{id}/structure', {
+          params: { path: { id: planId } },
+          body: body as never,
+        }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useCommitRollover(planId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (version: number) =>
+      unwrap(
+        apiClient.POST('/academics/rollovers/{id}/commit', {
+          params: { path: { id: planId } },
+          body: { version },
+        }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
