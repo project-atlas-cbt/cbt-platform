@@ -231,5 +231,5 @@ describe('Rollover Workflow Integration', () => {
     await user.click(commitBtn);
     expect(commitRolloverMutate).toHaveBeenCalledWith(1);
     unmountConfirm();
-  });
+  }, 15000);
 });

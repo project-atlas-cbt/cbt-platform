@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, unwrap } from '@/lib/api';
+import { isUuid } from '@/lib/utils';
 
 /**
  * F6 — the canonical read-side data layer for `academics.v1` (B5/B6). Moved
@@ -243,7 +244,7 @@ export function useCloseReadiness(sessionId: string | undefined, options?: { ena
           params: { path: { id: sessionId as string } },
         }),
       ),
-    enabled: Boolean(sessionId) && (options?.enabled ?? true),
+    enabled: isUuid(sessionId) && (options?.enabled ?? true),
   });
 }
 
@@ -263,6 +264,6 @@ export function useRolloverPlan(
           },
         }),
       ),
-    enabled: Boolean(planId) && (options?.enabled ?? true),
+    enabled: isUuid(planId) && (options?.enabled ?? true),
   });
 }
