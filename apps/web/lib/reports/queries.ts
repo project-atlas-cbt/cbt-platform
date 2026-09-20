@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { apiClient, unwrap } from '@/lib/api';
+import { apiClient, resolveApiOrigin, unwrap } from '@/lib/api';
 import { downloadCsv } from '@/lib/imports/use-import-download';
 import type {
   CreateExportInput,
@@ -17,13 +17,14 @@ const FALLBACK_API_ORIGIN = process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localh
 const API_PORT = process.env.NEXT_PUBLIC_API_PORT ?? '3001';
 
 function currentOrigin(): string {
-  if (typeof window === 'undefined') return FALLBACK_API_ORIGIN;
-  const { hostname, protocol } = window.location;
-  // Mirror the resolve-origin.ts logic for constructing the API origin.
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//localhost:${API_PORT}`;
-  }
-  return `${protocol}//${hostname}`;
+  return typeof window !== 'undefined'
+    ? resolveApiOrigin(
+        window.location.hostname,
+        window.location.protocol,
+        FALLBACK_API_ORIGIN,
+        API_PORT,
+      )
+    : FALLBACK_API_ORIGIN;
 }
 
 export const reportsKeys = {

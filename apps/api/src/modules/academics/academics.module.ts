@@ -28,6 +28,8 @@ import { TeacherAssignmentController } from './teacher-assignment.controller.js'
 import { TeacherAssignmentService } from './teacher-assignment.service.js';
 import { TermController } from './term.controller.js';
 import { TermService } from './term.service.js';
+import { RolloverController } from './rollover.controller.js';
+import { RolloverService } from './rollover.service.js';
 
 /**
  * Bounded domain per 08 §5: "Academics — Sessions, terms, departments,
@@ -62,6 +64,7 @@ import { TermService } from './term.service.js';
     TeacherAssignmentController,
     StudentSubjectRegistrationController,
     ClassCredentialSheetController,
+    RolloverController,
   ],
   providers: [
     AcademicsContextService,
@@ -79,6 +82,7 @@ import { TermService } from './term.service.js';
     AssignedScopeResolverProvider,
     ClassCredentialSheetService,
     AcademicsAuditActionRegistrationProvider,
+    RolloverService,
   ],
   // B6: HodAssignmentService is this module's first-ever export — UsersModule's
   // HodController calls .reassign() for PUT /v1/hods/:id/department. One-

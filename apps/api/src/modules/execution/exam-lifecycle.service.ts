@@ -114,9 +114,20 @@ export class ExamLifecycleService {
       });
     }
 
-    const { count } = await withTenant(prisma, schoolId, (tx) =>
-      tx.exam.updateMany({ where: { id: examId, status: 'CLOSED' }, data: { status: 'OPEN' } }),
-    );
+    const { count } = await withTenant(prisma, schoolId, async (tx) => {
+      // Shares B19's session-row lock with rollover close/commit. A closed
+      // historical session must never regain an OPEN exam through reopen.
+      const [academicSession] = await tx.$queryRaw<{ status: string }[]>`
+        SELECT status FROM academic_sessions
+        WHERE id = ${exam.academicSessionId}::uuid AND school_id = ${schoolId}::uuid
+        FOR UPDATE
+      `;
+      if (academicSession?.status !== 'CURRENT') return { count: 0 };
+      return tx.exam.updateMany({
+        where: { id: examId, status: 'CLOSED' },
+        data: { status: 'OPEN' },
+      });
+    });
     if (count === 0) {
       throw new AppHttpException({
         code: 'EXAM_NOT_CLOSED',

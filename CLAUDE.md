@@ -452,6 +452,12 @@ satisfying `04 § 65`), and `SearchDialog` grouping results by the per-role corp
 pass; typecheck and lint both exit 0. B18's contract is confirmed. Browser E2E (export and search)
 remains pending — no configured harness, same posture as F16. P18 is complete.
 
+**`B19 — Academic Session Rollover`** is in progress: its RLS-protected plan/draft model and
+review-first `academics.v1` endpoints are being implemented against ADR-0026. The target is an
+existing empty DRAFT/UPCOMING session; classes, offerings, and Teacher/HOD assignments remain
+non-operational drafts until an explicit, transactional commit. Validation and the historical-
+preservation/concurrency suites remain required before this phase can be marked complete.
+
 The database migration deploy wrapper reasserts the restricted `atlas_app` role's grants after every
 deployment, so new RLS-protected tables (including `export_jobs`) remain accessible only through
 their tenant policy rather than failing with a table-permission error.

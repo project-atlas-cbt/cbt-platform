@@ -11,6 +11,7 @@ vi.mock('@/lib/api', () => ({
     GET: vi.fn(),
   },
   resolveApiOrigin: () => 'http://localhost:3001',
+  unwrap: async (resultPromise: Promise<{ data?: unknown }>) => (await resultPromise).data,
   toApiError: (err: unknown, _status: number, fallback: string) =>
     new Error(typeof err === 'object' && err && 'message' in err ? String(err.message) : fallback),
 }));

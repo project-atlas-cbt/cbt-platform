@@ -45,24 +45,25 @@ export class AuditService {
     // AuditActionRegistry/AuditVocabularyCoverageService for the
     // merge-blocking half of this (whether every *canonical* action has a
     // real producer at all).
+    await withTenant(prisma, event.schoolId, (tx) => this.recordInTx(tx, event));
+  }
+
+  /** Critical workflows use this variant so their state transition and its
+   * audit evidence succeed or roll back together. */
+  async recordInTx(tx: Prisma.TransactionClient, event: RecordAuditEventInput): Promise<void> {
     this.actions.warnIfUnknown(event.action);
-    await withTenant(prisma, event.schoolId, (tx) =>
-      tx.auditEvent.create({
-        data: {
-          schoolId: event.schoolId,
-          actorUserId: event.actorUserId,
-          actorRole: event.actorRole,
-          action: event.action,
-          breakGlass: event.breakGlass ?? false,
-          // exactOptionalPropertyTypes: an explicit `undefined` is not the
-          // same as an absent key, so optional fields are spread in only
-          // when actually provided.
-          ...(event.reason !== undefined && { reason: event.reason }),
-          ...(event.entityType !== undefined && { entityType: event.entityType }),
-          ...(event.entityId !== undefined && { entityId: event.entityId }),
-          ...(event.metadata !== undefined && { metadata: event.metadata }),
-        },
-      }),
-    );
+    await tx.auditEvent.create({
+      data: {
+        schoolId: event.schoolId,
+        actorUserId: event.actorUserId,
+        actorRole: event.actorRole,
+        action: event.action,
+        breakGlass: event.breakGlass ?? false,
+        ...(event.reason !== undefined && { reason: event.reason }),
+        ...(event.entityType !== undefined && { entityType: event.entityType }),
+        ...(event.entityId !== undefined && { entityId: event.entityId }),
+        ...(event.metadata !== undefined && { metadata: event.metadata }),
+      },
+    });
   }
 }

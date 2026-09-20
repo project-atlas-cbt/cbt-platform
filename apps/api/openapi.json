@@ -3192,6 +3192,298 @@
         ]
       }
     },
+    "/academics/sessions/{id}/close-readiness": {
+      "get": {
+        "operationId": "RolloverController_readiness",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Return academic-session close readiness.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/sessions/{id}/close": {
+      "post": {
+        "operationId": "RolloverController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Close a ready CURRENT academic session for rollover.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/sessions/{id}/rollover/plan": {
+      "post": {
+        "operationId": "RolloverController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRolloverPlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolloverPlanResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/rollovers/{id}": {
+      "get": {
+        "operationId": "RolloverController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "outcome",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PROMOTE",
+                "REPEAT",
+                "TRANSFER",
+                "GRADUATE",
+                "WITHDRAW"
+              ]
+            }
+          },
+          {
+            "name": "sourceClassId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "departmentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "sourceLevel",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "JSS1",
+                "JSS2",
+                "JSS3",
+                "SS1",
+                "SS2",
+                "SS3"
+              ]
+            }
+          },
+          {
+            "name": "overriddenOnly",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RolloverPlanResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/rollovers/{id}/decisions": {
+      "patch": {
+        "operationId": "RolloverController_decisions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRolloverDecisionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/rollovers/{id}/structure": {
+      "patch": {
+        "operationId": "RolloverController_structure",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRolloverStructureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/rollovers/{id}/commit": {
+      "post": {
+        "operationId": "RolloverController_commit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitRolloverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "academics"
+        ]
+      }
+    },
     "/exams/{id}/attempts": {
       "post": {
         "operationId": "ExamControlController_startAttempt",
@@ -11266,6 +11558,199 @@
         },
         "required": [
           "registrations"
+        ]
+      },
+      "CreateRolloverPlanDto": {
+        "type": "object",
+        "properties": {
+          "targetAcademicSessionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "targetAcademicSessionId"
+        ]
+      },
+      "RolloverPlanResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceAcademicSessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetAcademicSessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "READY",
+              "COMMITTED"
+            ]
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "readiness": {
+            "type": "object"
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "structure": {
+            "type": "object"
+          },
+          "pagination": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "sourceAcademicSessionId",
+          "targetAcademicSessionId",
+          "status",
+          "version",
+          "readiness",
+          "decisions",
+          "structure",
+          "pagination"
+        ]
+      },
+      "UpdateRolloverDecisionItemDto": {
+        "type": "object",
+        "properties": {
+          "decisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "PROMOTE",
+              "REPEAT",
+              "TRANSFER",
+              "GRADUATE",
+              "WITHDRAW"
+            ]
+          },
+          "targetDraftClassId": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "decisionId",
+          "outcome",
+          "reason"
+        ]
+      },
+      "UpdateRolloverDecisionsDto": {
+        "type": "object",
+        "properties": {
+          "decisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateRolloverDecisionItemDto"
+            }
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "decisions",
+          "version"
+        ]
+      },
+      "UpdateRolloverStructureItemDto": {
+        "type": "object",
+        "properties": {
+          "draftId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "included": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "draftId",
+          "included"
+        ]
+      },
+      "UpdateRolloverStaffDraftDto": {
+        "type": "object",
+        "properties": {
+          "draftId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "confirmed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "draftId",
+          "confirmed"
+        ]
+      },
+      "UpdateRolloverStructureDto": {
+        "type": "object",
+        "properties": {
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateRolloverStructureItemDto"
+            }
+          },
+          "offerings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateRolloverStructureItemDto"
+            }
+          },
+          "staffAssignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateRolloverStaffDraftDto"
+            }
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "CommitRolloverDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
         ]
       },
       "StudentAttemptOptionDto": {

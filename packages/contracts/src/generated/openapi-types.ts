@@ -1335,6 +1335,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/academics/sessions/{id}/close-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return academic-session close readiness. */
+        get: operations["RolloverController_readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/sessions/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close a ready CURRENT academic session for rollover. */
+        post: operations["RolloverController_close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/sessions/{id}/rollover/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RolloverController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/rollovers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RolloverController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/rollovers/{id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["RolloverController_decisions"];
+        trace?: never;
+    };
+    "/academics/rollovers/{id}/structure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["RolloverController_structure"];
+        trace?: never;
+    };
+    "/academics/rollovers/{id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RolloverController_commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exams/{id}/attempts": {
         parameters: {
             query?: never;
@@ -4153,6 +4267,57 @@ export interface components {
         };
         StudentSubjectRegistrationListResponseDto: {
             registrations: components["schemas"]["StudentSubjectRegistrationResponseDto"][];
+        };
+        CreateRolloverPlanDto: {
+            /** Format: uuid */
+            targetAcademicSessionId: string;
+        };
+        RolloverPlanResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceAcademicSessionId: string;
+            /** Format: uuid */
+            targetAcademicSessionId: string;
+            /** @enum {string} */
+            status: "DRAFT" | "READY" | "COMMITTED";
+            version: number;
+            readiness: Record<string, never>;
+            decisions: string[];
+            structure: Record<string, never>;
+            pagination: Record<string, never>;
+        };
+        UpdateRolloverDecisionItemDto: {
+            /** Format: uuid */
+            decisionId: string;
+            /** @enum {string} */
+            outcome: "PROMOTE" | "REPEAT" | "TRANSFER" | "GRADUATE" | "WITHDRAW";
+            /** Format: uuid */
+            targetDraftClassId?: Record<string, never> | null;
+            reason: string;
+        };
+        UpdateRolloverDecisionsDto: {
+            decisions: components["schemas"]["UpdateRolloverDecisionItemDto"][];
+            version: number;
+        };
+        UpdateRolloverStructureItemDto: {
+            /** Format: uuid */
+            draftId: string;
+            included: boolean;
+        };
+        UpdateRolloverStaffDraftDto: {
+            /** Format: uuid */
+            draftId: string;
+            confirmed: boolean;
+        };
+        UpdateRolloverStructureDto: {
+            classes?: components["schemas"]["UpdateRolloverStructureItemDto"][];
+            offerings?: components["schemas"]["UpdateRolloverStructureItemDto"][];
+            staffAssignments?: components["schemas"]["UpdateRolloverStaffDraftDto"][];
+            version: number;
+        };
+        CommitRolloverDto: {
+            version: number;
         };
         StudentAttemptOptionDto: {
             optionId: string;
@@ -7697,6 +7862,167 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RolloverController_readiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RolloverController_close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RolloverController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRolloverPlanDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RolloverPlanResponseDto"];
+                };
+            };
+        };
+    };
+    RolloverController_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                outcome?: "PROMOTE" | "REPEAT" | "TRANSFER" | "GRADUATE" | "WITHDRAW";
+                sourceClassId?: string;
+                departmentId?: string;
+                sourceLevel?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
+                overriddenOnly?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RolloverPlanResponseDto"];
+                };
+            };
+        };
+    };
+    RolloverController_decisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRolloverDecisionsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RolloverController_structure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRolloverStructureDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RolloverController_commit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitRolloverDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

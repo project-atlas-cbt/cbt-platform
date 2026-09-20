@@ -46,3 +46,9 @@ export type ClassSubjectStatus = (typeof CLASS_SUBJECT_STATUSES)[number];
 
 export const HOD_ASSIGNMENT_STATUSES = ['ACTIVE', 'ENDED'] as const;
 export type HODAssignmentStatus = (typeof HOD_ASSIGNMENT_STATUSES)[number];
+
+export const ROLLOVER_PLAN_STATUSES = ['DRAFT', 'READY', 'COMMITTED'] as const;
+export type RolloverPlanStatus = (typeof ROLLOVER_PLAN_STATUSES)[number];
+
+export const ROLLOVER_OUTCOMES = ['PROMOTE', 'REPEAT', 'TRANSFER', 'GRADUATE', 'WITHDRAW'] as const;
+export type RolloverOutcome = (typeof ROLLOVER_OUTCOMES)[number];

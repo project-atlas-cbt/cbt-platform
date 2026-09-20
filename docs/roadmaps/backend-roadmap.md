@@ -3888,7 +3888,7 @@ Depends on B17's aggregates for report content.
 
 # B19 — Academic Session Rollover
 
-**Status:** NOT STARTED · **Decided ADRs:** 0026 (rollover mechanics)
+**Status:** IN PROGRESS · **Decided ADRs:** 0026 (rollover mechanics)
 
 ## Objective
 
@@ -3991,6 +3991,17 @@ Requires B15 so pending results can be detected. Requires B12 so active exams bl
 
 - Automatic promotion based on academic performance — `03 §61` requires human review; automation is not specified.
 - Multi-year bulk archival tooling.
+
+## Implementation notes (in progress)
+
+The B19 implementation uses an existing empty `DRAFT`/`UPCOMING` target session, stores
+classes, offerings, and staff as isolated plan drafts, and only materialises operational rows inside
+the commit transaction. Teacher and HOD draft assignments both require explicit confirmation.
+Departing students retain their global identity while their school membership and Student role end.
+Destination sessions are exclusively reserved by one plan, must already have configured terms, and the
+first configured target term becomes CURRENT atomically with the session transition. Committed plan,
+decision, and draft evidence is immutable at the database layer; all per-decision audit records are
+written inside the same commit transaction.
 
 ---
 

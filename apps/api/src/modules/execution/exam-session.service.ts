@@ -103,6 +103,17 @@ export class ExamSessionService {
       if (!locked || (locked.status !== 'READY' && locked.status !== 'OPEN')) {
         return { blocked: true as const };
       }
+      // B19 closes an academic session only when it has no active exams.
+      // Recheck the parent session while the exam row is locked so an exam
+      // session cannot be opened after a concurrent rollover has closed it.
+      const [academicSession] = await tx.$queryRaw<{ status: string }[]>`
+        SELECT status FROM academic_sessions
+        WHERE id = ${exam.academicSessionId}::uuid AND school_id = ${schoolId}::uuid
+        FOR UPDATE
+      `;
+      if (academicSession?.status !== 'CURRENT') {
+        return { blocked: true as const };
+      }
 
       const claim = await tx.exam.updateMany({
         where: { id: examId, status: 'READY' },

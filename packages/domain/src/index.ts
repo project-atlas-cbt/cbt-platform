@@ -73,6 +73,8 @@ export {
   SUBJECT_STATUSES,
   CLASS_SUBJECT_STATUSES,
   HOD_ASSIGNMENT_STATUSES,
+  ROLLOVER_PLAN_STATUSES,
+  ROLLOVER_OUTCOMES,
   type AcademicSessionStatus,
   type AcademicTermStatus,
   type DepartmentStatus,
@@ -81,6 +83,8 @@ export {
   type SubjectStatus,
   type ClassSubjectStatus,
   type HODAssignmentStatus,
+  type RolloverPlanStatus,
+  type RolloverOutcome,
 } from './academics/constants.js';
 export {
   USER_STATUSES,

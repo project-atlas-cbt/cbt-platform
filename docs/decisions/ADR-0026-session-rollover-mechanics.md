@@ -27,6 +27,13 @@ For a school with 31 classes and 42 subjects (`04 §12`), manual recreation ever
 - Everything is reviewable before commit, per `03 §61`'s insistence that promotion is never an instant mass update.
 - **Commit runs in one transaction** (`08 §7.3`). If a school proves large enough that a single transaction is impractical, a chunked-and-resumable strategy with a documented compensating path is required — but single-transaction is the default.
 - Each promotion decision, including every override, emits its own audit event.
+- The target is an already-created, empty `DRAFT` or `UPCOMING` session; rollover never infers
+  its name or dates. Terms remain configured through the existing academic-structure workflow.
+- Active teacher **and HOD** assignments are copied only as unconfirmed proposals. They become
+  active in the destination session only when an operator explicitly confirms them.
+- Graduate, withdraw, and transfer outcomes close access at the affected school by ending its
+  membership and Student role. The global `User` is deliberately untouched because it may have
+  membership at another school.
 
 ## Consequences
 

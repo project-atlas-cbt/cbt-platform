@@ -185,10 +185,38 @@ export class SessionService {
         throw new AppHttpException({ code: 'NOT_FOUND', message: 'Academic session not found.' });
       }
 
+      // Once B19 reserves a destination, its transition is exclusively the
+      // rollover commit. The legacy activation route must not make a READY
+      // plan's target CURRENT between commit preflight and materialisation.
+      const reservedForRollover = await tx.rolloverPlan.findFirst({
+        where: { schoolId, targetAcademicSessionId: id, status: { in: ['DRAFT', 'READY'] } },
+        select: { id: true },
+      });
+      if (reservedForRollover) {
+        throw new AppHttpException({
+          code: 'VALIDATION_ERROR',
+          message:
+            'This session is reserved for an academic rollover and must be activated by its commit.',
+        });
+      }
+
       const previousCurrent = await tx.academicSession.findFirst({
         where: { schoolId, status: 'CURRENT' },
       });
       if (previousCurrent && previousCurrent.id !== id) {
+        const historicalWork = await Promise.all([
+          tx.studentEnrollment.count({
+            where: { schoolId, academicSessionId: previousCurrent.id },
+          }),
+          tx.exam.count({ where: { schoolId, academicSessionId: previousCurrent.id } }),
+        ]);
+        if (historicalWork.some((count) => count > 0)) {
+          throw new AppHttpException({
+            code: 'VALIDATION_ERROR',
+            message:
+              'A populated current session must be closed and transitioned through the rollover workflow.',
+          });
+        }
         await tx.academicSession.update({
           where: { id: previousCurrent.id },
           data: { status: 'CLOSED' },

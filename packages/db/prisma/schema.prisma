@@ -902,6 +902,20 @@ enum HODAssignmentStatus {
   ENDED
 }
 
+enum RolloverPlanStatus {
+  DRAFT
+  READY
+  COMMITTED
+}
+
+enum RolloverOutcome {
+  PROMOTE
+  REPEAT
+  TRANSFER
+  GRADUATE
+  WITHDRAW
+}
+
 /// School's academic year (07 §6.1). Exactly one CURRENT session per school
 /// is enforced structurally by a partial unique index in this migration's
 /// hand-written SQL (Prisma's DSL can't express a filtered unique index) —
@@ -923,6 +937,7 @@ model AcademicSession {
   classSubjects      ClassSubject[]
   hodAssignments     HODAssignment[]
   studentEnrollments StudentEnrollment[]
+  rolloverSourceSessionDecisions RolloverDecision[] @relation("RolloverDecisionSourceSession")
   teacherAssignments TeacherAssignment[]
   // B11: exams held in this session.
   exams              Exam[]
@@ -1025,12 +1040,14 @@ model ClassGroup {
   // B6: StudentEnrollment FKs against the (schoolId, id, academicSessionId)
   // unique below (the same D-10-style guarantee ClassSubject already uses).
   studentEnrollments StudentEnrollment[]
+  rolloverSourceDecisions RolloverDecision[] @relation("RolloverDecisionSourceClass")
 
   // Composite-FK target for ClassSubject's session-agreement check (D-10) —
   // a three-column unique, not just (schoolId, id), so ClassSubject can FK
   // against (schoolId, classId, academicSessionId) and structurally cannot
   // reference a (class, session) pair that disagrees.
   @@unique([schoolId, id, academicSessionId])
+  @@unique([schoolId, id])
   // Unique class identity within (school, session) — roadmap Database work.
   @@unique([schoolId, academicSessionId, level, arm])
   @@index([schoolId])
@@ -1182,6 +1199,7 @@ model StudentEnrollment {
   /// ClassGroupService.delete()'s own dependent-count check.
   classGroupSession ClassGroup                   @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Restrict)
   registrations     StudentSubjectRegistration[]
+  rolloverSourceDecisions RolloverDecision[] @relation("RolloverDecisionSourceEnrollment")
   // DoD item 9 ("a student cannot be enrolled twice concurrently in one
   // session") is enforced by a partial unique index on
   // (school_id, student_profile_id, academic_session_id) WHERE
@@ -1191,6 +1209,9 @@ model StudentEnrollment {
 
   // Composite-FK target for StudentSubjectRegistration.
   @@unique([schoolId, id])
+  // B19 decision evidence binds a historical enrollment to the exact source
+  // session, not merely to an enrollment UUID.
+  @@unique([schoolId, id, academicSessionId])
   @@index([schoolId])
   @@index([schoolId, studentProfileId])
   @@index([schoolId, classId])
@@ -1277,6 +1298,119 @@ model StudentSubjectRegistration {
 enum StudentSubjectRegistrationStatus {
   REGISTERED
   DEREGISTERED
+}
+
+// ---------------------------------------------------------------------------
+// B19 — Academic Session Rollover. Draft rows are deliberately separate
+// from live academic structure: nothing acquires operational meaning until
+// the plan's single commit transaction materialises it in the target session.
+// ---------------------------------------------------------------------------
+model RolloverPlan {
+  id                      String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId                String             @map("school_id") @db.Uuid
+  sourceAcademicSessionId String             @map("source_academic_session_id") @db.Uuid
+  targetAcademicSessionId String             @map("target_academic_session_id") @db.Uuid
+  status                  RolloverPlanStatus @default(DRAFT)
+  readinessSnapshot       Json               @map("readiness_snapshot")
+  version                 Int                @default(1)
+  generatedByUserId       String             @map("generated_by_user_id") @db.Uuid
+  committedAt             DateTime?          @map("committed_at") @db.Timestamptz(6)
+  committedByUserId       String?            @map("committed_by_user_id") @db.Uuid
+  createdAt               DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([schoolId, sourceAcademicSessionId])
+  // A destination is reserved by exactly one plan. There is intentionally no
+  // cancellation state: a new destination session is created if a plan must
+  // be abandoned, so two historical sessions can never race into one target.
+  @@unique([schoolId, targetAcademicSessionId])
+  @@unique([schoolId, id])
+  @@index([schoolId, targetAcademicSessionId])
+  @@index([schoolId, status])
+  @@map("rollover_plans")
+}
+
+model RolloverDecision {
+  id                       String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId                 String          @map("school_id") @db.Uuid
+  rolloverPlanId           String          @map("rollover_plan_id") @db.Uuid
+  sourceEnrollmentId       String          @map("source_enrollment_id") @db.Uuid
+  sourceAcademicSessionId  String          @map("source_academic_session_id") @db.Uuid
+  sourceClassId            String          @map("source_class_id") @db.Uuid
+  proposedOutcome          RolloverOutcome @map("proposed_outcome")
+  outcome                  RolloverOutcome
+  targetDraftClassId       String?         @map("target_draft_class_id") @db.Uuid
+  reason                   String          @db.VarChar(500)
+  overriddenByUserId       String?         @map("overridden_by_user_id") @db.Uuid
+  overriddenAt             DateTime?       @map("overridden_at") @db.Timestamptz(6)
+  committedAt              DateTime?       @map("committed_at") @db.Timestamptz(6)
+  createdAt                DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sourceEnrollment StudentEnrollment @relation("RolloverDecisionSourceEnrollment", fields: [schoolId, sourceEnrollmentId], references: [schoolId, id], onDelete: Restrict)
+  sourceClass      ClassGroup        @relation("RolloverDecisionSourceClass", fields: [schoolId, sourceClassId], references: [schoolId, id], onDelete: Restrict)
+  sourceSession    AcademicSession   @relation("RolloverDecisionSourceSession", fields: [schoolId, sourceAcademicSessionId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, rolloverPlanId, sourceEnrollmentId])
+  @@index([schoolId, rolloverPlanId])
+  @@index([schoolId, targetDraftClassId])
+  @@map("rollover_decisions")
+}
+
+model RolloverClassDraft {
+  id                 String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId           String @map("school_id") @db.Uuid
+  rolloverPlanId     String @map("rollover_plan_id") @db.Uuid
+  sourceClassId      String @map("source_class_id") @db.Uuid
+  departmentId       String? @map("department_id") @db.Uuid
+  name               String @db.VarChar(32)
+  level              ClassLevel
+  arm                String @db.VarChar(16)
+  included           Boolean @default(true)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([schoolId, rolloverPlanId, sourceClassId])
+  @@unique([schoolId, rolloverPlanId, id])
+  @@unique([schoolId, id])
+  @@index([schoolId, rolloverPlanId])
+  @@map("rollover_class_drafts")
+}
+
+model RolloverOfferingDraft {
+  id                    String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId              String @map("school_id") @db.Uuid
+  rolloverPlanId        String @map("rollover_plan_id") @db.Uuid
+  sourceClassSubjectId  String @map("source_class_subject_id") @db.Uuid
+  targetDraftClassId    String @map("target_draft_class_id") @db.Uuid
+  subjectId             String @map("subject_id") @db.Uuid
+  included              Boolean @default(true)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([schoolId, rolloverPlanId, sourceClassSubjectId])
+  @@unique([schoolId, rolloverPlanId, id])
+  @@index([schoolId, targetDraftClassId])
+  @@map("rollover_offering_drafts")
+}
+
+model RolloverStaffAssignmentDraft {
+  id                         String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId                   String @map("school_id") @db.Uuid
+  rolloverPlanId             String @map("rollover_plan_id") @db.Uuid
+  assignmentKind             String @map("assignment_kind") @db.VarChar(16)
+  sourceAssignmentId         String @map("source_assignment_id") @db.Uuid
+  membershipId               String @map("membership_id") @db.Uuid
+  targetDraftClassId         String? @map("target_draft_class_id") @db.Uuid
+  subjectId                  String? @map("subject_id") @db.Uuid
+  departmentId               String? @map("department_id") @db.Uuid
+  confirmed                  Boolean @default(false)
+  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([schoolId, rolloverPlanId, assignmentKind, sourceAssignmentId])
+  @@index([schoolId, rolloverPlanId])
+  @@map("rollover_staff_assignment_drafts")
 }
 
 // ---------------------------------------------------------------------------
