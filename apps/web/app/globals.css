@@ -146,3 +146,24 @@ body {
      table columns of numbers all need digits that don't shift width. */
   font-variant-numeric: tabular-nums;
 }
+
+/* ADR-0030: Print stylesheet rules for browser-rendered official reports */
+@media print {
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr, img, .print-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}

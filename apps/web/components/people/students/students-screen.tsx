@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, GraduationCap, Upload } from 'lucide-react';
+import { Plus, GraduationCap, Upload, Download } from 'lucide-react';
+import { ExportDialog } from '@/components/reports/export';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,11 +62,13 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
 
   const [searchInput, setSearchInput] = useState(search);
   const [formOpen, setFormOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const canManage = useHasPermission('users.student.create');
   // F8 — a distinct grant from `users.student.create`, even though today's
   // permission table happens to grant both to the same actors.
   const canImport = useHasPermission('users.import.students');
+  const canExport = useHasPermission('reporting.exportStudentList');
   const context = useAcademicsContext();
   const classes = useClasses(context.data?.session?.id);
 
@@ -133,6 +136,11 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-text-primary">Students</h2>
         <div className="flex gap-2">
+          {canExport ? (
+            <Button variant="secondary" onClick={() => setExportOpen(true)}>
+              <Download aria-hidden /> Export
+            </Button>
+          ) : null}
           {canImport ? (
             <Button variant="secondary" asChild>
               <Link href={`${basePath}/students/import`}>
@@ -242,6 +250,15 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
           <StudentForm key={String(formOpen)} onSaved={() => setFormOpen(false)} />
         </DialogContent>
       </Dialog>
+
+      <ExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        initialType="STUDENTS"
+        {...(classFilter ? { initialScope: { classId: classFilter } } : {})}
+        lockType
+        contextTitle="Student Directory"
+      />
     </div>
   );
 }

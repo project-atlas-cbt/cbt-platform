@@ -211,6 +211,7 @@ export function QuestionEditorScreen({ questionId }: { questionId?: string }) {
   // JSON-stringified content for the autosave-trigger effect below.
   // `performAutosave` always re-reads `form.getValues()` at save time
   // instead of closing over this snapshot — see the file-level doc comment.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const values = form.watch();
   const valuesKey = JSON.stringify(values);
   const hasUnsavedChanges = valuesKey !== lastSavedValuesKeyRef.current;

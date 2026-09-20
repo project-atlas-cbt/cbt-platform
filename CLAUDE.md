@@ -12,8 +12,8 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 ## Project Status
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
-architecture decisions were completed first (see below); backend phases `B0`–`B16` and every
-frontend phase through `F16` are now complete (this line itself had drifted stale — kept at
+architecture decisions were completed first (see below); backend phases `B0`–`B18` and every
+frontend phase through `F18` are now complete (this line itself had drifted stale — kept at
 "`B0`–`B6`"/"`F0`–`F7`" long after later phases shipped; corrected 2026-09-04, see "Current Phase"
 below for a note on why this section can lag and the Change Log's own dated entries are the actual
 source of truth). See "Implementation Status" and "Change Log" further down in this file for what
@@ -433,7 +433,7 @@ hooks. 22 unit tests pass across 11 test files, proving the B17 contract end to 
 confirmed. See this file's Change Log entries below (dated 2026-09-04, 2026-09-05 and 2026-09-10) for
 the preceding implementation detail.
 
-**`B18 — Reporting & Export`** is implemented and awaiting F18 contract confirmation: `ReportsModule`
+**`B18 — Reporting & Export`** is implemented and F18 has now confirmed the contract: `ReportsModule`
 provides tenant-RLS-bound asynchronous CSV jobs for exam results, students, teachers, classes,
 question bank and participation; private artefacts expire after 24 hours and use requester-bound,
 rotated 15-minute authenticated download capabilities rather than exposed object-store URLs. It also
@@ -441,8 +441,16 @@ uses canonical, role-validated export scope, PostgreSQL FTS candidates followed 
 per-corpus scope filtering, and an explicit selected-school route for Software Admin exports; API
 downloads stream private objects rather than buffering them in request memory. It publishes
 role-scoped school search, Software-Admin school-only search, and data-only print-report
-endpoints over the existing results/analytics authorization paths. F18 owns browser print layouts,
-CSS and the final end-to-end contract confirmation.
+endpoints over the existing results/analytics authorization paths.
+
+**`F18 — Reporting, Export & Search`** is implemented (2026-09-19): `ExportDialog` (all six
+specified types with role-validated scope), `ExportProgress` (polling with backoff, download link
+on completion), four printable report views (`PrintExamResultsView`, `PrintExamPerformanceView`,
+`PrintClassPerformanceView`, `PrintStudentPerformanceView`) and a shared `PrintLayout` with school
+branding serialisation, `GlobalSearch` surfaced from F2's shell (returns null for students,
+satisfying `04 § 65`), and `SearchDialog` grouping results by the per-role corpora. Component tests
+pass; typecheck and lint both exit 0. B18's contract is confirmed. Browser E2E (export and search)
+remains pending — no configured harness, same posture as F16. P18 is complete.
 
 The database migration deploy wrapper reasserts the restricted `atlas_app` role's grants after every
 deployment, so new RLS-protected tables (including `export_jobs`) remain accessible only through

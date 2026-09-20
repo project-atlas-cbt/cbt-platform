@@ -38,6 +38,7 @@ export default tseslint.config(
             'packages/*/vitest.config.ts',
             'packages/*/prisma.config.ts',
             'packages/*/prisma/seed.ts',
+            'packages/*/prisma/migrate-deploy.ts',
             // Root-level tooling: `turbo run lint` only invokes each
             // workspace package's own scoped `lint` script, so these
             // repo-root files are never linted that way — only by
@@ -87,6 +88,10 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-explicit-any': 'warn',
     },
+  },
+  {
+    files: ['eslint.config.mjs', 'scripts/*.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
   },
   eslintConfigPrettier,
 );

@@ -20,6 +20,9 @@ import {
   type ExamResultSortBy,
   type ExamResultsFilters,
 } from '@/lib/results/staff-queries';
+import { Button } from '@/components/ui/button';
+import { Download, Printer } from 'lucide-react';
+import { ExportDialog } from '@/components/reports/export';
 import { ExamResultsTable } from './exam-results-table';
 import { ExamResultClassTabs, ExamResultSummaryPanel } from './exam-result-summary-panel';
 import { PublicationControls } from './publication-controls';
@@ -72,13 +75,7 @@ function asState(value: string | null): ResultState | undefined {
  * Filter, sort and pagination state lives in the URL (F3 precedent), so a
  * moderator can send a colleague the exact view they are looking at.
  */
-export function ExamResultsScreen({
-  examId,
-  basePath,
-}: {
-  examId: string;
-  basePath: string;
-}) {
+export function ExamResultsScreen({ examId, basePath }: { examId: string; basePath: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -98,6 +95,7 @@ export function ExamResultsScreen({
    */
   const operationId = searchParams.get('op');
   const [searchDraft, setSearchDraft] = useState(q);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const screenPath = `${basePath}/${examId}`;
 
@@ -149,7 +147,38 @@ export function ExamResultsScreen({
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-text-primary">Results</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold text-text-primary">Results</h1>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setExportOpen(true)}
+            className="gap-1.5 text-xs"
+          >
+            <Download className="size-3.5" />
+            <span>Export CSV</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => window.open(`/print/exams/${examId}/results`, '_blank')}
+            className="gap-1.5 text-xs"
+          >
+            <Printer className="size-3.5" />
+            <span>Print Broadsheet</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => window.open(`/print/exams/${examId}/performance`, '_blank')}
+            className="gap-1.5 text-xs"
+          >
+            <Printer className="size-3.5" />
+            <span>Print Analysis</span>
+          </Button>
+        </div>
+      </div>
 
       {results.isPending ? (
         <Skeleton className="h-24 w-full" />
@@ -224,6 +253,15 @@ export function ExamResultsScreen({
         onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
         detailBasePath={screenPath}
         hasFilters={hasFilters}
+      />
+
+      <ExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        initialType="EXAM_RESULTS"
+        initialScope={{ examId }}
+        lockType
+        contextTitle="Exam Results"
       />
     </div>
   );

@@ -15,6 +15,7 @@ import { ContextSwitcher } from './context-switcher';
 import { NotificationPanel } from './notification-panel';
 import { ProfileMenu, type ProfileMenuIdentity } from './profile-menu';
 import { OfflineIndicator } from './offline-indicator';
+import { GlobalSearch } from '@/components/reports/search';
 
 const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
 
@@ -94,7 +95,8 @@ function ShellChrome({
             roles={roles}
           />
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-2">
+          <GlobalSearch role={role} />
           {showNotifications ? <NotificationPanel /> : null}
           <ProfileMenu identity={identity} onLogout={onLogout} />
         </div>

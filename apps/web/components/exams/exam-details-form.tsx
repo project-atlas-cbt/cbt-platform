@@ -203,6 +203,7 @@ export function ExamDetailsForm({ examId, basePath }: { examId?: string; basePat
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once context first resolves
   }, [isEditMode, context.data]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const values = form.watch();
   const valuesKey = JSON.stringify(values);
   const hasUnsavedChanges = valuesKey !== lastSavedValuesKeyRef.current;
