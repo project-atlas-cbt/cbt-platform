@@ -17,7 +17,10 @@ import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { SubjectListResponseDto } from '../academics/dto/subject.dto.js';
 import { resolveQuestionActorRole } from './actor.util.js';
 import { QuestionService } from './question.service.js';
+import { QuestionRevisionService } from './question-revision.service.js';
 import {
+  BulkSubmitQuestionsDto,
+  BulkSubmitResultDto,
   CreateQuestionDto,
   ListQuestionsQueryDto,
   QuestionCountsResponseDto,
@@ -43,7 +46,10 @@ function currentUser(req: FastifyRequest): AuthenticatedUser {
 @ApiTags('questions')
 @Controller('questions')
 export class QuestionController {
-  constructor(private readonly questions: QuestionService) {}
+  constructor(
+    private readonly questions: QuestionService,
+    private readonly revisions: QuestionRevisionService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -122,5 +128,35 @@ export class QuestionController {
       actorUserId: user.userId,
       actorRole: resolveQuestionActorRole(user),
     });
+  }
+
+  // Declared before `GET :id` is irrelevant here — there is no generic
+  // `POST :id` route to conflict with — but the "summary" placement is
+  // deliberate: this is a Question-level action (a whole selected batch),
+  // so it lives beside the other Question-level mutators, even though each
+  // transition it applies is the revision-level `submit()` unchanged.
+  @Post('bulk-submit')
+  @HttpCode(HttpStatus.OK)
+  @Authorized('questionBank.submitForReview')
+  @ApiOperation({
+    summary:
+      "Submit each question's current DRAFT revision for review, in bulk. Best-effort: " +
+      'independent, individually-committed transitions with per-question outcomes.',
+  })
+  @ApiOkResponse({ type: BulkSubmitResultDto })
+  async bulkSubmit(
+    @Req() req: FastifyRequest,
+    @Body() body: BulkSubmitQuestionsDto,
+  ): Promise<BulkSubmitResultDto> {
+    const user = currentUser(req);
+    return this.revisions.bulkSubmit(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      body.questionIds,
+      {
+        actorUserId: user.userId,
+        actorRole: resolveQuestionActorRole(user),
+      },
+    );
   }
 }

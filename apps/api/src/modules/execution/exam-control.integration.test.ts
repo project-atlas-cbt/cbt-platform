@@ -307,6 +307,8 @@ describe('B12 Exam Activation & Control', () => {
   let classAId: string;
   let mathSubjectId: string;
   let studentProfileId: string;
+  let studentMembershipId: string;
+  let studentCtx: RequestCtx;
   let approvedRevisionId: string;
 
   async function buildReadyExam(
@@ -339,6 +341,29 @@ describe('B12 Exam Activation & Control', () => {
     const readyRes = await post(teacher, `/exams/${examId}/ready`, {});
     if (readyRes.statusCode !== 200) throw new Error(`ready failed: ${readyRes.body}`);
     return examId;
+  }
+
+  /** Mirrors `attempt.integration.test.ts`'s own student-login precedent
+   * exactly (real login against a real credential). */
+  async function giveStudentLogin(
+    membershipId: string,
+    remoteAddress: string,
+  ): Promise<RequestCtx> {
+    const membership = await withTenant(prisma, schoolId, (tx) =>
+      tx.schoolMembership.findUniqueOrThrow({ where: { id: membershipId } }),
+    );
+    await prisma.user.update({
+      where: { id: membership.userId },
+      data: {
+        passwordHash: await passwords.hash('a-real-password-123'),
+        credentialState: 'OK',
+        status: 'ACTIVE',
+      },
+    });
+    const ctx = await freshCtx(host, remoteAddress);
+    const loginRes = await login(ctx, membership.loginIdentifier, 'a-real-password-123');
+    if (loginRes.statusCode !== 200) throw new Error(`student login failed: ${loginRes.body}`);
+    return ctx;
   }
 
   beforeAll(async () => {
@@ -487,17 +512,20 @@ describe('B12 Exam Activation & Control', () => {
     hod = await freshCtx(host, `10.${RUN}.12.4`);
     await login(hod, otherTeacherBody.loginIdentifier, 'a-real-password-123');
 
-    studentProfileId = (
+    const createdStudent = (
       await post(admin, '/students', {
         firstName: 'Tunde',
         lastName: 'Bello',
         studentId: `ST-${randomUUID().slice(0, 8)}`,
       })
-    ).json<{ studentProfileId: string }>().studentProfileId;
+    ).json<{ studentProfileId: string; membershipId: string }>();
+    studentProfileId = createdStudent.studentProfileId;
+    studentMembershipId = createdStudent.membershipId;
     await post(admin, `/students/${studentProfileId}/enrollments`, {
       academicSessionId: sessionId,
       classId: classAId,
     });
+    studentCtx = await giveStudentLogin(studentMembershipId, `10.${RUN}.12.6`);
 
     const validOptions = [
       { content: '4', correctFlag: false },
@@ -736,6 +764,39 @@ describe('B12 Exam Activation & Control', () => {
     // not a fabricated placeholder.
     expect(body.aggregate.attemptDataAvailable).toBe(true);
     expect(body.liveAttempts).toEqual([]);
+  });
+
+  it('post-B13 gap closure: /control returns a real IN_PROGRESS live attempt row with studentName, startedAt, and time remaining', async () => {
+    const examId = await buildReadyExam('OPEN_TO_ELIGIBLE');
+    await post(teacher, `/exams/${examId}/sessions`, {});
+
+    const startRes = await post(studentCtx, `/exams/${examId}/attempts`, {});
+    expect(startRes.statusCode).toBe(200);
+    expect(startRes.json<{ state: string }>().state).toBe('IN_PROGRESS');
+
+    const controlRes = await get(teacher, `/exams/${examId}/control`);
+    expect(controlRes.statusCode).toBe(200);
+    const body = controlRes.json<{
+      aggregate: { inProgressCount: number; attemptDataAvailable: boolean };
+      liveAttempts: {
+        studentProfileId: string;
+        studentName: string;
+        status: string;
+        startedAt: string;
+        timeRemainingSeconds: number | null;
+      }[];
+    }>();
+    expect(body.aggregate.inProgressCount).toBe(1);
+    expect(body.aggregate.attemptDataAvailable).toBe(true);
+    const row = body.liveAttempts.find((x) => x.studentProfileId === studentProfileId);
+    expect(row).toBeDefined();
+    if (!row) return;
+    expect(row.status).toBe('IN_PROGRESS');
+    // Seeded as firstName 'Tunde' lastName 'Bello' (beforeAll).
+    expect(row.studentName).toBe('Tunde Bello');
+    expect(Number.isNaN(Date.parse(row.startedAt))).toBe(false);
+    expect(row.timeRemainingSeconds).not.toBeNull();
+    expect(row.timeRemainingSeconds as number).toBeGreaterThanOrEqual(0);
   });
 
   it('DoD 12/A-14: End Examination requires every session CLOSED and an exact absentee-list match, marks absences, audited', async () => {

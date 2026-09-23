@@ -3115,6 +3115,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/questions/bulk-submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit each question's current DRAFT revision for review, in bulk. Best-effort: independent, individually-committed transitions with per-question outcomes. */
+        post: operations["QuestionController_bulkSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/questions/{questionId}/revisions/{revisionId}": {
         parameters: {
             query?: never;
@@ -4475,20 +4492,23 @@ export interface components {
         ExamControlCenterAggregateDto: {
             /** @description AUTHORIZED ExamSessionParticipant count — real. */
             authorizedCount: number;
-            /** @description Real in B12, but degenerate: always equals authorizedCount (no attempts exist). */
+            /** @description Registration roll-ups for the same authorized cohort — real since B13 (independent ExamAttempt counts; a submitted student is never also counted not-started). */
             notStartedCount: number;
-            /** @description PLACEHOLDER — always 0 until B13 ships ExamAttempt. */
+            /** @description Real since B13 ships ExamAttempt — students with a currently-IN_PROGRESS attempt. */
             inProgressCount: number;
-            /** @description PLACEHOLDER — always 0 until B13 ships ExamAttempt. */
+            /** @description Real since B13 ships ExamAttempt — students whose attempt reached SUBMITTED/AUTO_SUBMITTED. */
             submittedCount: number;
             /** @description Real, but only ever non-zero after End Examination (ExamParticipation). */
             absentCount: number;
-            /** @description False in B12 — lets the frontend distinguish a real "0" from "not yet real" for inProgressCount/submittedCount/liveAttempts. */
+            /** @description Always true since B13 ships ExamAttempt — retained on the contract only so no future client can ever mistake an uncomputed count for a real zero. */
             attemptDataAvailable: boolean;
         };
         ExamLiveAttemptRowDto: {
             studentProfileId: string;
+            studentName: string;
             status: string;
+            /** Format: date-time */
+            startedAt: string;
             timeRemainingSeconds: number | null;
         };
         ExamControlCenterStalenessDto: {
@@ -5435,6 +5455,7 @@ export interface components {
             questionType: "SINGLE_CHOICE" | "TRUE_FALSE";
             /** @enum {string} */
             currentStatus: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED" | "ARCHIVED";
+            mine: boolean;
             authorTeacherProfileId: string;
             authorName: string;
             /** Format: date-time */
@@ -5469,6 +5490,7 @@ export interface components {
             questionType: "SINGLE_CHOICE" | "TRUE_FALSE";
             /** @enum {string} */
             currentStatus: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "ARCHIVED" | "ARCHIVED";
+            mine: boolean;
             authorTeacherProfileId: string;
             authorName: string;
             /** Format: date-time */
@@ -5481,6 +5503,23 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        BulkSubmitQuestionsDto: {
+            /** @description Question ids whose *current* DRAFT revision should be submitted for review. */
+            questionIds: string[];
+        };
+        QuestionBulkSubmitItemDto: {
+            questionId: string;
+            revisionId: string;
+        };
+        QuestionBulkSubmitFailureDto: {
+            questionId: string;
+            code: string;
+            message: string;
+        };
+        BulkSubmitResultDto: {
+            submitted: components["schemas"]["QuestionBulkSubmitItemDto"][];
+            failed: components["schemas"]["QuestionBulkSubmitFailureDto"][];
         };
         UpdateQuestionRevisionDto: {
             /** @enum {string} */
@@ -10484,6 +10523,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionController_bulkSubmit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSubmitQuestionsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkSubmitResultDto"];
                 };
             };
         };

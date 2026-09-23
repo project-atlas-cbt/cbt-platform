@@ -8,6 +8,7 @@ import { AuditService } from '../operations/audit-event.service.js';
 import {
   QUESTION_DETAIL_INCLUDE,
   QUESTION_INCLUDE,
+  currentRevisionOwnedBy,
   deriveCurrentStatus,
   toQuestionListItemDto,
   toQuestionResponseDto,
@@ -221,7 +222,7 @@ export class QuestionService {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Question not found.' });
     }
 
-    return toQuestionResponseDto(question);
+    return toQuestionResponseDto(question, currentRevisionOwnedBy(actor, question));
   }
 
   async list(
@@ -268,7 +269,12 @@ export class QuestionService {
       ]),
     );
 
-    return { questions: questions.map(toQuestionListItemDto), total, page, pageSize };
+    return {
+      questions: questions.map((q) => toQuestionListItemDto(q, currentRevisionOwnedBy(actor, q))),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async counts(schoolId: string, actor: AuthorizedActor): Promise<QuestionCountsResponseDto> {

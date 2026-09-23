@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { BookOpen, Download, Plus, Upload, XCircle } from 'lucide-react';
@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -30,6 +31,7 @@ import {
   useQuestionCounts,
   useQuestionsPaginated,
 } from '@/lib/questions/queries';
+import { useBulkSubmitQuestions, type BulkSubmitResult } from '@/lib/questions/mutations';
 import { useExportQuestions } from '@/lib/questions/use-export-questions';
 import { QuestionStatusBadge } from './question-status-badge';
 import { QuestionStatusTabs } from './question-status-tabs';
@@ -65,6 +67,7 @@ interface QuestionRow {
   currentStatus: string;
   authorName: string;
   updatedAt: string;
+  mine: boolean;
 }
 
 /**
@@ -125,6 +128,31 @@ export function QuestionBankScreen({
   const canCreate = useHasPermission('questionBank.create');
   const canImport = useHasPermission('questionBank.import');
   const canExport = useHasPermission('questionBank.export');
+  const canSubmitForReview = useHasPermission('questionBank.submitForReview');
+
+  // F9 — best-effort bulk "submit for review" (04 §38, user instruction
+  // 2026-09 — "submit valid ones, report the rest"): only shown on the
+  // DRAFT tab and only for callers holding `questionBank.submitForReview`
+  // (TEACHER-only — `granted('OWNED')`, denied to HOD / School Admin).
+  const bulkSubmit = useBulkSubmitQuestions();
+  const bulkMode = Boolean(canSubmitForReview) && status === 'DRAFT';
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [bulkResult, setBulkResult] = useState<BulkSubmitResult | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
+  // Leaving the DRAFT tab reseats the selection/result state. Done via the
+  // "adjust state during render" pattern (rather than an effect, which the
+  // `react-hooks/set-state-in-effect` rule forbids) so a tab change can never
+  // carry a half-remembered selection into a later visit of the DRAFT tab.
+  const [prevBulkMode, setPrevBulkMode] = useState(bulkMode);
+  if (prevBulkMode !== bulkMode) {
+    setPrevBulkMode(bulkMode);
+    if (!bulkMode) {
+      setSelectedIds(new Set());
+      setBulkResult(null);
+      setBulkError(null);
+    }
+  }
 
   // Exactly one of these two is ever `enabled` — see `assignedSubjectsOnly`'s
   // own doc comment above for why this can't be inferred from a permission
@@ -167,7 +195,68 @@ export function QuestionBankScreen({
   const rows: QuestionRow[] = questions.data?.questions ?? [];
   const pageCount = Math.max(1, Math.ceil((questions.data?.total ?? 0) / PAGE_SIZE));
 
-  const columns: DataTableColumn<QuestionRow>[] = [
+  const selectableRows = rows.filter((row) => row.mine);
+  const allSelectableSelected =
+    selectableRows.length > 0 && selectableRows.every((row) => selectedIds.has(row.id));
+  const failedReasons = bulkResult
+    ? Array.from(new Set(bulkResult.failed.map((failure) => failure.message)))
+    : [];
+
+  function toggleSelect(id: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleSelectPage() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelectableSelected) {
+        for (const row of selectableRows) next.delete(row.id);
+      } else {
+        for (const row of selectableRows) next.add(row.id);
+      }
+      return next;
+    });
+  }
+
+  async function submitSelected() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkError(null);
+    setBulkResult(null);
+    try {
+      const result = await bulkSubmit.mutateAsync(ids);
+      setBulkResult(result);
+      setSelectedIds(new Set());
+    } catch {
+      setBulkError('Could not submit for review. Please try again.');
+    }
+  }
+
+  const columns: DataTableColumn<QuestionRow>[] = [];
+  if (bulkMode) {
+    columns.push({
+      id: 'select',
+      header: '',
+      cell: (row) => (
+        <Checkbox
+          checked={row.mine && selectedIds.has(row.id)}
+          onCheckedChange={(checked) => toggleSelect(row.id, checked === true)}
+          disabled={!row.mine}
+          aria-label={
+            row.mine
+              ? `Select ${row.subjectName} for review`
+              : 'Written by a colleague — only your own drafts can be submitted'
+          }
+        />
+      ),
+    });
+  }
+  columns.push(
     {
       id: 'subject',
       header: 'Subject',
@@ -203,7 +292,7 @@ export function QuestionBankScreen({
         </Button>
       ),
     },
-  ];
+  );
 
   const hasFilters = Boolean(subjectId || level || difficulty || (status && !pinnedStatus));
 
@@ -318,6 +407,58 @@ export function QuestionBankScreen({
           </Select>
         </div>
       </div>
+
+      {bulkMode ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface-muted px-3 py-2">
+          <p className="text-sm text-text-secondary">
+            {selectedIds.size} of {selectableRows.length} of your drafts selected
+          </p>
+          <div className="flex items-center gap-2">
+            {selectableRows.length > 0 ? (
+              <Button variant="ghost" size="sm" onClick={toggleSelectPage}>
+                {allSelectableSelected ? 'Clear selection' : 'Select all on this page'}
+              </Button>
+            ) : null}
+            <Button
+              size="sm"
+              loading={bulkSubmit.isPending}
+              disabled={selectedIds.size === 0}
+              onClick={() => void submitSelected()}
+            >
+              Submit selected for review
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {bulkMode && bulkResult ? (
+        <div
+          role="status"
+          className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm"
+        >
+          {bulkResult.submitted.length > 0 ? (
+            <p className="text-text-primary">
+              {bulkResult.submitted.length} question
+              {bulkResult.submitted.length === 1 ? '' : 's'} submitted for review.
+            </p>
+          ) : null}
+          {failedReasons.length > 0 ? (
+            <p className="mt-1 text-text-secondary">
+              {bulkResult.submitted.length > 0 ? 'Skipped' : 'Nothing submitted'} —{' '}
+              {failedReasons.join(' · ')}.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {bulkMode && bulkError ? (
+        <p
+          role="alert"
+          className="rounded-md border border-danger/30 bg-danger-subtle px-3 py-2 text-sm font-medium text-danger"
+        >
+          {bulkError}
+        </p>
+      ) : null}
 
       {questions.isError ? (
         <ErrorState error={questions.error} onRetry={() => void questions.refetch()} />

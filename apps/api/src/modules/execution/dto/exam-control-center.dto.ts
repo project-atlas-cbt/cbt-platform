@@ -41,14 +41,25 @@ export class ExamControlCenterAggregateDto {
 
   @ApiProperty({
     type: Number,
-    description: 'Real in B12, but degenerate: always equals authorizedCount (no attempts exist).',
+    description:
+      'Registration roll-ups for the same authorized cohort — real since B13 ' +
+      '(independent ExamAttempt counts; a submitted student is never also counted not-started).',
   })
   notStartedCount!: number;
 
-  @ApiProperty({ type: Number, description: 'PLACEHOLDER — always 0 until B13 ships ExamAttempt.' })
+  @ApiProperty({
+    type: Number,
+    description:
+      'Real since B13 ships ExamAttempt — students with a currently-IN_PROGRESS attempt.',
+  })
   inProgressCount!: number;
 
-  @ApiProperty({ type: Number, description: 'PLACEHOLDER — always 0 until B13 ships ExamAttempt.' })
+  @ApiProperty({
+    type: Number,
+    description:
+      'Real since B13 ships ExamAttempt — students whose attempt reached ' +
+      'SUBMITTED/AUTO_SUBMITTED.',
+  })
   submittedCount!: number;
 
   @ApiProperty({
@@ -60,20 +71,27 @@ export class ExamControlCenterAggregateDto {
   @ApiProperty({
     type: Boolean,
     description:
-      'False in B12 — lets the frontend distinguish a real "0" from "not yet real" for ' +
-      'inProgressCount/submittedCount/liveAttempts.',
+      'Always true since B13 ships ExamAttempt — retained on the contract only so no ' +
+      'future client can ever mistake an uncomputed count for a real zero.',
   })
   attemptDataAvailable!: boolean;
 }
 
-/** Reserved shape for B13 — no field is ever populated in B12; `liveAttempts`
- * is always `[]`. */
+/** B13 — one row per currently-`IN_PROGRESS` `ExamAttempt` for this exam.
+ * `studentName`/`startedAt` were added after B13 shipped (2026-09) so the
+ * Control Center's live attempt table can name rows and show a start time. */
 export class ExamLiveAttemptRowDto {
   @ApiProperty({ type: String })
   studentProfileId!: string;
 
   @ApiProperty({ type: String })
+  studentName!: string;
+
+  @ApiProperty({ type: String })
   status!: string;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  startedAt!: string;
 
   @ApiProperty({ type: Number, nullable: true })
   timeRemainingSeconds!: number | null;
@@ -96,9 +114,8 @@ export class ExamControlCenterStalenessDto {
 }
 
 /** `GET /v1/exams/:id/control` and the SSE stream's own snapshot payload
- * share this exact shape — additive-only for B13 (fills `inProgressCount`/
- * `submittedCount`/`liveAttempts`, flips `attemptDataAvailable`; adds no new
- * top-level keys). */
+ * share this exact shape. Post-B13 all counts in `aggregate` and every
+ * `liveAttempts` row are computed from real `ExamAttempt` data. */
 export class ExamControlCenterResponseDto {
   @ApiProperty({ type: String })
   examId!: string;

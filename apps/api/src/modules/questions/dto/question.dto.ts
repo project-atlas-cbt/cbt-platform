@@ -328,6 +328,16 @@ export class QuestionListItemResponseDto {
   @ApiProperty({ type: String, enum: QUESTION_CURRENT_STATUSES })
   currentStatus!: (typeof QUESTION_CURRENT_STATUSES)[number];
 
+  /** Bulk-submit gap-closure: whether the caller authored the *current*
+   * revision (`createdByMembershipId`, not the question's original author)
+   * — the exact predicate `questionBank.submitForReview` evaluates as
+   * OWNED. Powers the teacher's Draft-tab bulk-submit checkbox disable:
+   * a teacher's bank scope is subject/level (shared question bank), so a
+   * Draft tab can list colleagues' drafts within shared subjects, which
+   * can be viewed but never submitted by this caller. */
+  @ApiProperty({ type: Boolean })
+  mine!: boolean;
+
   @ApiProperty({ type: String })
   authorTeacherProfileId!: string;
 
@@ -427,6 +437,50 @@ export class QuestionCountsResponseDto {
 
   @ApiProperty({ type: Number })
   archived!: number;
+}
+
+export class QuestionBulkSubmitItemDto {
+  @ApiProperty({ type: String })
+  questionId!: string;
+
+  @ApiProperty({ type: String })
+  revisionId!: string;
+}
+
+export class QuestionBulkSubmitFailureDto {
+  @ApiProperty({ type: String })
+  questionId!: string;
+
+  @ApiProperty({ type: String })
+  code!: string;
+
+  @ApiProperty({ type: String })
+  message!: string;
+}
+
+export class BulkSubmitQuestionsDto {
+  @ApiProperty({
+    type: String,
+    isArray: true,
+    maxItems: 200,
+    description: 'Question ids whose *current* DRAFT revision should be submitted for review.',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  // `'all'` + `{ each: true }` — every id here is a UUIDv7 (ADR-0033);
+  // without the explicit version the options object would be bound to the
+  // `version` constraint instead and every id would fail validation.
+  @IsUUID('all', { each: true })
+  questionIds!: string[];
+}
+
+export class BulkSubmitResultDto {
+  @ApiProperty({ type: QuestionBulkSubmitItemDto, isArray: true })
+  submitted!: QuestionBulkSubmitItemDto[];
+
+  @ApiProperty({ type: QuestionBulkSubmitFailureDto, isArray: true })
+  failed!: QuestionBulkSubmitFailureDto[];
 }
 
 export class AttachQuestionMediaDto {

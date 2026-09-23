@@ -3213,14 +3213,33 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "sessionId": { "type": "string" },
-                    "sessionStatus": { "type": "string" },
-                    "activeExams": { "type": "number" },
-                    "pendingResults": { "type": "number" },
-                    "activeStudents": { "type": "number" },
-                    "ready": { "type": "boolean" }
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "sessionStatus": {
+                      "type": "string"
+                    },
+                    "activeExams": {
+                      "type": "number"
+                    },
+                    "pendingResults": {
+                      "type": "number"
+                    },
+                    "activeStudents": {
+                      "type": "number"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    }
                   },
-                  "required": ["sessionId", "sessionStatus", "activeExams", "pendingResults", "activeStudents", "ready"]
+                  "required": [
+                    "sessionId",
+                    "sessionStatus",
+                    "activeExams",
+                    "pendingResults",
+                    "activeStudents",
+                    "ready"
+                  ]
                 }
               }
             }
@@ -7620,6 +7639,38 @@
           }
         },
         "summary": "Archive a question — always allowed, never touches any revision row.",
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/bulk-submit": {
+      "post": {
+        "operationId": "QuestionController_bulkSubmit",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSubmitQuestionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkSubmitResultDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Submit each question's current DRAFT revision for review, in bulk. Best-effort: independent, individually-committed transitions with per-question outcomes.",
         "tags": [
           "questions"
         ]
@@ -12348,15 +12399,15 @@
           },
           "notStartedCount": {
             "type": "number",
-            "description": "Real in B12, but degenerate: always equals authorizedCount (no attempts exist)."
+            "description": "Registration roll-ups for the same authorized cohort — real since B13 (independent ExamAttempt counts; a submitted student is never also counted not-started)."
           },
           "inProgressCount": {
             "type": "number",
-            "description": "PLACEHOLDER — always 0 until B13 ships ExamAttempt."
+            "description": "Real since B13 ships ExamAttempt — students with a currently-IN_PROGRESS attempt."
           },
           "submittedCount": {
             "type": "number",
-            "description": "PLACEHOLDER — always 0 until B13 ships ExamAttempt."
+            "description": "Real since B13 ships ExamAttempt — students whose attempt reached SUBMITTED/AUTO_SUBMITTED."
           },
           "absentCount": {
             "type": "number",
@@ -12364,7 +12415,7 @@
           },
           "attemptDataAvailable": {
             "type": "boolean",
-            "description": "False in B12 — lets the frontend distinguish a real \"0\" from \"not yet real\" for inProgressCount/submittedCount/liveAttempts."
+            "description": "Always true since B13 ships ExamAttempt — retained on the contract only so no future client can ever mistake an uncomputed count for a real zero."
           }
         },
         "required": [
@@ -12382,8 +12433,15 @@
           "studentProfileId": {
             "type": "string"
           },
+          "studentName": {
+            "type": "string"
+          },
           "status": {
             "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
           },
           "timeRemainingSeconds": {
             "type": "number",
@@ -12392,7 +12450,9 @@
         },
         "required": [
           "studentProfileId",
+          "studentName",
           "status",
+          "startedAt",
           "timeRemainingSeconds"
         ]
       },
@@ -16172,6 +16232,9 @@
               "ARCHIVED"
             ]
           },
+          "mine": {
+            "type": "boolean"
+          },
           "authorTeacherProfileId": {
             "type": "string"
           },
@@ -16210,6 +16273,7 @@
           "marks",
           "questionType",
           "currentStatus",
+          "mine",
           "authorTeacherProfileId",
           "authorName",
           "createdAt",
@@ -16314,6 +16378,9 @@
               "ARCHIVED"
             ]
           },
+          "mine": {
+            "type": "boolean"
+          },
           "authorTeacherProfileId": {
             "type": "string"
           },
@@ -16341,6 +16408,7 @@
           "marks",
           "questionType",
           "currentStatus",
+          "mine",
           "authorTeacherProfileId",
           "authorName",
           "createdAt",
@@ -16371,6 +16439,77 @@
           "total",
           "page",
           "pageSize"
+        ]
+      },
+      "BulkSubmitQuestionsDto": {
+        "type": "object",
+        "properties": {
+          "questionIds": {
+            "maxItems": 200,
+            "description": "Question ids whose *current* DRAFT revision should be submitted for review.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "questionIds"
+        ]
+      },
+      "QuestionBulkSubmitItemDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "revisionId"
+        ]
+      },
+      "QuestionBulkSubmitFailureDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "code",
+          "message"
+        ]
+      },
+      "BulkSubmitResultDto": {
+        "type": "object",
+        "properties": {
+          "submitted": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionBulkSubmitItemDto"
+            }
+          },
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionBulkSubmitFailureDto"
+            }
+          }
+        },
+        "required": [
+          "submitted",
+          "failed"
         ]
       },
       "UpdateQuestionRevisionDto": {

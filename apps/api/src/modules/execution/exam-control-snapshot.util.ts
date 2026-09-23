@@ -59,7 +59,15 @@ export async function computeExamControlSnapshot(
     ).size;
     const liveAttempts = await tx.examAttempt.findMany({
       where: { schoolId, examId, state: 'IN_PROGRESS' },
-      select: { studentProfileId: true, state: true, expiresAt: true },
+      select: {
+        studentProfileId: true,
+        state: true,
+        expiresAt: true,
+        startedAt: true,
+        studentProfile: {
+          select: { membership: { select: { user: { select: { displayName: true } } } } },
+        },
+      },
     });
     const allAttempts = await tx.examAttempt.findMany({
       where: { schoolId, examId },
@@ -124,6 +132,8 @@ export async function computeExamControlSnapshot(
         studentProfileId: a.studentProfileId,
         status: a.state,
         timeRemainingSeconds: Math.max(0, Math.floor((a.expiresAt.getTime() - nowMs) / 1000)),
+        studentName: a.studentProfile.membership.user.displayName,
+        startedAt: a.startedAt.toISOString(),
       })),
       staleness: {
         isStale,

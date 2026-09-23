@@ -28,7 +28,7 @@ import { StalenessIndicator } from './staleness-indicator';
 import { AggregateSummaryCards } from './aggregate-summary-cards';
 import { SessionsTable } from './sessions-table';
 import { DelegatesSection } from './delegates-section';
-import { FeatureNotYetAvailable } from './feature-not-yet-available';
+import { LiveAttemptsTable } from './live-attempts-table';
 import { OpenSessionDialog } from './dialogs/open-session-dialog';
 import { CloseExamDialog } from './dialogs/close-exam-dialog';
 import { ReopenExamDialog } from './dialogs/reopen-exam-dialog';
@@ -193,10 +193,10 @@ export function ExamControlCenterScreen({
 
       <div className="space-y-2">
         <h2 className="text-sm font-semibold text-text-primary">Live attempts</h2>
-        <FeatureNotYetAvailable
-          title="Live attempt tracking is not yet available"
-          description="Per-student status, start time, and time remaining ship with the Attempt Engine."
-          phase="B13"
+        <LiveAttemptsTable
+          examId={examId}
+          liveAttempts={snapshot.liveAttempts}
+          computedAt={snapshot.computedAt}
         />
       </div>
 

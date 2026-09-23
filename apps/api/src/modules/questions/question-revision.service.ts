@@ -14,6 +14,7 @@ import { requireSchoolActor } from './question-scope.util.js';
 import { validateQuestionRevisionForSubmit } from './question-validation.util.js';
 import { TopicService } from './topic.service.js';
 import type {
+  BulkSubmitResultDto,
   CreateRevisionDto,
   QuestionOptionInputDto,
   QuestionRevisionResponseDto,
@@ -358,6 +359,77 @@ export class QuestionRevisionService {
       entityId: revisionId,
     });
     return toRevisionResponseDto(updated);
+  }
+
+  /** Bulk-submit gap-closure (teacher Draft tab): submits each question's
+   * *current* DRAFT revision to review in one call, replaying `submit()`'s
+   * own logic unchanged per question — the same DRAFT gate, the same OWNED
+   * `questionBank.submitForReview` evaluation against the revision's
+   * `createdByMembershipId`, the same validation catalogue, the same active-
+   * assignment re-check, the same `QUESTION_REVISION_SUBMITTED` audit row.
+   *
+   * Semantics are deliberately per-question, not all-or-nothing (confirmed
+   * with the project owner): each eligible draft transitions independently
+   * in its own transaction — one ineligible draft never blocks the rest of
+   * a selected batch — and any that can't are returned in `failed` with their
+   * exact reason rather than being silently dropped or half-committed. The
+   * server resolves `currentRevisionId` and re-verifies ownership per
+   * revision, so a client-selected id is never trusted; selecting a
+   * colleague's draft (visible in the shared subject/level bank) yields a
+   * `FORBIDDEN` failure for that row only. */
+  async bulkSubmit(
+    schoolId: string,
+    actor: AuthorizedActor,
+    questionIds: string[],
+    auditCtx: ActorContext,
+  ): Promise<BulkSubmitResultDto> {
+    // Resolve the current revision per requested question in one read. RLS
+    // (via withTenant) already scopes every row to this school; a question
+    // id from another school, or a question with no revision at all, is a
+    // NOT_FOUND failure — never a cross-school read.
+    const currentRevisionByQuestion = new Map<string, string>();
+    const questions = await withTenant(prisma, schoolId, (tx) =>
+      tx.question.findMany({
+        where: { id: { in: questionIds }, schoolId },
+        select: { id: true, currentRevisionId: true },
+      }),
+    );
+    for (const question of questions) {
+      if (question.currentRevisionId !== null) {
+        currentRevisionByQuestion.set(question.id, question.currentRevisionId);
+      }
+    }
+
+    const submitted: BulkSubmitResultDto['submitted'] = [];
+    const failed: BulkSubmitResultDto['failed'] = [];
+
+    for (const questionId of questionIds) {
+      const revisionId = currentRevisionByQuestion.get(questionId);
+      if (!revisionId) {
+        failed.push({
+          questionId,
+          code: 'NOT_FOUND',
+          message: 'Question not found in this school.',
+        });
+        continue;
+      }
+      try {
+        const revision = await this.submit(schoolId, actor, questionId, revisionId, auditCtx);
+        submitted.push({ questionId, revisionId: revision.id });
+      } catch (err) {
+        if (err instanceof AppHttpException) {
+          failed.push({
+            questionId,
+            code: err.code,
+            message: err.message || 'This question could not be submitted for review.',
+          });
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    return { submitted, failed };
   }
 
   /** Shared fetch-and-authorize used by every OWNED-graded revision action

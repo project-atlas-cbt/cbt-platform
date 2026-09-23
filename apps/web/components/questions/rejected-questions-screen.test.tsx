@@ -19,6 +19,9 @@ vi.mock('@/lib/questions/use-export-questions', () => ({
 vi.mock('@/lib/academics/queries', () => ({
   useSubjects: vi.fn(() => ({ data: { subjects: [] } })),
 }));
+vi.mock('@/lib/questions/mutations', () => ({
+  useBulkSubmitQuestions: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+}));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn(() => true) }));
 
 const mockUseQuestionsPaginated = vi.mocked(useQuestionsPaginated);

@@ -119,10 +119,29 @@ interface QuestionForListItem {
     questionType: string;
     topicId: string | null;
     topic: { name: string } | null;
+    createdByMembershipId: string | null;
   } | null;
 }
 
-export function toQuestionListItemDto(question: QuestionForListItem): QuestionListItemResponseDto {
+/** The exact `questionBank.submitForReview` OWNED predicate, derived
+ * server-side for the bank list/detail so the client needn't compare
+ * profile ids itself: the current *revision's* creator, not the question's
+ * original author (a cloned revision of a colleague's approved question is
+ * owned by the cloner). */
+export function currentRevisionOwnedBy(
+  actor: { kind: string; membershipId?: string },
+  question: { currentRevision: { createdByMembershipId: string | null } | null },
+): boolean {
+  return (
+    actor.kind === 'SCHOOL' &&
+    question.currentRevision?.createdByMembershipId === actor.membershipId
+  );
+}
+
+export function toQuestionListItemDto(
+  question: QuestionForListItem,
+  mine: boolean,
+): QuestionListItemResponseDto {
   return {
     id: question.id,
     subjectId: question.subjectId,
@@ -139,6 +158,7 @@ export function toQuestionListItemDto(question: QuestionForListItem): QuestionLi
       (question.currentRevision?.questionType as QuestionListItemResponseDto['questionType']) ??
       'SINGLE_CHOICE',
     currentStatus: deriveCurrentStatus(question) as QuestionListItemResponseDto['currentStatus'],
+    mine,
     authorTeacherProfileId: question.authorTeacherProfileId,
     authorName: question.authorProfile.membership.user.displayName,
     createdAt: question.createdAt.toISOString(),
@@ -148,9 +168,10 @@ export function toQuestionListItemDto(question: QuestionForListItem): QuestionLi
 
 export function toQuestionResponseDto(
   question: QuestionForListItem & { revisions: QuestionRevisionWithRelations[] },
+  mine: boolean,
 ): QuestionResponseDto {
   return {
-    ...toQuestionListItemDto(question),
+    ...toQuestionListItemDto(question, mine),
     archivedAt: question.archivedAt?.toISOString() ?? null,
     revisions: question.revisions
       .slice()

@@ -473,6 +473,43 @@ confirmation gate, post-commit transition summary). Backed by typed React Query 
 lifecycle integration test). `@atlas/web typecheck` and `lint` both exit 0. B19's contract is
 confirmed. Browser E2E remains pending — same posture as F16/F18 (no configured harness).
 
+**2026-09-23 — Teacher bulk "Submit for review" shipped (explicit user request):** teachers can
+now select multiple/all of their own Draft-tab questions on the Question Bank and submit them for
+review in one action — `POST /v1/questions/bulk-submit` (`questionBank.submitForReview`,
+TEACHER-only), best-effort per-question through the existing single-submit engine (each transition
+independently committed and audited; per-question `submitted`/`failed` outcomes, never a whole-batch
+failure). The bank list and detail responses now carry `mine` (current-revision ownership) so the
+UI disables selection of colleagues' drafts. HOD review remains fully manual — explicit user
+decision recorded in `04 §38`. Also fixed a spec-contract drift the regen surfaced, not introduced
+by this phase: `/academics/sessions/:id/close-readiness` had lost its `@ApiOkResponse` while the
+committed `openapi.json` still documented one; the pre-existing inline schema was re-declared on
+`rollover.controller.ts`. Validation: 7 new API integration tests + 6 new web component tests;
+api/web typecheck/lint/build exit 0; all API unit tests (181) and question web tests (69) pass.
+Known pre-existing (not from this work): 18 web failures in student/results/report suites at HEAD
+("No QueryClient set"). See `CHANGE-LOG.md` (2026-09-23).
+
+**2026-09-23 — School Admin Questions oversight closed too:** the last honestly-open half of F9's
+own deferred-item list ("School Admin's Questions oversight screen, `04 §15`") shipped — `/school/
+questions`, `/school/questions/[id]`, `/school/questions/rejected` reusing F9's
+`QuestionBankScreen`/`QuestionDetailScreen`/`RejectedQuestionsScreen` unmodified at
+`basePath="/school/questions"`, with `hideImport` (School Admin's `questionBank.import` is an
+unfinalized `limitedReadOnly(...)` placeholder; genuine import needs a `TeacherProfile`). Create/
+Edit actions never render (`questionBank.create`/`questionBank.editOwnDraft` are `denied()` for
+School Admin); Archive renders (`questionBank.archive` finalized as `SCHOOL` in `B8`). The page
+previously rendered only the `[...slug]` catch-all placeholder. See `CHANGE-LOG.md` (2026-09-23)
+for the full entry.
+
+**2026-09-23 — F12's live attempt table shipped (B13 gap closure):** the Control Center's
+long-reserved live-attempts slot is now a real `LiveAttemptsTable` — `exam-control.v1`'s
+`liveAttempts` (each IN_PROGRESS `ExamAttempt` row now carrying `studentName` + `startedAt`) merged
+with the F16 participation roster into `04 §46`'s per-student table (In progress / Not started /
+Submitted, ABSENT excluded, time left projected server-side from `timeRemainingSeconds`/`computedAt`
+and ticking client-side, sorted, with loading/error/empty states). API + worker snapshot parity was
+kept via the shared `@atlas/domain` control-cache type; the aggregate DTO's B12-era placeholder
+doc text was corrected; contracts were regenerated; `FeatureNotYetAvailable.tsx` was deleted.
+Still honestly deferred: operational alerts (F12 DoD item 10) — no per-student liveness signal
+exists. See `CHANGE-LOG.md` (2026-09-23).
+
 The database migration deploy wrapper reasserts the restricted `atlas_app` role's grants after every
 deployment, so new RLS-protected tables (including `export_jobs`) remain accessible only through
 their tenant policy rather than failing with a table-permission error.

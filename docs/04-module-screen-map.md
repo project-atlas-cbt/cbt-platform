@@ -1002,6 +1002,19 @@ Rejected
 Archived
 ```
 
+When the Draft tab is active, a teacher may bulk-submit drafts for review in
+one action (`POST /v1/questions/bulk-submit`, user instruction 2026-09 — the
+frozen spec below omits it; the import path already validates questions, so
+per-question submission is unnecessary overhead). The bank list carries an
+explicit `mine` flag per row; only the caller's own drafts are selectable
+(disabled checkbox + "written by a colleague" affordance for everyone
+else's). Best-effort semantics: each selected draft is submitted through the
+ordinary single-submit engine and independently audited, and the response
+reports per-question outcomes (`submitted` / `failed` with a code) rather
+than failing the batch wholesale. HOD review remains fully manual (B9 — a
+reviewer's approval decision is a single high-integrity academic judgment and
+is never bulk-operated).
+
 ---
 
 # 39. Teacher → Question Editor

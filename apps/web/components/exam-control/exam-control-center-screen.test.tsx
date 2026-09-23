@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useHasPermission } from '@/lib/nav';
 import { useExam } from '@/lib/exams/queries';
-import { useExamControl } from '@/lib/exam-control/queries';
+import { useExamControl, useExamParticipation } from '@/lib/exam-control/queries';
 import {
   useOpenExamSession,
   useCloseExam,
@@ -21,6 +21,13 @@ vi.mock('@/lib/exam-control/queries', () => ({
   // `EndExaminationDialog` (always mounted, closed-by-default) calls this
   // unconditionally regardless of `open` — every hook call must resolve.
   useEligibleStudents: vi.fn(() => ({ data: undefined, isPending: true, isError: false })),
+  // The `LiveAttemptsTable` (always mounted) owns the roster query.
+  useExamParticipation: vi.fn(() => ({
+    data: { examId: 'e1', students: [] },
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  })),
 }));
 vi.mock('@/lib/exam-control/mutations', () => ({
   useOpenExamSession: vi.fn(),
@@ -49,6 +56,7 @@ vi.mock('./delegates-section', () => ({
 const mockUseHasPermission = vi.mocked(useHasPermission);
 const mockUseExam = vi.mocked(useExam);
 const mockUseExamControl = vi.mocked(useExamControl);
+const mockUseExamParticipation = vi.mocked(useExamParticipation);
 const mockUseExamControlStream = vi.mocked(useExamControlStream);
 const mockUseOpenExamSession = vi.mocked(useOpenExamSession);
 const mockUseCloseExam = vi.mocked(useCloseExam);
@@ -212,15 +220,57 @@ describe('ExamControlCenterScreen', () => {
     expect(openSession).toHaveBeenCalledWith({ sessionType: 'STANDARD' });
   });
 
-  it('renders the live-attempts placeholder honestly, not a fabricated table', () => {
+  it('renders the live-attempts table with real per-student rows instead of the B12 placeholder', () => {
+    mockUseExamParticipation.mockReturnValue({
+      data: {
+        examId: 'e1',
+        students: [
+          {
+            studentProfileId: 'p-ada',
+            studentName: 'Ada Obi',
+            rollupStatus: 'PENDING',
+            sessions: [],
+          },
+          {
+            studentProfileId: 'p-tunde',
+            studentName: 'Tunde Bello',
+            rollupStatus: 'PENDING',
+            sessions: [],
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
     mockUseExamControl.mockReturnValue({
-      data: snapshot({ examStatus: 'OPEN' }),
+      data: snapshot({
+        examStatus: 'OPEN',
+        liveAttempts: [
+          {
+            studentProfileId: 'p-tunde',
+            studentName: 'Tunde Bello',
+            status: 'IN_PROGRESS',
+            startedAt: '2026-01-01T00:00:00Z',
+            timeRemainingSeconds: 2538,
+          },
+        ],
+      }),
       isPending: false,
       isError: false,
       refetch: vi.fn(),
     } as never);
     render(<ExamControlCenterScreen basePath="/teacher/exam-control" examId="e1" />);
-    expect(screen.getByText(/live attempt tracking is not yet available/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /live attempts/i })).toBeInTheDocument();
+    expect(
+      screen.queryByText(/live attempt tracking is not yet available/i),
+    ).not.toBeInTheDocument();
+    // In progress rows sort first (04 §46): the starting student's real
+    // status badge and countdown appear; a non-starter renders Not started
+    // (the aggregate StatTile label uses the same words, so scope to rows).
+    expect(screen.getByText('Tunde Bello')).toBeInTheDocument();
+    expect(screen.getAllByText('In progress').length).toBeGreaterThan(0);
+    expect(screen.getByRole('row', { name: /ada obi/i }).textContent).toContain('Not started');
   });
 
   it('shows a loading state', () => {

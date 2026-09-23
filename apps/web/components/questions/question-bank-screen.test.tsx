@@ -10,6 +10,7 @@ import {
 import { useExportQuestions } from '@/lib/questions/use-export-questions';
 import { useSubjects } from '@/lib/academics/queries';
 import { useHasPermission } from '@/lib/nav';
+import { useBulkSubmitQuestions } from '@/lib/questions/mutations';
 
 const replace = vi.fn();
 let params = new URLSearchParams();
@@ -22,6 +23,7 @@ vi.mock('@/lib/questions/queries', () => ({
   useQuestionsPaginated: vi.fn(),
   useAssignedSubjects: vi.fn(),
 }));
+vi.mock('@/lib/questions/mutations', () => ({ useBulkSubmitQuestions: vi.fn() }));
 vi.mock('@/lib/questions/use-export-questions', () => ({ useExportQuestions: vi.fn() }));
 vi.mock('@/lib/academics/queries', () => ({ useSubjects: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
@@ -32,6 +34,7 @@ const mockUseExportQuestions = vi.mocked(useExportQuestions);
 const mockUseSubjects = vi.mocked(useSubjects);
 const mockUseAssignedSubjects = vi.mocked(useAssignedSubjects);
 const mockUseHasPermission = vi.mocked(useHasPermission);
+const mockUseBulkSubmitQuestions = vi.mocked(useBulkSubmitQuestions);
 
 const QUESTIONS = [
   {
@@ -46,6 +49,52 @@ const QUESTIONS = [
   },
 ];
 
+// Colleague-draft mix for the F9 bulk-submit flow: Ada owns q1/q2, Ben owns
+// q3 — only Ada's rows may ever be selected/submitted.
+const MIXED_DRAFTS = [
+  {
+    id: 'q1',
+    subjectName: 'Mathematics',
+    level: 'SS2',
+    topicName: 'Quadratic Equations',
+    difficulty: 'EASY',
+    currentStatus: 'DRAFT',
+    authorName: 'Ada Okoye',
+    updatedAt: '2026-01-01T00:00:00Z',
+    mine: true,
+  },
+  {
+    id: 'q2',
+    subjectName: 'English Language',
+    level: 'SS1',
+    topicName: 'Comprehension',
+    difficulty: 'MEDIUM',
+    currentStatus: 'DRAFT',
+    authorName: 'Ada Okoye',
+    updatedAt: '2026-01-02T00:00:00Z',
+    mine: true,
+  },
+  {
+    id: 'q3',
+    subjectName: 'Physics',
+    level: 'SS3',
+    topicName: 'Mechanics',
+    difficulty: 'HARD',
+    currentStatus: 'DRAFT',
+    authorName: 'Ben Musa',
+    updatedAt: '2026-01-03T00:00:00Z',
+    mine: false,
+  },
+];
+
+function draftResult(questions: typeof MIXED_DRAFTS) {
+  return {
+    isPending: false,
+    isError: false,
+    data: { questions, total: questions.length, page: 1, pageSize: 25 },
+  } as never;
+}
+
 describe('QuestionBankScreen', () => {
   beforeEach(() => {
     params = new URLSearchParams();
@@ -57,6 +106,8 @@ describe('QuestionBankScreen', () => {
     } as never);
     mockUseExportQuestions.mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never);
     mockUseHasPermission.mockReturnValue(true);
+    const mutateAsync = vi.fn().mockResolvedValue({ submitted: [], failed: [] });
+    mockUseBulkSubmitQuestions.mockReturnValue({ mutateAsync, isPending: false } as never);
   });
 
   it('shows a loading state', () => {
@@ -208,5 +259,126 @@ describe('QuestionBankScreen', () => {
 
     expect(mockUseSubjects).toHaveBeenCalledWith({ enabled: true });
     expect(mockUseAssignedSubjects).toHaveBeenCalledWith({ enabled: false });
+  });
+
+  it('F9 bulk submit: the DRAFT tab shows enabled checkboxes only for own drafts', () => {
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    params.set('status', 'DRAFT');
+    render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+
+    expect(screen.getByRole('button', { name: /submit selected for review/i })).toBeInTheDocument();
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(3);
+    expect(checkboxes[0]).toBeEnabled();
+    expect(checkboxes[1]).toBeEnabled();
+    expect(checkboxes[2]).toBeDisabled();
+    expect(checkboxes[2]).toHaveAttribute('aria-label', expect.stringContaining('colleague'));
+  });
+
+  it('F9 bulk submit: no selection strip outside the DRAFT tab', () => {
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+
+    expect(
+      screen.queryByRole('button', { name: /submit selected for review/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('F9 bulk submit: HOD / School Admin (no submitForReview grant) get no selection strips', () => {
+    mockUseHasPermission.mockReturnValue(false);
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    params.set('status', 'DRAFT');
+    render(<QuestionBankScreen basePath="/hod/question-bank" />);
+
+    expect(
+      screen.queryByRole('button', { name: /submit selected for review/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('F9 bulk submit: select-all-on-page + submit sends only the owned ids', async () => {
+    const user = userEvent.setup();
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    const mutateAsync = vi.fn().mockResolvedValue({
+      submitted: [
+        { questionId: 'q1', revisionId: 'r1' },
+        { questionId: 'q2', revisionId: 'r2' },
+      ],
+      failed: [],
+    });
+    mockUseBulkSubmitQuestions.mockReturnValue({ mutateAsync, isPending: false } as never);
+    params.set('status', 'DRAFT');
+    render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+
+    await user.click(screen.getByRole('button', { name: /select all on this page/i }));
+    await user.click(screen.getByRole('button', { name: /submit selected for review/i }));
+
+    expect(mutateAsync).toHaveBeenCalledWith(['q1', 'q2']);
+    expect(screen.getByText(/2 questions submitted for review/i)).toBeInTheDocument();
+    // Selection reseated after a successful submit.
+    expect(screen.getByText(/0 of 2 of your drafts selected/i)).toBeInTheDocument();
+  });
+
+  it('F9 bulk submit: partial failures are reported without blocking the batch', async () => {
+    const user = userEvent.setup();
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    const mutateAsync = vi.fn().mockResolvedValue({
+      submitted: [{ questionId: 'q2', revisionId: 'r2' }],
+      failed: [
+        { questionId: 'q1', code: 'QUESTION_REVISION_NOT_DRAFT', message: 'Already submitted.' },
+        { questionId: 'q3', code: 'FORBIDDEN', message: 'Not yours to submit.' },
+      ],
+    });
+    mockUseBulkSubmitQuestions.mockReturnValue({ mutateAsync, isPending: false } as never);
+    params.set('status', 'DRAFT');
+    render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+
+    await user.click(screen.getByRole('button', { name: /select all on this page/i }));
+    await user.click(screen.getByRole('button', { name: /submit selected for review/i }));
+
+    expect(mutateAsync).toHaveBeenCalledWith(['q1', 'q2']);
+    expect(screen.getByText(/1 question submitted for review/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Skipped — Already submitted. · Not yours to submit./i),
+    ).toBeInTheDocument();
+  });
+
+  it('F9 bulk submit: a thrown request-level error shows an inline alert', async () => {
+    const user = userEvent.setup();
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    const mutateAsync = vi.fn().mockRejectedValue(new Error('server down'));
+    mockUseBulkSubmitQuestions.mockReturnValue({ mutateAsync, isPending: false } as never);
+    params.set('status', 'DRAFT');
+    render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+
+    await user.click(screen.getByRole('button', { name: /select all on this page/i }));
+    await user.click(screen.getByRole('button', { name: /submit selected for review/i }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Could not submit for review. Please try again.',
+    );
+  });
+
+  it('F9 bulk submit: leaving the DRAFT tab reseats the selection', async () => {
+    const user = userEvent.setup();
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    params.set('status', 'DRAFT');
+    const { rerender } = render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+
+    await user.click(screen.getAllByRole('checkbox')[0] as HTMLElement);
+    expect(screen.getByText(/1 of 2 of your drafts selected/i)).toBeInTheDocument();
+
+    params.set('status', 'SUBMITTED');
+    rerender(<QuestionBankScreen basePath="/teacher/question-bank" />);
+    expect(
+      screen.queryByRole('button', { name: /submit selected for review/i }),
+    ).not.toBeInTheDocument();
+
+    params.set('status', 'DRAFT');
+    rerender(<QuestionBankScreen basePath="/teacher/question-bank" />);
+    expect(screen.getByText(/0 of 2 of your drafts selected/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')[0]).not.toBeChecked();
   });
 });

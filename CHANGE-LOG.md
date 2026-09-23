@@ -2,6 +2,115 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-09-23 — F12 gap closure: real Live Attempt table (B13)
+
+Closed the F12 DoD item that was honestly partial by construction (no `ExamAttempt` existed when F12
+shipped): the Exam Control Center's live-attempts slot is now a real per-student table (`04 §46`),
+replacing and deleting the `FeatureNotYetAvailable` placeholder.
+
+- **Backend** (additive, user-confirmed scope): `exam-control.v1`'s live-attempt rows now carry
+  `studentName` and `startedAt` (both the API and the worker's parity refresh were extended via the
+  shared `@atlas/domain` control-cache type; identical select/map in
+  `exam-control-snapshot.util.ts` and `apps/worker`'s `exam-control-refresh.queue.ts`).
+  `ExamLiveAttemptRowDto` fields declared in `exam-control-center.dto.ts`; the aggregate DTO's
+  B12-era placeholder doc text (`attemptDataAvailable` explanation, count summaries) corrected to
+  B13 reality. OpenAPI re-emitted, `@atlas/contracts` regenerated.
+- **Frontend** (`apps/web`): new `components/exam-control/live-attempts-table.tsx` merges the
+  snapshot's `liveAttempts` with the F16 participation roster into one table — In progress
+  (start time + time left, server-derived from `timeRemainingSeconds`/`computedAt`, ticking
+  every second), Not started (PENDING), Submitted (ATTENDED not live), ABSENT excluded, a live
+  row whose student left the roster still shown, sorted In progress → Not started → Submitted,
+  with loading/error/empty states and inline refetch on roster error. Wired into the four-role
+  `ExamControlCenterScreen`; `feature-not-yet-available.tsx` deleted; the stale "live attempt
+  tracking ships in B13" tooltip on `aggregate-summary-cards.tsx` removed.
+- **Testing:** +1 API integration test (student starts a real attempt → `/control` returns the
+  IN_PROGRESS row with name/startedAt/time-remaining, aggregate inProgressCount); +6 web component
+  tests (roster merge incl. ABSENT exclusion, sort, per-second time-left tick, roster-dropout
+  resilience, error-retry, empty state); center-screen test exercised the real table.
+  api typecheck/lint + 181 unit tests, exam-control integration 16/16, attempt integration 42/42,
+  worker typecheck/lint/unit + refresh integration 4/4, web typecheck/lint + full suite 875 pass
+  (18 pre-existing "No QueryClient set" failures only), `next build` and contracts build pass.
+- **Still deferred** (unchanged): operational alerts — no per-student liveness signal exists, so
+  an abandoned attempt is indistinguishable from a quiet one; low-time alerts are a separate,
+  unapproved feature. See F12's Deferred items.
+
+### 2026-09-23 — Teacher bulk "Submit for review" (`POST /v1/questions/bulk-submit` + bank Draft tab)
+
+Added a best-effort bulk submit-for-review workflow at the explicit request of the project owner
+(2026-09): a teacher may select many (or all) of their own Draft-tab questions and submit them for
+review in one action, rather than opening each draft. Import already validates questions, so
+per-question manual submission was unnecessary overhead. HOD review stays fully manual — explicit
+user decision, outranks `04 §38`'s silent omission of any bulk affordance.
+
+- **Backend**
+  - `POST /v1/questions/bulk-submit` (`questionBank.submitForReview`, TEACHER-only OWNED) with
+    `BulkSubmitQuestionsDto` (1–200 UUID ids). Each id is resolved under the tenant-isolated
+    `withTenant` RLS scope (foreign-school ids → `NOT_FOUND`), then passed through the _existing_
+    single-submit engine (`QuestionRevisionService.submit()` — DRAFT gate, revision validation,
+    active-assignment re-check, `QUESTION_REVISION_SUBMITTED` audit) with per-question `AppHttpException`
+    captured into `BulkSubmitResultDto.failed`, never aborting the batch. Confirmed user decision:
+    "submit valid ones, report the rest."
+  - `GET /v1/questions` list items and `GET /v1/questions/:id` now carry `mine` (current revision's
+    `createdByMembershipId === caller's membership` — the correct ownership signal for cloned
+    revisions, deliberately not `authorTeacherProfileId`). The bank UI uses it to disable selection
+    of colleagues' drafts ("not yours" affordance).
+  - Spec-contract fix surfaced by regen, not introduced by this phase: `rollover.controller.ts`'s
+    `GET /academics/sessions/:id/close-readiness` had no `@ApiOkResponse` (the committed
+    `openapi.json` still carried a hand-described inline schema — stale docs). Re-declared the exact
+    pre-existing shape on the controller so the emitted spec matches the API truth again.
+- **Frontend** (`QuestionBankScreen`, shared by `/teacher/question-bank`, `/hod/question-bank`,
+  `/school/questions`)
+  - Bulk selection strip + selection column render only on the **Draft** tab and only when the actor
+    holds `questionBank.submitForReview` (Teacher; invisible to HOD/School Admin). "Select all on
+    this page", per-row checkboxes (disabled for non-owned rows with an explanatory label), running
+    selection count, inline success summary (`N questions submitted for review`, deduped failure
+    reasons) and inline request-error alert. Selection/result reseat on leaving the Draft tab
+    (React "adjust state during render", not an effect — passes `react-hooks/set-state-in-effect`).
+- **Testing:** 7 new API integration tests (`question-bulk-submit.integration.test.ts`: happy path
+  with audit deltas, mixed per-question failures, `mine` flag, tenant isolation, out-of-scope-after-
+  assignment, 400 validation, School-Admin 403); 6 new web component tests; all API unit tests
+  (26 files / 181) and question web tests (13 files / 69) pass; api+web typecheck/lint/build exit 0.
+  Note: 18 web test failures in unrelated student/results/report suites are **pre-existing at HEAD**
+  ("No QueryClient set" — confirmed by stashing this work), not introduced here.
+- **Docs updated:** `docs/04-module-screen-map.md` §38, `docs/roadmaps/roadmap-index.md`,
+  `CLAUDE.md`. Contracts (`openapi.json` + `@atlas/contracts` generated types) regenerated.
+- **Deferred/Candidate:** G1/G3-independent bulk _review_ remains out of scope by explicit user
+  decision (a reviewer's approval is a single high-integrity judgment).
+
+### 2026-09-23 — School Admin Questions oversight screen (`/school/questions`)
+
+Closed the remaining half of F9's own honestly-recorded deferral — "School Admin's Questions
+oversight screen (`04 §15`)" — which still rendered only the `[...slug]` catch-all placeholder
+("hasn't been built yet") after F10 took care of HOD's half (`/hod/question-bank`).
+
+- **`/school/questions`** (`school/questions/page.tsx`) — `QuestionBankScreen` reused unmodified at
+  `basePath="/school/questions"`, exactly the reuse F9's Deferred items predicted and F10 already
+  exercised for HOD. `hideImport` passed, mirroring F10's HOD precedent: School Admin's
+  `questionBank.import` row is an unfinalized `limitedReadOnly(...)` placeholder and genuine
+  import requires a `TeacherProfile` (guaranteed `QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE`).
+- **`/school/questions/[id]`** (`school/questions/[id]/page.tsx`) — `QuestionDetailScreen`
+  verbatim, no fork needed: Create/Edit/Start-new-revision gated by `questionBank.create`/
+  `questionBank.editOwnDraft` (`denied()` for School Admin) never render; Archive gated by
+  `questionBank.archive` (`granted('SCHOOL')` for School Admin per B8's finalization) correctly
+  does.
+- **`/school/questions/rejected`** (`school/questions/rejected/page.tsx`) — `RejectedQuestionsScreen`
+  at the same base, mirroring the HOD pairing, because the bank screen's "Rejected questions" link
+  is `basePath`-relative.
+- `04 §15`'s oversight posture is satisfied with zero School Admin-specific filtering logic: the
+  list/tabs/counts/filters are already `questionBank.view` SCHOOL-scoped server-side. No new
+  permission rows, no schema, no backend change.
+
+**Validation:** `pnpm --filter @atlas/web typecheck`, `lint`, and `build` all exit 0; the build
+route table now lists `/school/questions`, `/school/questions/[id]`, `/school/questions/rejected`
+as real routes (no longer falling through `school/[...slug]`). All 19 question-related test files
+(96 tests) pass. Browser E2E remains pending, same posture as every prior phase (no configured
+harness).
+
+**Docs updated:** `docs/roadmaps/frontend-roadmap.md`'s F9 Deferred-item bullet now records the
+closure. **Deferred:** `04 §15`'s "Question Analytics" list item still has no dedicated surface on
+this route (no role's question-bank screen links to question analytics; per-exam question
+analytics already lives at `/teacher/results/[examId]/analytics`) — recorded, not built.
+
 ### Initial State
 
 - Product and architecture specification completed.

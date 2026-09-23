@@ -8,10 +8,10 @@ type Aggregate = ApiComponents['schemas']['ExamControlCenterAggregateDto'];
  * "status legibility over decorative analytics" — this is the screen
  * doctrine names as the one exception to generous whitespace).
  *
- * In-progress/Submitted render `—`, never a fabricated `0`, whenever
- * `attemptDataAvailable === false` (always true in B12 — no `ExamAttempt`
- * exists yet) — a real `0` would be indistinguishable from "not yet real,"
- * per the DTO's own doc comment.
+ * In-progress/Submitted render real counts — since B13 ships ExamAttempt,
+ * `attemptDataAvailable` is always `true`, so the `—` branch is defensive
+ * (a real school with zero attempts must still show a real `0`, which the
+ * snapshot computes independently from authorizedCount).
  */
 export function AggregateSummaryCards({ aggregate }: { aggregate: Aggregate }) {
   return (
@@ -49,12 +49,7 @@ function StatTile({
     <div className="rounded-md border border-border bg-surface px-3 py-2.5">
       <p className="text-xs font-medium text-text-muted">{label}</p>
       {value === null ? (
-        <p
-          className="text-2xl font-semibold tabular-nums text-text-muted"
-          title="Live attempt tracking ships in a later phase (B13)."
-        >
-          —
-        </p>
+        <p className="text-2xl font-semibold tabular-nums text-text-muted">—</p>
       ) : (
         <p className={`text-2xl font-semibold tabular-nums ${toneClass}`}>
           {value.toLocaleString()}

@@ -82,8 +82,17 @@ export interface ExamControlCenterSnapshot {
   examStatus: ExamStatus;
   sessions: ExamControlCenterSessionSnapshot[];
   aggregate: ExamControlCenterAggregateSnapshot;
-  /** B13: one row per currently-`IN_PROGRESS` `ExamAttempt` for this exam. */
-  liveAttempts: { studentProfileId: string; status: string; timeRemainingSeconds: number | null }[];
+  /** B13: one row per currently-`IN_PROGRESS` `ExamAttempt` for this exam.
+   * `studentName`/`startedAt` added post-B13 so the Control Center's live
+   * attempt table can name rows and show a start time without a second
+   * per-student join on the client. */
+  liveAttempts: {
+    studentProfileId: string;
+    status: string;
+    timeRemainingSeconds: number | null;
+    studentName: string;
+    startedAt: string;
+  }[];
   staleness: ExamControlCenterStalenessSnapshot;
   computedAt: string;
 }

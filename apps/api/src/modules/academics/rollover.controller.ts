@@ -38,6 +38,28 @@ export class RolloverController {
   @Get('sessions/:id/close-readiness')
   @Authorized('progression.promote.view')
   @ApiOperation({ summary: 'Return academic-session close readiness.' })
+  @ApiOkResponse({
+    description: 'Session close readiness.',
+    schema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string' },
+        sessionStatus: { type: 'string' },
+        activeExams: { type: 'number' },
+        pendingResults: { type: 'number' },
+        activeStudents: { type: 'number' },
+        ready: { type: 'boolean' },
+      },
+      required: [
+        'sessionId',
+        'sessionStatus',
+        'activeExams',
+        'pendingResults',
+        'activeStudents',
+        'ready',
+      ],
+    },
+  })
   async readiness(@Req() req: FastifyRequest, @Param('id', new ParseUUIDPipe()) id: string) {
     const u = user(req);
     // Readiness aggregates school-wide active exams/results. HOD promotion

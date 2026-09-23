@@ -160,7 +160,15 @@ async function computeSnapshot(
     ).size;
     const liveAttempts = await tx.examAttempt.findMany({
       where: { schoolId, examId, state: 'IN_PROGRESS' },
-      select: { studentProfileId: true, state: true, expiresAt: true },
+      select: {
+        studentProfileId: true,
+        state: true,
+        expiresAt: true,
+        startedAt: true,
+        studentProfile: {
+          select: { membership: { select: { user: { select: { displayName: true } } } } },
+        },
+      },
     });
     const allAttempts = await tx.examAttempt.findMany({
       where: { schoolId, examId },
@@ -263,6 +271,8 @@ async function computeSnapshot(
           0,
           Math.floor((a.expiresAt.getTime() - now.getTime()) / 1000),
         ),
+        studentName: a.studentProfile.membership.user.displayName,
+        startedAt: a.startedAt.toISOString(),
       })),
       staleness: {
         isStale,

@@ -138,6 +138,25 @@ export function useArchiveQuestion() {
   });
 }
 
+/**
+ * F9 — best-effort bulk "submit for review" for the Teacher bank page
+ * (04 §38). The API submits every *own* draft independently and reports the
+ * rest per-question, so a single partial failure never blocks the batch.
+ */
+export interface BulkSubmitResult {
+  submitted: { questionId: string; revisionId: string }[];
+  failed: { questionId: string; code: string; message: string }[];
+}
+
+export function useBulkSubmitQuestions() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (questionIds: string[]) =>
+      unwrap(apiClient.POST('/questions/bulk-submit', { body: { questionIds } })),
+    onSuccess: () => invalidateQuestions(client),
+  });
+}
+
 export function useAttachQuestionMedia(questionId: string, revisionId: string) {
   const client = useQueryClient();
   return useMutation({
