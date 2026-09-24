@@ -2,6 +2,48 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-09-24 — F3 gap closure: School Detail's Usage, Users and Exams tabs now show real data (SA-04 §8)
+
+Closed F3's last honestly-open Deferred item. `04 §8` always specified Users and Exams as full School
+Detail sections; F3 shipped honest "not yet available" states for both because no platform user-list
+endpoint existed and no `Exam`/`ExamAttempt` rows existed (so the Usage tile's counts were phantom
+`0`s). With B11/B13/B17 shipped, the blockers evaporated. Confirmed with the project owner before
+implementation; pure additive reads over already-stored data — zero new permission ids, no schema.
+
+- **Backend** (all `platform.school.viewAll`, every query inside one `withTenant` scope so RLS makes
+  cross-school leakage structurally impossible even with a forged `:id`):
+  - `GET /v1/platform/schools/:id/users` — `ListSchoolUsersQueryDto`/`ListSchoolUsersResponseDto`,
+    `SchoolsAdminService.listUsers()`: paginated (default 25, `MAX_PAGE_SIZE` cap) directory of
+    `SchoolMembership` rows; filters `q` (displayName/firstName/lastName/email/loginIdentifier),
+    `role` (ACTIVE `RoleAssignment`s only), `userStatus`; `sortBy` `lastName` (lastName/firstName/
+    joinedAt tiebreak) else `joinedAt`. Deliberately minimal `User` select — asserted by test to
+    never return `passwordHash`/`credentialState`/session data; `email` null for students (ADR-0019);
+    `roles` is every ACTIVE role (Teacher+HOD shown once, as an array).
+  - `GET /v1/platform/schools/:id/exams` — reuses `ListExamsQueryDto`/`ExamListResponseDto`/
+    `EXAM_LIST_INCLUDE`/`toExamListItemResponseDto` from `apps/api/src/modules/exams/`,
+    `SchoolsAdminService.listExams()`: every filter the school-session route supports honoured
+    (status, session/term/subject/department/teacher, and the `classId` `classes:some` join),
+    `createdAt` desc. Never calls `ExamService.list()` — that path is author-bound to a school-session
+    `AuthorizedActor` a platform session must not impersonate.
+  - `SchoolsAdminService.detail()`'s usage counts are now real: every persisted `Exam` (all statuses,
+    matching B17's `analytics.platform()` semantic) and every `ExamAttempt` for the school.
+- **Frontend** (`apps/web/app/admin/(shell)/schools/[id]/`): `usage/page.tsx` renders the four real
+  MetricTiles (stale "don't exist yet" note removed); `users/page.tsx` — search input, role/status
+  Selects (`ALL = '__all__'` sentinel), sortable Member/Joined columns, caption "N people at this
+  school", distinct no-filter/no-match empty states; `exams/page.tsx` — `ExamStatusTabs` + DataTable
+  (Exam/Subject/Session·Term/Teacher/Status/Created), status+page URL state. Filter/sort/pagination
+  server-side and URL-mirrored, page reset to 1 on change; the schools-list screen's conventions.
+- **Testing:** `apps/api/src/modules/platform/platform-school-directory.integration.test.ts` — 16 new
+  cases (usage against real exams/attempts, users safe-field contract + student email null +
+  filters + sort + pagination, exams status filter + pagination + mapper shape, both 404s,
+  cross-school isolation, unauthenticated 401, genuine school-session cookie rejected by
+  `PlatformAuthGuard`). 16/16 green; all six `src/modules/platform/` integration files 59/59.
+  Web: 13 new component tests across the three tab pages, green. api/web typecheck, lint, contracts
+  build, `pnpm generate` all exit 0.
+- **Docs updated:** `docs/roadmaps/backend-roadmap.md` (B3 API table + "Sixth gap closure"),
+  `docs/roadmaps/frontend-roadmap.md` (F3 DoD item 4, post-completion note, Deferred items, and the
+  stale F0–F3 phase-completion rows corrected), `CLAUDE.md`. No schema or permission-table change.
+
 ### 2026-09-23 — F12 gap closure: real Live Attempt table (B13)
 
 Closed the F12 DoD item that was honestly partial by construction (no `ExamAttempt` existed when F12

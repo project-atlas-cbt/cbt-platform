@@ -20,10 +20,13 @@ import { CreateSchoolDto } from './dto/create-school.dto.js';
 import { IssueSubscriptionDto, SchoolLifecycleReasonDto } from './dto/school-lifecycle.dto.js';
 import {
   ListSchoolsQueryDto,
+  ListSchoolUsersQueryDto,
+  ListSchoolUsersResponseDto,
   SchoolActivationGrantsResponseDto,
   SchoolDetailResponseDto,
   SchoolListResponseDto,
 } from './dto/school-response.dto.js';
+import { ExamListResponseDto, ListExamsQueryDto } from '../exams/dto/exam.dto.js';
 import {
   CreateSchoolResponseDto,
   IssueSubscriptionResponseDto,
@@ -169,5 +172,32 @@ export class SchoolsAdminController {
   async listActivationGrants(@Param('id') id: string): Promise<SchoolActivationGrantsResponseDto> {
     const grants = await this.schools.listActivationGrants(id);
     return { grants };
+  }
+
+  @Get(':id/users')
+  @AuthorizedPlatform('platform.school.viewAll')
+  @ApiOperation({
+    summary:
+      'School user directory (04 §8) — search, role/status filter, sort, paginate; read-only.',
+  })
+  @ApiOkResponse({ type: ListSchoolUsersResponseDto })
+  async listUsers(
+    @Param('id') id: string,
+    @Query() query: ListSchoolUsersQueryDto,
+  ): Promise<ListSchoolUsersResponseDto> {
+    return this.schools.listUsers(id, query);
+  }
+
+  @Get(':id/exams')
+  @AuthorizedPlatform('platform.school.viewAll')
+  @ApiOperation({
+    summary: 'School exam directory (04 §8) — status/other filters + pagination; read-only.',
+  })
+  @ApiOkResponse({ type: ExamListResponseDto })
+  async listExams(
+    @Param('id') id: string,
+    @Query() query: ListExamsQueryDto,
+  ): Promise<ExamListResponseDto> {
+    return this.schools.listExams(id, query);
   }
 }

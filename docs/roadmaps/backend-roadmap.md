@@ -532,20 +532,22 @@ from this section even though `docs/roadmaps/roadmap-index.md`'s Immediate-Next-
 ("Platform-level account provisioning belongs to... B3"). Built as originally intended, not a scope
 addition — this section's own table was simply incomplete.
 
-| Endpoint                                                                | Purpose                                                                           |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `POST /v1/platform/auth/login` · `/logout` · `GET /v1/platform/auth/me` | Software Admin session (ADR-0005's distinct platform host)                        |
-| `GET /v1/platform/schools`                                              | List with filters Active/Provisional/Suspended/Expired/Deactivated (`05 §3.1`)    |
-| `POST /v1/platform/schools`                                             | Create school + initial admin + subscription (`05 §3.2`)                          |
-| `GET /v1/platform/schools/:id`                                          | Overview, subscription, usage, activity (`05 §3.3`)                               |
-| `POST /v1/platform/schools/:id/suspend` · `/reactivate` · `/deactivate` | Lifecycle, reason required                                                        |
-| `POST /v1/platform/schools/:id/subscriptions`                           | Issue or renew                                                                    |
-| `POST /v1/platform/schools/:id/activation-grants`                       | Issue key                                                                         |
-| `GET /v1/platform/schools/:id/activation-grants`                        | Activation/renewal history (`05 §4.1`) — F3 gap-closure, see Implementation notes |
-| `GET /v1/platform/metrics`                                              | Platform dashboard aggregates (cached — see Implementation notes)                 |
-| `POST /v1/activation/verify` · `/v1/activation/redeem`                  | School-side activation (`03 §3`)                                                  |
-| `GET /v1/school/profile` · `PATCH /v1/school/profile`                   | School-side profile incl. timezone                                                |
-| `GET /v1/school/subscription`                                           | School-side read-only status                                                      |
+| Endpoint                                                                | Purpose                                                                                                    |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `POST /v1/platform/auth/login` · `/logout` · `GET /v1/platform/auth/me` | Software Admin session (ADR-0005's distinct platform host)                                                 |
+| `GET /v1/platform/schools`                                              | List with filters Active/Provisional/Suspended/Expired/Deactivated (`05 §3.1`)                             |
+| `POST /v1/platform/schools`                                             | Create school + initial admin + subscription (`05 §3.2`)                                                   |
+| `GET /v1/platform/schools/:id`                                          | Overview, subscription, usage, activity (`05 §3.3`)                                                        |
+| `POST /v1/platform/schools/:id/suspend` · `/reactivate` · `/deactivate` | Lifecycle, reason required                                                                                 |
+| `POST /v1/platform/schools/:id/subscriptions`                           | Issue or renew                                                                                             |
+| `POST /v1/platform/schools/:id/activation-grants`                       | Issue key                                                                                                  |
+| `GET /v1/platform/schools/:id/activation-grants`                        | Activation/renewal history (`05 §4.1`) — F3 gap-closure, see Implementation notes                          |
+| `GET /v1/platform/schools/:id/users`                                    | User directory (`04 §8`), search/role/status/sort/page — 2026-09-24 F3 gap-closure                         |
+| `GET /v1/platform/schools/:id/exams`                                    | Exam directory (`04 §8`), status/session/term/subject/class filters, paginated — 2026-09-24 F3 gap-closure |
+| `GET /v1/platform/metrics`                                              | Platform dashboard aggregates (cached — see Implementation notes)                                          |
+| `POST /v1/activation/verify` · `/v1/activation/redeem`                  | School-side activation (`03 §3`)                                                                           |
+| `GET /v1/school/profile` · `PATCH /v1/school/profile`                   | School-side profile incl. timezone                                                                         |
+| `GET /v1/school/subscription`                                           | School-side read-only status                                                                               |
 
 ## Database work
 
@@ -872,6 +874,59 @@ decision beyond confirming the already-documented terminal-state semantics. New 
 - the full unit suite (143/143) — `pnpm generate`/integration tests deferred, not silently skipped,
   per this same Change Log entry's own "Verification" paragraph (blocked by unrelated concurrent
   session activity on this repository, not by anything in this fix).
+
+### 2026-09-24 — Sixth gap closure: the Software Admin school directory (Users + Exams, real Usage counts)
+
+`04 §8`'s School Detail spec always listed Users and Exams as full sections, but neither had a
+platform-side data source — F3's own DoD item 4 shipped them as honest "not yet available" states
+and its Deferred items recorded exactly why (`B11`/`B13` didn't exist for exam data, no platform
+user-list endpoint at all, and `detail()`'s usage counts were phantom `0`s). With `B11`/`B13`/`B17`
+long since shipped, all three reasons evaporated, so this gap closure closes F3's last honestly-open
+Deferred item — confirmed with the project owner before implementation. Pure additive reads over
+already-stored data: no schema migration, no business-rule change, zero new permission ids (all
+three routes reuse the existing `platform.school.viewAll`).
+
+- **`GET /v1/platform/schools/:id/users`** (`ListSchoolUsersQueryDto`/`ListSchoolUsersResponseDto`,
+  `SchoolsAdminService.listUsers()`): a directory of the school's `SchoolMembership` rows — a
+  Software Admin's platform session nonetheless never sees another school's rows, because every
+  query runs inside a single `withTenant` scope (`FORCE ROW LEVEL SECURITY`, ADR-0023), regardless
+  of which `:id` the route receives. Filters: `q` (displayName/firstName/lastName/email/
+  loginIdentifier, case-insensitive), `role` (ACTIVE `RoleAssignment`s only), `userStatus`,
+  `sortBy` (`lastName` → lastName/firstName/joinedAt tiebreak, else `joinedAt`), `page`/`pageSize`
+  (default 25, cap `MAX_PAGE_SIZE`). The user payload is deliberately minimal — never
+  `passwordHash`/`credentialState`/session data — and `email` is `null` for students by design
+  (ADR-0019); `roles` is every ACTIVE role for the person (a Teacher+HOD shows both), so a member
+  appears once with an array of roles, never once per role.
+- **`GET /v1/platform/schools/:id/exams`** (reuses `ListExamsQueryDto`/`ExamListResponseDto`,
+  `EXAM_LIST_INCLUDE`, `toExamListItemResponseDto` from `apps/api/src/modules/exams/`,
+  `SchoolsAdminService.listExams()`): read-only per-school exam directory honouring every filter the
+  school-session route supports — status, academicSessionId, academicTermId, subjectId,
+  departmentId, teacherMembershipId, and the `classId` `classes: { some: { classSubject: { classId } } }`
+  join — ordered `createdAt` desc. It deliberately never calls `ExamService.list()`: that path is
+  author-bound to a school-session `AuthorizedActor` and its scope gates, which a platform session
+  has no business impersonating. `ExamListResponseDto` carries `durationSeconds` nowhere — the
+  deliberate `ExamListItemResponseDto` scope (no duration field); if the frontend ever needs it,
+  that's a separate, confirmed change.
+- **`detail()`'s usage counts are now real, not phantom `0`s**: since B11/B13/B17, real rows exist,
+  so `detail()` counts every persisted `Exam` (all statuses — the tile is "how many exams does this
+  school have", matching B17's own `analytics.platform()` semantic, not a status-specific filter)
+  and every persisted `ExamAttempt` for the school, both via the same `withTenant`-scoped aggregate
+  pattern `countByRole` uses. The UI-side doc comment that previously warned "exams and attempts
+  don't exist yet" was removed.
+
+**Testing:** a new `platform-school-directory.integration.test.ts` (16 cases) proves the real shapes
+over real HTTP — usage counts against genuinely created exams/attempts, users list safe-field
+contract (asserts the exact selected `User` columns, student email `null`, never a password hash),
+search/role/status filters, lastName/joinedAt sort, pagination, both 404 paths, the exams list's
+status filter + pagination + mapper shape, cross-school isolation (School A's Software Admin — or
+rather, the `withTenant` scope itself — cannot read School B's rows even with a forged `:id`),
+unauthenticated 401, and a genuine school-session cookie being rejected by `PlatformAuthGuard`
+(`atlas_session` is not `atlas_platform_session`). Fixture work round-trips three real schools
+(with Teachers/HODs/Students, DRAFT→ExamClass→OPEN exams, IN_PROGRESS and SUBMITTED attempts) and
+tears down in a proven order (attempt → session → exam (cascade clears `exam_class`) → role
+assignment → membership → user, per-school try/catch, then platform user). The suite is green:
+16/16 new, 59/59 across all six `apps/api` `src/modules/platform/` integration files. No permission
+or schema change.
 
 ---
 

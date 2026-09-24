@@ -38,6 +38,13 @@ export type StudentEnrollmentStatus = (typeof STUDENT_ENROLLMENT_STATUSES)[numbe
 export const TEACHER_ASSIGNMENT_STATUSES = ['ACTIVE', 'ENDED'] as const;
 export type TeacherAssignmentStatus = (typeof TEACHER_ASSIGNMENT_STATUSES)[number];
 
+/// 07 §6.7's membership (school join) lifecycle per user — the state of the
+/// SchoolMembership row itself, independent of the underlying account's
+/// UserStatus. INVITED-only staff get PENDING until their invitation is
+/// activated; left-at end dates a membership via ENDED.
+export const MEMBERSHIP_STATUSES = ['PENDING', 'ACTIVE', 'INACTIVE', 'ENDED'] as const;
+export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
+
 /// ADR-0011. A Moderator can deregister a student from an elective and
 /// re-register them; deregistration takes effect for future exams only.
 export const STUDENT_SUBJECT_REGISTRATION_STATUSES = ['REGISTERED', 'DEREGISTERED'] as const;

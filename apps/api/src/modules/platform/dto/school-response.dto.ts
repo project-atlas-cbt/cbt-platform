@@ -2,10 +2,16 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import {
+  MEMBERSHIP_STATUSES,
+  SCHOOL_ROLES,
   SCHOOL_STATUSES,
   SUBSCRIPTION_STATUSES,
+  USER_STATUSES,
+  type MembershipStatus,
+  type Role,
   type SchoolStatus,
   type SubscriptionStatus,
+  type UserStatus,
 } from '@atlas/domain';
 
 const SCHOOL_LIST_SORT_FIELDS = ['name', 'status', 'createdAt'] as const;
@@ -134,21 +140,22 @@ export class SchoolSubscriptionSummaryDto {
 }
 
 export class SchoolUsageDto {
-  @ApiProperty({ type: Number })
+  @ApiProperty({ type: Number, description: 'Active RoleAssignments with role STUDENT.' })
   students!: number;
 
-  @ApiProperty({ type: Number })
+  @ApiProperty({ type: Number, description: 'Active RoleAssignments with role TEACHER.' })
   teachers!: number;
 
   @ApiProperty({
     type: Number,
-    description: 'Exams do not exist until B11 — always 0 until then, not fabricated.',
+    description:
+      'Every persisted Exam row for this school, across all statuses (matches B17 analytics semantics).',
   })
   exams!: number;
 
   @ApiProperty({
     type: Number,
-    description: 'Attempts do not exist until B13 — always 0 until then, not fabricated.',
+    description: 'Every persisted ExamAttempt row for this school (B13/B17).',
   })
   attempts!: number;
 }
@@ -230,4 +237,125 @@ export class SchoolActivationGrantDto {
 export class SchoolActivationGrantsResponseDto {
   @ApiProperty({ type: SchoolActivationGrantDto, isArray: true })
   grants!: SchoolActivationGrantDto[];
+}
+
+const SCHOOL_USERS_SORT_FIELDS = ['joinedAt', 'lastName'] as const;
+type SchoolUsersSortField = (typeof SCHOOL_USERS_SORT_FIELDS)[number];
+
+/** `GET /v1/platform/schools/:id/users` — `04 §8`'s per-school user directory,
+ * an F3 gap-closure (the Users tab previously had no platform-side data
+ * source at all, only the Usage tab's aggregate counts). Mirrors
+ * `ListSchoolsQueryDto`'s F3 pagination shape and `ListStudentsQueryDto`'s
+ * F7 directory query shape (search/status/sort/paging — same `ListPeopleQueryDto`
+ * conventions). `role` matches members holding an *active* assignment to
+ * that role; `status` is the account's `UserStatus`, not the membership's. */
+export class ListSchoolUsersQueryDto {
+  @ApiPropertyOptional({
+    type: String,
+    maxLength: 200,
+    description: 'Matches display name, first/last name, login identifier, or email.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  q?: string;
+
+  @ApiPropertyOptional({ type: String, enum: SCHOOL_ROLES })
+  @IsOptional()
+  @IsIn(SCHOOL_ROLES)
+  role?: Role;
+
+  @ApiPropertyOptional({ type: String, enum: USER_STATUSES })
+  @IsOptional()
+  @IsIn(USER_STATUSES)
+  status?: UserStatus;
+
+  @ApiPropertyOptional({ type: String, enum: SCHOOL_USERS_SORT_FIELDS, default: 'joinedAt' })
+  @IsOptional()
+  @IsIn(SCHOOL_USERS_SORT_FIELDS)
+  sortBy?: SchoolUsersSortField;
+
+  @ApiPropertyOptional({ type: String, enum: SORT_DIRECTIONS, default: 'desc' })
+  @IsOptional()
+  @IsIn(SORT_DIRECTIONS)
+  sortDir?: SortDirection;
+
+  @ApiPropertyOptional({ type: Number, minimum: 1, default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ type: Number, minimum: 1, maximum: 100, default: 25 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
+}
+
+/** One row of the per-school user directory. `roles` deliberately covers
+ * every active assignment (a Teacher+HOD shows both, matching `GET /auth/me`'s
+ * multi-role reality — 06 §7/§9), so the directory is per-person, not a
+ * flattened per-role listing. Never carries `passwordHash`/`credentialState`/
+ * session data — read-only oversight rows only. */
+export class PlatformSchoolUserDto {
+  @ApiProperty({ type: String })
+  membershipId!: string;
+
+  @ApiProperty({ type: String })
+  userId!: string;
+
+  @ApiProperty({ type: String })
+  displayName!: string;
+
+  @ApiProperty({ type: String })
+  firstName!: string;
+
+  @ApiProperty({ type: String })
+  lastName!: string;
+
+  @ApiProperty({ type: String })
+  loginIdentifier!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Students have none by design (ADR-0019).',
+  })
+  email!: string | null;
+
+  @ApiProperty({
+    type: String,
+    isArray: true,
+    enum: SCHOOL_ROLES,
+    description: 'ACTIVE assignments only.',
+  })
+  roles!: Role[];
+
+  @ApiProperty({ type: String, enum: USER_STATUSES })
+  userStatus!: UserStatus;
+
+  @ApiProperty({ type: String, enum: MEMBERSHIP_STATUSES })
+  membershipStatus!: MembershipStatus;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  joinedAt!: string;
+}
+
+/** Same `total`/`page`/`pageSize` pagination convention as `SchoolListResponseDto`. */
+export class ListSchoolUsersResponseDto {
+  @ApiProperty({ type: PlatformSchoolUserDto, isArray: true })
+  users!: PlatformSchoolUserDto[];
+
+  @ApiProperty({ type: Number })
+  total!: number;
+
+  @ApiProperty({ type: Number })
+  page!: number;
+
+  @ApiProperty({ type: Number })
+  pageSize!: number;
 }

@@ -93,12 +93,14 @@ export {
   STUDENT_ENROLLMENT_STATUSES,
   TEACHER_ASSIGNMENT_STATUSES,
   STUDENT_SUBJECT_REGISTRATION_STATUSES,
+  MEMBERSHIP_STATUSES,
   type UserStatus,
   type StudentProfileStatus,
   type EmploymentStatus,
   type StudentEnrollmentStatus,
   type TeacherAssignmentStatus,
   type StudentSubjectRegistrationStatus,
+  type MembershipStatus,
 } from './people/constants.js';
 export {
   IMPORT_JOB_TYPES,

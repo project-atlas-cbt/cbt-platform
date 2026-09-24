@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { prisma, withTenant, TENANT_SESSION_VARIABLE } from '@atlas/db';
+import { prisma, withTenant, TENANT_SESSION_VARIABLE, type Prisma } from '@atlas/db';
 import type { Env } from '@atlas/config';
 import type { PlatformOverride, SchoolStatus } from '@atlas/domain';
 import type { NotificationChannel } from '@atlas/notifications';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { EXAM_LIST_INCLUDE, toExamListItemResponseDto } from '../exams/exam-mappers.js';
+import type { ExamListResponseDto, ListExamsQueryDto } from '../exams/dto/exam.dto.js';
 import { AccessGateService } from './access-gate.service.js';
 import { generateUniqueSchoolSubdomain } from './subdomain-generator.js';
 import {
@@ -17,6 +19,8 @@ import {
 import type { CreateSchoolDto } from './dto/create-school.dto.js';
 import type { IssueSubscriptionDto } from './dto/school-lifecycle.dto.js';
 import type {
+  ListSchoolUsersQueryDto,
+  ListSchoolUsersResponseDto,
   SchoolActivationGrantDto,
   SchoolDetailResponseDto,
   SchoolListItemDto,
@@ -272,15 +276,26 @@ export class SchoolsAdminService {
     return { id: result.school.id, subdomain };
   }
 
+  /**
+   * `SchoolUsageDto`'s exam/attempt counts are no longer phantom `0`s: since
+   * B11/B13 and B17, real rows exist, so this counts every persisted `Exam`
+   * (all statuses, matching B17's `analytics.platform()` semantic — the
+   * Usage tile is "how many exams does this school have", not a
+   * status-specific filter) and every persisted `ExamAttempt` for the
+   * school. Same `withTenant`-scoped aggregate pattern `countByRole` already
+   * uses, never a cross-school query.
+   */
   async detail(schoolId: string): Promise<SchoolDetailResponseDto> {
     const school = await prisma.school.findUnique({ where: { id: schoolId } });
     if (!school) throw new AppHttpException({ code: 'NOT_FOUND', message: 'School not found.' });
 
     const subscription = await this.currentSubscription(schoolId);
 
-    const [students, teachers] = await Promise.all([
+    const [students, teachers, exams, attempts] = await Promise.all([
       this.countByRole(schoolId, 'STUDENT'),
       this.countByRole(schoolId, 'TEACHER'),
+      withTenant(prisma, schoolId, (tx) => tx.exam.count({ where: { schoolId } })),
+      withTenant(prisma, schoolId, (tx) => tx.examAttempt.count({ where: { schoolId } })),
     ]);
 
     return {
@@ -302,14 +317,7 @@ export class SchoolsAdminService {
             expiresAt: subscription.expiresAt.toISOString(),
           }
         : null,
-      usage: {
-        students,
-        teachers,
-        // Exams/attempts don't exist until B11/B13 — see the DTO's own
-        // field-level doc comments.
-        exams: 0,
-        attempts: 0,
-      },
+      usage: { students, teachers, exams, attempts },
     };
   }
 
@@ -471,6 +479,147 @@ export class SchoolsAdminService {
       subscriptionId: grant.subscriptionId,
       subscriptionPlan: grant.subscription.plan,
     }));
+  }
+
+  /**
+   * `04 §8`'s Users section — a directory of the school's `SchoolMembership`
+   * rows, the platform-side read the Software Admin always expected
+   * (previously only aggregate counts existed, via `detail()`'s usage). All
+   * reads are scoped to the one school through `withTenant` — a Software
+   * Admin's platform session is still never handed another school's rows
+   * (`FORCE ROW LEVEL SECURITY`, ADR-0023), regardless of which `id` the
+   * route receives.
+   *
+   * `roles` covers every ACTIVE `RoleAssignment` for the person (a Teacher+
+   * HOD shows both), so a member appears once with an array of roles rather
+   * than once per role. The selected `User` fields are deliberately minimal —
+   * never `passwordHash`/`credentialState`/session data; `email` is null for
+   * students by design (ADR-0019).
+   */
+  async listUsers(
+    schoolId: string,
+    query: ListSchoolUsersQueryDto,
+  ): Promise<ListSchoolUsersResponseDto> {
+    const school = await prisma.school.findUnique({ where: { id: schoolId } });
+    if (!school) throw new AppHttpException({ code: 'NOT_FOUND', message: 'School not found.' });
+
+    const page = query.page && query.page > 0 ? query.page : 1;
+    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const sortDir = query.sortDir ?? 'desc';
+    const q = query.q?.trim();
+
+    const where: Prisma.SchoolMembershipWhereInput = {
+      schoolId,
+      ...(query.role ? { roleAssignments: { some: { role: query.role, status: 'ACTIVE' } } } : {}),
+      ...(query.status ? { user: { status: query.status } } : {}),
+      ...(q
+        ? {
+            OR: [
+              { user: { displayName: { contains: q, mode: 'insensitive' } } },
+              { user: { firstName: { contains: q, mode: 'insensitive' } } },
+              { user: { lastName: { contains: q, mode: 'insensitive' } } },
+              { user: { email: { contains: q, mode: 'insensitive' } } },
+              { loginIdentifier: { contains: q, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+    const orderBy =
+      query.sortBy === 'lastName'
+        ? [{ user: { lastName: sortDir } }, { user: { firstName: sortDir } }, { joinedAt: sortDir }]
+        : { joinedAt: sortDir };
+
+    const [memberships, total] = await withTenant(prisma, schoolId, async (tx) => {
+      const rows = await tx.schoolMembership.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              displayName: true,
+              email: true,
+              status: true,
+            },
+          },
+          roleAssignments: { where: { status: 'ACTIVE' }, select: { role: true } },
+        },
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+      const count = await tx.schoolMembership.count({ where });
+      return [rows, count] as const;
+    });
+
+    return {
+      users: memberships.map((membership) => ({
+        membershipId: membership.id,
+        userId: membership.user.id,
+        displayName: membership.user.displayName,
+        firstName: membership.user.firstName,
+        lastName: membership.user.lastName,
+        loginIdentifier: membership.loginIdentifier,
+        email: membership.user.email,
+        roles: membership.roleAssignments.map((a) => a.role),
+        userStatus: membership.user.status,
+        membershipStatus: membership.status,
+        joinedAt: membership.joinedAt.toISOString(),
+      })),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  /**
+   * `04 §8`'s Exams section — read-only, per-school exam directory for the
+   * Software Admin's platform session. Reuses `ExamService`'s exact list
+   * read shape (`EXAM_LIST_INCLUDE` + `toExamListItemResponseDto`) and
+   * `ListExamsQueryDto`, but never calls `ExamService.list()` — that path is
+   * author-bound to a school-session `AuthorizedActor` and its `scope`
+   * gates, which a platform session has no business impersonating. All
+   * filters the school-session route supports are honoured here; every query
+   * stays inside one `withTenant` scope, so cross-school leakage is
+   * structurally impossible.
+   */
+  async listExams(schoolId: string, query: ListExamsQueryDto): Promise<ExamListResponseDto> {
+    const school = await prisma.school.findUnique({ where: { id: schoolId } });
+    if (!school) throw new AppHttpException({ code: 'NOT_FOUND', message: 'School not found.' });
+
+    const page = query.page && query.page > 0 ? query.page : 1;
+    const pageSize = Math.min(query.pageSize ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+
+    const where: Prisma.ExamWhereInput = {
+      schoolId,
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.academicSessionId ? { academicSessionId: query.academicSessionId } : {}),
+      ...(query.academicTermId ? { academicTermId: query.academicTermId } : {}),
+      ...(query.subjectId ? { subjectId: query.subjectId } : {}),
+      ...(query.departmentId ? { departmentId: query.departmentId } : {}),
+      ...(query.teacherMembershipId ? { createdByMembershipId: query.teacherMembershipId } : {}),
+      ...(query.classId ? { classes: { some: { classSubject: { classId: query.classId } } } } : {}),
+    };
+
+    const [exams, total] = await withTenant(prisma, schoolId, async (tx) => {
+      const rows = await tx.exam.findMany({
+        where,
+        include: EXAM_LIST_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+      const count = await tx.exam.count({ where });
+      return [rows, count] as const;
+    });
+
+    return {
+      exams: exams.map(toExamListItemResponseDto),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   // --- internal helpers ---------------------------------------------------

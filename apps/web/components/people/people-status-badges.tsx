@@ -1,6 +1,7 @@
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import type {
   EmploymentStatus,
+  MembershipStatus,
   StudentEnrollmentStatus,
   StudentProfileStatus,
   StudentSubjectRegistrationStatus,
@@ -23,6 +24,21 @@ const USER_STATUS_META: Record<UserStatus, { label: string; status: BadgeProps['
 
 export function UserStatusBadge({ value }: { value: UserStatus }) {
   const meta = USER_STATUS_META[value];
+  return <Badge status={meta.status}>{meta.label}</Badge>;
+}
+
+const MEMBERSHIP_STATUS_META: Record<
+  MembershipStatus,
+  { label: string; status: BadgeProps['status'] }
+> = {
+  PENDING: { label: 'Pending', status: 'info' },
+  ACTIVE: { label: 'Active', status: 'success' },
+  INACTIVE: { label: 'Inactive', status: 'neutral' },
+  ENDED: { label: 'Ended', status: 'neutral' },
+};
+
+export function MembershipStatusBadge({ value }: { value: MembershipStatus }) {
+  const meta = MEMBERSHIP_STATUS_META[value];
   return <Badge status={meta.status}>{meta.label}</Badge>;
 }
 

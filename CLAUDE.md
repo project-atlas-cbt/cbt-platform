@@ -517,6 +517,31 @@ their tenant policy rather than failing with a table-permission error.
 Long-running worker sweeps use an explicit 120-second renewable BullMQ lock (rather than the
 30-second default) so a full tenant pass cannot be reclaimed mid-run by its short refresh cadence.
 
+**2026-09-24 — F3 gap closure: School Detail's Usage, Users and Exams tabs are real now (SA-04 §8).**
+Closed F3's last honestly-open Deferred item once the data behind it existed — `04 §8` always listed
+Users and Exams as full School Detail sections, but they shipped as honest "not yet available" states
+(no platform user-list endpoint, and no `Exam`/`ExamAttempt` rows for the usage tile when F3 built).
+Two new read-only routes on `SchoolsAdminController`, both `platform.school.viewAll` (no permission
+or schema change): `GET /v1/platform/schools/:id/users` — a paginated `SchoolMembership` directory
+with `q`/`role`/`userStatus`/`sortBy`/`page` filters, multi-role arrays (a Teacher+HOD appears once),
+the student `email` null per ADR-0019, and a deliberately minimal `User` select (never
+passwordHash/credentialState/session fields) — and `GET /v1/platform/schools/:id/exams`, reusing the
+school-session `ListExamsQueryDto`/`ExamListResponseDto`/`EXAM_LIST_INCLUDE` read shape but never
+calling `ExamService.list()` (that path is author-bound to a school-session `AuthorizedActor`). Every
+query in both stays inside one `withTenant` scope, so RLS (`FORCE ROW LEVEL SECURITY`) makes
+cross-school leakage structurally impossible regardless of the `:id` passed. `detail()`'s usage
+counts are de-phantomed — real persisted `Exam` (all statuses) and `ExamAttempt` counts per school.
+Frontend: the three School Detail tabs (`usage/page.tsx`, `users/page.tsx`, `exams/page.tsx`) are
+full data screens — DataTable + URL state + the `ALL = '__all__'` Radix Select sentinel + distinct
+no-filter/no-match empty states; users has server-side search/role/status filters and sortable
+Member/Joined columns; exams reuses `ExamStatusTabs`. Validation: 13 new web component tests + 16 new
+API integration tests (`platform-school-directory.integration.test.ts`, green 16/16; all six platform
+integration files 59/59) — the fixture work round-trips real schools/exams/attempts including the B11
+`exam_class` immutability trigger ordering, a genuine school-session cookie rejected by
+`PlatformAuthGuard` (401), and no password-hash ever selected. Web/API typecheck and lint exit 0.
+Docs updated: both roadmaps + `CHANGE-LOG.md` (2026-09-24); `pnpm generate` (openapi.json +
+contracts) re-run.
+
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
 future phase, even though both `F11` and (now) `B12`/`F12` are complete and the Change Log below

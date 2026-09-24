@@ -625,12 +625,16 @@ Pairs with F4 — the key issued here is redeemed there.
 3. ✅ Captures name, admin, and subscription exactly per `CreateSchoolDto`; returns the generated
    subdomain (`05 §3.2`'s "System generates: School identifier"). No raw activation key is ever
    shown — the email is the one-time reveal channel, B3's own design.
-4. ⚠️ **Partial, narrowed (2026-09-03, B10's own pass closed the Audit and Activity tabs).** All
-   seven sections (`04 §8`) render as real routes/tabs; five now have real data (Overview,
-   Subscription, Usage, Audit, Activity — the latter two via `<AuditLogTable fixedSchoolId>`,
-   B10's own component) and two still show a specific, honest "not yet available" state (Users,
-   Exams) — no platform-side user-list endpoint, no exam data (`B11` exists now but no
-   platform-facing exam-list endpoint was built). Not silently faked.
+4. ✅ **Closed (2026-09-24 gap closure).** All seven sections (`04 §8`) render as real routes/tabs
+   with real data: Overview, Subscription, Usage, Audit, Activity (the latter two via
+   `<AuditLogTable fixedSchoolId>`, B10's own component), plus — closing this DoD item's last two
+   honestly-open states — **Users** and **Exams**. Usage counts are real persisted Exam/Attempt
+   numbers, the Users tab is a full searchable/filterable/sortable/paginated member directory
+   (multi-role members shown once, student email masked per ADR-0019), and the Exams tab is a
+   paginated exam list with status tabs reusing the school-session filter contract. Backed by two
+   new read-only `platform.v1` endpoints (`GET /v1/platform/schools/:id/users`, `/:id/exams`) and
+   `detail()`'s de-phantomed counts — all `platform.school.viewAll`, no permission or schema change.
+   See `backend-roadmap.md`'s B3 section, "Sixth gap closure", for the backend half.
 5. ✅ Suspend/reactivate/deactivate all require a reason (`<ReasonDialog>`), are gated by current
    status (e.g. Suspend only enabled when `ACTIVE`), and never update optimistically — only a
    confirmed refetch changes what the screen shows.
@@ -747,10 +751,34 @@ Software Admin account and a real Postgres database, cleaned up afterward. `next
 confirmed the full intended route table (all `/admin/schools/[id]/*` sub-routes, `/admin/subscriptions`,
 `/admin/analytics`, `/admin/audit`).
 
+## Post-completion gap closure (2026-09-24)
+
+Closed the last honestly-open F3 Deferred item — the **Users** and **Exams** School Detail tabs
+(and real Usage counts) — once the backend behind them was viable. `detail()`'s usage tile was
+phantom `0`s when F3 shipped (no `Exam`/`ExamAttempt` rows existed); today they do, so the counts
+are real persisted numbers. Two new read-only `platform.v1` endpoints
+(`GET /v1/platform/schools/:id/users`, `/:id/exams`) power the tabs — users as a
+searchable/filterable/sortable/paginated directory (multi-role arrays, student email masked),
+exams as paginated rows with status tabs reusing the school-session `ListExamsQueryDto` contract
+(`status`/session/term/subject/class/department/teacher filters all honoured server-side). Both
+pages follow the schools-list screen's established conventions: filters/sort/pagination mirrored
+into the URL, the `ALL = '__all__'` sentinel for Radix Selects, real loading/error/empty states
+(no-filter vs no-match distinguished), and server-side pagination with the page reset to 1 on any
+filter/sort change. No new permission row — all three reads reuse `platform.school.viewAll`
+(`platform`-session scoped, and the routes only ever execute inside one `withTenant` scope per
+school, so cross-school leakage is structurally impossible).
+
+**Testing:** 13 new component tests across the three tab pages (`usage/page.test.tsx`,
+`users/page.test.tsx`, `exams/page.test.tsx` — URL-state interactions, multi-role/student-email
+rendering, sort/pagination navigation, empty-state split) plus the 16-case backend integration
+suite in `backend-roadmap.md`'s B3 "Sixth gap closure". `@atlas/web typecheck` and `lint` exit 0.
+
 ## Deferred items
 
-- Users/Exams tabs on School Detail, full Platform Analytics screen (`B17`) — no backend data
-  source yet; each has a real, specific "not yet available" state naming what unlocks it. Audit
+- **Users/Exams tabs on School Detail — CLOSED 2026-09-24** (this F3 gap closure); see DoD item 4.
+  Full Platform Analytics screen (`B17`) is separate — its content already lives in F17's
+  `PlatformAnalyticsView`; the `/admin/analytics` route still shows its honest "not yet available"
+  state pending a real `GET /v1/platform/analytics` consumption there. Audit
   and Activity tabs, and the standalone `/admin/audit` screen, were closed by `B10`'s own
   implementation pass (2026-09-03) — see that phase's Change Log entry.
 - Real break-glass wiring — `<ReasonDialog variant="breakGlass">` is built and tested but unused by
@@ -3359,10 +3387,10 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 
 | Phase | Status                    | Backend pair   | Started    | Completed  | Notes                                                                                                                                                                                                                                                  |
 | ----- | ------------------------- | -------------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| F0    | NOT STARTED               | B0             | —          | —          | Design system may start now                                                                                                                                                                                                                            |
-| F1    | NOT STARTED               | B1             | —          | —          | Decided: ADR-0005, 0022                                                                                                                                                                                                                                |
-| F2    | NOT STARTED               | B2, B10        | —          | —          | Shell may start now                                                                                                                                                                                                                                    |
-| F3    | NOT STARTED               | B3             | —          | —          |                                                                                                                                                                                                                                                        |
+| F0    | COMPLETE                  | B0             | 2026-08-25 | 2026-08-25 | Status corrected 2026-09-24 — this table still read NOT STARTED after F0 shipped, the same staleness row F14 already flags below                                                                                                                       |
+| F1    | COMPLETE                  | B1             | 2026-08-26 | 2026-08-26 | Status corrected 2026-09-24 (same pre-existing table staleness)                                                                                                                                                                                        |
+| F2    | COMPLETE                  | B2, B10        | 2026-08-26 | 2026-08-26 | Status corrected 2026-09-24 (same pre-existing table staleness)                                                                                                                                                                                        |
+| F3    | COMPLETE                  | B3             | 2026-08-27 | 2026-08-27 | Status corrected 2026-09-24 (same pre-existing table staleness). Post-completion gap closure (2026-09-24): real Usage counts + Users/Exams tabs on School Detail — see this section                                                                    |
 | F4    | COMPLETE                  | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts`                                                                                                                              |
 | F5    | COMPLETE                  | B4             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (ADR-0010's own B3/B5 assignment, neither built it)                                                                                                     |
 | F6    | COMPLETE                  | B5             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `GET /v1/classes/:id/teachers`                                                                                                                                                                                              |

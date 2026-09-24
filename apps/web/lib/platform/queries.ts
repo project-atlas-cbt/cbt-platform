@@ -1,6 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { SCHOOL_ROLES } from '@atlas/domain';
+import type { ExamStatus, UserStatus } from '@atlas/domain';
 import { apiClient, unwrap } from '@/lib/api';
 
 /**
@@ -72,6 +74,91 @@ export function useSchool(id: string) {
     queryKey: ['platform', 'schools', id],
     queryFn: () => unwrap(apiClient.GET('/platform/schools/{id}', { params: { path: { id } } })),
     enabled: Boolean(id),
+  });
+}
+
+type SchoolUserRole = (typeof SCHOOL_ROLES)[number];
+
+export interface UseSchoolUsersParams {
+  q?: string;
+  role?: SchoolUserRole | null;
+  status?: UserStatus | null;
+  sortBy?: 'joinedAt' | 'lastName' | null;
+  sortDir?: 'asc' | 'desc' | null;
+  page?: number;
+  pageSize?: number;
+}
+
+/** `04 §8`'s per-school Users tab — B3/F3 gap-closure, read-only directory.
+ * Filter/sort/pagination state is server-side, so every param participates
+ * in the query key (same convention as `useSchools` for the list screen). */
+export function useSchoolUsers(schoolId: string, params: UseSchoolUsersParams) {
+  const q = params.q ?? '';
+  const role = params.role ?? null;
+  const status = params.status ?? null;
+  const sortBy = params.sortBy ?? null;
+  const sortDir = params.sortDir ?? null;
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 25;
+  return useQuery({
+    queryKey: [
+      'platform',
+      'schools',
+      schoolId,
+      'users',
+      q,
+      role,
+      status,
+      sortBy,
+      sortDir,
+      page,
+      pageSize,
+    ],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/platform/schools/{id}/users', {
+          params: {
+            path: { id: schoolId },
+            query: {
+              ...(q ? { q } : {}),
+              ...(role ? { role } : {}),
+              ...(status ? { status } : {}),
+              ...(sortBy ? { sortBy } : {}),
+              ...(sortDir ? { sortDir } : {}),
+              page,
+              pageSize,
+            },
+          },
+        }),
+      ),
+    enabled: Boolean(schoolId),
+  });
+}
+
+export interface UseSchoolExamsParams {
+  status?: ExamStatus | null;
+  page?: number;
+  pageSize?: number;
+}
+
+/** `04 §8`'s per-school Exams tab — read-only directory for the Software
+ *  Admin's platform session. Status filter + pagination, server-side. */
+export function useSchoolExams(schoolId: string, params: UseSchoolExamsParams) {
+  const status = params.status ?? null;
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 25;
+  return useQuery({
+    queryKey: ['platform', 'schools', schoolId, 'exams', status, page, pageSize],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/platform/schools/{id}/exams', {
+          params: {
+            path: { id: schoolId },
+            query: { ...(status ? { status } : {}), page, pageSize },
+          },
+        }),
+      ),
+    enabled: Boolean(schoolId),
   });
 }
 

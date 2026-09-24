@@ -922,6 +922,242 @@
         ]
       }
     },
+    "/platform/schools/{id}/users": {
+      "get": {
+        "operationId": "SchoolsAdminController_listUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Matches display name, first/last name, login identifier, or email.",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SCHOOL_ADMIN",
+                "MODERATOR",
+                "HOD",
+                "TEACHER",
+                "STUDENT"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "INVITED",
+                "ACTIVE",
+                "SUSPENDED",
+                "INACTIVE"
+              ]
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "joinedAt",
+              "type": "string",
+              "enum": [
+                "joinedAt",
+                "lastName"
+              ]
+            }
+          },
+          {
+            "name": "sortDir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSchoolUsersResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "School user directory (04 §8) — search, role/status filter, sort, paginate; read-only.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/schools/{id}/exams": {
+      "get": {
+        "operationId": "SchoolsAdminController_listExams",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "READY",
+                "OPEN",
+                "CLOSED",
+                "COMPLETED",
+                "ARCHIVED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "academicSessionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "academicTermId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subjectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classId",
+            "required": false,
+            "in": "query",
+            "description": "A targeted ClassGroup id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "departmentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "teacherMembershipId",
+            "required": false,
+            "in": "query",
+            "description": "The creating teacher's SchoolMembership id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "School exam directory (04 §8) — status/other filters + pagination; read-only.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/platform/metrics": {
       "get": {
         "operationId": "PlatformMetricsController_get",
@@ -9588,18 +9824,20 @@
         "type": "object",
         "properties": {
           "students": {
-            "type": "number"
+            "type": "number",
+            "description": "Active RoleAssignments with role STUDENT."
           },
           "teachers": {
-            "type": "number"
+            "type": "number",
+            "description": "Active RoleAssignments with role TEACHER."
           },
           "exams": {
             "type": "number",
-            "description": "Exams do not exist until B11 — always 0 until then, not fabricated."
+            "description": "Every persisted Exam row for this school, across all statuses (matches B17 analytics semantics)."
           },
           "attempts": {
             "type": "number",
-            "description": "Attempts do not exist until B13 — always 0 until then, not fabricated."
+            "description": "Every persisted ExamAttempt row for this school (B13/B17)."
           }
         },
         "required": [
@@ -9785,6 +10023,257 @@
         },
         "required": [
           "grants"
+        ]
+      },
+      "PlatformSchoolUserDto": {
+        "type": "object",
+        "properties": {
+          "membershipId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "loginIdentifier": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "description": "Students have none by design (ADR-0019)."
+          },
+          "roles": {
+            "type": "array",
+            "description": "ACTIVE assignments only.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "SCHOOL_ADMIN",
+                "MODERATOR",
+                "HOD",
+                "TEACHER",
+                "STUDENT"
+              ]
+            }
+          },
+          "userStatus": {
+            "type": "string",
+            "enum": [
+              "INVITED",
+              "ACTIVE",
+              "SUSPENDED",
+              "INACTIVE"
+            ]
+          },
+          "membershipStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACTIVE",
+              "INACTIVE",
+              "ENDED"
+            ]
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "membershipId",
+          "userId",
+          "displayName",
+          "firstName",
+          "lastName",
+          "loginIdentifier",
+          "email",
+          "roles",
+          "userStatus",
+          "membershipStatus",
+          "joinedAt"
+        ]
+      },
+      "ListSchoolUsersResponseDto": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformSchoolUserDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "users",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "ExamClassResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "classId": {
+            "type": "string"
+          },
+          "classSubjectId": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "arm": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "classId",
+          "classSubjectId",
+          "className",
+          "level",
+          "arm"
+        ]
+      },
+      "ExamListItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "examType": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "READY",
+              "OPEN",
+              "CLOSED",
+              "COMPLETED",
+              "ARCHIVED",
+              "CANCELLED"
+            ]
+          },
+          "academicSessionId": {
+            "type": "string"
+          },
+          "sessionName": {
+            "type": "string"
+          },
+          "academicTermId": {
+            "type": "string"
+          },
+          "termName": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "departmentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "departmentName": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdByMembershipId": {
+            "type": "string"
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamClassResponseDto"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "examType",
+          "status",
+          "academicSessionId",
+          "sessionName",
+          "academicTermId",
+          "termName",
+          "subjectId",
+          "subjectName",
+          "departmentId",
+          "departmentName",
+          "createdByMembershipId",
+          "createdByName",
+          "classes",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ExamListResponseDto": {
+        "type": "object",
+        "properties": {
+          "exams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamListItemResponseDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "exams",
+          "total",
+          "page",
+          "pageSize"
         ]
       },
       "PlatformMetricsResponseDto": {
@@ -11994,37 +12483,6 @@
           "serverTime",
           "navigationPolicy",
           "questions"
-        ]
-      },
-      "ExamClassResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "classId": {
-            "type": "string"
-          },
-          "classSubjectId": {
-            "type": "string"
-          },
-          "className": {
-            "type": "string"
-          },
-          "level": {
-            "type": "string"
-          },
-          "arm": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "classId",
-          "classSubjectId",
-          "className",
-          "level",
-          "arm"
         ]
       },
       "ExamQuestionResponseDto": {
@@ -16993,123 +17451,6 @@
           "title",
           "examType",
           "classIds"
-        ]
-      },
-      "ExamListItemResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "examType": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "DRAFT",
-              "READY",
-              "OPEN",
-              "CLOSED",
-              "COMPLETED",
-              "ARCHIVED",
-              "CANCELLED"
-            ]
-          },
-          "academicSessionId": {
-            "type": "string"
-          },
-          "sessionName": {
-            "type": "string"
-          },
-          "academicTermId": {
-            "type": "string"
-          },
-          "termName": {
-            "type": "string"
-          },
-          "subjectId": {
-            "type": "string"
-          },
-          "subjectName": {
-            "type": "string"
-          },
-          "departmentId": {
-            "type": "string",
-            "nullable": true
-          },
-          "departmentName": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdByMembershipId": {
-            "type": "string"
-          },
-          "createdByName": {
-            "type": "string"
-          },
-          "classes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamClassResponseDto"
-            }
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "examType",
-          "status",
-          "academicSessionId",
-          "sessionName",
-          "academicTermId",
-          "termName",
-          "subjectId",
-          "subjectName",
-          "departmentId",
-          "departmentName",
-          "createdByMembershipId",
-          "createdByName",
-          "classes",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
-      "ExamListResponseDto": {
-        "type": "object",
-        "properties": {
-          "exams": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamListItemResponseDto"
-            }
-          },
-          "total": {
-            "type": "number"
-          },
-          "page": {
-            "type": "number"
-          },
-          "pageSize": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "exams",
-          "total",
-          "page",
-          "pageSize"
         ]
       },
       "UpdateExamDto": {

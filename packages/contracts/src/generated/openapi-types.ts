@@ -448,6 +448,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/schools/{id}/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** School user directory (04 §8) — search, role/status filter, sort, paginate; read-only. */
+        get: operations["SchoolsAdminController_listUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools/{id}/exams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** School exam directory (04 §8) — status/other filters + pagination; read-only. */
+        get: operations["SchoolsAdminController_listExams"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/metrics": {
         parameters: {
             query?: never;
@@ -3727,11 +3761,13 @@ export interface components {
             expiresAt: string;
         };
         SchoolUsageDto: {
+            /** @description Active RoleAssignments with role STUDENT. */
             students: number;
+            /** @description Active RoleAssignments with role TEACHER. */
             teachers: number;
-            /** @description Exams do not exist until B11 — always 0 until then, not fabricated. */
+            /** @description Every persisted Exam row for this school, across all statuses (matches B17 analytics semantics). */
             exams: number;
-            /** @description Attempts do not exist until B13 — always 0 until then, not fabricated. */
+            /** @description Every persisted ExamAttempt row for this school (B13/B17). */
             attempts: number;
         };
         SchoolDetailResponseDto: {
@@ -3778,6 +3814,66 @@ export interface components {
         };
         SchoolActivationGrantsResponseDto: {
             grants: components["schemas"]["SchoolActivationGrantDto"][];
+        };
+        PlatformSchoolUserDto: {
+            membershipId: string;
+            userId: string;
+            displayName: string;
+            firstName: string;
+            lastName: string;
+            loginIdentifier: string;
+            /** @description Students have none by design (ADR-0019). */
+            email: string | null;
+            /** @description ACTIVE assignments only. */
+            roles: ("SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT")[];
+            /** @enum {string} */
+            userStatus: "INVITED" | "ACTIVE" | "SUSPENDED" | "INACTIVE";
+            /** @enum {string} */
+            membershipStatus: "PENDING" | "ACTIVE" | "INACTIVE" | "ENDED";
+            /** Format: date-time */
+            joinedAt: string;
+        };
+        ListSchoolUsersResponseDto: {
+            users: components["schemas"]["PlatformSchoolUserDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ExamClassResponseDto: {
+            id: string;
+            classId: string;
+            classSubjectId: string;
+            className: string;
+            level: string;
+            arm: string;
+        };
+        ExamListItemResponseDto: {
+            id: string;
+            title: string;
+            examType: string;
+            /** @enum {string} */
+            status: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+            academicSessionId: string;
+            sessionName: string;
+            academicTermId: string;
+            termName: string;
+            subjectId: string;
+            subjectName: string;
+            departmentId: string | null;
+            departmentName: string | null;
+            createdByMembershipId: string;
+            createdByName: string;
+            classes: components["schemas"]["ExamClassResponseDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ExamListResponseDto: {
+            exams: components["schemas"]["ExamListItemResponseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         PlatformMetricsResponseDto: {
             totalSchools: number;
@@ -4387,14 +4483,6 @@ export interface components {
             navigationInstructions?: string | null;
             questions: components["schemas"]["StudentAttemptQuestionDto"][];
             invalidationReason?: string | null;
-        };
-        ExamClassResponseDto: {
-            id: string;
-            classId: string;
-            classSubjectId: string;
-            className: string;
-            level: string;
-            arm: string;
         };
         ExamQuestionResponseDto: {
             id: string;
@@ -5648,34 +5736,6 @@ export interface components {
             /** @description ClassGroup ids this exam targets — at least one. All must share school, session, and level with each other and with this exam (ADR-0013). */
             classIds: string[];
         };
-        ExamListItemResponseDto: {
-            id: string;
-            title: string;
-            examType: string;
-            /** @enum {string} */
-            status: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
-            academicSessionId: string;
-            sessionName: string;
-            academicTermId: string;
-            termName: string;
-            subjectId: string;
-            subjectName: string;
-            departmentId: string | null;
-            departmentName: string | null;
-            createdByMembershipId: string;
-            createdByName: string;
-            classes: components["schemas"]["ExamClassResponseDto"][];
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        ExamListResponseDto: {
-            exams: components["schemas"]["ExamListItemResponseDto"][];
-            total: number;
-            page: number;
-            pageSize: number;
-        };
         UpdateExamDto: {
             academicSessionId?: string;
             academicTermId?: string;
@@ -6365,6 +6425,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssueSubscriptionResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_listUsers: {
+        parameters: {
+            query?: {
+                /** @description Matches display name, first/last name, login identifier, or email. */
+                q?: string;
+                role?: "SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT";
+                status?: "INVITED" | "ACTIVE" | "SUSPENDED" | "INACTIVE";
+                sortBy?: "joinedAt" | "lastName";
+                sortDir?: "asc" | "desc";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListSchoolUsersResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_listExams: {
+        parameters: {
+            query?: {
+                status?: "DRAFT" | "READY" | "OPEN" | "CLOSED" | "COMPLETED" | "ARCHIVED" | "CANCELLED";
+                academicSessionId?: string;
+                academicTermId?: string;
+                subjectId?: string;
+                /** @description A targeted ClassGroup id. */
+                classId?: string;
+                departmentId?: string;
+                /** @description The creating teacher's SchoolMembership id. */
+                teacherMembershipId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamListResponseDto"];
                 };
             };
         };
