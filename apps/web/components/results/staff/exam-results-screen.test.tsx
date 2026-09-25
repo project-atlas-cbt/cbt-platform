@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useHasPermission } from '@/lib/nav';
 import {
   useAdjustmentOperation,
@@ -59,6 +60,19 @@ function data(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// The screen mounts `<ExportDialog>` (a react-query mutation at its top
+// level) unconditionally, so every render needs a QueryClientProvider. Uses
+// RTL's `wrapper` option (react-query's own documented pattern) so the
+// `rerender` calls below keep the provider too.
+function renderWithClient(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+}
+
 describe('ExamResultsScreen', () => {
   beforeEach(() => {
     params = new URLSearchParams();
@@ -77,11 +91,14 @@ describe('ExamResultsScreen', () => {
   });
 
   it('shows participation-derived expected and absent counts', () => {
-    render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
+    renderWithClient(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
     expect(screen.getByText('Students expected')).toBeInTheDocument();
     expect(screen.getByText('Absent')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+    // `absentCount` and `voidedCount` are both 1 in the fixture, so the
+    // shared `1` value renders twice in the summary `dl` (ADR-0025 keeps
+    // Voided visible alongside the averages) — assert both explicitly.
+    expect(screen.getAllByText('1')).toHaveLength(2);
     expect(screen.getByText('Voided')).toBeInTheDocument();
   });
 
@@ -91,7 +108,7 @@ describe('ExamResultsScreen', () => {
       isPending: true,
       isError: false,
     } as never);
-    render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
+    renderWithClient(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
     expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
   });
 
@@ -103,18 +120,18 @@ describe('ExamResultsScreen', () => {
       error: new Error('boom'),
       refetch: vi.fn(),
     } as never);
-    render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
+    renderWithClient(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
     expect(screen.getByRole('alert')).toHaveTextContent('boom');
   });
 
   it('hides publication controls entirely without publish or unpublish grants', () => {
-    render(<ExamResultsScreen examId="exam-1" basePath="/teacher/results" />);
+    renderWithClient(<ExamResultsScreen examId="exam-1" basePath="/teacher/results" />);
     expect(screen.queryByRole('button', { name: /publish results/i })).not.toBeInTheDocument();
   });
 
   it('offers publication when granted, and blocks it while an adjustment is running', () => {
     mockUseHasPermission.mockReturnValue(true);
-    const { rerender } = render(
+    const { rerender } = renderWithClient(
       <ExamResultsScreen examId="exam-1" basePath="/moderator/results" />,
     );
     expect(screen.getByRole('button', { name: /publish results/i })).toBeEnabled();
@@ -135,7 +152,7 @@ describe('ExamResultsScreen', () => {
       { ...SUMMARY, classId: 'c1', className: 'SS2A' },
       { ...SUMMARY, classId: 'c2', className: 'SS2B' },
     ];
-    const { rerender } = render(
+    const { rerender } = renderWithClient(
       <ExamResultsScreen examId="exam-1" basePath="/moderator/results" />,
     );
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
@@ -152,7 +169,7 @@ describe('ExamResultsScreen', () => {
 
   it('reads filter and sort state from the URL rather than local state', () => {
     params = new URLSearchParams('q=ada&state=VOIDED&sortBy=percentage&sortDir=desc&page=2');
-    render(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
+    renderWithClient(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
     expect(mockUseExamResults).toHaveBeenCalledWith(
       'exam-1',
       expect.objectContaining({

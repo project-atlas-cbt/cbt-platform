@@ -542,6 +542,24 @@ integration files 59/59) — the fixture work round-trips real schools/exams/att
 Docs updated: both roadmaps + `CHANGE-LOG.md` (2026-09-24); `pnpm generate` (openapi.json +
 contracts) re-run.
 
+**2026-09-25 — Web test suites repaired: the 18 deterministic failures fixed, full-suite load
+flakiness hardened (906/906 green).** Pre-existing broken/flaky web tests, triaged by isolated run:
+(1) **Group A (2 files, 13 tests)** — `StudentsScreen`/`ExamResultsScreen` mount `<ExportDialog>`
+(`useCreateExport()` at `export-dialog.tsx:84`) and `<StudentForm>` unconditionally, so stubbed
+renders without a provider threw "No QueryClient set"; fixed with a per-file `renderWithClient` helper
+using RTL's `wrapper` option so the `rerender` calls below keep the provider. (2) **Group B (3 files,
+5 tests)** — `search-dialog`/`export-dialog`/`print-exam-results-view` stubbed `@/lib/api` without
+`unwrap` (+`resolveApiOrigin`), which `lib/reports/queries.ts` imports, so their queries never
+resolved; matched the `unwrap` shim `export-progress.test.tsx` added in B19. (3) **Flaky hardening** —
+the four `.integration.test.tsx` flows got 60s per-test ceilings (was 20s/20s/15s) plus 10s
+`waitFor`/`findBy` headroom (1-3s defaults tripped under full-suite parallel load); the
+load-prone `step-08`/`step-09`/`student-form`/`schools-new`/`question-navigator`/`terms-screen`
+tests got explicit 10s implicit-wait ceilings; `error-table.performance`'s wall-clock budget rose
+1000ms → 5000ms (observed 1466ms under parallel contention vs ~16ms isolated) with the strict
+single-page-mount invariant untouched. Verified across repeated full-suite runs — final runs clean
+at 906/906 (runs 3–5; the run-2 5-fail/run-3 1-fail outliers were the load-sensitive files now
+hardened); `apps/web` typecheck + lint exit 0. Docs: `CHANGE-LOG.md` 2026-09-25.
+
 **Note on this section's own staleness, found while updating it for `B12` (2026-09-04):** the
 paragraph above had fallen behind — it still named `B12` as "next" and left `F11` marked as a
 future phase, even though both `F11` and (now) `B12`/`F12` are complete and the Change Log below

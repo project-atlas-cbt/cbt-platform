@@ -144,14 +144,19 @@ describe('Question review flow (F10)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /^approve$/i }));
 
-    await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith(
-        '/reviews/questions/{id}/approve',
-        expect.objectContaining({ params: { path: { id: 'q1' } }, body: {} }),
-      );
+    await waitFor(
+      () => {
+        expect(mockPost).toHaveBeenCalledWith(
+          '/reviews/questions/{id}/approve',
+          expect.objectContaining({ params: { path: { id: 'q1' } }, body: {} }),
+        );
+      },
+      { timeout: 10000 },
+    );
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/hod/question-review/q2'), {
+      timeout: 10000,
     });
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/hod/question-review/q2'));
-  });
+  }, 30000);
 
   it('rejecting requires a reason, then calls the real reject endpoint', async () => {
     mockGet.mockImplementation(
@@ -179,18 +184,23 @@ describe('Question review flow (F10)', () => {
     await userEvent.type(screen.getByLabelText(/reason/i), 'Option B is ambiguous.');
     await userEvent.click(screen.getByRole('button', { name: /^reject question$/i }));
 
-    await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith(
-        '/reviews/questions/{id}/reject',
-        expect.objectContaining({
-          params: { path: { id: 'q2' } },
-          body: { reason: 'Option B is ambiguous.' },
-        }),
-      );
-    });
+    await waitFor(
+      () => {
+        expect(mockPost).toHaveBeenCalledWith(
+          '/reviews/questions/{id}/reject',
+          expect.objectContaining({
+            params: { path: { id: 'q2' } },
+            body: { reason: 'Option B is ambiguous.' },
+          }),
+        );
+      },
+      { timeout: 10000 },
+    );
     // q2 is the last item in queue order — no next question, back to the queue list.
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/hod/question-review'));
-  });
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/hod/question-review'), {
+      timeout: 10000,
+    });
+  }, 30000);
 
   it('a cross-department (or otherwise unauthorized) question shows an error state, never raw JSON', async () => {
     mockGet.mockImplementation((path: string) => {

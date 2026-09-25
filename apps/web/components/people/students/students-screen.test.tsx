@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StudentsScreen } from './students-screen';
 import { useStudentsPaginated } from '@/lib/people/queries';
 import { useAcademicsContext, useClasses } from '@/lib/academics/queries';
@@ -21,6 +22,19 @@ const mockUseStudentsPaginated = vi.mocked(useStudentsPaginated);
 const mockUseAcademicsContext = vi.mocked(useAcademicsContext);
 const mockUseClasses = vi.mocked(useClasses);
 const mockUseHasPermission = vi.mocked(useHasPermission);
+
+// The screen mounts `<ExportDialog>` (a react-query mutation at its top
+// level) and `<StudentForm>` unconditionally, so every render needs a
+// QueryClientProvider. Uses RTL's `wrapper` option (react-query's own
+// documented pattern) so `rerender` keeps the provider too.
+function renderWithClient(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 function result(
   students: unknown[],
@@ -59,25 +73,25 @@ describe('StudentsScreen', () => {
 
   it('shows a loading state while pending', () => {
     mockUseStudentsPaginated.mockReturnValue(result([], { isPending: true }) as never);
-    render(<StudentsScreen basePath="/school/people" />);
+    renderWithClient(<StudentsScreen basePath="/school/people" />);
     expect(screen.queryByText('No students yet')).not.toBeInTheDocument();
   });
 
   it('shows an error state with retry on failure', () => {
     mockUseStudentsPaginated.mockReturnValue(result([], { isError: true }) as never);
-    render(<StudentsScreen basePath="/school/people" />);
+    renderWithClient(<StudentsScreen basePath="/school/people" />);
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 
   it('shows the first-run empty state with no filters applied', () => {
     mockUseStudentsPaginated.mockReturnValue(result([]) as never);
-    render(<StudentsScreen basePath="/school/people" />);
+    renderWithClient(<StudentsScreen basePath="/school/people" />);
     expect(screen.getByText('No students yet')).toBeInTheDocument();
   });
 
   it('renders real rows with class, department, and status', () => {
     mockUseStudentsPaginated.mockReturnValue(result(STUDENTS) as never);
-    render(<StudentsScreen basePath="/school/people" />);
+    renderWithClient(<StudentsScreen basePath="/school/people" />);
     expect(screen.getByRole('link', { name: 'Ada Okoye' })).toHaveAttribute(
       'href',
       '/school/people/students/sp1',
@@ -94,14 +108,14 @@ describe('StudentsScreen', () => {
 
   it('searching updates the URL and resets to page 1', async () => {
     mockUseStudentsPaginated.mockReturnValue(result([]) as never);
-    render(<StudentsScreen basePath="/school/people" />);
+    renderWithClient(<StudentsScreen basePath="/school/people" />);
     await userEvent.type(screen.getByLabelText(/search/i), 'Ada{Enter}');
     expect(replace).toHaveBeenCalledWith('/school/people/students?q=Ada');
   });
 
   it('paginates via the DataTable pager when there is more than one page', async () => {
     mockUseStudentsPaginated.mockReturnValue(result(STUDENTS, { total: 30 }) as never);
-    render(<StudentsScreen basePath="/school/people" />);
+    renderWithClient(<StudentsScreen basePath="/school/people" />);
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(replace).toHaveBeenCalledWith('/school/people/students?page=2');
   });
@@ -109,7 +123,7 @@ describe('StudentsScreen', () => {
   it('hides the Add student action for a view-only actor', () => {
     mockUseHasPermission.mockReturnValue(false);
     mockUseStudentsPaginated.mockReturnValue(result(STUDENTS) as never);
-    render(<StudentsScreen basePath="/hod/people" />);
+    renderWithClient(<StudentsScreen basePath="/hod/people" />);
     expect(screen.queryByRole('button', { name: /add student/i })).not.toBeInTheDocument();
   });
 });

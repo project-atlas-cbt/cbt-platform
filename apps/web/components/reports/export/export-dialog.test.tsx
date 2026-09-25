@@ -13,6 +13,10 @@ vi.mock('@/lib/api', () => ({
   resolveApiOrigin: () => 'http://localhost:3001',
   toApiError: (err: unknown, _status: number, fallback: string) =>
     new Error(typeof err === 'object' && err && 'message' in err ? String(err.message) : fallback),
+  // `@/lib/reports/queries` imports `unwrap` from `@/lib/api`; without it the
+  // export mutation and job-polling query reject before resolving (the same
+  // shim export-progress.test.tsx added in B19).
+  unwrap: async (resultPromise: Promise<{ data?: unknown }>) => (await resultPromise).data,
 }));
 
 const mockPost = vi.mocked(apiClient.POST);

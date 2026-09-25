@@ -41,7 +41,7 @@ describe('QuestionNavigator', () => {
     );
 
     expect(
-      await screen.findByRole('button', { name: /question 1, answered/i }),
+      await screen.findByRole('button', { name: /question 1, answered/i }, { timeout: 10000 }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /question 2, unanswered, current/i }),
@@ -105,7 +105,7 @@ describe('QuestionNavigator', () => {
       />,
     );
     expect(
-      await screen.findByRole('button', { name: /question 1, unanswered/i }),
+      await screen.findByRole('button', { name: /question 1, unanswered/i }, { timeout: 10000 }),
     ).toBeInTheDocument();
   });
 });

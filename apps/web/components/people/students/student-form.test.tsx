@@ -51,7 +51,7 @@ describe('StudentForm — create', () => {
     await userEvent.type(screen.getByLabelText(/last name/i), 'Obi');
     await userEvent.type(screen.getByLabelText(/student id/i), 'ST001');
     await userEvent.click(screen.getByRole('combobox'));
-    await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }, { timeout: 10000 }));
     await userEvent.click(screen.getByRole('button', { name: /add student/i }));
   }
 
@@ -63,7 +63,7 @@ describe('StudentForm — create', () => {
 
     await addStudent();
 
-    expect(await screen.findByText('Student added')).toBeInTheDocument();
+    expect(await screen.findByText('Student added', {}, { timeout: 10000 })).toBeInTheDocument();
     expect(screen.getByText('ST001')).toBeInTheDocument();
     expect(screen.getByText('Xy7-abcd')).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
@@ -76,7 +76,9 @@ describe('StudentForm — create', () => {
     });
 
     await addStudent();
-    await userEvent.click(await screen.findByRole('button', { name: /^done$/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^done$/i }, { timeout: 10000 }),
+    );
 
     expect(onSaved).toHaveBeenCalledTimes(1);
   });

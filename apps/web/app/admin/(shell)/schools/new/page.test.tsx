@@ -25,7 +25,9 @@ describe('CreateSchoolPage', () => {
   it('shows validation errors for empty required fields and never calls the mutation', async () => {
     render(<CreateSchoolPage />);
     await userEvent.click(screen.getByRole('button', { name: /create school/i }));
-    expect(await screen.findByText(/enter a school name/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/enter a school name/i, {}, { timeout: 10000 }),
+    ).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
@@ -35,7 +37,9 @@ describe('CreateSchoolPage', () => {
     await userEvent.clear(screen.getByLabelText(/admin email/i));
     await userEvent.type(screen.getByLabelText(/admin email/i), 'not-an-email');
     await userEvent.click(screen.getByRole('button', { name: /create school/i }));
-    expect(await screen.findByText(/enter a valid email address/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/enter a valid email address/i, {}, { timeout: 10000 }),
+    ).toBeInTheDocument();
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
@@ -44,7 +48,7 @@ describe('CreateSchoolPage', () => {
     render(<CreateSchoolPage />);
     await fillValidForm();
     await userEvent.click(screen.getByRole('button', { name: /create school/i }));
-    await screen.findByText(/school created/i);
+    await screen.findByText(/school created/i, {}, { timeout: 10000 });
     expect(mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Greenfield College',
@@ -59,7 +63,7 @@ describe('CreateSchoolPage', () => {
     render(<CreateSchoolPage />);
     await fillValidForm();
     await userEvent.click(screen.getByRole('button', { name: /create school/i }));
-    expect(await screen.findByText(/greenfield/)).toBeInTheDocument();
+    expect(await screen.findByText(/greenfield/, {}, { timeout: 10000 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /view school/i })).toHaveAttribute(
       'href',
       '/admin/schools/s1',
@@ -74,7 +78,9 @@ describe('CreateSchoolPage', () => {
     render(<CreateSchoolPage />);
     await fillValidForm();
     await userEvent.click(screen.getByRole('button', { name: /create school/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/could not create the school/i);
+    expect(await screen.findByRole('alert', {}, { timeout: 10000 })).toHaveTextContent(
+      /could not create the school/i,
+    );
     expect(screen.queryByText(/school created/i)).not.toBeInTheDocument();
   });
 });

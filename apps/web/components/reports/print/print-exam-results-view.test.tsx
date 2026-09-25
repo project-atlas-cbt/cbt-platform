@@ -28,6 +28,11 @@ vi.mock('@/lib/api', () => ({
     GET: vi.fn(),
   },
   toApiError: () => new Error('API Error'),
+  // `@/lib/reports/queries` imports `unwrap`/`resolveApiOrigin` from
+  // `@/lib/api`; without them `usePrintExamResults`'s queryFn throws before
+  // the query resolves (same shim export-progress.test.tsx added in B19).
+  unwrap: async (resultPromise: Promise<{ data?: unknown }>) => (await resultPromise).data,
+  resolveApiOrigin: () => 'http://localhost:3001',
 }));
 
 const mockGet = vi.mocked(apiClient.GET);

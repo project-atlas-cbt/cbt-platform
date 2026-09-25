@@ -122,6 +122,8 @@ describe('QuestionEditorScreen — create, autosave, submit (F9)', () => {
   // codebase's other tests, the same reasoning
   // `structure-creation.integration.test.tsx`'s own multi-step walk
   // already established for a slow-but-correct test needing real headroom.
+  // 60000ms (raised from 20000ms, which tripped under full-suite parallel
+  // CPU contention).
   it('auto-creates the question once the minimum-viable fields are filled, then autosaves further edits via PATCH, then submits', async () => {
     render(wrap(<QuestionEditorScreen />));
 
@@ -160,7 +162,7 @@ describe('QuestionEditorScreen — create, autosave, submit (F9)', () => {
           difficulty: 'EASY',
         });
       },
-      { timeout: 3000 },
+      { timeout: 10000 },
     );
     // The URL transitions from /new to /:id/edit (replace, not push).
     expect(replace).toHaveBeenCalledWith('/teacher/question-bank/q1/edit');
@@ -175,7 +177,7 @@ describe('QuestionEditorScreen — create, autosave, submit (F9)', () => {
           expect.objectContaining({ params: { path: { questionId: 'q1', revisionId: 'rev1' } } }),
         );
       },
-      { timeout: 3000 },
+      { timeout: 10000 },
     );
     expect(mockPost).not.toHaveBeenCalledWith('/questions', expect.anything());
 
@@ -191,5 +193,5 @@ describe('QuestionEditorScreen — create, autosave, submit (F9)', () => {
       );
     });
     expect(push).toHaveBeenCalledWith('/teacher/question-bank/q1');
-  }, 20000);
+  }, 60000);
 });

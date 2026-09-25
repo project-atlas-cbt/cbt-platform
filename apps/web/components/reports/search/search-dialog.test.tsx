@@ -15,6 +15,12 @@ vi.mock('@/lib/api', () => ({
     GET: vi.fn(),
   },
   toApiError: () => new Error('Search failed'),
+  // The real `@/lib/reports/queries` imports `unwrap` and `resolveApiOrigin`
+  // from `@/lib/api`; the mock must expose them or `useSearch`'s queryFn
+  // throws before the query can resolve (same shape export-progress.test.tsx
+  // added in B19).
+  unwrap: async (resultPromise: Promise<{ data?: unknown }>) => (await resultPromise).data,
+  resolveApiOrigin: () => 'http://localhost:3001',
 }));
 
 const mockGet = vi.mocked(apiClient.GET);

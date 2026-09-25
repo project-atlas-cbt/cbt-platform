@@ -89,9 +89,13 @@ describe('Step08Staff', () => {
     const [teacherSelect, departmentSelect] = screen.getAllByRole('combobox');
     if (!teacherSelect || !departmentSelect) throw new Error('expected two comboboxes');
     await userEvent.click(teacherSelect);
-    await userEvent.click(await screen.findByRole('option', { name: 'Chidi Eze' }));
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'Chidi Eze' }, { timeout: 10000 }),
+    );
     await userEvent.click(departmentSelect);
-    await userEvent.click(await screen.findByRole('option', { name: 'Science' }));
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'Science' }, { timeout: 10000 }),
+    );
     await userEvent.click(screen.getByRole('button', { name: /promote to hod/i }));
 
     expect(createHodMutateAsync).toHaveBeenCalledWith({

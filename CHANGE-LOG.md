@@ -2,6 +2,27 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-09-25 — Web test suites repaired: 18 deterministic failures fixed, full-suite load flakiness hardened
+
+The web suite's pre-existing failing/flaky tests were triaged and fixed (see CLAUDE.md 2026-09-25 for
+the full note). All 906 web tests are green across full-suite runs; `apps/web` typecheck and lint exit 0.
+
+- **Group A — "No QueryClient set" (2 files, 13 tests)**: `StudentsScreen` and `ExamResultsScreen`
+  mount `<ExportDialog>` (which runs `useCreateExport()` at `export-dialog.tsx:84`) and `<StudentForm>`
+  unconditionally, so any test that stubs their queries without a provider threw. Fixed per-file with a
+  `renderWithClient` helper using RTL's `wrapper` option (react-query's own documented pattern) so the
+  `rerender` calls keep the provider too.
+- **Group B — stale `@/lib/api` mocks (3 files, 5 tests)**: `search-dialog`, `export-dialog` and
+  `print-exam-results-view` tests stubbed only `apiClient` + `toApiError`, omitting `unwrap` (and
+  `resolveApiOrigin`), which `lib/reports/queries.ts` imports — so the queries never resolved. Matched
+  the `unwrap` shim `export-progress.test.tsx` already introduced in B19.
+- **Full-suite flakiness hardened**: the four long integration-flow tests got 60s per-test ceilings
+  (raised from 20s/20s/15s) and 10s `waitFor`/implicit `findBy` headroom where their 1-3s defaults tripped
+  under parallel CPU contention; the load-prone onboarding/steps/students/attempt/terms/schools-new
+  tests got explicit 10s ceilings on their implicit waits; `error-table.performance`'s wall-clock budget
+  rose 1000ms → 5000ms (the render spiked to 1466ms under full-suite load vs ~16ms isolated) while its
+  strict single-page-mount invariant is unchanged.
+
 ### 2026-09-24 — F3 gap closure: School Detail's Usage, Users and Exams tabs now show real data (SA-04 §8)
 
 Closed F3's last honestly-open Deferred item. `04 §8` always specified Users and Exams as full School

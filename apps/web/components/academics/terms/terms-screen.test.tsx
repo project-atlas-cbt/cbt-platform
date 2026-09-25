@@ -135,6 +135,7 @@ describe('TermsScreen', () => {
     render(<TermsScreen />);
 
     await userEvent.click(screen.getAllByRole('button', { name: /add term/i })[0]!);
+    await screen.findByLabelText(/term name/i, {}, { timeout: 10000 });
     await userEvent.type(screen.getByLabelText(/term name/i), 'Second Term');
     await userEvent.clear(screen.getByLabelText(/order/i));
     await userEvent.type(screen.getByLabelText(/order/i), '2');

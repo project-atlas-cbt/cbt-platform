@@ -50,7 +50,7 @@ describe('Step09Students', () => {
     await userEvent.type(screen.getByLabelText(/last name/i), 'Obi');
     await userEvent.type(screen.getByLabelText(/student id/i), 'ST001');
     await userEvent.click(screen.getByRole('combobox'));
-    await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }, { timeout: 10000 }));
     await userEvent.click(screen.getByRole('button', { name: /add student/i }));
 
     expect(mutateAsync).toHaveBeenCalledWith({
@@ -85,10 +85,12 @@ describe('Step09Students', () => {
     await userEvent.type(screen.getByLabelText(/last name/i), 'Obi');
     await userEvent.type(screen.getByLabelText(/student id/i), 'ST001');
     await userEvent.click(screen.getByRole('combobox'));
-    await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }, { timeout: 10000 }));
     await userEvent.click(screen.getByRole('button', { name: /add student/i }));
 
-    expect(await screen.findByText('Credentials for ST001')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Credentials for ST001', {}, { timeout: 10000 }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Xy7-abcd')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /dismiss/i }));
