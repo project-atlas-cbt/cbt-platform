@@ -59,6 +59,17 @@ describe('loadEnv', () => {
     expect(env.AUTH_LOCKOUT_WINDOW_SECONDS).toBe(15 * 60);
   });
 
+  it('defaults the B20 observability and safe-retention settings', () => {
+    const env = loadEnv(validEnv);
+    expect(env.OTEL_EXPORTER_OTLP_ENDPOINT).toBe('');
+    expect(env.SENTRY_DSN).toBe('');
+    expect(env.EXAM_HEALTH_WINDOW_SECONDS).toBe(300);
+    expect(env.EXAM_HEALTH_MIN_SAMPLES).toBe(50);
+    expect(env.EXAM_HEALTH_SUCCESS_THRESHOLD_PERCENT).toBe(95);
+    expect(env.RETENTION_SWEEP_INTERVAL_MS).toBe(24 * 60 * 60 * 1000);
+    expect(env.EXPIRED_SESSION_RETENTION_DAYS).toBe(30);
+  });
+
   it('rejects a session secret shorter than 16 characters', () => {
     expect(() => loadEnv({ ...validEnv, SESSION_COOKIE_SECRET: 'short' })).toThrow(
       EnvValidationError,

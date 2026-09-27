@@ -569,6 +569,20 @@ describe('AuditEvent append-only enforcement (B10 DoD item 2)', () => {
   // testing through that connection is what actually proves the trigger
   // itself, independent of the grant.
 
+  it('the runtime role has neither schema CREATE nor audit TRUNCATE privileges (B20 least privilege)', async () => {
+    const [privileges] = await prisma.$queryRaw<
+      Array<{ canCreateSchemaObjects: boolean; canTruncateAudit: boolean }>
+    >`
+      SELECT
+        has_schema_privilege(current_user, 'public', 'CREATE') AS "canCreateSchemaObjects",
+        has_table_privilege(current_user, 'audit_events', 'TRUNCATE') AS "canTruncateAudit"
+    `;
+    expect(privileges).toEqual({
+      canCreateSchemaObjects: false,
+      canTruncateAudit: false,
+    });
+  });
+
   it('a direct raw-SQL UPDATE against audit_events is rejected at the grant level (atlas_app)', async () => {
     const school = await createSchool();
     const admin = await seedUser({

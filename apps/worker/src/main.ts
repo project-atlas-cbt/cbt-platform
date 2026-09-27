@@ -2,6 +2,11 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { loadEnv, loadRootEnv } from '@atlas/config';
 import { prisma } from '@atlas/db';
+import {
+  initializeObservability,
+  shutdownObservability,
+  structuredLog,
+} from '@atlas/observability';
 import { ATTEMPT_MARKING_QUEUE_NAME, type AttemptMarkingJobPayload } from '@atlas/domain';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
@@ -45,10 +50,21 @@ import {
   createAnalyticsRefreshWorker,
   scheduleAnalyticsRefresh,
 } from './queues/analytics-refresh.queue.js';
+import {
+  RETENTION_QUEUE_NAME,
+  createRetentionWorker,
+  scheduleRetentionSweep,
+} from './queues/retention.queue.js';
 
 async function main() {
   loadRootEnv();
   const env = loadEnv();
+  initializeObservability({
+    serviceName: 'atlas-worker',
+    environment: env.OBSERVABILITY_ENVIRONMENT,
+    ...(env.OTEL_EXPORTER_OTLP_ENDPOINT ? { otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT } : {}),
+    ...(env.SENTRY_DSN ? { sentryDsn: env.SENTRY_DSN } : {}),
+  });
 
   // Proves the worker process shares the tenancy-aware Prisma client with
   // the API (ADR-0023: "Background workers and exports inherit the same
@@ -134,6 +150,15 @@ async function main() {
   const analyticsRefreshQueue = new Queue(ANALYTICS_REFRESH_QUEUE_NAME, { connection });
   await scheduleAnalyticsRefresh(analyticsRefreshQueue, env.ANALYTICS_REFRESH_INTERVAL_MS);
 
+  const retentionWorker = createRetentionWorker(connection, {
+    policy: {
+      expiredSessionRetentionDays: env.EXPIRED_SESSION_RETENTION_DAYS,
+      expiredPasswordResetRetentionDays: env.EXPIRED_PASSWORD_RESET_RETENTION_DAYS,
+    },
+  });
+  const retentionQueue = new Queue(RETENTION_QUEUE_NAME, { connection });
+  await scheduleRetentionSweep(retentionQueue, env.RETENTION_SWEEP_INTERVAL_MS);
+
   // B14: this process is a producer onto the shared marking queue — both
   // its own ADR-0004 sweeper (below) and apps/api's submit()/end()/
   // opportunistic-finalisation paths enqueue here; the marking-job
@@ -199,9 +224,10 @@ async function main() {
     notificationDispatchQueue,
     attemptMarkingQueue,
     attemptAutoSubmitQueue,
+    retentionQueue,
   ]) {
     queue.on('error', (err) => {
-      console.error(`[worker] queue "${queue.name}" connection error:`, err.message);
+      structuredLog('error', 'worker.queue.connection-error', { queue: queue.name }, err);
     });
   }
 
@@ -216,12 +242,21 @@ async function main() {
     attemptMarkingWorker,
     attemptAutoSubmitWorker,
     resultAdjustmentWorker,
+    retentionWorker,
   ]) {
     worker.on('completed', (job) => {
-      console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
+      structuredLog('info', 'worker.job.completed', {
+        queue: worker.name,
+        jobId: job.id ?? null,
+      });
     });
     worker.on('failed', (job, err) => {
-      console.error(`[worker] job ${job?.id} on queue "${worker.name}" failed:`, err.message);
+      structuredLog(
+        'error',
+        'worker.job.failed',
+        { queue: worker.name, jobId: job?.id ?? null },
+        err,
+      );
     });
     // Worker extends EventEmitter and emits 'error' for connection-level
     // failures (e.g. a dropped/failed Redis connection) — an unhandled
@@ -229,16 +264,14 @@ async function main() {
     // during B7's review of its own new import-expiry worker; applied to
     // every worker in this shared loop since none of them had one either.
     worker.on('error', (err) => {
-      console.error(`[worker] worker "${worker.name}" connection error:`, err.message);
+      structuredLog('error', 'worker.connection-error', { queue: worker.name }, err);
     });
   }
 
-  console.log(
-    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), "${examControlRefreshWorker.name}" (sweep every ${env.EXAM_CONTROL_REFRESH_INTERVAL_MS}ms), "${attemptAutoSubmitWorker.name}" (sweep every ${env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS}ms), "${attemptMarkingWorker.name}" (per-item, no schedule), "${resultAdjustmentWorker.name}" (per-item, no schedule), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
-  );
+  structuredLog('info', 'worker.started', { queueCount: 11 });
 
   const shutdown = async () => {
-    console.log('[worker] shutting down...');
+    structuredLog('info', 'worker.shutting-down');
     await Promise.all([
       probeWorker.close(),
       subscriptionExpiryWorker.close(),
@@ -250,6 +283,7 @@ async function main() {
       attemptMarkingWorker.close(),
       resultAdjustmentWorker.close(),
       attemptAutoSubmitWorker.close(),
+      retentionWorker.close(),
     ]);
     await subscriptionExpiryQueue.close();
     await orphanMediaReportQueue.close();
@@ -260,8 +294,10 @@ async function main() {
     await notificationDispatchQueue.close();
     await attemptMarkingQueue.close();
     await attemptAutoSubmitQueue.close();
+    await retentionQueue.close();
     redis.disconnect();
     await prisma.$disconnect();
+    await shutdownObservability();
     process.exit(0);
   };
   // process.on expects a void-returning listener; wrapping avoids handing
@@ -269,7 +305,7 @@ async function main() {
   // unhandled) — see @typescript-eslint/no-misused-promises.
   const onSignal = () => {
     void shutdown().catch((err: unknown) => {
-      console.error('[worker] error during shutdown:', err);
+      structuredLog('error', 'worker.shutdown.failed', {}, err);
       process.exit(1);
     });
   };
@@ -278,6 +314,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('[worker] failed to start:', err);
+  structuredLog('error', 'worker.start.failed', {}, err);
   process.exit(1);
 });

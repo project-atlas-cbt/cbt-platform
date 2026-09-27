@@ -6,6 +6,7 @@ import {
   type AttemptMarkingJobPayload,
   type AttemptSnapshotDocumentV1,
 } from '@atlas/domain';
+import { examMetrics, traceOperation } from '@atlas/observability';
 import {
   autoPublishIfPolicyRequires,
   finalizeResultAfterMarking,
@@ -176,7 +177,18 @@ export function createAttemptMarkingWorker(
   return new Worker<AttemptMarkingJobPayload>(
     ATTEMPT_MARKING_QUEUE_NAME,
     async (job) => {
-      await runAttemptMarking(deps, job.data);
+      const startedAt = performance.now();
+      await traceOperation(
+        'exam.result_generation',
+        {
+          'tenant.school_id': job.data.schoolId,
+          'attempt.id': job.data.attemptId,
+        },
+        () => runAttemptMarking(deps, job.data),
+      );
+      examMetrics.resultGenerationLatency.record(performance.now() - startedAt, {
+        schoolId: job.data.schoolId,
+      });
     },
     { connection },
   );

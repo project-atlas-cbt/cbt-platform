@@ -9,6 +9,13 @@ overrides:
   # second copy, and @fastify/helmet + @fastify/cors's plugin types stop
   # structurally matching the app instance's type. One version, tree-wide.
   fastify: '5.11.3'
+  # B20 vulnerability remediation. These transitive packages are pinned to
+  # the first patched releases because their parents had not yet widened
+  # their ranges when the security audit was run.
+  browserslist: '4.28.7'
+  deepmerge-ts: '8.0.0'
+  js-yaml: '4.3.2'
+  mysql2: '3.22.0'
 allowBuilds:
   # Prisma's own engine binaries — required for `prisma generate`/`migrate`
   # to work at all.
@@ -22,6 +29,10 @@ allowBuilds:
   # msgpack perf path).
   esbuild: true
   msgpackr-extract: true
+  # OpenTelemetry's protobuf serializer ships a postinstall helper, but its
+  # published JS output is already complete and the build is unnecessary for
+  # this runtime. Keep supply-chain execution disabled explicitly.
+  protobufjs: false
   unrs-resolver: true
   # Our own git-hooks tool (package.json "simple-git-hooks" config).
   simple-git-hooks: true

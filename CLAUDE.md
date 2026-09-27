@@ -473,6 +473,18 @@ confirmation gate, post-commit transition summary). Backed by typed React Query 
 lifecycle integration test). `@atlas/web typecheck` and `lint` both exit 0. B19's contract is
 confirmed. Browser E2E remains pending — same posture as F16/F18 (no configured harness).
 
+**`B20 — Security Hardening & Compliance`** is implemented and **IN REVIEW** (2026-09-27):
+nonce-based CSP and secure browser headers, endpoint-class throttles, metadata-only structured
+logging, optional OpenTelemetry/Sentry instrumentation for the four critical exam flows, a
+Redis-windowed answer-save health alert, restricted runtime database grants, operational-token
+retention, and blocking Gitleaks/dependency/Trivy CI gates. Threat-model and compliance drafts are
+under `docs/security/` and `docs/compliance/`. Local lint/build, 183 API unit tests, worker tests,
+health-degradation/CSP tests, peer checks, and high-severity dependency audit pass; the web suite
+holds its pre-existing baseline (877 pass, 18 unrelated `No QueryClient set` failures). Do not mark
+B20 complete until Nigerian counsel reviews the compliance drafts, Docker-backed PostgreSQL/
+Redis/MinIO checks and security scans pass in CI, B21 validates rate limits under legitimate load,
+and the owner records residual-risk acceptance.
+
 **2026-09-23 — Teacher bulk "Submit for review" shipped (explicit user request):** teachers can
 now select multiple/all of their own Draft-tab questions on the Question Bank and submit them for
 review in one action — `POST /v1/questions/bulk-submit` (`questionBank.submitForReview`,

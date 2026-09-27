@@ -96,9 +96,7 @@ export function ResultsExamPickerScreen({ basePath }: { basePath: string }) {
         isLoading={exams.isPending}
         page={page}
         pageCount={pageCount}
-        onPageChange={(next) =>
-          router.replace(next > 1 ? `${basePath}?page=${next}` : basePath)
-        }
+        onPageChange={(next) => router.replace(next > 1 ? `${basePath}?page=${next}` : basePath)}
         emptyState={
           <EmptyState
             icon={ClipboardList}

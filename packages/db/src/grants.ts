@@ -21,6 +21,10 @@ import { createPrismaClient } from './client.js';
 export async function grantAppRole(ownerConnectionUrl: string): Promise<void> {
   const owner = createPrismaClient(ownerConnectionUrl);
   try {
+    // B20 least privilege: the runtime role can resolve objects in the
+    // schema but cannot create or replace schema objects. DDL remains
+    // exclusively on DATABASE_URL's migration owner.
+    await owner.$executeRawUnsafe('REVOKE CREATE ON SCHEMA public FROM atlas_app');
     await owner.$executeRawUnsafe('GRANT USAGE ON SCHEMA public TO atlas_app');
     await owner.$executeRawUnsafe(
       'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO atlas_app',
@@ -51,7 +55,9 @@ export async function grantAppRole(ownerConnectionUrl: string): Promise<void> {
     await owner.$executeRawUnsafe(`
       DO $$
       BEGIN
-        REVOKE UPDATE, DELETE ON "audit_events" FROM atlas_app;
+        REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+          ON "audit_events" FROM atlas_app;
+        GRANT SELECT, INSERT ON "audit_events" TO atlas_app;
       EXCEPTION WHEN undefined_table THEN
         NULL;
       END $$;

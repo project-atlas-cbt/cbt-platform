@@ -11,7 +11,9 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { examMetrics, traceOperation } from '@atlas/observability';
 import { Authorized } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
@@ -45,6 +47,8 @@ import {
   GrantMakeupAuthorizationDto,
   GrantRetryAuthorizationDto,
 } from './dto/participation.dto.js';
+
+const ATTEMPT_START_THROTTLE = { default: { limit: 30, ttl: 60_000 } };
 
 function attemptRequestContext(
   req: FastifyRequest,
@@ -88,6 +92,7 @@ export class ExamControlController {
 
   @Post(':id/attempts')
   @HttpCode(HttpStatus.OK)
+  @Throttle(ATTEMPT_START_THROTTLE)
   @Authorized('studentCbt.start')
   @ApiOperation({
     summary:
@@ -99,13 +104,20 @@ export class ExamControlController {
     @Param('id') id: string,
   ): Promise<AttemptPackageResponseDto> {
     const user = currentUser(req);
-    return this.attempts.start(
-      user.schoolId,
-      actorFromAuthenticatedUser(user),
-      id,
-      attemptRequestContext(req, user),
-      { actorUserId: user.userId, actorRole: 'STUDENT' },
+    const result = await traceOperation(
+      'exam.start_attempt',
+      { 'tenant.school_id': user.schoolId, 'exam.id': id },
+      () =>
+        this.attempts.start(
+          user.schoolId,
+          actorFromAuthenticatedUser(user),
+          id,
+          attemptRequestContext(req, user),
+          { actorUserId: user.userId, actorRole: 'STUDENT' },
+        ),
     );
+    examMetrics.attemptStarts.add(1, { schoolId: user.schoolId });
+    return result;
   }
 
   @Post(':id/close')

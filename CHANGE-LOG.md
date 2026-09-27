@@ -2,6 +2,28 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-09-27 — B20 Security Hardening & Compliance (IN REVIEW)
+
+Implemented the B20 engineering and documentation baseline without claiming legal or production
+completion:
+
+- Added nonce-based CSP and secure web headers, endpoint-class rate limits, metadata-only structured
+  request logs, optional OpenTelemetry/Sentry initialization with PII scrubbing, critical-flow
+  traces/metrics, and a Redis-windowed Exam Health Monitor alert.
+- Restricted the application database role (including append-only audit access) and added a
+  scheduled retention worker that removes only expired operational sessions and reset tokens while
+  preserving academic evidence.
+- Made Gitleaks, high-severity dependency audit, image build, and Trivy HIGH/CRITICAL checks blocking
+  CI jobs; upgraded vulnerable direct dependencies and pinned safe transitive versions.
+- Added the threat model, control-evidence register, controller/processor posture, DPA template,
+  subject-rights procedure, breach-response procedure, and provisional retention schedule.
+- Validation: lint/build, 183 API unit tests, worker unit tests, simulated health degradation, CSP
+  tests, peer checks, and `pnpm audit --audit-level high` pass. The full web suite remains at its
+  pre-existing baseline (877 pass, 18 unrelated `No QueryClient set` failures).
+- Open gates: legal review by Nigerian counsel, Docker-backed PostgreSQL/Redis/MinIO integration and
+  blocking security-scan evidence in CI, B21 load-profile validation, and owner residual-risk
+  acceptance. Docker was unavailable in the implementation environment.
+
 ### 2026-09-23 — F12 gap closure: real Live Attempt table (B13)
 
 Closed the F12 DoD item that was honestly partial by construction (no `ExamAttempt` existed when F12

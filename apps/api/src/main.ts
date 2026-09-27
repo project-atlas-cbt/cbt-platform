@@ -6,6 +6,11 @@ import { SwaggerModule } from '@nestjs/swagger';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import { getProductName, type Env } from '@atlas/config';
+import {
+  initializeObservability,
+  shutdownObservability,
+  structuredLog,
+} from '@atlas/observability';
 import { AppModule } from './app.module.js';
 import { API_VERSION_PREFIX } from './openapi/version.js';
 import { isAllowedOrigin } from './security/cors.js';
@@ -22,6 +27,16 @@ async function bootstrap() {
 
   const config = app.get(ConfigService<Env, true>);
   const isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
+  initializeObservability({
+    serviceName: 'atlas-api',
+    environment: config.get('OBSERVABILITY_ENVIRONMENT', { infer: true }),
+    ...(config.get('OTEL_EXPORTER_OTLP_ENDPOINT', { infer: true })
+      ? { otlpEndpoint: config.get('OTEL_EXPORTER_OTLP_ENDPOINT', { infer: true }) }
+      : {}),
+    ...(config.get('SENTRY_DSN', { infer: true })
+      ? { sentryDsn: config.get('SENTRY_DSN', { infer: true }) }
+      : {}),
+  });
 
   // A real bug found only by live browser testing of F3's admin login, not
   // by inspection: @fastify/helmet's default `hsts` option was on
@@ -109,9 +124,9 @@ async function bootstrap() {
   const port = config.get('API_PORT', { infer: true });
   const host = config.get('API_HOST', { infer: true });
   await app.listen(port, host);
-  console.log(`[api] listening on http://${host}:${port}${API_VERSION_PREFIX}`);
+  structuredLog('info', 'api.started', { host, port, apiPrefix: API_VERSION_PREFIX });
   if (!isProduction) {
-    console.log(`[api] API docs available at http://${host}:${port}/docs`);
+    structuredLog('info', 'api.docs.enabled', { route: '/docs' });
   }
 
   // B7: the two import BullMQ Worker consumers, started only here — never
@@ -128,7 +143,8 @@ async function bootstrap() {
   app.enableShutdownHooks();
   const shutdown = () => {
     void Promise.all([importWorkers.close(), notificationDispatchWorker.close()])
-      .catch((err: unknown) => console.error('[api] error closing background workers:', err))
+      .then(() => shutdownObservability())
+      .catch((err: unknown) => structuredLog('error', 'api.shutdown.failed', {}, err))
       .finally(() => process.exit(0));
   };
   process.on('SIGINT', shutdown);
@@ -136,6 +152,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  console.error('[api] failed to start:', err);
+  structuredLog('error', 'api.start.failed', {}, err);
   process.exit(1);
 });

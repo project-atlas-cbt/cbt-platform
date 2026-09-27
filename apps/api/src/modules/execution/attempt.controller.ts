@@ -1,6 +1,9 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { FastifyRequest } from 'fastify';
+import { examMetrics, traceOperation } from '@atlas/observability';
+import { ExamHealthService } from '../../observability/exam-health.service.js';
 import { Authorized } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
@@ -27,6 +30,9 @@ function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
 }
 
+const ANSWER_SYNC_THROTTLE = { default: { limit: 240, ttl: 60_000 } };
+const ATTEMPT_SUBMIT_THROTTLE = { default: { limit: 30, ttl: 60_000 } };
+
 /**
  * `attempt.v1` (B13) — `08 §9`'s "narrowest, most carefully designed
  * surface in the product." `POST /v1/exams/:id/attempts` (start) lives in
@@ -43,6 +49,7 @@ export class AttemptController {
     private readonly events: AttemptEventService,
     private readonly statusService: AttemptStatusService,
     private readonly administration: AttemptAdministrationService,
+    private readonly health: ExamHealthService,
   ) {}
 
   @Post(':id/invalidate')
@@ -81,6 +88,7 @@ export class AttemptController {
 
   @Put(':id/answers/:questionId')
   @HttpCode(HttpStatus.OK)
+  @Throttle(ANSWER_SYNC_THROTTLE)
   @Authorized('studentCbt.answer')
   @ApiOperation({ summary: 'Save one answer — idempotent, sequenced (ADR-0003/ADR-0007).' })
   @ApiOkResponse({ type: SaveAnswerResponseDto })
@@ -91,18 +99,36 @@ export class AttemptController {
     @Body() body: SaveAnswerDto,
   ): Promise<SaveAnswerResponseDto> {
     const user = currentUser(req);
-    return this.answers.saveAnswer(
-      user.schoolId,
-      actorFromAuthenticatedUser(user),
-      id,
-      questionId,
-      body,
-      new Date(),
-    );
+    const startedAt = performance.now();
+    try {
+      const result = await traceOperation(
+        'exam.answer_sync',
+        { 'tenant.school_id': user.schoolId, 'attempt.id': id },
+        () =>
+          this.answers.saveAnswer(
+            user.schoolId,
+            actorFromAuthenticatedUser(user),
+            id,
+            questionId,
+            body,
+            new Date(),
+          ),
+      );
+      void this.health
+        .recordAnswerSave(user.schoolId, result.accepted, performance.now() - startedAt)
+        .catch(() => undefined);
+      return result;
+    } catch (error) {
+      void this.health
+        .recordAnswerSave(user.schoolId, false, performance.now() - startedAt)
+        .catch(() => undefined);
+      throw error;
+    }
   }
 
   @Post(':id/answers/batch')
   @HttpCode(HttpStatus.OK)
+  @Throttle(ANSWER_SYNC_THROTTLE)
   @Authorized('studentCbt.answer')
   @ApiOperation({ summary: 'Flush an offline answer queue — never all-or-nothing.' })
   @ApiOkResponse({ type: SaveAnswerBatchResponseDto })
@@ -112,13 +138,34 @@ export class AttemptController {
     @Body() body: SaveAnswerBatchDto,
   ): Promise<SaveAnswerBatchResponseDto> {
     const user = currentUser(req);
-    return this.answers.saveAnswerBatch(
-      user.schoolId,
-      actorFromAuthenticatedUser(user),
-      id,
-      body,
-      new Date(),
-    );
+    const startedAt = performance.now();
+    try {
+      const result = await traceOperation(
+        'exam.answer_sync_batch',
+        { 'tenant.school_id': user.schoolId, 'attempt.id': id },
+        () =>
+          this.answers.saveAnswerBatch(
+            user.schoolId,
+            actorFromAuthenticatedUser(user),
+            id,
+            body,
+            new Date(),
+          ),
+      );
+      void this.health
+        .recordAnswerSave(
+          user.schoolId,
+          result.results.every((item) => item.accepted),
+          performance.now() - startedAt,
+        )
+        .catch(() => undefined);
+      return result;
+    } catch (error) {
+      void this.health
+        .recordAnswerSave(user.schoolId, false, performance.now() - startedAt)
+        .catch(() => undefined);
+      throw error;
+    }
   }
 
   @Post(':id/heartbeat')
@@ -158,6 +205,7 @@ export class AttemptController {
 
   @Post(':id/submit')
   @HttpCode(HttpStatus.OK)
+  @Throttle(ATTEMPT_SUBMIT_THROTTLE)
   @Authorized('studentCbt.submit')
   @ApiOperation({
     summary: 'Normal submission — state transition and answer freeze only, never marking (B14).',
@@ -168,10 +216,21 @@ export class AttemptController {
     @Param('id') id: string,
   ): Promise<AttemptStateResponseDto> {
     const user = currentUser(req);
-    return this.lifecycle.submit(user.schoolId, actorFromAuthenticatedUser(user), id, new Date(), {
-      actorUserId: user.userId,
-      actorRole: 'STUDENT',
+    const startedAt = performance.now();
+    const result = await traceOperation(
+      'exam.submit_attempt',
+      { 'tenant.school_id': user.schoolId, 'attempt.id': id },
+      () =>
+        this.lifecycle.submit(user.schoolId, actorFromAuthenticatedUser(user), id, new Date(), {
+          actorUserId: user.userId,
+          actorRole: 'STUDENT',
+        }),
+    );
+    examMetrics.submissions.add(1, { schoolId: user.schoolId, state: result.state });
+    examMetrics.submissionLatency.record(performance.now() - startedAt, {
+      schoolId: user.schoolId,
     });
+    return result;
   }
 
   @Post(':id/end')

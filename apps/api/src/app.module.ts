@@ -27,6 +27,7 @@ import { OperationsModule } from './modules/operations/operations.module.js';
 import { NotificationCenterModule } from './modules/notification-center/notification-center.module.js';
 import { MediaModule } from './modules/media/media.module.js';
 import { ReportsModule } from './modules/reports/reports.module.js';
+import { ObservabilityModule } from './observability/observability.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ReportsModule } from './modules/reports/reports.module.js';
     RedisModule,
     TenancyModule,
     SecurityModule,
+    ObservabilityModule,
     AuthorizationModule,
     NotificationsModule,
     AccessGateModule,

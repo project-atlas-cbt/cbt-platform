@@ -200,6 +200,33 @@ export const envSchema = z.object({
   // value instead of silently falling back — an integrity parameter, never
   // a per-school policy. Default: 60 seconds.
   ATTEMPT_GRACE_WINDOW_SECONDS: z.coerce.number().int().min(0).default(60),
+
+  // ---- B20: observability, health monitoring, and safe retention ----------
+  // Empty endpoints keep local/test telemetry as a no-op. Production may
+  // point both applications at the same OTLP collector and Sentry project
+  // without making either external service part of request correctness.
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional().default(''),
+  SENTRY_DSN: z.string().optional().default(''),
+  OBSERVABILITY_ENVIRONMENT: z.string().min(1).default('local'),
+
+  // Rolling answer-save health monitor. Defaults deliberately require a
+  // meaningful sample before alerting, avoiding a single transient failure
+  // becoming an operational incident.
+  EXAM_HEALTH_WINDOW_SECONDS: z.coerce.number().int().positive().default(300),
+  EXAM_HEALTH_MIN_SAMPLES: z.coerce.number().int().positive().default(50),
+  EXAM_HEALTH_SUCCESS_THRESHOLD_PERCENT: z.coerce.number().min(1).max(100).default(95),
+  EXAM_HEALTH_ALERT_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(900),
+
+  // Retention execution is intentionally limited to ephemeral operational
+  // records. Academic evidence and audit history remain indefinite under
+  // ADR-0028 and are never candidates for this worker.
+  RETENTION_SWEEP_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(24 * 60 * 60 * 1000),
+  EXPIRED_SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+  EXPIRED_PASSWORD_RESET_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;

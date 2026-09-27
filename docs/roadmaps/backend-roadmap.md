@@ -64,8 +64,8 @@ If a future decision is reopened or superseded, the affected phases return to **
 | B16 | Participation, Absence & Makeup    | 0014, 0024                         | F16           | COMPLETE    |
 | B17 | Analytics                          | 0002, 0025                         | F17           | COMPLETE    |
 | B18 | Reporting & Export                 | 0030                               | F18           | COMPLETE    |
-| B19 | Academic Session Rollover          | 0026                               | F19           | NOT STARTED |
-| B20 | Security Hardening & Compliance    | 0028                               | F20           | NOT STARTED |
+| B19 | Academic Session Rollover          | 0026                               | F19           | COMPLETE    |
+| B20 | Security Hardening & Compliance    | 0028                               | F20           | IN REVIEW   |
 | B21 | Performance & Load                 | 0032                               | F20           | NOT STARTED |
 | B22 | Failure, Recovery & DR             | —                                  | —             | NOT STARTED |
 | B23 | Production Readiness & Launch      | —                                  | F21           | NOT STARTED |
@@ -4007,7 +4007,7 @@ written inside the same commit transaction.
 
 # B20 — Security Hardening & Compliance
 
-**Status:** NOT STARTED · **Decided ADRs:** 0028 (data protection, retention)
+**Status:** IN REVIEW (2026-09-27) · **Decided ADRs:** 0028 (data protection, retention)
 
 ## Objective
 
@@ -4096,6 +4096,29 @@ The Exam Health Monitor depends on B13/B14 metrics being emitted.
 - ADR-0028 decided.
 - No unresolved high-severity findings.
 - Security suites wired as merge blockers.
+
+## Implementation notes (2026-09-27)
+
+The engineering baseline is implemented on `feat/b20-security-hardening-compliance`: nonce-based
+web CSP and hardened browser headers; endpoint-class throttles; metadata-only structured request
+logging; optional OpenTelemetry and Sentry integration with PII scrubbing; spans and metrics for
+the four critical exam flows; a Redis-windowed answer-save health alert; restricted application
+database grants; and a retention worker that deletes only expired operational sessions and reset
+tokens. Gitleaks, high-severity dependency audit, image build, and Trivy HIGH/CRITICAL scanning are
+blocking CI jobs. The threat model, control-evidence register, DPA template, subject-rights
+procedure, breach-response procedure, retention schedule, and controller/processor posture are
+recorded under `docs/security/` and `docs/compliance/`.
+
+Local lint, build, API unit tests (183), worker unit tests, the health-monitor degradation test,
+CSP tests, peer checks, and the high-severity dependency audit pass. The full web suite remains at
+the repository's existing baseline of 877 passing and 18 unrelated `No QueryClient set` failures.
+Docker is unavailable in the implementation environment, so the new PostgreSQL retention and
+least-privilege integration checks must pass in CI before approval.
+
+B20 remains **IN REVIEW**, not complete. Completion still requires Nigerian counsel to approve or
+amend the compliance documents, CI evidence for PostgreSQL/Redis/MinIO integration and the blocking
+security scans, B21's legitimate-exam-traffic load profile for rate-limit validation, and recorded
+owner acceptance of residual risks.
 
 ## Deferred items
 

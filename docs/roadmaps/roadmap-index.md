@@ -26,7 +26,14 @@
 
 **All decision gates are resolved; `B0` is done.** See §7 for what each gate settled.
 
-Two decisions carry conditions: [ADR-0028](../decisions/ADR-0028-data-protection-and-retention.md)'s retention schedule is provisional pending legal review at B20, and [ADR-0032](../decisions/ADR-0032-aws-region.md)'s region must be validated by measurement at B21.
+`B20 — Security Hardening & Compliance` is implemented and **IN REVIEW** (2026-09-27). The
+engineering controls, blocking CI security jobs, threat model, and compliance drafts are present;
+completion remains gated on Nigerian counsel, Docker-backed CI evidence, B21 load validation, and
+owner acceptance of residual risks.
+
+Two decisions carry conditions: [ADR-0028](../decisions/ADR-0028-data-protection-and-retention.md)'s
+retention schedule remains provisional pending legal review, and
+[ADR-0032](../decisions/ADR-0032-aws-region.md)'s region must be validated by measurement at B21.
 
 ---
 
