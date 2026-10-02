@@ -17,8 +17,7 @@ Purpose:
 Multi-tenant CBT platform for secondary schools in Nigeria.
 
 Status:
-Architecture complete.
-Implementation not started.
+Implementation in progress. See CLAUDE.md "Project Status" for the current phase and CHANGE-LOG.md for what has shipped.
 
 Stack:
 TypeScript

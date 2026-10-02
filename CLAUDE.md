@@ -7,6 +7,8 @@ Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary scho
 
 > The internal codename "Project Atlas" is temporary unless/until a final commercial product name is established.
 
+Agent working rules (imported so they load every session): @AGENTS.md
+
 ---
 
 ## Project Status
