@@ -7,7 +7,7 @@
 #
 # Single stage, whole-repo build: simplicity over image size for a local dev
 # container. Node 24 LTS per CLAUDE.md's technology baseline (ADR-0031).
-FROM node:24-alpine
+FROM node:26-alpine
 
 # B20: pnpm is activated into a shared, non-root-readable location so the
 # unprivileged runtime user below never needs to download it at start-up.
