@@ -46,6 +46,10 @@ Third round:
 - **Image too big for the runner.** The Dockerfile's trailing `chown -R` copied every file into a
   second layer; it now builds as the `node` user from the start (`COPY --chown`, user-owned pnpm
   cache mount), and the scan job frees the runner's unused preinstalled toolchains first.
+- **ADR-0031 spike (B20 regression):** its cleanup deleted the probe school as `atlas_app`, which B20
+  no longer allows; it now deletes through the schema-owner connection (the locked transaction
+  itself still runs as `atlas_app`). With this, the integration job's suites all passed in CI:
+  api 369/369 (including the 1,500-row import), worker 49/49, cross-cutting 159/159.
 
 Consequence worth knowing: integration and security suites have **not run in CI** since MinIO broke,
 so the first green run is their first CI run in that period.
