@@ -49,8 +49,12 @@ services:
   # idempotently, the same mechanism that has to work in CI service
   # containers, which (per B0's own precedent) can't run custom init
   # scripts the way this file's own postgres service does.
+  # MinIO withdrew its public images (minio/minio no longer pulls), so this
+  # is Chainguard's build of upstream MinIO, pinned by digest, as in CI. It
+  # defaults to UID 65532, which can't write the root-owned data volume.
   minio:
-    image: minio/minio:RELEASE.2025-04-08T15-41-24Z
+    image: cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b
+    user: '0'
     container_name: atlas-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

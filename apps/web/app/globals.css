@@ -162,7 +162,9 @@ body {
   thead {
     display: table-header-group;
   }
-  tr, img, .print-card {
+  tr,
+  img,
+  .print-card {
     page-break-inside: avoid;
     break-inside: avoid;
   }

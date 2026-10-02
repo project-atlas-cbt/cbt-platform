@@ -8,8 +8,8 @@
  * DRAFT questions; per-row validation (insufficient options, bad
  * difficulty/marks, unresolvable subject/class, out-of-scope); topic
  * auto-create on import; `QUESTION_IMPORT_REQUIRES_TEACHER_PROFILE` for an
- * uploader with no `TeacherProfile`; and `GET /v1/questions/export`'s CSV
- * shape and role-scoping.
+ * uploader with no `TeacherProfile`; and the question-bank export's CSV
+ * shape (via B18's `POST /v1/exports`, which replaced `GET /questions/export`).
  */
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';
@@ -24,6 +24,7 @@ import { PasswordService } from '../identity/password.service.js';
 import { ImportValidationService } from '../imports/import-validation.service.js';
 import { ImportCommitService } from '../imports/import-commit.service.js';
 import { IMPORT_TEMPLATE_VERSION } from '../imports/import-templates.js';
+import { ExportService } from '../reports/export.service.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -425,7 +426,12 @@ describe('B8 — question import/export', () => {
     expect(correct?.content).toBe('4'); // "Correct Answer: B" -> Option B's content
   });
 
-  it('GET /questions/export produces a re-importable, template-shaped CSV', async () => {
+  // B18 replaced `GET /questions/export` with the reports module's async
+  // export (`POST /exports` type QUESTION_BANK → background job → tokened
+  // download). Same CSV builder, so the re-importable template shape is
+  // asserted here, through the route that actually ships. The job is run
+  // directly, per this file's "background jobs invoked directly" precedent.
+  it('the QUESTION_BANK export produces a re-importable, template-shaped CSV', async () => {
     await post(teacher, '/questions', {
       subjectId: mathSubjectId,
       level: 'SS2',
@@ -438,7 +444,21 @@ describe('B8 — question import/export', () => {
         { content: 'Y', correctFlag: true },
       ],
     });
-    const res = await get(teacher, '/questions/export');
+    const created = await post(teacher, '/exports', {
+      type: 'QUESTION_BANK',
+      scope: { subjectId: mathSubjectId, level: 'SS2' },
+    });
+    expect(created.statusCode).toBe(202);
+    const jobId = created.json<{ id: string }>().id;
+    await app.get(ExportService).generate(schoolId, jobId);
+    const status = await get(teacher, `/exports/${jobId}`);
+    expect(status.statusCode).toBe(200);
+    const { status: jobStatus, downloadUrl } = status.json<{
+      status: string;
+      downloadUrl: string;
+    }>();
+    expect(jobStatus).toBe('COMPLETED');
+    const res = await get(teacher, downloadUrl.replace(/^\/v1/, ''));
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/csv');
     expect(res.body).toContain(`# template-version: ${IMPORT_TEMPLATE_VERSION}`);

@@ -2,6 +2,27 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-02 — CI pipeline repaired
+
+Every CI job had been failing in about a minute on every PR since at least #10. None of it was
+product code:
+
+- **MinIO image withdrawn upstream.** `minio/minio` no longer pulls from Docker Hub or quay.io, so
+  the contract-drift, integration and security jobs died at "Start MinIO" (exit 125). Replaced in
+  CI and `docker-compose.yml` with Chainguard's build of upstream MinIO, pinned by digest, run as
+  root (its default UID can't write the root-owned data volume). Same server and API; verified
+  locally against the media, reports and question tests and as the dev compose service.
+- **Format check:** four web files from earlier F-phase work were never Prettier-formatted.
+- **B20's scanners:** `aquasecurity/trivy-action@0.33.1` never resolved (its tags are `v`-prefixed);
+  now pinned by commit SHA to `v0.36.0`, and `**/node_modules` is skipped. `gitleaks-action` needs
+  a paid license for organisation-owned repos, so the job now runs the gitleaks CLI image (MIT),
+  pinned by digest. A local run over all 158 commits found no leaks.
+- **Stale B8 test:** "GET /questions/export…" now exercises B18's `POST /exports` QUESTION_BANK flow
+  (job run directly, tokened download) and asserts the same template-shaped CSV; it passes.
+
+Consequence worth knowing: integration and security suites have **not run in CI** since MinIO broke,
+so the first green run is their first CI run in that period.
+
 ### 2026-10-02 — B20 Security Hardening & Compliance
 
 B20 implemented; DoD 1–12 met (roadmap section has the per-item evidence). Project-owner decisions

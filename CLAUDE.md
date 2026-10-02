@@ -236,9 +236,10 @@ Open items carried forward:
 - From B20 → F20: web CSP (`docs/security/web-csp-policy.md`), Software Admin MFA UI, then
   `PLATFORM_MFA_REQUIRED=true`. From B20 → B23: legal review of retention/DPA (ADR-0028 amendment),
   encryption-at-rest verification, production secrets (`CSRF_SECRET`, `MFA_ENCRYPTION_KEY`).
-- Known failing integration tests: the B8 `GET /questions/export` test (endpoint removed in B18,
-  test left behind) and the 1,500-row import timing budget (fails identically on pre-B20 code
-  locally — workstation throughput; B21 to re-measure) — see the B20 `CHANGE-LOG.md` entry.
+- Known failing integration test: the 1,500-row import timing budget (fails identically on pre-B20
+  code locally — workstation throughput; B21 to re-measure) — see the B20 `CHANGE-LOG.md` entry.
+- Local and CI object storage is Chainguard's MinIO build pinned by digest (MinIO withdrew its
+  public images, 2026-10-02 CI repair entry).
 
 Engineering facts every session needs:
 
