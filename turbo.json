@@ -1,6 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "stream",
+  // turbo >= 2.11 writes its own block into the root AGENTS.md whenever it
+  // detects an AI agent. AGENTS.md is the project's governance document,
+  // maintained by hand, so the managed block is opted out.
+  "agentGuidance": false,
   // Shared config files every package's tsconfig/eslint config extends —
   // without this, a change to one of these doesn't invalidate any
   // package's turbo cache, since turbo's default hashing only tracks
