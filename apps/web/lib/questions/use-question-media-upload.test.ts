@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useQuestionMediaUpload } from './use-question-media-upload';
 import {
@@ -38,6 +38,15 @@ describe('useQuestionMediaUpload', () => {
     mockComplete.mockReturnValue({ mutateAsync: completeMutateAsync } as never);
     mockAttach.mockReturnValue({ mutateAsync: attachMutateAsync } as never);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    // The preview URL is a browser API. Vitest's jsdom URL shim converts the
+    // File through jsdom internals that jsdom 30.1 changed, and the hook's
+    // catch turned that crash into a null result — so stub it, rather than
+    // depend on the test environment's blob-URL support.
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('refuses to upload before a draft revision exists', async () => {

@@ -19,11 +19,11 @@
     "@atlas/domain": "workspace:*",
     "@atlas/notifications": "workspace:*",
     "@atlas/observability": "workspace:*",
-    "bullmq": "^6.2.0",
+    "bullmq": "^6.3.10",
     "ioredis": "^6.0.0"
   },
   "devDependencies": {
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   }
