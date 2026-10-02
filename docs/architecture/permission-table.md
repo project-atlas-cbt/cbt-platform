@@ -13,21 +13,23 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | Read own resolved identity (GET /auth/me) — not an explicit 02 row.                                     | SELF           | SELF         | SELF      | SELF | SELF    | SELF    |          |
 | Manage own session (logout/refresh) — not an explicit 02 row.                                           | SELF           | SELF         | SELF      | SELF | SELF    | SELF    |          |
 | Read own effective permission set (GET /v1/me/permissions) — B2's own contract, not an explicit 02 row. | SELF           | SELF         | SELF      | SELF | SELF    | SELF    |          |
+| Enrol, view or disable own second factor (TOTP) — B20, Software Admin only; not an explicit 02 row.     | SELF           | —            | —         | —    | —       | —       |          |
 
 ## Platform / School
 
-| Action                        | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD           | TEACHER  | STUDENT | Awaiting |
-| ----------------------------- | -------------- | ------------ | --------- | ------------- | -------- | ------- | -------- |
-| View all schools              | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Create school                 | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Activate school               | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Suspend school                | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Renew subscription            | PLATFORM       | —            | —         | —             | —        | —       |          |
-| Revoke school access          | PLATFORM       | —            | —         | —             | —        | —       |          |
-| View subscription status      | PLATFORM       | SCHOOL ⚠️    | —         | —             | —        | —       |          |
-| View school metrics           | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | ASSIGNED | SELF    |          |
-| Platform audit/logs           | PLATFORM       | SCHOOL ⚠️    | SCHOOL ⚠️ | DEPARTMENT ⚠️ | SELF ⚠️  | —       |          |
-| View orphan-media report (B4) | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Action                                                                                      | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD           | TEACHER  | STUDENT | Awaiting |
+| ------------------------------------------------------------------------------------------- | -------------- | ------------ | --------- | ------------- | -------- | ------- | -------- |
+| Reset another Software Admin's second factor (lost device) — B20, reason required, audited. | PLATFORM       | —            | —         | —             | —        | —       |          |
+| View all schools                                                                            | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Create school                                                                               | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Activate school                                                                             | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Suspend school                                                                              | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Renew subscription                                                                          | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Revoke school access                                                                        | PLATFORM       | —            | —         | —             | —        | —       |          |
+| View subscription status                                                                    | PLATFORM       | SCHOOL ⚠️    | —         | —             | —        | —       |          |
+| View school metrics                                                                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | ASSIGNED | SELF    |          |
+| Platform audit/logs                                                                         | PLATFORM       | SCHOOL ⚠️    | SCHOOL ⚠️ | DEPARTMENT ⚠️ | SELF ⚠️  | —       |          |
+| View orphan-media report (B4)                                                               | PLATFORM       | —            | —         | —             | —        | —       |          |
 
 <details><summary>Notes</summary>
 

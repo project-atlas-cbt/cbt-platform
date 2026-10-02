@@ -14,7 +14,9 @@ import { useAuditLog } from '@/lib/platform/queries';
 
 interface AuditRow {
   id: string;
-  schoolId: string;
+  /** Null for a platform-level event (B20: Software Admin MFA, platform
+   * sign-in, operator commands) — no school was affected. */
+  schoolId: string | null;
   actorUserId: string;
   actorDisplayName?: string | null;
   actorRole: string;
@@ -154,14 +156,17 @@ export function AuditLogTable({
           {
             id: 'schoolId',
             header: 'School',
-            cell: (row: AuditRow) => (
-              <Link
-                href={`/admin/schools/${row.schoolId}`}
-                className="text-xs text-text-secondary hover:underline"
-              >
-                {row.schoolId.slice(0, 8)}…
-              </Link>
-            ),
+            cell: (row: AuditRow) =>
+              row.schoolId ? (
+                <Link
+                  href={`/admin/schools/${row.schoolId}`}
+                  className="text-xs text-text-secondary hover:underline"
+                >
+                  {row.schoolId.slice(0, 8)}…
+                </Link>
+              ) : (
+                <span className="text-xs text-text-secondary">Platform</span>
+              ),
           } satisfies DataTableColumn<AuditRow>,
         ]),
     ...(compact

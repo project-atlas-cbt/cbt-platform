@@ -352,7 +352,7 @@
             "description": ""
           }
         },
-        "summary": "Readiness probe — database, Redis, and object storage are reachable.",
+        "summary": "Readiness probe — database and Redis are reachable.",
         "tags": [
           "health"
         ]
@@ -472,13 +472,217 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "$ref": "#/components/schemas/PlatformLoginResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Authenticate as Software Admin (ADR-0005's distinct platform host). B20: returns mfa_required + a challenge token, and no session, when a second factor is enrolled.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/mfa/verify": {
+      "post": {
+        "operationId": "PlatformAuthController_verifyMfa",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaVerifyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
                   "$ref": "#/components/schemas/StatusResponseDto"
                 }
               }
             }
           }
         },
-        "summary": "Authenticate as Software Admin (ADR-0005's distinct platform host).",
+        "summary": "B20: complete Software Admin sign-in with a TOTP code.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/mfa/recovery": {
+      "post": {
+        "operationId": "PlatformAuthController_recoverMfa",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaRecoveryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B20: complete Software Admin sign-in with a single-use recovery code.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/mfa": {
+      "get": {
+        "operationId": "PlatformAuthController_mfaStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B20: the current Software Admin's second-factor status.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/mfa/enrol": {
+      "post": {
+        "operationId": "PlatformAuthController_startEnrolment",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaEnrolmentStartResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B20: start TOTP enrolment — returns the secret and otpauth URI.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/mfa/enrol/confirm": {
+      "post": {
+        "operationId": "PlatformAuthController_confirmEnrolment",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaEnrolmentConfirmResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B20: confirm enrolment with a first code; returns the recovery codes (shown once). Ends every other session.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/mfa/disable": {
+      "post": {
+        "operationId": "PlatformAuthController_disableMfa",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B20: remove own second factor — requires a current code.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/mfa/reset": {
+      "post": {
+        "operationId": "PlatformAuthController_resetMfa",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaResetDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "B20: clear another Software Admin's lost second factor (reason required, audited; ends their sessions).",
         "tags": [
           "platform"
         ]
@@ -9184,7 +9388,8 @@
             "type": "string"
           },
           "schoolId": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "actorUserId": {
             "type": "string"
@@ -9586,6 +9791,138 @@
         "required": [
           "email",
           "password"
+        ]
+      },
+      "PlatformLoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "mfa_required"
+            ]
+          },
+          "challengeToken": {
+            "type": "string",
+            "description": "Present only when status is mfa_required. Single-use, 5 minutes."
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "MfaVerifyDto": {
+        "type": "object",
+        "properties": {
+          "challengeToken": {
+            "type": "string"
+          },
+          "otp": {
+            "type": "string",
+            "description": "Six-digit TOTP code.",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "challengeToken",
+          "otp"
+        ]
+      },
+      "MfaRecoveryDto": {
+        "type": "object",
+        "properties": {
+          "challengeToken": {
+            "type": "string"
+          },
+          "recoveryCode": {
+            "type": "string",
+            "description": "One unused recovery code."
+          }
+        },
+        "required": [
+          "challengeToken",
+          "recoveryCode"
+        ]
+      },
+      "MfaStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "enrolled": {
+            "type": "boolean"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether the platform enforces a second factor for Software Admin."
+          },
+          "recoveryCodesRemaining": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "enrolled",
+          "required",
+          "recoveryCodesRemaining"
+        ]
+      },
+      "MfaEnrolmentStartResponseDto": {
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string",
+            "description": "Base32 secret, for manual entry."
+          },
+          "otpauthUri": {
+            "type": "string",
+            "description": "otpauth:// URI, for a QR code."
+          }
+        },
+        "required": [
+          "secret",
+          "otpauthUri"
+        ]
+      },
+      "MfaCodeDto": {
+        "type": "object",
+        "properties": {
+          "otp": {
+            "type": "string",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "otp"
+        ]
+      },
+      "MfaEnrolmentConfirmResponseDto": {
+        "type": "object",
+        "properties": {
+          "recoveryCodes": {
+            "description": "Shown exactly once — never retrievable again.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "recoveryCodes"
+        ]
+      },
+      "MfaResetDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "reason"
         ]
       },
       "PlatformMeUserDto": {

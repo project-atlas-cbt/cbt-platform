@@ -198,7 +198,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Readiness probe — database, Redis, and object storage are reachable. */
+        /** Readiness probe — database and Redis are reachable. */
         get: operations["HealthController_readiness"];
         put?: never;
         post?: never;
@@ -268,8 +268,127 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Authenticate as Software Admin (ADR-0005's distinct platform host). */
+        /** Authenticate as Software Admin (ADR-0005's distinct platform host). B20: returns mfa_required + a challenge token, and no session, when a second factor is enrolled. */
         post: operations["PlatformAuthController_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** B20: complete Software Admin sign-in with a TOTP code. */
+        post: operations["PlatformAuthController_verifyMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/mfa/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** B20: complete Software Admin sign-in with a single-use recovery code. */
+        post: operations["PlatformAuthController_recoverMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** B20: the current Software Admin's second-factor status. */
+        get: operations["PlatformAuthController_mfaStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/mfa/enrol": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** B20: start TOTP enrolment — returns the secret and otpauth URI. */
+        post: operations["PlatformAuthController_startEnrolment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/mfa/enrol/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** B20: confirm enrolment with a first code; returns the recovery codes (shown once). Ends every other session. */
+        post: operations["PlatformAuthController_confirmEnrolment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/mfa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** B20: remove own second factor — requires a current code. */
+        post: operations["PlatformAuthController_disableMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/mfa/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** B20: clear another Software Admin's lost second factor (reason required, audited; ends their sessions). */
+        post: operations["PlatformAuthController_resetMfa"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3588,7 +3707,7 @@ export interface components {
         };
         AuditEventResponseDto: {
             id: string;
-            schoolId: string;
+            schoolId: string | null;
             actorUserId: string;
             actorDisplayName?: string | null;
             actorRole: string;
@@ -3698,6 +3817,50 @@ export interface components {
             /** @description Software Admin's account email. */
             email: string;
             password: string;
+        };
+        PlatformLoginResponseDto: {
+            /** @enum {string} */
+            status: "ok" | "mfa_required";
+            /** @description Present only when status is mfa_required. Single-use, 5 minutes. */
+            challengeToken?: string;
+        };
+        MfaVerifyDto: {
+            challengeToken: string;
+            /**
+             * @description Six-digit TOTP code.
+             * @example 123456
+             */
+            otp: string;
+        };
+        MfaRecoveryDto: {
+            challengeToken: string;
+            /** @description One unused recovery code. */
+            recoveryCode: string;
+        };
+        MfaStatusResponseDto: {
+            enrolled: boolean;
+            /** @description Whether the platform enforces a second factor for Software Admin. */
+            required: boolean;
+            recoveryCodesRemaining: number;
+        };
+        MfaEnrolmentStartResponseDto: {
+            /** @description Base32 secret, for manual entry. */
+            secret: string;
+            /** @description otpauth:// URI, for a QR code. */
+            otpauthUri: string;
+        };
+        MfaCodeDto: {
+            /** @example 123456 */
+            otp: string;
+        };
+        MfaEnrolmentConfirmResponseDto: {
+            /** @description Shown exactly once — never retrievable again. */
+            recoveryCodes: string[];
+        };
+        MfaResetDto: {
+            /** Format: uuid */
+            userId: string;
+            reason: string;
         };
         PlatformMeUserDto: {
             id: string;
@@ -6145,6 +6308,159 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PlatformLoginDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformLoginResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_verifyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaVerifyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_recoverMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaRecoveryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_mfaStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_startEnrolment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolmentStartResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_confirmEnrolment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolmentConfirmResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_disableMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_resetMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaResetDto"];
             };
         };
         responses: {

@@ -8,6 +8,7 @@ import { TenancyMiddleware } from './common/tenancy.middleware.js';
 import { TenancyModule } from './common/tenancy.module.js';
 import { IdempotencyInterceptor } from './common/idempotency.interceptor.js';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
+import { UuidRouteParamPipe } from './common/uuid-route-param.pipe.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { SecurityModule } from './security/security.module.js';
 import { PlatformModule } from './modules/platform/platform.module.js';
@@ -89,6 +90,8 @@ import { ReportsModule } from './modules/reports/reports.module.js';
     // instead of 400ing; `@Type(() => Number)` never coerced a query
     // string to a number). main.ts no longer registers this separately —
     // same double-handling risk HttpExceptionFilter's own comment names.
+    // B20: route ids are UUIDs, validated globally (see the pipe's comment).
+    { provide: APP_PIPE, useClass: UuidRouteParamPipe },
     {
       provide: APP_PIPE,
       useValue: new ValidationPipe({

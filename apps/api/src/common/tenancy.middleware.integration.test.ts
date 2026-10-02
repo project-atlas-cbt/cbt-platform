@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@atlas/db';
 import { TenancyMiddleware } from './tenancy.middleware.js';
 import { TenancyContextService, type TenancyStore } from './tenancy-context.service.js';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 
@@ -34,7 +35,7 @@ describe('TenancyMiddleware (ADR-0005)', () => {
   });
 
   afterAll(async () => {
-    await prisma.school.delete({ where: { id: school.id } });
+    await ownerPrisma().school.delete({ where: { id: school.id } });
   });
 
   // Deliberately resolves with a plain SNAPSHOT of the store, captured

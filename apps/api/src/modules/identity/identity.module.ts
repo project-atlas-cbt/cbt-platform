@@ -9,6 +9,7 @@ import { AuthLockoutService } from './auth-lockout.service.js';
 import { AuthGuard } from './auth.guard.js';
 import { CredentialSheetService } from './credential-sheet.service.js';
 import { registerIdentityTemplates } from './templates.js';
+import { IdentityAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 
 /**
  * Bounded domain per 08 §5: "Identity — Users, school memberships, roles,
@@ -33,6 +34,7 @@ import { registerIdentityTemplates } from './templates.js';
     AuthLockoutService,
     AuthGuard,
     CredentialSheetService,
+    IdentityAuditActionRegistrationProvider,
   ],
   // SessionService is exported alongside AuthGuard (not otherwise part of
   // this module's public surface) because `@UseGuards(AuthGuard)` used

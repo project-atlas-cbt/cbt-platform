@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@atlas/db';
+import { createPrismaClient, type PrismaClient } from '@atlas/db';
 
 /**
  * B10: `AuditEvent` gained an unconditional append-only trigger (any
@@ -28,5 +28,13 @@ export async function safeDeleteSchools(
   schoolIds: readonly string[],
 ): Promise<void> {
   if (schoolIds.length === 0) return;
-  await prisma.school.deleteMany({ where: { id: { in: [...schoolIds] } } }).catch(() => undefined);
+  // B20: atlas_app can no longer DELETE schools (packages/db/src/
+  // privileges.ts) — teardown is an owner operation, like provisioning.
+  const ownerUrl = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
+  const owner = ownerUrl ? createPrismaClient(ownerUrl) : prisma;
+  try {
+    await owner.school.deleteMany({ where: { id: { in: [...schoolIds] } } }).catch(() => undefined);
+  } finally {
+    if (owner !== prisma) await owner.$disconnect();
+  }
 }

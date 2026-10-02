@@ -1,18 +1,13 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import type { Env } from '@atlas/config';
+import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import { ATTEMPT_MARKING_QUEUE_NAME, type AttemptMarkingJobPayload } from '@atlas/domain';
+import { injectTraceContext } from '@atlas/observability';
 
-/** A small, deliberate duplicate of `NotificationDispatchQueueService`'s own
- * identical helper — a generic "parse a redis:// URL into BullMQ connection
- * options" utility with no real shared-module boundary to cross for,
- * matching this codebase's established "convention reuse, not literal code
- * sharing" precedent. */
-function redisConnectionOptions(redisUrl: string): { host: string; port: number } {
-  const url = new URL(redisUrl);
-  return { host: url.hostname, port: Number(url.port) || 6379 };
-}
+/** B20: the hand-rolled `{ host, port }` parser this used to carry dropped
+ * the Redis password and TLS; @atlas/config now owns the one full parser. */
+const redisConnectionOptions = redisConnectionFromUrl;
 
 /**
  * B14's producer side of the marking queue — mirrors
@@ -63,12 +58,16 @@ export class AttemptMarkingQueueService implements OnModuleInit, OnApplicationSh
     if (!this.queue) {
       throw new Error('AttemptMarkingQueueService.enqueue used before onModuleInit ran.');
     }
-    await this.queue.add('mark', payload, {
-      jobId: jobId ?? `mark-${payload.attemptId}`,
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 10_000 },
-      removeOnComplete: true,
-      removeOnFail: 10,
-    });
+    await this.queue.add(
+      'mark',
+      { ...payload, trace: injectTraceContext() },
+      {
+        jobId: jobId ?? `mark-${payload.attemptId}`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 10_000 },
+        removeOnComplete: true,
+        removeOnFail: 10,
+      },
+    );
   }
 }

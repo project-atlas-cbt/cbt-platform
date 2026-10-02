@@ -90,16 +90,30 @@ export class PlatformAuditReaderService implements OnModuleDestroy {
   }
 
   private async enrichActorDisplayNames(
-    rows: readonly { schoolId: string; actorUserId: string }[],
+    rows: readonly { schoolId: string | null; actorUserId: string }[],
   ): Promise<Map<string, string>> {
     const bySchool = new Map<string, Set<string>>();
+    const platformActorIds = new Set<string>();
     for (const row of rows) {
+      // B20: a platform-level row (school_id NULL) — its actor is a
+      // Software Admin; `users` carries no RLS, no tenant scope needed.
+      if (row.schoolId === null) {
+        platformActorIds.add(row.actorUserId);
+        continue;
+      }
       const set = bySchool.get(row.schoolId) ?? new Set<string>();
       set.add(row.actorUserId);
       bySchool.set(row.schoolId, set);
     }
 
     const result = new Map<string, string>();
+    if (platformActorIds.size > 0) {
+      const admins = await prisma.user.findMany({
+        where: { id: { in: [...platformActorIds] } },
+        select: { id: true, displayName: true },
+      });
+      for (const admin of admins) result.set(admin.id, admin.displayName);
+    }
     for (const [schoolId, actorIds] of bySchool) {
       const users = await withTenant(prisma, schoolId, (tx) =>
         tx.user.findMany({

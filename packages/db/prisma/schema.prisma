@@ -278,6 +278,7 @@ model User {
   passwordResetTokens     PasswordResetToken[]
   platformRoleAssignments PlatformRoleAssignment[]
   platformSessions        PlatformSession[]
+  platformMfaCredential   PlatformMfaCredential?
   issuedActivationGrants  ActivationGrant[]
   uploadedMediaAssets     MediaAsset[]
 
@@ -500,7 +501,11 @@ model PlatformRoleAssignment {
 /// explicit bypass path @atlas/db's tenancy.ts already anticipated for B2.
 model AuditEvent {
   id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId    String   @map("school_id") @db.Uuid
+  /// Null only for platform-level events with no affected school (B20:
+  /// Software Admin MFA, platform login, operator commands). Such rows are
+  /// insert-only for atlas_app (a dedicated RLS policy) and readable only
+  /// through atlas_audit_reader.
+  schoolId    String?  @map("school_id") @db.Uuid
   actorUserId String   @map("actor_user_id") @db.Uuid
   actorRole   Role     @map("actor_role")
   /// Free-form (e.g. "BREAK_GLASS_FORCE_PASSWORD_RESET") — deliberately not
@@ -520,7 +525,11 @@ model AuditEvent {
   metadata    Json?
   occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
 
-  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  /// B20: Restrict, not Cascade — invariant 15 (audit is append-only)
+  /// means a school with audit history can never be deleted out from under
+  /// it; the immutability trigger already made a cascade fail, this makes
+  /// the schema say so.
+  school School? @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 
   @@index([schoolId])
   @@index([schoolId, occurredAt])
@@ -711,6 +720,11 @@ model PlatformSession {
   rotatedFromId String?   @unique @map("rotated_from_id") @db.Uuid
   userAgent     String?   @map("user_agent")
   ipAddress     String?   @map("ip_address") @db.VarChar(64)
+  /// B20: last authenticated request, for the platform idle timeout
+  /// (PLATFORM_SESSION_IDLE_TIMEOUT_SECONDS). Written at most once a minute
+  /// by PlatformAuthGuard, not on every request. Null on rows that predate B20
+  /// — treated as "seen at createdAt".
+  lastSeenAt    DateTime? @map("last_seen_at") @db.Timestamptz(6)
 
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   rotatedFrom PlatformSession? @relation("PlatformSessionRotation", fields: [rotatedFromId], references: [id])
@@ -718,6 +732,46 @@ model PlatformSession {
 
   @@index([userId])
   @@map("platform_sessions")
+}
+
+/// B20 (08 §16 "stronger controls" for administrative operations; project-
+/// owner decision 2026-10-02): TOTP second factor for Software Admin. A
+/// platform table like PlatformSession — no school, no RLS (see
+/// scripts/lint-schema-tenancy.mjs EXEMPT_MODELS). One credential per user;
+/// `confirmedAt` null means enrolment was started but never proved with a
+/// first code, and such a credential never gates login.
+model PlatformMfaCredential {
+  id               String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  /// AES-256-GCM ciphertext of the base32 TOTP secret (iv.tag.ciphertext,
+  /// base64url), keyed by MFA_ENCRYPTION_KEY — never the plain secret.
+  secretCiphertext String    @map("secret_ciphertext")
+  confirmedAt      DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  /// Highest TOTP time-step ever accepted — a code at or below it is
+  /// rejected, so an observed code can't be replayed inside its window.
+  lastUsedStep     Int?      @map("last_used_step")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user          User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes PlatformMfaRecoveryCode[]
+
+  @@map("platform_mfa_credentials")
+}
+
+/// B20: single-use recovery codes, issued once at enrolment confirmation.
+/// Stored as sha256 of an 80-bit random code — never recoverable.
+model PlatformMfaRecoveryCode {
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  credentialId String    @map("credential_id") @db.Uuid
+  codeHash     String    @unique @map("code_hash") @db.VarChar(64)
+  usedAt       DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  credential PlatformMfaCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@index([credentialId])
+  @@map("platform_mfa_recovery_codes")
 }
 
 // ---------------------------------------------------------------------------

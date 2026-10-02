@@ -54,5 +54,14 @@ export function isAllowedOrigin(
 
   const root = rootDomain.toLowerCase();
   const hostname = url.hostname.toLowerCase();
-  return hostname === root || hostname.endsWith(`.${root}`);
+  if (hostname === root) return true;
+  if (!hostname.endsWith(`.${root}`)) return false;
+
+  // B20 CORS lockdown: exactly one well-formed DNS label in front of the
+  // root — the shape of every real tenant (`<school>.<root>`) and the
+  // platform host (`admin.<root>`). Deeper names (`x.school.<root>`) are
+  // never provisioned (wildcard DNS/TLS covers one level, ADR-0005), so a
+  // credentialed request from one is refused rather than trusted by suffix.
+  const label = hostname.slice(0, -(root.length + 1));
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label);
 }

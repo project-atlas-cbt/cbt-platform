@@ -9,6 +9,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import { runOrphanMediaReport } from './orphan-media-report.queue.js';
 import { ORPHAN_MEDIA_REPORT_CACHE_KEY, type OrphanMediaReportSnapshot } from '@atlas/domain';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 const ownerDatabaseUrl = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
 const MINUTE_MS = 60 * 1000;
@@ -61,7 +62,7 @@ async function createAsset(params: {
 
 async function cleanupSchool(schoolId: string, uploaderId: string): Promise<void> {
   await withTenant(prisma, schoolId, (tx) => tx.mediaAsset.deleteMany({ where: { schoolId } }));
-  await prisma.school.delete({ where: { id: schoolId } });
+  await ownerPrisma().school.delete({ where: { id: schoolId } });
   await prisma.user.delete({ where: { id: uploaderId } });
 }
 

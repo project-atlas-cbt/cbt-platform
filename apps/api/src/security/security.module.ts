@@ -7,6 +7,7 @@ import type { Env } from '@atlas/config';
 import { REDIS_CLIENT } from '../redis/redis.module.js';
 import { RedisThrottlerStorage } from './redis-throttler-storage.service.js';
 import { CsrfGuard } from './csrf.guard.js';
+import { buildThrottlers } from './rate-limit.js';
 
 /**
  * B0 security/authorization scope: "Baseline security headers [helmet,
@@ -32,14 +33,19 @@ import { CsrfGuard } from './csrf.guard.js';
   imports: [
     ThrottlerModule.forRootAsync({
       inject: [REDIS_CLIENT, ConfigService],
+      // B20: per-class throttlers keyed by session (authenticated) or
+      // IP + account (sign-in) — see rate-limit.ts for why per-IP keys
+      // would throttle a whole school lab behind one NAT address.
       useFactory: (redis: Redis, config: ConfigService<Env, true>): ThrottlerModuleOptions => ({
-        throttlers: [
-          {
-            name: 'default',
-            limit: config.get('RATE_LIMIT_MAX', { infer: true }),
-            ttl: config.get('RATE_LIMIT_WINDOW_SECONDS', { infer: true }) * 1000,
-          },
-        ],
+        throttlers: buildThrottlers({
+          defaultMax: config.get('RATE_LIMIT_MAX', { infer: true }),
+          defaultWindowSeconds: config.get('RATE_LIMIT_WINDOW_SECONDS', { infer: true }),
+          answerMax: config.get('RATE_LIMIT_ANSWER_MAX', { infer: true }),
+          heavyMax: config.get('RATE_LIMIT_HEAVY_MAX', { infer: true }),
+          authIdentifierMax: config.get('RATE_LIMIT_AUTH_IDENTIFIER_MAX', { infer: true }),
+          authIpMax: config.get('RATE_LIMIT_AUTH_IP_MAX', { infer: true }),
+          signingSecret: config.get('SESSION_COOKIE_SECRET', { infer: true }),
+        }),
         storage: new RedisThrottlerStorage(redis),
       }),
     }),

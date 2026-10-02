@@ -17,6 +17,7 @@ import {
   runExamControlRefreshSweep,
   type ExamControlRefreshSweepDeps,
 } from './exam-control-refresh.queue.js';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 const ownerDatabaseUrl = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
 
@@ -139,7 +140,7 @@ async function cleanupSchool(schoolId: string): Promise<void> {
     await tx.roleAssignment.deleteMany({ where: { schoolId } });
     await tx.schoolMembership.deleteMany({ where: { schoolId } });
   });
-  await prisma.school.delete({ where: { id: schoolId } });
+  await ownerPrisma().school.delete({ where: { id: schoolId } });
   for (const { userId } of userIds) {
     await prisma.user.delete({ where: { id: userId } }).catch(() => undefined);
   }

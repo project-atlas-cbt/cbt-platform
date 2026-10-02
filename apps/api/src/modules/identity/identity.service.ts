@@ -5,6 +5,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { prisma, withTenant } from '@atlas/db';
 import type { Env } from '@atlas/config';
 import type { NotificationChannel } from '@atlas/notifications';
+import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
 import { AccessGateService } from '../platform/access-gate.service.js';
@@ -12,6 +13,21 @@ import { PasswordService } from './password.service.js';
 import { SessionService, type AuthenticatedSession } from './session.service.js';
 import { AuthLockoutService } from './auth-lockout.service.js';
 import { PASSWORD_RESET_TEMPLATE_NAME } from './templates.js';
+import { AuditService } from '../operations/audit-event.service.js';
+
+/** B20: identity audit actions (registered by
+ * IdentityAuditActionRegistrationProvider). Ids and outcomes only — the
+ * identifier typed at a failed sign-in is never recorded. */
+export const IDENTITY_AUDIT_ACTIONS = {
+  signedIn: 'USER_SIGNED_IN',
+  accountLocked: 'USER_ACCOUNT_LOCKED',
+  passwordChanged: 'USER_PASSWORD_CHANGED',
+  passwordResetCompleted: 'USER_PASSWORD_RESET_COMPLETED',
+} as const;
+
+/** Most-privileged role first — the role an identity event is attributed
+ * to when a membership holds several (Teacher + HOD, say). */
+const ROLE_PRECEDENCE: Role[] = ['SCHOOL_ADMIN', 'MODERATOR', 'HOD', 'TEACHER', 'STUDENT'];
 
 function hashToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
@@ -46,7 +62,43 @@ export class IdentityService {
     private readonly config: ConfigService<Env, true>,
     @Inject(NOTIFICATION_CHANNEL) private readonly notifications: NotificationChannel,
     private readonly accessGate: AccessGateService,
+    private readonly audit: AuditService,
   ) {}
+
+  /** The role an identity audit event is attributed to (see ROLE_PRECEDENCE). */
+  private async actorRoleFor(schoolId: string, membershipId: string): Promise<Role> {
+    const roles = await withTenant(prisma, schoolId, (tx) =>
+      tx.roleAssignment.findMany({
+        where: { schoolId, membershipId, status: 'ACTIVE' },
+        select: { role: true },
+      }),
+    );
+    const held = new Set(roles.map((r) => r.role));
+    return ROLE_PRECEDENCE.find((r) => held.has(r)) ?? 'STUDENT';
+  }
+
+  /** Sign-in/lockout auditing never blocks or fails the sign-in itself —
+   * an audit-store hiccup must not lock a lab of students out of an exam.
+   * Credential *changes* are audited in-band instead (see changePassword). */
+  private async auditBestEffort(
+    schoolId: string,
+    userId: string,
+    membershipId: string,
+    action: string,
+  ): Promise<void> {
+    try {
+      await this.audit.record({
+        schoolId,
+        actorUserId: userId,
+        actorRole: await this.actorRoleFor(schoolId, membershipId),
+        action,
+        entityType: 'SchoolMembership',
+        entityId: membershipId,
+      });
+    } catch (err) {
+      this.logger.error({ msg: 'Identity audit write failed', err, action });
+    }
+  }
 
   /**
    * Walks every branch a login attempt can take, but the DoD's enumeration-
@@ -115,7 +167,15 @@ export class IdentityService {
 
     const valid = await this.passwords.verify(user.passwordHash, password);
     if (!valid) {
-      await this.lockout.recordFailure(schoolId, identifier);
+      const { lockedNow } = await this.lockout.recordFailure(schoolId, identifier);
+      if (lockedNow) {
+        await this.auditBestEffort(
+          schoolId,
+          user.id,
+          membership.id,
+          IDENTITY_AUDIT_ACTIONS.accountLocked,
+        );
+      }
       return { kind: 'WRONG_PASSWORD' };
     }
 
@@ -159,7 +219,16 @@ export class IdentityService {
       data: { lastLoginAt: new Date() },
     });
 
-    return this.sessions.issue(res, { userId: outcome.userId, schoolId, req });
+    // Session fixation: always a fresh server-generated token (issue()),
+    // never anything the client presented.
+    const session = await this.sessions.issue(res, { userId: outcome.userId, schoolId, req });
+    await this.auditBestEffort(
+      schoolId,
+      outcome.userId,
+      outcome.membershipId,
+      IDENTITY_AUDIT_ACTIONS.signedIn,
+    );
+    return session;
   }
 
   async logout(schoolId: string, sessionId: string, res: FastifyReply): Promise<void> {
@@ -218,6 +287,7 @@ export class IdentityService {
     userId: string,
     currentPassword: string | undefined,
     newPassword: string,
+    current?: { sessionId: string; membershipId: string },
   ): Promise<void> {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
@@ -244,7 +314,21 @@ export class IdentityService {
       where: { id: userId },
       data: { passwordHash, credentialState: 'OK' },
     });
-    void schoolId; // reserved for an audit event once B10 exists
+
+    // B20 (08 §16 revocable sessions): every other session issued against
+    // the old credential ends now; the caller's own session survives.
+    const revoked = await this.sessions.revokeAllForUser(schoolId, userId, current?.sessionId);
+    if (current) {
+      await this.audit.record({
+        schoolId,
+        actorUserId: userId,
+        actorRole: await this.actorRoleFor(schoolId, current.membershipId),
+        action: IDENTITY_AUDIT_ACTIONS.passwordChanged,
+        entityType: 'SchoolMembership',
+        entityId: current.membershipId,
+        metadata: { otherSessionsRevoked: revoked },
+      });
+    }
   }
 
   /**
@@ -391,5 +475,26 @@ export class IdentityService {
         data: { usedAt: new Date() },
       });
     });
+
+    // B20: a reset is exactly the case where an attacker may hold a live
+    // session — every session for this user at this school ends now.
+    const revoked = await this.sessions.revokeAllForUser(schoolId, token.userId);
+    const membership = await withTenant(prisma, schoolId, (tx) =>
+      tx.schoolMembership.findFirst({
+        where: { schoolId, userId: token.userId },
+        select: { id: true },
+      }),
+    );
+    if (membership) {
+      await this.audit.record({
+        schoolId,
+        actorUserId: token.userId,
+        actorRole: await this.actorRoleFor(schoolId, membership.id),
+        action: IDENTITY_AUDIT_ACTIONS.passwordResetCompleted,
+        entityType: 'SchoolMembership',
+        entityId: membership.id,
+        metadata: { sessionsRevoked: revoked },
+      });
+    }
   }
 }

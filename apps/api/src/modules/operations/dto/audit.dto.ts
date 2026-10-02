@@ -67,8 +67,11 @@ export class AuditEventResponseDto {
   @ApiProperty({ type: String })
   id!: string;
 
-  @ApiProperty({ type: String })
-  schoolId!: string;
+  /** B20: null for a platform-level event (Software Admin MFA, platform
+   * sign-in, operator commands) — only ever returned by
+   * `GET /v1/platform/audit`; school-scoped reads never see such rows. */
+  @ApiProperty({ type: String, nullable: true })
+  schoolId!: string | null;
 
   @ApiProperty({ type: String })
   actorUserId!: string;

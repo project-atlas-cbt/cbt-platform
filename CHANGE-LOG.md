@@ -2,6 +2,90 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-02 — B20 Security Hardening & Compliance
+
+B20 implemented; DoD 1–12 met (roadmap section has the per-item evidence). Project-owner decisions
+taken before implementation: formalise retention (academic + audit indefinite, purge operational
+data, legal review carried to B23 — ADR-0028 amended); Software Admin **TOTP MFA** on top of session
+hardening; web-tier CSP is F20's (policy written); build an **audited redaction tool**.
+
+- **Least-privilege database** (`packages/db/src/privileges.ts`, re-applied by `grantAppRole()` on
+  every deploy): `atlas_app` has no DELETE on academic evidence, `audit_events` or `schools`, no
+  UPDATE/DELETE on append-only tables, no writes to `platform_role_assignments`, no access to
+  `_prisma_migrations`. Migration `20261002120000_b20_security_hardening`: `audit_events.school_id`
+  nullable + `ON DELETE RESTRICT` with an INSERT-only RLS policy for platform-level rows;
+  `platform_sessions.last_seen_at`; `platform_mfa_credentials` / `platform_mfa_recovery_codes`.
+  Test fixtures needing owner rights use `apps/{api,worker}/src/test-support/owner-prisma.ts`; the
+  seed creates the first Software Admin on the owner connection and no longer prints its password.
+- **Controls**: sessions revoked on password change/reset/credential reissue; Software Admin cookie
+  host-only + `SameSite=Strict`, 8h absolute / 30-min idle; TOTP MFA (`/v1/platform/auth/mfa*`,
+  two-step login, replay + attempt limits, recovery codes, peer reset, `PLATFORM_MFA_REQUIRED` gate
+  — off until F20 ships the UI); per-class rate limits keyed by session / account+IP / IP with
+  `TRUST_PROXY_HOPS`; idempotency keys scoped to school + principal; break-glass audit inside the
+  action's transaction plus an operator alert; identity audit events (`USER_SIGNED_IN`,
+  `USER_ACCOUNT_LOCKED`, `USER_PASSWORD_CHANGED`, `USER_PASSWORD_RESET_COMPLETED`); production boot
+  refuses dev secrets, non-TLS Postgres/Redis, missing `CSRF_SECRET`/`MFA_ENCRYPTION_KEY`; BullMQ
+  connections now carry Redis credentials/TLS (`redisConnectionFromUrl`); restrictive API CSP,
+  tightened CORS; global UUID route-param pipe; console email transport withholds content in
+  production; generic `/health/ready` body; validated correlation ids.
+- **Observability** — new `@atlas/observability`: redacting pino JSON logger with correlation /
+  school / user / trace ids; OpenTelemetry spans on start-attempt, answer-save(+batch), submit and
+  result generation (trace carried into the marking job); OTLP metrics; Sentry (scrubbed). **Exam
+  Health Monitor** worker job (answer-save success, submission p95, marking backlog, auth-failure
+  spike; fire/resolve once) and `OperationalAlertService` (log + Sentry + `OPS_ALERT_EMAILS`).
+  Runbook `docs/operations/exam-health-monitor.md`.
+- **Retention & data protection**: `RETENTION_SCHEDULE` (`@atlas/domain`), daily worker retention
+  sweep; `docs/compliance/{data-protection,retention-schedule,dpa-template}.md`; operator commands
+  `ops:redact-subject` and `ops:mfa-reset` (dry-run by default, audited).
+- **Security suites** (`apps/api/src/security/suites/`, `pnpm test:security`, own CI job):
+  authorization matrix (every route × every role, unauthenticated, cross-kind, cross-tenant replay),
+  tenant isolation (>1,000 IDOR probes, indistinguishable from nonexistent ids, school B unchanged),
+  sessions/CSRF, MFA, HTTP surface (headers, CORS, the 40-student lab rate-limit profile), input
+  attacks (SQLi through every free-text query param, prototype pollution on every body route,
+  malformed ids, uploads), log hygiene. Plus `tests/tenancy/db-privileges.integration.test.ts`
+  (live catalog, incl. "every `school_id` table has RLS forced").
+- **CI**: new `security` and `supply-chain` jobs (`pnpm audit:deps` prod/high+, Trivy fs + image,
+  all blocking); gitleaks now blocking (`.gitleaksignore` for two reviewed test fixtures);
+  `permissions: contents: read`; shared `scripts/ci/bootstrap-db-roles.sh`; Dependabot. Container
+  image runs as non-root.
+- **Dependencies remediated** (23 high + 3 critical → 0): fastify 5.12.5, @nestjs/platform-fastify
+  11.2.7, @fastify/static 10, image-size 2.0.4, Next.js 16.3.8, Prisma 7.10, plus overrides.
+- **Docs**: `docs/security/{threat-model,controls-evidence,web-csp-policy}.md`; ADR-0028 amendment;
+  domain plan, roadmap index, B23/F20 carry-forwards.
+- **Contract changes**: MFA routes; platform login returns `{ status: 'ok' | 'mfa_required',
+challengeToken? }`; audit `schoolId` nullable (web audit table shows "Platform"); error code
+  `MFA_ENROLMENT_REQUIRED`; non-UUID route ids now 400.
+
+**Testing.** Unit: API 196, domain 150, config 20, observability 17, notifications 11, validation 7,
+worker 1, web 906 — all green (two timeouts under full-suite load pass in isolation). Security
+suites 41/41. Integration (final run, freshly migrated database): cross-cutting 159/159; worker
+49/49; API 367/369 — the two failures are explained under "Open" below. Typecheck and lint clean
+workspace-wide. Trivy (local, CI severity settings): `pnpm-lock.yaml` 0 HIGH/CRITICAL
+vulnerabilities, `Dockerfile.node` 0 misconfigurations.
+
+**Open / honest notes.**
+
+- `question-import-export.integration.test.ts` "GET /questions/export…" fails — **pre-existing**:
+  B18 (`303f446`) removed that endpoint (exports moved to the reports module) but left the B8 test.
+- `import-1500-rows.integration.test.ts` commit phase exceeds its 90s budget locally
+  (106s, then the 120s test timeout). **Not caused by B20:** run against the same freshly migrated
+  database, the pre-B20 commit `d296eb5` also hits the 120s timeout (and so does the current tree,
+  at 118s), so it is this workstation's throughput, not a regression. The only B20 change on the
+  per-row path, the credential re-issue revoke, is skipped for never-claimed accounts anyway. B21's
+  load work should re-measure the 1,500-row budget on representative hardware.
+- `exam-control-refresh.integration.test.ts` timed out once under full-suite load; passes alone and
+  passed in the final full run. One security-suite run, concurrent with a Trivy container, lost its
+  Postgres connection mid-run (fixture error plus one 500); the suite then passed 41/41 twice in a
+  row.
+- Local dev databases accumulate test schools (sign-ins now write audit rows, and audited schools are
+  undeletable by design); CI uses a fresh database per run.
+- Trivy locally covered the lockfile and Dockerfile only (a whole-repo scan through a Windows bind
+  mount exceeded 25 minutes); the full fs scan, the image scan and secret scanning are verified by
+  the first CI run.
+- Browser validation of MFA/CSP is F20's.
+
+**Next:** B21 (F20 pairs with B20 _and_ B21, so per the pairing rule F20 follows B21).
+
 ### 2026-09-25 — Web test suites repaired: 18 deterministic failures fixed, full-suite load flakiness hardened
 
 The web suite's pre-existing failing/flaky tests were triaged and fixed (see CLAUDE.md 2026-09-25 for

@@ -1,0 +1,4 @@
+# B20: reviewed gitleaks false positives — test-only fixture strings, never real
+# credentials. Add an entry only after confirming the value is not a secret.
+8bab0a62915d89997f3a0b061e0bbaf5ce430dde:apps/api/src/modules/identity/identity.integration.test.ts:generic-api-key:296
+3fd1efe4060e2c39af328396dca0e9174f8f54cc:apps/api/src/security/csrf.guard.test.ts:generic-api-key:10

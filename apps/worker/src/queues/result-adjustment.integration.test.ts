@@ -14,6 +14,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import type { AdjustableResultValues } from '@atlas/domain';
 import { runResultAdjustment } from './result-adjustment.queue.js';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 interface Fixture {
   schoolId: string;
@@ -272,7 +273,9 @@ async function cleanupSchool(schoolId: string): Promise<void> {
   await prisma.user
     .deleteMany({ where: { id: { in: userIds.map((u) => u.userId) } } })
     .catch(() => undefined);
-  await prisma.school.deleteMany({ where: { id: schoolId } }).catch(() => undefined);
+  await ownerPrisma()
+    .school.deleteMany({ where: { id: schoolId } })
+    .catch(() => undefined);
 }
 
 describe('B15 result adjustment worker (ADR-0025)', () => {

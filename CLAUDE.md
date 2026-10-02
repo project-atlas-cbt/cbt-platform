@@ -214,13 +214,16 @@ screens against them). Why these two, and which skills were considered and rejec
 - [x] Roadmap cross-reference/index
 - [x] Architecture decision records (33 of 33)
 - [x] Repository engineering foundation (`B0`)
+- [x] Security hardening & compliance (`B20`)
 - [ ] Product implementation
 
 ### Current Phase
 
-Backend `B0`–`B19` and frontend `F0`–`F19` are implemented, plus the 2026-09-23..25 gap
+Backend `B0`–`B20` and frontend `F0`–`F19` are implemented, plus the 2026-09-23..25 gap
 closures (teacher bulk submit-for-review, School Admin Questions oversight, F12 live attempt table,
-F3 School Detail Usage/Users/Exams tabs, web test-suite repair — 906/906 green). Each phase's DoD
+F3 School Detail Usage/Users/Exams tabs, web test-suite repair — 906/906 green). B20 (security
+hardening & compliance, 2026-10-02) is next to be followed by **B21**, then F20 (which pairs with
+both). Each phase's DoD
 outcome, honestly-partial items and design reasoning are in its dated `CHANGE-LOG.md` entry and its
 roadmap section; read those before resuming related work.
 
@@ -230,6 +233,12 @@ Open items carried forward:
   has no configured browser harness.
 - `F12` operational alerts (DoD item 10) are deferred: no per-student liveness signal exists.
 - Excused absence is intentionally deferred (`F16`).
+- From B20 → F20: web CSP (`docs/security/web-csp-policy.md`), Software Admin MFA UI, then
+  `PLATFORM_MFA_REQUIRED=true`. From B20 → B23: legal review of retention/DPA (ADR-0028 amendment),
+  encryption-at-rest verification, production secrets (`CSRF_SECRET`, `MFA_ENCRYPTION_KEY`).
+- Known failing integration tests: the B8 `GET /questions/export` test (endpoint removed in B18,
+  test left behind) and the 1,500-row import timing budget (fails identically on pre-B20 code
+  locally — workstation throughput; B21 to re-measure) — see the B20 `CHANGE-LOG.md` entry.
 
 Engineering facts every session needs:
 
@@ -241,6 +250,13 @@ Engineering facts every session needs:
   RLS-protected tables stay reachable only through their tenant policy.
 - `login_identifier` lives on `SchoolMembership`, not `User` (ADR-0005 per-school uniqueness).
 - Long-running worker sweeps use an explicit 120-second renewable BullMQ lock.
+- B20 least privilege: `atlas_app` cannot DELETE academic evidence, audit or schools, nor write
+  `platform_role_assignments` (`packages/db/src/privileges.ts`). Tests needing those use the owner
+  connection (`test-support/owner-prisma.ts`); never widen the grants to make a test pass.
+- Every route is in the security suites automatically (`pnpm test:security`, route inventory from
+  Nest metadata) — a new route must pass tenant isolation and privilege escalation on its first run.
+- Logging goes through `@atlas/observability` (redacting pino); never log request bodies, answers,
+  tokens or PII. Route params named `id`/`…Id` must be UUIDs (global pipe).
 
 ---
 
@@ -374,7 +390,7 @@ Full outcomes: `docs/decisions/README.md`. The decisions that most change how th
 
 ### Conditional decisions to carry forward
 
-- **ADR-0028** — retention schedule is provisional; legal review is a gating item in `B20`.
+- **ADR-0028** — retention schedule formalised in `B20` (2026-10-02 amendment); legal review carried to `B23` as a launch-readiness item.
 - **ADR-0032** — `eu-west-1` chosen on reasoning; RTT must be measured from real Nigerian networks in `B21` and may trigger an amendment before `B23`.
 
 ### Deferred / intentionally not part of the immediate implementation

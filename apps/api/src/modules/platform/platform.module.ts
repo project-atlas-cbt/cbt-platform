@@ -9,6 +9,7 @@ import { MediaModule } from '../media/media.module.js';
 import { AcademicsModule } from '../academics/academics.module.js';
 import { PlatformSessionService } from './platform-session.service.js';
 import { PlatformAuthGuard } from './platform-auth.guard.js';
+import { PlatformMfaService } from './mfa/platform-mfa.service.js';
 import { PlatformAuthService } from './platform-auth.service.js';
 import { PlatformAuthController } from './platform-auth.controller.js';
 import { SchoolsAdminService } from './schools-admin.service.js';
@@ -88,6 +89,7 @@ import { ReportsModule } from '../reports/reports.module.js';
   providers: [
     PlatformSessionService,
     PlatformAuthGuard,
+    PlatformMfaService,
     PlatformAuthService,
     SchoolsAdminService,
     PlatformMetricsService,

@@ -3208,7 +3208,8 @@ Bring the frontend to production standard: accessibility, performance on real la
 - Bundle optimisation, with the exam route kept deliberately small.
 - Service-worker precaching strategy finalised (`09 §10`).
 - Constrained-network testing: high latency, packet loss, the 40-client lab burst (`R-09`).
-- CSP and security headers with B20.
+- CSP and security headers with B20. **B20 (2026-10-02) defined the policy — implement `docs/security/web-csp-policy.md`.**
+- **Carried from B20:** Software Admin MFA UI — enrolment (`POST /v1/platform/auth/mfa/enrol`, `/enrol/confirm` → recovery codes shown once), the two-step sign-in (`/v1/platform/auth/login` may return `mfa_required` + `challengeToken`; then `/mfa/verify` or `/mfa/recovery`), status/disable/peer reset — then set `PLATFORM_MFA_REQUIRED=true`. The admin audit table already renders platform-level rows (`schoolId: null`) as "Platform".
 - Client-side error tracking via Sentry (`09 §35`).
 - **Pre-flight compatibility check on the assessment preview** so an unsupported machine is detected before a student starts (`R-10`).
 

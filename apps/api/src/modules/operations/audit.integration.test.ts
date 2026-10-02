@@ -15,6 +15,10 @@ import { createPrismaClient, prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
+import {
+  grantSoftwareAdmin,
+  revokeSoftwareAdminFixtures,
+} from '../../test-support/owner-prisma.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -88,11 +92,31 @@ async function post(ctx: RequestCtx, url: string, payload?: Record<string, unkno
 }
 
 async function get(ctx: RequestCtx, url: string) {
-  return app.inject({
+  const res = await app.inject({
     method: 'GET',
     url,
     headers: { host: ctx.host, cookie: cookieHeader(ctx) },
     remoteAddress: ctx.remoteAddress,
+  });
+  if (!url.startsWith('/audit')) return res;
+  // B20: every sign-in now writes a USER_SIGNED_IN audit row, so the
+  // actor's own login to make this request appears in their trail. These
+  // tests are about which *seeded* events each role's scope admits — the
+  // sign-in rows are filtered out of the view rather than every expected
+  // count being bumped by the incidental login. (Sign-in auditing itself is
+  // asserted in the B20 security suite.)
+  const json = res.json.bind(res);
+  return Object.assign(res, {
+    json: <T>(): T => {
+      const body = json<{ items?: { action: string }[]; total?: number }>();
+      if (!Array.isArray(body.items)) return body as T;
+      const items = body.items.filter((i) => i.action !== 'USER_SIGNED_IN');
+      return {
+        ...body,
+        items,
+        total: (body.total ?? 0) - (body.items.length - items.length),
+      } as T;
+    },
   });
 }
 
@@ -130,9 +154,7 @@ afterAll(async () => {
   await prisma.platformSession
     .deleteMany({ where: { userId: { in: createdPlatformUserIds } } })
     .catch(() => undefined);
-  await prisma.platformRoleAssignment
-    .deleteMany({ where: { userId: { in: createdPlatformUserIds } } })
-    .catch(() => undefined);
+  await revokeSoftwareAdminFixtures(createdPlatformUserIds);
   await prisma.user
     .deleteMany({ where: { id: { in: createdPlatformUserIds } } })
     .catch(() => undefined);
@@ -199,9 +221,10 @@ async function seedPlatformAdmin(): Promise<{ email: string; password: string }>
       passwordHash,
       status: 'ACTIVE',
       credentialState: 'OK',
-      platformRoleAssignments: { create: { role: 'SOFTWARE_ADMIN' } },
     },
   });
+  // B20: platform authority is owner-provisioned; atlas_app can't write it.
+  await grantSoftwareAdmin(user.id);
   createdPlatformUserIds.push(user.id);
   return { email, password };
 }

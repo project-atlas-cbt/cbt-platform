@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
 import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
+import { enrichLogContext } from '@atlas/observability';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
 import { AccessGateService } from '../platform/access-gate.service.js';
@@ -138,6 +139,7 @@ export class AuthGuard implements CanActivate {
       sessionId: session.sessionId,
       roles: roleAssignments.map((r) => r.role),
     };
+    enrichLogContext({ userId: user.id });
     return true;
   }
 }

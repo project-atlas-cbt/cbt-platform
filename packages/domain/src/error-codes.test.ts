@@ -18,6 +18,11 @@ describe('BASE_ERROR_CODES (ADR-0033)', () => {
     expect(isKnownBaseErrorCode('ATTEMPT_EXPIRED')).toBe(false);
   });
 
+  it('MFA_ENROLMENT_REQUIRED (B20) is a non-retryable 403', () => {
+    expect(BASE_ERROR_CODES.MFA_ENROLMENT_REQUIRED.httpStatus).toBe(403);
+    expect(BASE_ERROR_CODES.MFA_ENROLMENT_REQUIRED.retryable).toBe(false);
+  });
+
   it('PASSWORD_CHANGE_REQUIRED (B1) is a non-retryable 403, distinct from FORBIDDEN', () => {
     expect(BASE_ERROR_CODES.PASSWORD_CHANGE_REQUIRED.httpStatus).toBe(403);
     expect(BASE_ERROR_CODES.PASSWORD_CHANGE_REQUIRED.retryable).toBe(false);

@@ -23,6 +23,7 @@ import { Authorized } from '../authorization/decorators.js';
 import type { AuthenticatedUser } from '../identity/auth.guard.js';
 import { CreateExportDto, ExportJobResponseDto } from './dto/export.dto.js';
 import { ExportService } from './export.service.js';
+import { RateLimitClass } from '../../security/rate-limit.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
@@ -34,6 +35,7 @@ export class ReportsController {
   constructor(private readonly exports: ExportService) {}
 
   @Post('exports')
+  @RateLimitClass('heavy')
   @HttpCode(HttpStatus.ACCEPTED)
   @Authorized('reporting.exportSchoolData')
   @ApiOperation({ summary: 'Queue a school-scoped CSV export.' })

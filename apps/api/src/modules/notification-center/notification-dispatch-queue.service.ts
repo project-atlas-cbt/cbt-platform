@@ -1,23 +1,15 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import type { Env } from '@atlas/config';
+import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
   type NotificationDispatchJobPayload,
 } from '@atlas/notifications';
 
-/** A small, deliberate duplicate of `ImportQueueService`'s own identical
- * helper (`imports/import-queue.service.ts`) — a generic "parse a redis://
- * URL into BullMQ connection options" utility with no real shared-module
- * boundary to cross for, matching this codebase's established "convention
- * reuse, not literal code sharing" precedent (e.g. apps/worker's own
- * duplicated notification-template content) rather than an odd dependency
- * from this module onto ImportsModule for unrelated plumbing. */
-function redisConnectionOptions(redisUrl: string): { host: string; port: number } {
-  const url = new URL(redisUrl);
-  return { host: url.hostname, port: Number(url.port) || 6379 };
-}
+/** B20: the hand-rolled `{ host, port }` parser this used to carry dropped
+ * the Redis password and TLS; @atlas/config now owns the one full parser. */
+const redisConnectionOptions = redisConnectionFromUrl;
 
 /**
  * B10's retry mechanism for out-of-band (email) notification dispatch —

@@ -13,7 +13,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Module } from '@nestjs/common';
 import { Queue, QueueEvents, Worker } from 'bullmq';
-import { loadEnv, loadRootEnv } from '@atlas/config';
+import { loadEnv, loadRootEnv, redisConnectionFromUrl } from '@atlas/config';
 import { createPrismaClient } from '@atlas/db';
 
 loadRootEnv();
@@ -80,7 +80,7 @@ async function main() {
 
   // 3. BullMQ + Redis: enqueue and process one job end to end.
   const redisUrl = new URL(env.REDIS_URL);
-  const connection = { host: redisUrl.hostname, port: Number(redisUrl.port) || 6379 };
+  const connection = redisConnectionFromUrl(redisUrl.toString());
   const queueName = `atlas-spike-${randomUUID().slice(0, 8)}`;
 
   await step('BullMQ + Redis: enqueue → process → complete', async () => {

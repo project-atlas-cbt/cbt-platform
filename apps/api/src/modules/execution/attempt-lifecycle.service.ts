@@ -30,6 +30,8 @@ import { toStudentAttemptQuestions } from './attempt-snapshot-projection.mapper.
 import { buildSnapshotDocument } from './attempt-snapshot-builder.js';
 import type { SnapshotSourceQuestion } from './attempt-snapshot.types.js';
 import type { AttemptPackageResponseDto, AttemptStateResponseDto } from './dto/attempt.dto.js';
+import { CRITICAL_SPANS, withSpan } from '@atlas/observability';
+import { ExamTelemetryService } from './exam-telemetry.service.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -101,7 +103,69 @@ export class AttemptLifecycleService {
     private readonly storage: ObjectStorageService,
     private readonly finalization: AttemptFinalizationService,
     private readonly marking: AttemptMarkingQueueService,
+    private readonly telemetry: ExamTelemetryService,
   ) {}
+
+  // ---- B20 critical-flow instrumentation (08 §18 tracing; 09 §36) -------
+  // Thin wrappers: the span and the metrics surround the unchanged
+  // transactional bodies below (startInner/submitInner/endInner), so the
+  // instrumentation can never alter what those transactions do. Span
+  // attributes are ids only — never names or answer content.
+
+  async start(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examId: string,
+    requestCtx: AttemptRequestContext,
+    auditCtx: ActorContext,
+  ): Promise<AttemptPackageResponseDto> {
+    return withSpan(
+      CRITICAL_SPANS.attemptStart,
+      { 'atlas.school_id': schoolId, 'atlas.exam_id': examId },
+      async (span) => {
+        const pkg = await this.startInner(schoolId, actor, examId, requestCtx, auditCtx);
+        span.setAttribute('atlas.attempt_id', pkg.attemptId);
+        this.telemetry.attemptStarted();
+        return pkg;
+      },
+    );
+  }
+
+  async submit(
+    ...args: Parameters<AttemptLifecycleService['submitInner']>
+  ): ReturnType<AttemptLifecycleService['submitInner']> {
+    const [schoolId, , attemptId] = args;
+    const began = performance.now();
+    return withSpan(
+      CRITICAL_SPANS.attemptSubmit,
+      { 'atlas.school_id': schoolId, 'atlas.attempt_id': attemptId, 'atlas.submit_kind': 'manual' },
+      async () => {
+        const result = await this.submitInner(...args);
+        this.telemetry.submission('manual', performance.now() - began);
+        return result;
+      },
+    );
+  }
+
+  async end(
+    ...args: Parameters<AttemptLifecycleService['endInner']>
+  ): ReturnType<AttemptLifecycleService['endInner']> {
+    const [schoolId, , attemptId] = args;
+    const began = performance.now();
+    return withSpan(
+      CRITICAL_SPANS.attemptSubmit,
+      {
+        'atlas.school_id': schoolId,
+        'atlas.attempt_id': attemptId,
+        'atlas.submit_kind': 'staff_end',
+      },
+      async () => {
+        const result = await this.endInner(...args);
+        this.telemetry.submission('staff_end', performance.now() - began);
+        return result;
+      },
+    );
+  }
 
   /**
    * DoD items 1–5, 11, 13, 14, 17: validate-under-lock, create, snapshot —
@@ -115,7 +179,7 @@ export class AttemptLifecycleService {
    * `exam_attempts_active_unique` partial index (migration SQL) is the
    * final database-level backstop (DoD item 2).
    */
-  async start(
+  private async startInner(
     schoolId: string,
     actor: AuthorizedActor,
     examId: string,
@@ -450,7 +514,7 @@ export class AttemptLifecycleService {
    * ATTEMPT_WRITE_WINDOW_CLOSED` B13 left here (which pre-dated any
    * mechanism that could actually resolve the underlying condition).
    */
-  async submit(
+  private async submitInner(
     schoolId: string,
     actor: AuthorizedActor,
     attemptId: string,
@@ -531,7 +595,7 @@ export class AttemptLifecycleService {
    * .endAttempt`. Transitions to `SUBMITTED` (07 §16 names no distinct
    * "ended by staff" terminal state) — distinguished from a student's own
    * submission only by its own `ATTEMPT_ENDED_BY_STAFF` audit action. */
-  async end(
+  private async endInner(
     schoolId: string,
     actor: AuthorizedActor,
     attemptId: string,

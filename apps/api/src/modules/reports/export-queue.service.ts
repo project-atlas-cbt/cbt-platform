@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import type { Env } from '@atlas/config';
+import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import { EXPORT_EXPIRY_QUEUE_NAME, EXPORT_QUEUE_NAME, type ExportJobPayload } from '@atlas/domain';
 
 @Injectable()
@@ -14,10 +14,10 @@ export class ExportQueueService implements OnModuleInit, OnApplicationShutdown {
   onModuleInit(): void {
     const redis = new URL(this.config.get('REDIS_URL', { infer: true }));
     this.queue = new Queue<ExportJobPayload>(EXPORT_QUEUE_NAME, {
-      connection: { host: redis.hostname, port: Number(redis.port) || 6379 },
+      connection: redisConnectionFromUrl(redis.toString()),
     });
     this.expiryQueue = new Queue<ExportJobPayload>(EXPORT_EXPIRY_QUEUE_NAME, {
-      connection: { host: redis.hostname, port: Number(redis.port) || 6379 },
+      connection: redisConnectionFromUrl(redis.toString()),
     });
     this.queue.on('error', (error: Error) => this.logger.error(error.message, error.stack));
   }

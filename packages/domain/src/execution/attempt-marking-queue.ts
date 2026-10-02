@@ -24,4 +24,8 @@ export const ATTEMPT_MARKING_QUEUE_NAME = 'atlas-attempt-marking';
 export interface AttemptMarkingJobPayload {
   schoolId: string;
   attemptId: string;
+  /** B20: W3C trace-context carrier from the enqueuing request (submit),
+   * so the worker's result-generation span joins the same trace. Optional —
+   * jobs enqueued before B20, or by the sweeper outside any span, carry none. */
+  trace?: Record<string, string>;
 }

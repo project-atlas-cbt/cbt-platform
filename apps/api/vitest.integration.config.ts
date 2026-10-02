@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.integration.test.ts'],
+    // B20: the security suites have their own config/job (test:security).
+    exclude: ['**/node_modules/**', 'src/**/*.security.integration.test.ts'],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     fileParallelism: false,

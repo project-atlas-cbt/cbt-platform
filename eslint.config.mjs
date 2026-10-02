@@ -35,6 +35,7 @@ export default tseslint.config(
           allowDefaultProject: [
             'apps/*/vitest.config.ts',
             'apps/*/vitest.integration.config.ts',
+            'apps/*/vitest.security.config.ts',
             'packages/*/vitest.config.ts',
             'packages/*/prisma.config.ts',
             'packages/*/prisma/seed.ts',

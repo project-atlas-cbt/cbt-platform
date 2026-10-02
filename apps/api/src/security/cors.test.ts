@@ -34,6 +34,12 @@ describe('isAllowedOrigin (ADR-0022)', () => {
     expect(isAllowedOrigin('https://notatlas.app', WEB_ORIGIN, ROOT)).toBe(false);
   });
 
+  it('B20: rejects nested subdomains and malformed labels under the root', () => {
+    expect(isAllowedOrigin('https://evil.greenfield.atlas.app', WEB_ORIGIN, ROOT)).toBe(false);
+    expect(isAllowedOrigin('https://-bad.atlas.app', WEB_ORIGIN, ROOT)).toBe(false);
+    expect(isAllowedOrigin('https://under_score.atlas.app', WEB_ORIGIN, ROOT)).toBe(false);
+  });
+
   it('rejects a malformed origin rather than throwing', () => {
     expect(isAllowedOrigin('not-a-url', WEB_ORIGIN, ROOT)).toBe(false);
   });

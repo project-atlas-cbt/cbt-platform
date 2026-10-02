@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import { runUnassignedStudentsDigest } from './unassigned-students-digest.queue.js';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 const ownerDatabaseUrl = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
 
@@ -132,7 +133,7 @@ async function cleanupSchool(schoolId: string): Promise<void> {
     await tx.classGroup.deleteMany({ where: { schoolId } });
     await tx.academicSession.deleteMany({ where: { schoolId } });
   });
-  await prisma.school.delete({ where: { id: schoolId } });
+  await ownerPrisma().school.delete({ where: { id: schoolId } });
   for (const { userId } of userIds) {
     await prisma.user.delete({ where: { id: userId } }).catch(() => undefined);
   }

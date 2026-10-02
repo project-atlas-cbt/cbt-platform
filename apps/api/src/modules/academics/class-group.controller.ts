@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ParseUUIDPipe,
   Get,
   HttpCode,
   HttpStatus,
@@ -41,7 +42,7 @@ export class ClassGroupController {
   @ApiOkResponse({ type: ClassGroupListResponseDto })
   async list(
     @Req() req: FastifyRequest,
-    @Query('academicSessionId') academicSessionId?: string,
+    @Query('academicSessionId', new ParseUUIDPipe({ optional: true })) academicSessionId?: string,
   ): Promise<ClassGroupListResponseDto> {
     const classes = await this.classes.list(currentUser(req).schoolId, academicSessionId);
     return { classes };

@@ -9,6 +9,8 @@ import type { Env } from '@atlas/config';
 
 export const PLATFORM_SESSION_COOKIE_NAME = 'atlas_platform_session';
 
+const LAST_SEEN_WRITE_INTERVAL_MS = 60_000;
+
 export interface AuthenticatedPlatformSession {
   sessionId: string;
   userId: string;
@@ -40,7 +42,10 @@ export class PlatformSessionService {
   ): Promise<AuthenticatedPlatformSession> {
     const rawToken = randomBytes(32).toString('base64url');
     const tokenHash = hashToken(rawToken);
-    const ttlSeconds = this.config.get('SESSION_TTL_SECONDS', { infer: true });
+    // B20: Software Admin sessions get their own, much shorter absolute
+    // lifetime (default 8h vs a school session's 7 days) — 08 §16's
+    // "stronger controls" for administrative operations.
+    const ttlSeconds = this.config.get('PLATFORM_SESSION_TTL_SECONDS', { infer: true });
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
     const userAgent = params.req?.headers['user-agent']?.toString().slice(0, 512);
@@ -51,6 +56,7 @@ export class PlatformSessionService {
         userId: params.userId,
         tokenHash,
         expiresAt,
+        lastSeenAt: new Date(),
         ...(params.rotatedFromId !== undefined ? { rotatedFromId: params.rotatedFromId } : {}),
         ...(userAgent !== undefined ? { userAgent } : {}),
         ...(ipAddress !== undefined ? { ipAddress } : {}),
@@ -76,9 +82,40 @@ export class PlatformSessionService {
 
     const tokenHash = hashToken(unsigned);
     const session = await prisma.platformSession.findUnique({ where: { tokenHash } });
-    if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
+    const now = new Date();
+    if (!session || session.revokedAt || session.expiresAt < now) return null;
+
+    // B20 idle timeout: an unattended admin browser stops being a live
+    // credential after PLATFORM_SESSION_IDLE_TIMEOUT_SECONDS of inactivity.
+    const idleMs = this.config.get('PLATFORM_SESSION_IDLE_TIMEOUT_SECONDS', { infer: true }) * 1000;
+    const lastSeen = session.lastSeenAt ?? session.createdAt;
+    if (now.getTime() - lastSeen.getTime() > idleMs) {
+      await this.revoke(session.id);
+      return null;
+    }
+    // Touch at most once a minute — not a write per request.
+    if (now.getTime() - lastSeen.getTime() > LAST_SEEN_WRITE_INTERVAL_MS) {
+      await prisma.platformSession.update({
+        where: { id: session.id },
+        data: { lastSeenAt: now },
+      });
+    }
 
     return { sessionId: session.id, userId: session.userId };
+  }
+
+  /** B20: ends every live session a Software Admin holds (MFA enrolment,
+   * disable or reset), optionally keeping the caller's own. */
+  async revokeAllForUser(userId: string, exceptSessionId?: string): Promise<number> {
+    const { count } = await prisma.platformSession.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+        ...(exceptSessionId !== undefined && { id: { not: exceptSessionId } }),
+      },
+      data: { revokedAt: new Date() },
+    });
+    return count;
   }
 
   async revoke(sessionId: string): Promise<void> {
@@ -89,7 +126,6 @@ export class PlatformSessionService {
   }
 
   clearCookie(res: FastifyReply): void {
-    const cookieDomain = this.config.get('COOKIE_DOMAIN', { infer: true });
     res.header(
       'set-cookie',
       stringifySetCookie({
@@ -97,7 +133,6 @@ export class PlatformSessionService {
         value: '',
         maxAge: 0,
         path: '/',
-        ...(cookieDomain ? { domain: cookieDomain } : {}),
       }),
     );
   }
@@ -105,19 +140,24 @@ export class PlatformSessionService {
   private setCookie(res: FastifyReply, rawToken: string, expiresAt: Date): void {
     const signingSecret = this.config.get('SESSION_COOKIE_SECRET', { infer: true });
     const isProduction = this.config.get('NODE_ENV', { infer: true }) === 'production';
-    const cookieDomain = this.config.get('COOKIE_DOMAIN', { infer: true });
 
+    // B20: host-only — deliberately no Domain attribute. The school session
+    // cookie is Domain=<root> by ADR-0022 so every school subdomain's web
+    // origin can reach the API; the Software Admin credential has no such
+    // need, and a parent-domain cookie would be sent to (and exposed to any
+    // compromise of) every school subdomain. Only the API host that issued
+    // it ever receives it. `strict`: the platform console is never entered
+    // via a cross-site link that needs the session on arrival.
     res.header(
       'set-cookie',
       stringifySetCookie({
         name: PLATFORM_SESSION_COOKIE_NAME,
         value: sign(rawToken, signingSecret),
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'strict',
         secure: isProduction,
         path: '/',
         expires: expiresAt,
-        ...(cookieDomain ? { domain: cookieDomain } : {}),
       }),
     );
   }

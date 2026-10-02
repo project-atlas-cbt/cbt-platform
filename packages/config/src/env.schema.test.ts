@@ -76,3 +76,49 @@ describe('loadEnv', () => {
     }
   });
 });
+
+describe('loadEnv — B20 production hardening', () => {
+  const strong = (seed: string) => `${seed}`.repeat(40).slice(0, 48);
+  const productionEnv = {
+    ...validEnv,
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgresql://user:pass@db:5432/db?sslmode=require',
+    DATABASE_APP_URL: 'postgresql://app_user:pass@db:5432/db?sslmode=verify-full',
+    DATABASE_AUDIT_READER_URL: 'postgresql://audit_reader:pass@db:5432/db?sslmode=require',
+    REDIS_URL: 'rediss://cache:6380',
+    SESSION_COOKIE_SECRET: strong('a8Fq'),
+    CSRF_SECRET: strong('Zp3x'),
+    MFA_ENCRYPTION_KEY: strong('Kq7m'),
+    COOKIE_DOMAIN: 'school.example.ng',
+  };
+
+  it('accepts a hardened production environment', () => {
+    expect(loadEnv(productionEnv).PLATFORM_MFA_REQUIRED).toBe(false);
+  });
+
+  it.each([
+    ['SESSION_COOKIE_SECRET', 'dev-only-change-me-dev-only-change-me'],
+    ['CSRF_SECRET', undefined],
+    ['MFA_ENCRYPTION_KEY', undefined],
+    ['DATABASE_APP_URL', 'postgresql://app_user:pass@db:5432/db'],
+    ['REDIS_URL', 'redis://cache:6379'],
+    ['COOKIE_DOMAIN', undefined],
+  ] as Array<[string, string | undefined]>)(
+    'rejects production with an unsafe %s',
+    (key, value) => {
+      const env: Record<string, string | undefined> = { ...productionEnv, [key]: value };
+      if (value === undefined) delete env[key];
+      expect(() => loadEnv(env)).toThrow(EnvValidationError);
+    },
+  );
+
+  it('rejects a CSRF secret equal to the session secret in production', () => {
+    expect(() =>
+      loadEnv({ ...productionEnv, CSRF_SECRET: productionEnv.SESSION_COOKIE_SECRET }),
+    ).toThrow(EnvValidationError);
+  });
+
+  it('applies none of the production rules outside production', () => {
+    expect(() => loadEnv({ ...validEnv, REDIS_URL: 'redis://localhost:6379' })).not.toThrow();
+  });
+});

@@ -1,3 +1,4 @@
+import { ownerPrisma } from './owner-prisma.js';
 import type { PrismaClient } from '@atlas/db';
 
 /**
@@ -33,5 +34,11 @@ export async function safeDeleteSchools(
   schoolIds: readonly string[],
 ): Promise<void> {
   if (schoolIds.length === 0) return;
-  await prisma.school.deleteMany({ where: { id: { in: [...schoolIds] } } }).catch(() => undefined);
+  // B20: atlas_app can no longer DELETE schools (packages/db/src/
+  // privileges.ts) — teardown is an owner operation, like provisioning.
+  // `prisma` stays in the signature so every existing call site is unchanged.
+  void prisma;
+  await ownerPrisma()
+    .school.deleteMany({ where: { id: { in: [...schoolIds] } } })
+    .catch(() => undefined);
 }

@@ -1645,6 +1645,9 @@ describe.skipIf(!ownerDatabaseUrl || !appDatabaseUrl)(
           data: {
             schoolId: school.id,
             examId: exam.id,
+            // Required since B16 made participation session-scoped; this
+            // fixture predated it (found when B20 ran the full typecheck).
+            examSessionId: examSession.id,
             studentProfileId: studentProfile.id,
             status: 'ABSENT',
             markedByMembershipId: membership.id,
