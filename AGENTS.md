@@ -181,7 +181,7 @@ When implementation changes product behaviour, architecture, business rules, or 
 
 1. Update the appropriate specification or ADR.
 2. Update the roadmap if scope/state changed.
-3. Update `CLAUDE.md`.
+3. Add a dated entry to `CHANGE-LOG.md`, and refresh `CLAUDE.md`'s status summary if the current phase changed.
 
 Do not allow implementation to silently diverge from documentation.
 
@@ -189,20 +189,10 @@ Do not allow implementation to silently diverge from documentation.
 
 ## 12. CLAUDE.md Maintenance
 
-After meaningful work:
-
-Update `CLAUDE.md` with:
-
-- Completed work
-- Current phase/status
-- Important decisions
-- Deferred work
-- Relevant blockers
-- Significant changes to project state
-
-Do not turn `CLAUDE.md` into a dump of implementation details.
-
-Keep it concise enough for an agent to read at the beginning of a session.
+`CLAUDE.md` loads at the start of every session, so it holds durable context — product rules,
+architecture decisions, the current phase, open items and blockers — not a history of how each
+phase was built. Record completed work, implementation detail and test results as a dated entry in
+`CHANGE-LOG.md`, and keep `CLAUDE.md`'s status summary to a few lines that point there.
 
 ---
 
@@ -335,8 +325,6 @@ This is a default, not an absolute rule:
   without recording why.
 - `F0` (design system) and `F13` (offline exam engine) have no backend dependency and may proceed
   independently at any time, per the roadmap's own note.
-- Applies going forward from `B1`/`F1` onward; it does not retroactively require pausing to build
-  frontend for phases already completed before this instruction, only going forward.
 
 ---
 

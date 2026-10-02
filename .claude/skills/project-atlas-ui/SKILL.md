@@ -117,7 +117,7 @@ separate, minimal runtime. Rules:
   defect under exam time pressure.
 - **No social/marketing UI of any kind** — no "upgrade," no promotional banner, no unrelated links.
 - **Connection status is always visible, and is the most important non-answer element on screen**
-  (`04 §57`). It communicates local-vs-server truth (§9 below), never implies the client is the
+  (`04 §57`). It communicates local-vs-server truth (§12 below), never implies the client is the
   authority on time, eligibility, or submission.
 - **The question navigator states are exactly**: unanswered, answered, current (`04 §56`) — do not
   invent a fourth visual state without a corresponding product state to back it.
@@ -246,7 +246,7 @@ retrofit.
 
 **Accessibility.** See §11.
 
-**Motion.** See §12.
+**Motion.** See §13.
 
 ---
 
@@ -366,7 +366,7 @@ Non-negotiable, enforced on every screen:
   announced to assistive tech.
 - Tables use real table semantics (headers associated with cells) — critical for the large
   student/result tables this product is full of.
-- Respect `prefers-reduced-motion` everywhere motion is used (§12).
+- Respect `prefers-reduced-motion` everywhere motion is used (§13).
 - Status communicated to screen readers, not just by color — a badge's meaning must not depend on
   color perception alone (icon or text label alongside color).
 - Charts/analytics (HOD department analytics, teacher question analytics) need a non-visual
