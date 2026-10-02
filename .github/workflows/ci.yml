@@ -33,13 +33,13 @@ jobs:
       # Nothing here ever opens a connection.
       DATABASE_APP_URL: 'postgresql://atlas_app:atlas_app_ci_password@localhost:5432/atlas_ci?schema=public'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -123,7 +123,7 @@ jobs:
       S3_SECRET_ACCESS_KEY: 'atlas_minio_dev_password'
       S3_REGION: 'us-east-1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # MinIO (S3-compatible) storage for OpenAPI generation (AppModule's
       # ObjectStorageService self-provisions the bucket on boot).
@@ -144,11 +144,11 @@ jobs:
             curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
           done
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -251,7 +251,7 @@ jobs:
       # that file's comment), scoped here to the ephemeral CI database.
       PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'Yes, proceed (Recommended)'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # MinIO (S3-compatible) storage for storage integration tests
       # (e.g. media.integration.test.ts) and AppModule boot.
@@ -265,11 +265,11 @@ jobs:
             curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
           done
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -363,7 +363,7 @@ jobs:
       # that file's comment), scoped here to the ephemeral CI database.
       PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'Yes, proceed (Recommended)'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # MinIO (S3-compatible) storage for storage integration tests
       # (e.g. media.integration.test.ts) and AppModule boot.
@@ -377,11 +377,11 @@ jobs:
             curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
           done
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -418,13 +418,13 @@ jobs:
     name: Dependency and container scanning
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -486,7 +486,7 @@ jobs:
     name: Secret scanning
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # B20: a detected secret fails the build (it was advisory-only).
