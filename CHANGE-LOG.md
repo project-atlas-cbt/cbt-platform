@@ -51,6 +51,11 @@ Third round:
   itself still runs as `atlas_app`). With this, the integration job's suites all passed in CI:
   api 369/369 (including the 1,500-row import), worker 49/49, cross-cutting 159/159.
 
+Follow-up: Dependabot (added in B20) opened 16 PRs on its first run, 9 of them major-version
+migrations (NestJS 12, TypeScript 6, vitest 5, Node 26 against ADR-0031's Node 24 baseline, …).
+`.github/dependabot.yml` now ignores npm and Node-image major versions, groups all GitHub Actions
+updates into one PR, and caps npm PRs at 5. Majors are scheduled as deliberate work.
+
 Consequence worth knowing: integration and security suites have **not run in CI** since MinIO broke,
 so the first green run is their first CI run in that period.
 
