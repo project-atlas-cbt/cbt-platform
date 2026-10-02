@@ -1,21 +1,39 @@
 # B20: dependency freshness. Security advisories are still enforced at merge
 # time by the CI `supply-chain` job; this keeps the tree from drifting into
 # them in the first place.
+#
+# Tuned 2026-10-02 after the first run opened 16 PRs at once: routine
+# updates arrive as a few grouped PRs that can merge on green CI, while
+# major versions (NestJS, TypeScript, vitest, the Node runtime, ...) are
+# migrations, scheduled deliberately rather than proposed weekly. The Node
+# base image stays on the ADR-0031 baseline (Node 24 LTS) until an ADR
+# amendment moves it.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+  # Action majors are usually runtime moves (e.g. off deprecated Node 20)
+  # and are kept, but every action update arrives as one PR.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']
   - package-ecosystem: docker
     directory: /infra/docker
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
