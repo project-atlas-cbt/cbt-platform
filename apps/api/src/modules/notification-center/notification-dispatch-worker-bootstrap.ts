@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { Worker, type Job } from 'bullmq';
 import type { INestApplicationContext } from '@nestjs/common';
-import type { Env } from '@atlas/config';
+import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
   type NotificationChannel,
@@ -28,7 +28,7 @@ export function startNotificationDispatchWorker(
   const config = app.get(ConfigService<Env, true>);
   const channel = app.get<NotificationChannel>(NOTIFICATION_CHANNEL);
   const url = new URL(config.get('REDIS_URL', { infer: true }));
-  const connection = { host: url.hostname, port: Number(url.port) || 6379 };
+  const connection = redisConnectionFromUrl(url.toString());
 
   const worker = new Worker<NotificationDispatchJobPayload>(
     NOTIFICATION_DISPATCH_QUEUE_NAME,

@@ -14,6 +14,9 @@ import { AuditActionRegistry } from '../operations/audit-action.registry.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { BreakGlassService } from './break-glass.service.js';
 import type { AuthorizedActor } from './authorization.types.js';
+import type { OperationalAlertService } from '../../notifications/operational-alert.service.js';
+
+const noopAlerts = { dispatch: () => undefined } as unknown as OperationalAlertService;
 
 const createdSchoolIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -46,7 +49,7 @@ describe('BreakGlassService — real database (ADR-0012 DoD item 9)', () => {
       userId: platformUser.id,
       roles: ['SOFTWARE_ADMIN'],
     };
-    const service = new BreakGlassService(new AuditService(new AuditActionRegistry()));
+    const service = new BreakGlassService(new AuditService(new AuditActionRegistry()), noopAlerts);
 
     const operationRan = { value: false };
     const result = await service.execute(
@@ -106,7 +109,7 @@ describe('BreakGlassService — real database (ADR-0012 DoD item 9)', () => {
       userId: platformUser.id,
       roles: ['SOFTWARE_ADMIN'],
     };
-    const service = new BreakGlassService(new AuditService(new AuditActionRegistry()));
+    const service = new BreakGlassService(new AuditService(new AuditActionRegistry()), noopAlerts);
     await service.execute(
       actor,
       { schoolId: schoolB.id, permissionId: 'account.deactivate', reason: 'Regression test.' },

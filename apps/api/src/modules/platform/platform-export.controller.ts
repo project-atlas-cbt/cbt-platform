@@ -23,6 +23,7 @@ import { AuthorizedPlatform } from '../authorization/decorators.js';
 import type { AuthenticatedPlatformUser } from '../identity/auth.guard.js';
 import { CreateExportDto, ExportJobResponseDto } from '../reports/dto/export.dto.js';
 import { ExportService } from '../reports/export.service.js';
+import { RateLimitClass } from '../../security/rate-limit.js';
 
 /** The explicit school segment is the guardrail against accidental
  * platform-wide academic exports. */
@@ -32,6 +33,7 @@ export class PlatformExportController {
   constructor(private readonly exports: ExportService) {}
 
   @Post()
+  @RateLimitClass('heavy')
   @HttpCode(HttpStatus.ACCEPTED)
   @AuthorizedPlatform('platform.school.viewAll')
   @ApiOperation({ summary: 'Queue an export for one explicitly selected school.' })

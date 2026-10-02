@@ -81,6 +81,9 @@ describe('PERMISSION_TABLE — ADR-0012: SOFTWARE_ADMIN is not a wildcard', () =
       // notifications.
       'notification.viewOwn',
       'notification.markRead',
+      // B20: a Software Admin's own second factor — own-account, SELF-scoped
+      // (school roles are denied this row, MFA for them being deferred).
+      'identity.mfa.manage',
     ]);
     for (const rule of PERMISSION_TABLE) {
       if (selfAccountRowIds.has(rule.id)) continue;

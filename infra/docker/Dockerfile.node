@@ -9,7 +9,10 @@
 # container. Node 24 LTS per CLAUDE.md's technology baseline (ADR-0031).
 FROM node:24-alpine
 
-RUN corepack enable
+# B20: pnpm is activated into a shared, non-root-readable location so the
+# unprivileged runtime user below never needs to download it at start-up.
+ENV COREPACK_HOME=/opt/corepack
+RUN corepack enable && corepack prepare pnpm@11.23.0 --activate
 
 WORKDIR /repo
 
@@ -47,3 +50,10 @@ RUN pnpm db:generate
 RUN pnpm turbo run build --filter=@atlas/api --filter=@atlas/worker
 
 # docker-compose.yml sets `command:` per service to select api or worker.
+
+# B20 container hardening: never run as root. The official image's `node`
+# user (uid 1000) owns the built repo; nothing at runtime needs privilege.
+# CI builds this image and Trivy-scans it (HIGH/CRITICAL blocks the merge);
+# the B23 production image inherits the same scan job.
+RUN chown -R node:node /repo /opt/corepack
+USER node

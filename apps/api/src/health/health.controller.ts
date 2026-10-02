@@ -1,4 +1,4 @@
-import { Controller, Get, HttpStatus, Inject, Res } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Inject, Logger, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
@@ -6,15 +6,19 @@ import { prisma } from '@atlas/db';
 import { PublicRoute } from '../modules/authorization/decorators.js';
 import { REDIS_CLIENT } from '../redis/redis.module.js';
 
+/** B20: a public, unauthenticated endpoint reports pass/fail only. The
+ * underlying error (which can name hosts, ports, roles or SQL) goes to the
+ * structured log, never the response body. */
 interface ReadinessCheck {
   name: 'database' | 'redis';
   ok: boolean;
-  error?: string;
 }
 
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
+  private readonly logger = new Logger('Health');
+
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
   @Get()
@@ -31,7 +35,7 @@ export class HealthController {
     'Liveness/readiness probes are infrastructure-level, unauthenticated by nature (load balancers, orchestrators).',
   )
   @ApiOperation({
-    summary: 'Readiness probe — database, Redis, and object storage are reachable.',
+    summary: 'Readiness probe — database and Redis are reachable.',
   })
   async readiness(@Res({ passthrough: true }) res: FastifyReply) {
     const checks = await Promise.all([this.checkDatabase(), this.checkRedis()]);
@@ -45,7 +49,8 @@ export class HealthController {
       await prisma.$queryRaw`SELECT 1`;
       return { name: 'database', ok: true };
     } catch (err) {
-      return { name: 'database', ok: false, error: (err as Error).message };
+      this.logger.error({ msg: 'Readiness: database check failed', err });
+      return { name: 'database', ok: false };
     }
   }
 
@@ -54,7 +59,8 @@ export class HealthController {
       const pong = await this.redis.ping();
       return { name: 'redis', ok: pong === 'PONG' };
     } catch (err) {
-      return { name: 'redis', ok: false, error: (err as Error).message };
+      this.logger.error({ msg: 'Readiness: redis check failed', err });
+      return { name: 'redis', ok: false };
     }
   }
 }

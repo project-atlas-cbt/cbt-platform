@@ -5,10 +5,13 @@ import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { PasswordService } from '../identity/password.service.js';
 import { AuthLockoutService } from '../identity/auth-lockout.service.js';
-import {
-  PlatformSessionService,
-  type AuthenticatedPlatformSession,
-} from './platform-session.service.js';
+import { PlatformSessionService } from './platform-session.service.js';
+import { PlatformMfaService, PLATFORM_MFA_AUDIT_ACTIONS } from './mfa/platform-mfa.service.js';
+import { AuditService } from '../operations/audit-event.service.js';
+
+/** B20: what `POST /platform/auth/login` tells the caller. */
+export type PlatformLoginResult =
+  { status: 'ok' } | { status: 'mfa_required'; challengeToken: string };
 
 // AuthLockoutService's key is an arbitrary namespaced string, not literally
 // a school id (see identity.module.ts's export comment) — this is that
@@ -46,6 +49,8 @@ export class PlatformAuthService {
     private readonly passwords: PasswordService,
     private readonly sessions: PlatformSessionService,
     private readonly lockout: AuthLockoutService,
+    private readonly mfa: PlatformMfaService,
+    private readonly audit: AuditService,
   ) {}
 
   async evaluateLogin(email: string, password: string): Promise<PlatformLoginOutcome> {
@@ -94,17 +99,75 @@ export class PlatformAuthService {
     return { kind: 'SUCCESS', userId: user.id };
   }
 
+  /**
+   * B20: an admin with an enrolled second factor gets a challenge token and
+   * NO session — the session is only issued by `completeMfa`. Without a
+   * factor, the session is issued here (and, if PLATFORM_MFA_REQUIRED is
+   * on, PlatformAuthGuard confines it to the enrolment routes).
+   */
   async login(
     email: string,
     password: string,
     res: FastifyReply,
     req: FastifyRequest,
-  ): Promise<AuthenticatedPlatformSession> {
+  ): Promise<PlatformLoginResult> {
     const outcome = await this.evaluateLogin(email, password);
     if (outcome.kind !== 'SUCCESS') throw GENERIC_LOGIN_FAILURE();
 
-    await prisma.user.update({ where: { id: outcome.userId }, data: { lastLoginAt: new Date() } });
-    return this.sessions.issue(res, { userId: outcome.userId, req });
+    if (await this.mfa.isEnrolled(outcome.userId)) {
+      return {
+        status: 'mfa_required',
+        challengeToken: await this.mfa.createChallenge(outcome.userId),
+      };
+    }
+    await this.startSession(outcome.userId, res, req, { mfa: false });
+    return { status: 'ok' };
+  }
+
+  async completeMfa(
+    challengeToken: string,
+    proof: { otp: string } | { recoveryCode: string },
+    res: FastifyReply,
+    req: FastifyRequest,
+  ): Promise<void> {
+    const userId = await this.mfa.completeChallenge(challengeToken, proof);
+    // Re-checked: the account could have been suspended or demoted in the
+    // minutes between the password step and this one.
+    const user = await prisma.user.findFirst({
+      where: {
+        id: userId,
+        status: 'ACTIVE',
+        platformRoleAssignments: { some: { status: 'ACTIVE' } },
+      },
+      select: { id: true },
+    });
+    if (!user) throw GENERIC_LOGIN_FAILURE();
+    await this.startSession(userId, res, req, {
+      mfa: true,
+      method: 'otp' in proof ? 'totp' : 'recovery_code',
+    });
+  }
+
+  private async startSession(
+    userId: string,
+    res: FastifyReply,
+    req: FastifyRequest,
+    metadata: { mfa: boolean; method?: string },
+  ): Promise<void> {
+    await prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
+    const session = await this.sessions.issue(res, { userId, req });
+    await this.audit
+      .recordPlatform({
+        actorUserId: userId,
+        actorRole: 'SOFTWARE_ADMIN',
+        action: PLATFORM_MFA_AUDIT_ACTIONS.signedIn,
+        entityType: 'PlatformSession',
+        entityId: session.sessionId,
+        metadata,
+      })
+      .catch((err: unknown) =>
+        this.logger.error({ msg: 'Platform sign-in audit write failed', err }),
+      );
   }
 
   async logout(sessionId: string, res: FastifyReply): Promise<void> {

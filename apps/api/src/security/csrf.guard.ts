@@ -71,7 +71,12 @@ export class CsrfGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<FastifyRequest>();
     const res = context.switchToHttp().getResponse<FastifyReply>();
 
-    const signingSecret = this.config.get('SESSION_COOKIE_SECRET', { infer: true });
+    // B20: its own key (CSRF_SECRET), so session and CSRF signing rotate
+    // independently; production requires it (env.schema.ts), elsewhere it
+    // falls back to the session secret.
+    const csrfSecret: string | undefined = this.config.get('CSRF_SECRET', { infer: true });
+    const sessionSecret: string = this.config.get('SESSION_COOKIE_SECRET', { infer: true });
+    const signingSecret = csrfSecret ?? sessionSecret;
     const cookies = parseCookie(req.headers.cookie ?? '');
     const rawCookie = cookies[CSRF_COOKIE_NAME];
     const unsigned = rawCookie ? unsign(rawCookie, signingSecret) : false;

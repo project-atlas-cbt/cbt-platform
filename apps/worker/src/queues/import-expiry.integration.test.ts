@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import { runImportExpirySweep } from './import-expiry.queue.js';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 const ownerDatabaseUrl = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
 const HOUR_MS = 60 * 60 * 1000;
@@ -47,7 +48,7 @@ async function createImportJob(params: {
 
 async function cleanupSchool(schoolId: string, uploaderId: string): Promise<void> {
   await withTenant(prisma, schoolId, (tx) => tx.importJob.deleteMany({ where: { schoolId } }));
-  await prisma.school.delete({ where: { id: schoolId } });
+  await ownerPrisma().school.delete({ where: { id: schoolId } });
   await prisma.user.delete({ where: { id: uploaderId } });
 }
 

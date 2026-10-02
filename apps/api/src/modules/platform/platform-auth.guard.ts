@@ -2,7 +2,11 @@ import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/com
 import type { FastifyRequest } from 'fastify';
 import { prisma } from '@atlas/db';
 import { AppHttpException } from '../../common/app-http-exception.js';
+import { Reflector } from '@nestjs/core';
+import { enrichLogContext } from '@atlas/observability';
 import { PlatformSessionService } from './platform-session.service.js';
+import { PlatformMfaService } from './mfa/platform-mfa.service.js';
+import { ALLOW_MFA_ENROLMENT_PENDING_KEY } from './mfa/decorators.js';
 
 /**
  * Software Admin's equivalent of identity/auth.guard.ts's AuthGuard —
@@ -22,7 +26,11 @@ import { PlatformSessionService } from './platform-session.service.js';
  */
 @Injectable()
 export class PlatformAuthGuard implements CanActivate {
-  constructor(private readonly sessions: PlatformSessionService) {}
+  constructor(
+    private readonly sessions: PlatformSessionService,
+    private readonly mfa: PlatformMfaService,
+    private readonly reflector: Reflector,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<FastifyRequest>();
@@ -40,12 +48,29 @@ export class PlatformAuthGuard implements CanActivate {
     });
     if (roleAssignments.length === 0) throw unauthenticated();
 
+    // B20: with MFA enforcement on, an admin without a second factor is
+    // confined to the enrolment routes - centrally, so no controller can
+    // forget it (same shape as AuthGuard's PASSWORD_CHANGE_REQUIRED gate).
+    if (this.mfa.isRequired() && !(await this.mfa.isEnrolled(user.id))) {
+      const allowPending = this.reflector.getAllAndOverride<boolean>(
+        ALLOW_MFA_ENROLMENT_PENDING_KEY,
+        [context.getHandler(), context.getClass()],
+      );
+      if (!allowPending) {
+        throw new AppHttpException({
+          code: 'MFA_ENROLMENT_REQUIRED',
+          message: 'Enrol a second factor before continuing.',
+        });
+      }
+    }
+
     req.user = {
       kind: 'PLATFORM',
       userId: user.id,
       sessionId: session.sessionId,
       roles: roleAssignments.map((r) => r.role),
     };
+    enrichLogContext({ userId: user.id });
     return true;
   }
 }

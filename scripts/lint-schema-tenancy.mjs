@@ -30,7 +30,17 @@ const schemaPath = resolve(__dirname, '../packages/db/prisma/schema.prisma');
 // PlatformSession (B3): Software Admin's session record — same exemption
 // reasoning as PlatformRoleAssignment; a platform account has no school to
 // scope a session under. See its own doc comment.
-const EXEMPT_MODELS = new Set(['School', 'User', 'PlatformRoleAssignment', 'PlatformSession']);
+//
+// PlatformMfaCredential / PlatformMfaRecoveryCode (B20): Software Admin's
+// second factor — the same platform-account reasoning again.
+const EXEMPT_MODELS = new Set([
+  'School',
+  'User',
+  'PlatformRoleAssignment',
+  'PlatformSession',
+  'PlatformMfaCredential',
+  'PlatformMfaRecoveryCode',
+]);
 
 const schema = readFileSync(schemaPath, 'utf-8');
 const modelBlockRe = /model\s+(\w+)\s*\{([^}]*)\}/g;

@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@atlas/db';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
 import { requirePermissionRule } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { OperationalAlertService } from '../../notifications/operational-alert.service.js';
 import type { AuthorizedActor } from './authorization.types.js';
 
 export interface BreakGlassParams {
@@ -34,12 +35,15 @@ export interface BreakGlassParams {
  */
 @Injectable()
 export class BreakGlassService {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    private readonly alerts: OperationalAlertService,
+  ) {}
 
   async execute<T>(
     actor: AuthorizedActor,
     params: BreakGlassParams,
-    fn: () => Promise<T>,
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
     if (actor.kind !== 'PLATFORM' || !actor.roles.includes('SOFTWARE_ADMIN')) {
       throw new AppHttpException({
@@ -63,20 +67,37 @@ export class BreakGlassService {
       });
     }
 
-    const result = await fn();
-
-    await this.audit.record({
-      schoolId: params.schoolId,
-      actorUserId: actor.userId,
-      actorRole: 'SOFTWARE_ADMIN',
-      action: `BREAK_GLASS_${params.permissionId.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`,
-      reason: params.reason,
-      breakGlass: true,
-      ...(params.entityType !== undefined && { entityType: params.entityType }),
-      ...(params.entityId !== undefined && { entityId: params.entityId }),
-      ...(params.metadata !== undefined && { metadata: params.metadata }),
+    // B20: the action and its break-glass audit row commit or roll back
+    // together, in the target school's tenant transaction. Before B20 the
+    // audit row was written after `fn()` had already committed, so an audit
+    // write failure left an unaudited privileged action behind — exactly
+    // what ADR-0012's "audited break-glass" exists to rule out.
+    const action = `BREAK_GLASS_${params.permissionId.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+    const outcome = await withTenant(prisma, params.schoolId, async (tx) => {
+      const result = await fn(tx);
+      await this.audit.recordInTx(tx, {
+        schoolId: params.schoolId,
+        actorUserId: actor.userId,
+        actorRole: 'SOFTWARE_ADMIN',
+        action,
+        reason: params.reason,
+        breakGlass: true,
+        ...(params.entityType !== undefined && { entityType: params.entityType }),
+        ...(params.entityId !== undefined && { entityId: params.entityId }),
+        ...(params.metadata !== undefined && { metadata: params.metadata }),
+      });
+      return result;
     });
 
-    return result;
+    // B20 security alert: every break-glass use is pushed to operators, not
+    // just recorded — ids only, the reason stays in the audit row.
+    this.alerts.dispatch({
+      alertKey: action,
+      severity: 'warning',
+      title: 'Break-glass action performed',
+      summary: `Software Admin ${actor.userId} performed ${params.permissionId} in school ${params.schoolId}${params.entityId ? ` on ${params.entityType ?? 'entity'} ${params.entityId}` : ''}.`,
+      transition: 'EVENT',
+    });
+    return outcome;
   }
 }

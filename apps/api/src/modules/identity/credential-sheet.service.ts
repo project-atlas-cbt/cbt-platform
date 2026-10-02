@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
 import { PasswordService } from './password.service.js';
+import { SessionService } from './session.service.js';
 
 export interface CredentialSheetRow {
   studentId: string;
@@ -29,7 +30,10 @@ export interface CredentialSheetRow {
  */
 @Injectable()
 export class CredentialSheetService {
-  constructor(private readonly passwords: PasswordService) {}
+  constructor(
+    private readonly passwords: PasswordService,
+    private readonly sessions: SessionService,
+  ) {}
 
   /**
    * Generates and stores a fresh initial password for each given student
@@ -72,6 +76,14 @@ export class CredentialSheetService {
           ...(existingUser.status === 'INVITED' ? { status: 'ACTIVE' as const } : {}),
         },
       });
+      // B20: re-issuing credentials is an administrator-forced reset — any
+      // session the student (or whoever had their old password) holds ends.
+      // A never-claimed (INVITED) account has never signed in, so there is
+      // nothing to revoke — skipping it keeps bulk imports to one write per
+      // student.
+      if (existingUser.status !== 'INVITED') {
+        await this.sessions.revokeAllForUser(schoolId, membership.userId);
+      }
       rows.push({
         studentId: membership.studentProfile.studentId,
         displayName: user.displayName,

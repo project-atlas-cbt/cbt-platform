@@ -12,6 +12,12 @@ import {
   recordAutoPublication,
   type FinalizedResultOutcome,
 } from './result-finalization.js';
+import {
+  CRITICAL_SPANS,
+  examInstruments,
+  withExtractedTraceContext,
+  withSpan,
+} from '@atlas/observability';
 
 /**
  * B14's marking-job consumer — lives in `apps/worker`, not `apps/api`,
@@ -59,7 +65,29 @@ export interface AttemptMarkingWorkerDeps {
   invalidateAnalytics?: (schoolId: string) => Promise<void>;
 }
 
+/**
+ * B20 (08 §18 "trace result generation"): the result-generation span,
+ * continuing the trace of the request that enqueued this job (submit) via
+ * the W3C carrier the API puts in the payload. Ids-only attributes.
+ */
 export async function runAttemptMarking(
+  deps: AttemptMarkingWorkerDeps,
+  payload: AttemptMarkingJobPayload,
+): Promise<void> {
+  const began = performance.now();
+  await withExtractedTraceContext(payload.trace, () =>
+    withSpan(
+      CRITICAL_SPANS.resultGenerate,
+      { 'atlas.school_id': payload.schoolId, 'atlas.attempt_id': payload.attemptId },
+      () => markAttempt(deps, payload),
+    ),
+  );
+  const instruments = examInstruments();
+  instruments.resultGenerated.add(1);
+  instruments.resultGenerationDuration.record(performance.now() - began);
+}
+
+async function markAttempt(
   deps: AttemptMarkingWorkerDeps,
   payload: AttemptMarkingJobPayload,
 ): Promise<void> {

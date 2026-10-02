@@ -23,6 +23,7 @@ import {
   runAttemptAutoSubmitSweep,
   type AttemptAutoSubmitSweepDeps,
 } from './attempt-auto-submit.queue.js';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 const ownerDatabaseUrl = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
 
@@ -283,7 +284,9 @@ async function cleanupSchool(schoolId: string): Promise<void> {
   await withTenant(prisma, schoolId, (tx) =>
     tx.schoolMembership.deleteMany({ where: { schoolId } }),
   ).catch(() => undefined);
-  await prisma.school.delete({ where: { id: schoolId } }).catch(() => undefined);
+  await ownerPrisma()
+    .school.delete({ where: { id: schoolId } })
+    .catch(() => undefined);
   for (const { userId } of userIds) {
     await prisma.user.delete({ where: { id: userId } }).catch(() => undefined);
   }

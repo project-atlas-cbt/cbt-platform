@@ -2,7 +2,7 @@
   "name": "project-atlas",
   "private": true,
   "version": "0.0.0",
-  "description": "Project Atlas — multi-tenant CBT platform (monorepo root).",
+  "description": "Project Atlas \u2014 multi-tenant CBT platform (monorepo root).",
   "engines": {
     "node": ">=22.18.0 <25.0.0"
   },
@@ -16,6 +16,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
+    "test:security": "turbo run test:security",
+    "audit:deps": "pnpm audit --prod --audit-level high",
     "generate": "pnpm --filter @atlas/api run openapi:emit && pnpm --filter @atlas/contracts run generate",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

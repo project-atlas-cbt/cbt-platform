@@ -1,0 +1,122 @@
+/**
+ * B20 retention schedule (ADR-0028 as amended 2026-10-02; resolves audit
+ * finding M-14). The single machine-readable statement of what the
+ * platform keeps and for how long — `docs/compliance/retention-schedule.md`
+ * is its human-readable twin, and `apps/worker`'s retention sweep executes
+ * exactly the `PURGE`/`REDACT_FIELD` rows below, nothing else.
+ *
+ * Two hard rules, both enforced outside this file as well:
+ * 1. Academic evidence and audit records are retained indefinitely (07 §42
+ *    invariants 14 and 15; ADR-0028 "academic evidence is never
+ *    destroyed"). The database role cannot delete them at all
+ *    (packages/db/src/privileges.ts), so no schedule row could, even by
+ *    mistake.
+ * 2. Only operational data with no academic meaning is ever purged, and
+ *    only after it has stopped doing its job (expired, revoked, used, read).
+ *
+ * Periods are engineering defaults chosen to keep forensic usefulness
+ * (session/IP history for incident response, 30–90 days) while not
+ * holding minors' operational data indefinitely. They are provisional
+ * until the legal review recorded as a B23 launch-readiness item.
+ */
+export type RetentionAction = 'RETAIN_INDEFINITELY' | 'PURGE' | 'REDACT_FIELD';
+
+export interface RetentionRule {
+  id: string;
+  /** Postgres table the rule applies to. */
+  table: string;
+  category: 'ACADEMIC_EVIDENCE' | 'AUDIT' | 'IDENTITY' | 'OPERATIONAL';
+  action: RetentionAction;
+  /** Days after `trigger` before the action runs (purge/redact rows only). */
+  afterDays?: number;
+  /** When the clock starts — human-readable, mirrored in the worker query. */
+  trigger: string;
+  rationale: string;
+}
+
+export const RETENTION_SCHEDULE: readonly RetentionRule[] = [
+  // ---- retained indefinitely --------------------------------------------
+  {
+    id: 'academic-evidence',
+    table:
+      'exam_attempts, attempt_question_snapshots, attempt_answers, attempt_answer_events, attempt_events, attempt_question_results, attempt_authorizations, exam_participations, results, result_publications, result_adjustment_operations, result_adjustments, question_reviews',
+    category: 'ACADEMIC_EVIDENCE',
+    action: 'RETAIN_INDEFINITELY',
+    trigger: 'n/a',
+    rationale:
+      "The school's academic record (invariant 14; ADR-0028). Personal identifiers on the person may be redacted on a data-subject request; the evidence itself is never destroyed.",
+  },
+  {
+    id: 'audit',
+    table: 'audit_events',
+    category: 'AUDIT',
+    action: 'RETAIN_INDEFINITELY',
+    trigger: 'n/a',
+    rationale: 'Append-only (invariant 15); the evidence that every other control was exercised.',
+  },
+  {
+    id: 'people',
+    table: 'users, school_memberships, student_profiles, teacher_profiles',
+    category: 'IDENTITY',
+    action: 'RETAIN_INDEFINITELY',
+    trigger: 'n/a',
+    rationale:
+      'Needed to attribute academic records. Redactable per person on a verified subject request (ops:redact-subject), never deleted — attempts and results must keep a referent.',
+  },
+  // ---- purged / redacted after use ----------------------------------------
+  {
+    id: 'school-sessions',
+    table: 'sessions',
+    category: 'OPERATIONAL',
+    action: 'PURGE',
+    afterDays: 30,
+    trigger: 'revoked_at, or expires_at if never revoked',
+    rationale:
+      'A dead session is only useful for incident response (IP/user-agent history); 30 days covers the investigation window.',
+  },
+  {
+    id: 'platform-sessions',
+    table: 'platform_sessions',
+    category: 'OPERATIONAL',
+    action: 'PURGE',
+    afterDays: 90,
+    trigger: 'revoked_at, or expires_at if never revoked',
+    rationale:
+      'Software Admin access history is kept longer than a school session: it is the privileged path.',
+  },
+  {
+    id: 'password-reset-tokens',
+    table: 'password_reset_tokens',
+    category: 'OPERATIONAL',
+    action: 'PURGE',
+    afterDays: 30,
+    trigger: 'used_at, or expires_at if never used',
+    rationale: 'A spent or expired single-use token has no further function.',
+  },
+  {
+    id: 'import-raw-rows',
+    table: 'import_rows',
+    category: 'OPERATIONAL',
+    action: 'REDACT_FIELD',
+    afterDays: 90,
+    trigger: "the parent import job's updated_at, once COMPLETED / FAILED / EXPIRED",
+    rationale:
+      "raw_data is a verbatim copy of an uploaded spreadsheet row (names, admission numbers). The people it created live on in their own tables; the row's status and errors are kept, the copy of the source cells is not.",
+  },
+  {
+    id: 'read-notifications',
+    table: 'notifications',
+    category: 'OPERATIONAL',
+    action: 'PURGE',
+    afterDays: 365,
+    trigger: 'read_at',
+    rationale:
+      'In-app operational notices (07 §11.2), not records; a year after being read they are noise.',
+  },
+];
+
+export function retentionRule(id: string): RetentionRule {
+  const rule = RETENTION_SCHEDULE.find((r) => r.id === id);
+  if (!rule) throw new Error(`Unknown retention rule "${id}".`);
+  return rule;
+}

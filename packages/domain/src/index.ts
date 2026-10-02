@@ -233,3 +233,9 @@ export {
   EXPORT_ARTEFACT_TTL_MS,
   type ExportJobPayload,
 } from './reporting/export-queue.js';
+export {
+  RETENTION_SCHEDULE,
+  retentionRule,
+  type RetentionRule,
+  type RetentionAction,
+} from './compliance/retention.js';

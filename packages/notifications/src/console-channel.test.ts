@@ -26,6 +26,21 @@ describe('ConsoleNotificationChannel (ADR-0019 dev/console provider)', () => {
     expect(lines[0]).toContain('https://example.test/reset/abc123');
   });
 
+  it('B20: withholds recipient and body (live reset links) when revealContent is false', async () => {
+    const registry = new TemplateRegistry();
+    registry.register({ name: 'password-reset', subject: 'Reset', text: 'Link: {{link}}' });
+    const lines: string[] = [];
+    const channel = new ConsoleNotificationChannel(registry, (line) => lines.push(line), {
+      revealContent: false,
+    });
+    await channel.send({
+      to: 'teacher@example.test',
+      template: 'password-reset',
+      variables: { link: 'https://example.test/reset?token=abc123' },
+    });
+    expect(lines).toEqual(['[notifications:console] template=password-reset (content withheld)']);
+  });
+
   it('propagates an unknown-template failure rather than sending silently', async () => {
     const channel = new ConsoleNotificationChannel(new TemplateRegistry(), () => {});
     await expect(channel.send({ to: 'x@example.test', template: 'nope' })).rejects.toThrow(

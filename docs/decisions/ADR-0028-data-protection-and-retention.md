@@ -1,6 +1,6 @@
 # ADR-0028 — Data protection posture and retention
 
-**Status:** Accepted (retention schedule provisional — legal review required at B20)
+**Status:** Accepted (retention schedule formalised in B20 — see the 2026-10-02 amendment; legal review carried to B23 as a launch-readiness item)
 **Date:** 2026-08-24
 **Deciders:** Project owner, engineering takeover review
 **Audit findings:** M-13 (MEDIUM), M-14 (MEDIUM)
@@ -54,3 +54,30 @@ The platform stores personal data about **minors** at scale — names, admission
 - B20: DPA; controller/processor documentation; subject-access and breach procedures; retention schedule with legal input; log hygiene.
 - B21: measure storage growth to inform the schedule.
 - B23: DPA available before general availability.
+
+---
+
+## Amendment — 2026-10-02 (B20)
+
+Project-owner decisions taken at B20, recorded here rather than rewriting the decision above:
+
+1. **Retention schedule formalised** (resolves M-14): academic evidence, audit and people records
+   are retained indefinitely; only operational data is purged or redacted on fixed periods —
+   [docs/compliance/retention-schedule.md](../compliance/retention-schedule.md), machine-readable as
+   `RETENTION_SCHEDULE` (`packages/domain`), executed by the worker's daily retention sweep. The
+   protection is structural, not procedural: the runtime database role holds no `DELETE` on any
+   academic-evidence, audit or `schools` table (`packages/db/src/privileges.ts`).
+2. **Legal review is a launch-readiness item**, not a B20 gate: the schedule, the posture and the DPA
+   are reviewed by counsel before general availability (B23). Engineering could not supply that
+   input; the decision is that the safe, irreversible-nothing schedule ships now and the review may
+   shorten operational periods or add archival tiers later without data loss.
+3. **Data-subject redaction is tooling, not just procedure**: an audited operator command
+   (`ops:redact-subject`, dry-run by default) removes personal identifiers and never touches academic
+   evidence — [docs/compliance/data-protection.md](../compliance/data-protection.md) §4.
+4. **Posture documents produced**: controller/processor roles, data inventory, data-subject and
+   breach procedures ([data-protection.md](../compliance/data-protection.md)) and a draft DPA marked
+   for legal review ([dpa-template.md](../compliance/dpa-template.md)).
+5. **Orphaned media stays report-only** until B21's storage measurements inform a rule (unchanged).
+
+Status line above is unchanged in substance: the schedule is now formal, with legal review carried
+to B23.

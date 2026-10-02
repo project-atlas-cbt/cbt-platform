@@ -62,7 +62,12 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     const fingerprint = fingerprintRequest(req);
-    const redisKey = `idempotency:${key}`;
+    // B20: scoped to the caller. Unscoped, a key is a bearer handle on
+    // someone else's stored response — any caller who learned (or guessed)
+    // a key could replay it with the same URL and body and be handed the
+    // original caller's response body. Guards have already run here, so
+    // req.user is the authenticated principal (or absent on public routes).
+    const redisKey = `idempotency:${idempotencyScope(req)}:${key}`;
     const existingRaw = await this.redis.get(redisKey);
 
     if (existingRaw) {
@@ -85,10 +90,22 @@ export class IdempotencyInterceptor implements NestInterceptor {
           body,
           requestFingerprint: fingerprint,
         };
-        void this.redis.set(redisKey, JSON.stringify(stored), 'EX', ttl);
+        // NX: the first completed response for a key is the one every replay
+        // gets — a concurrent duplicate finishing second never overwrites it.
+        void this.redis.set(redisKey, JSON.stringify(stored), 'EX', ttl, 'NX');
       }),
     );
   }
+}
+
+function idempotencyScope(req: FastifyRequest): string {
+  const user = req.user;
+  if (user?.kind === 'SCHOOL') return `school:${user.schoolId}:user:${user.userId}`;
+  if (user?.kind === 'PLATFORM') return `platform:user:${user.userId}`;
+  return `anon:${createHash('sha256')
+    .update(req.ip ?? '')
+    .digest('hex')
+    .slice(0, 16)}`;
 }
 
 function fingerprintRequest(req: FastifyRequest): string {

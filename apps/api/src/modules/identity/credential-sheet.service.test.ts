@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { CredentialSheetService, type CredentialSheetRow } from './credential-sheet.service.js';
 import { PasswordService } from './password.service.js';
+import type { SessionService } from './session.service.js';
 
 describe('CredentialSheetService.toCsv (ADR-0019/A-02 one-time-reveal primitive)', () => {
-  const service = new CredentialSheetService(new PasswordService());
+  // toCsv never touches sessions — B20's revocation only runs in issueInitialPasswords.
+  const service = new CredentialSheetService(new PasswordService(), {} as SessionService);
 
   const row = (overrides: Partial<CredentialSheetRow> = {}): CredentialSheetRow => ({
     studentId: 'ST001',

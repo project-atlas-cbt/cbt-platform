@@ -4062,7 +4062,7 @@ written inside the same commit transaction.
 
 # B20 — Security Hardening & Compliance
 
-**Status:** NOT STARTED · **Decided ADRs:** 0028 (data protection, retention)
+**Status:** ✅ DONE (2026-10-02) · **Decided ADRs:** 0028 (data protection, retention — amended 2026-10-02)
 
 ## Objective
 
@@ -4133,28 +4133,67 @@ The Exam Health Monitor depends on B13/B14 metrics being emitted.
 
 ## Definition of Done
 
-1. Every control in `08 §16` is implemented and evidenced.
-2. The full tenant-isolation suite passes against every endpoint in the product.
-3. Privilege-escalation attempts fail for all six roles.
-4. Dependency and container scans run in CI and block on high-severity findings.
-5. Traces cover start-attempt, answer-sync, submit, and result generation.
-6. Logs carry correlation ids and tenant context, and contain no credentials, answer content, or unnecessary PII.
-7. The Exam Health Monitor alerts on a simulated drop in answer-save success (`09 §37`).
-8. Rate limits protect the platform without throttling legitimate exam traffic under B21's load profile.
-9. The data-protection posture is documented: controller/processor roles, DPA, subject-access handling.
-10. The retention schedule is defined and implemented, and never deletes what invariant 14 protects.
-11. Database roles follow least privilege; the application role cannot alter audit records.
-12. Threat model completed and findings remediated or accepted with a recorded rationale.
+1. ✅ Every control in `08 §16` is implemented and evidenced — `docs/security/controls-evidence.md` (control → implementation → test). _At-rest storage encryption is an infrastructure property verified at B23 provisioning; the app enforces TLS in transit at boot._
+2. ✅ The full tenant-isolation suite passes against every endpoint — `tenant-isolation.security.integration.test.ts`: every id-bearing school route × every school-B id (>1,000 probes) is indistinguishable from a nonexistent id, never 5xx, never leaks a school-B id or name, and school B's data is unchanged; plus `rls.integration.test.ts` and the new catalog check (every `school_id` table has RLS enabled + forced).
+3. ✅ Privilege-escalation attempts fail for all six roles — `authorization-matrix.security.integration.test.ts`: every route, every school role without a GRANTED grant → 403 (derived from `PERMISSION_TABLE`); school sessions never reach platform routes and Software Admin never reaches school routes (401, with a valid CSRF context so the auth layer itself is proven); cross-tenant session replay → 401 on every school route.
+4. ✅ Dependency and container scans run in CI and block on high severity — `supply-chain` job: `pnpm audit:deps` (prod, high+), Trivy fs (vuln/secret/misconfig) and Trivy image scan of `Dockerfile.node`, all `exit-code 1`; gitleaks now blocking. 23 high + 3 critical advisories remediated (see Implementation notes). _The B23 production image inherits the same job._
+5. ✅ Traces cover start-attempt, answer-sync, submit and result generation — spans asserted in `attempt.integration.test.ts` (start/save/submit, id-only attributes) and `attempt-marking.integration.test.ts` (result generation continues the submit trace via the job's W3C carrier).
+6. ✅ Logs carry correlation ids and tenant context, and contain no credentials, answer content or unnecessary PII — `log-hygiene.security.integration.test.ts` (production logger, every secret class driven through, none found).
+7. ✅ The Exam Health Monitor alerts on a simulated drop in answer-save success — `exam-health-monitor.integration.test.ts` (98.9% quiet → 91% fires once → 76% no repeat → recovery resolves once).
+8. ✅ _(shape; load re-validation is B21)_ Rate limits protect without throttling legitimate exam traffic — `http-surface.security.integration.test.ts`: 40 students behind one NAT sign in and make 800 answer-path calls with zero 429s; a runaway session, account guessing and credential spraying are all cut off. B21's measured load profile re-validates the numbers.
+9. ✅ Data-protection posture documented — `docs/compliance/data-protection.md` (controller/processor, inventory, subject-access/deletion, breach procedure), `docs/compliance/dpa-template.md` (draft, legal review required), plus the audited `ops:redact-subject` tool.
+10. ✅ Retention schedule defined and implemented, never deleting what invariant 14 protects — `docs/compliance/retention-schedule.md` / `RETENTION_SCHEDULE`; worker retention sweep; `retention.integration.test.ts` (protected tables' global row counts unchanged); and `atlas_app` has no `DELETE` on any protected table. _Legal review carried to B23 (ADR-0028 amendment)._
+11. ✅ Least-privilege database roles; the application role cannot alter audit records — `tests/tenancy/db-privileges.integration.test.ts` against the live catalog.
+12. ✅ Threat model completed; findings remediated or accepted with rationale — `docs/security/threat-model.md` (26-item register).
 
 ## Exit criteria
 
-- ADR-0028 decided.
-- No unresolved high-severity findings.
-- Security suites wired as merge blockers.
+- ✅ ADR-0028 decided (and amended 2026-10-02).
+- ✅ No unresolved high-severity findings (threat model register).
+- ✅ Security suites wired as merge blockers (CI `security`, `supply-chain`, `secret-scan` jobs).
 
 ## Deferred items
 
 - Third-party penetration test and formal certification (recommend scheduling before general availability; record as a launch-readiness item).
+- **Carried to B23 (launch readiness):** legal review of the retention schedule, data-protection posture and DPA (ADR-0028 amendment); encryption-at-rest verification on provisioned RDS/S3/ElastiCache; the production image (inherits the CI scan); `TRUST_PROXY_HOPS=1` behind the ALB; production secrets (`CSRF_SECRET`, `MFA_ENCRYPTION_KEY`) in the secret manager; GitHub Actions SHA pinning.
+- **Carried to F20:** web-tier CSP/headers per `docs/security/web-csp-policy.md`; Software Admin MFA enrolment + two-step login UI, then `PLATFORM_MFA_REQUIRED=true`; client Sentry.
+- **Candidate/Deferred:** MFA for school roles; Software Admin self-service password change (already deferred since B3); malware scanning of uploads; tightening "unknown parent → `200 []`" child-collection routes to 404 (accepted — indistinguishable, no disclosure).
+
+## Implementation notes (2026-10-02)
+
+Project-owner decisions before implementation: (1) formalise retention — academic + audit
+indefinite, purge operational data, legal review to B23; (2) Software Admin TOTP MFA in addition to
+session hardening; (3) web CSP is F20's (policy documented here); (4) build an audited redaction tool.
+
+- **Least privilege** (`packages/db/src/privileges.ts`, applied by `grantAppRole()` after every
+  deploy): append-only tables lose UPDATE/DELETE; academic evidence, `audit_events` and `schools`
+  lose DELETE; `platform_role_assignments` is read-only to the app; `_prisma_migrations`
+  unreachable. Test fixtures that need these use the owner connection (`test-support/owner-prisma.ts`).
+  Migration `20261002120000_b20_security_hardening`: `audit_events.school_id` nullable + RESTRICT,
+  an INSERT-only RLS policy for platform-level rows, `platform_sessions.last_seen_at`, MFA tables.
+- **Controls remediated** (threat model findings 1–18): session revocation on password
+  change/reset/credential reissue; Software Admin cookie host-only/Strict, 8h absolute, 30-min idle;
+  TOTP MFA on `node:crypto` (RFC 6238 vectors tested), AES-256-GCM sealed secrets, replay and
+  brute-force protection, recovery codes, peer reset, `PLATFORM_MFA_REQUIRED` gate; per-class rate
+  limiting keyed by session / account+IP / IP with `trustProxy`; idempotency keys scoped to the
+  caller; break-glass audited in-transaction and alerted; production env refuses dev secrets and
+  plaintext DB/Redis; BullMQ connections carry Redis TLS/auth; global UUID route-param pipe (~80
+  routes used to 500 on a malformed id); restrictive API CSP and tighter CORS; identity events
+  audited; console email transport withholds content in production; generic health probe body.
+- **Observability** (`@atlas/observability`, new package): pino JSON logger with redaction and
+  correlation/tenant/trace fields (AsyncLocalStorage); OpenTelemetry tracing (manual spans on the four
+  flows, W3C propagation into BullMQ) and metrics (OTLP when configured); Sentry with scrubbing; the
+  Exam Health Monitor (Redis minute buckets written by the API, evaluated by the worker, fire/resolve
+  once) and operational alert dispatch (log + Sentry + `OPS_ALERT_EMAILS`).
+- **Dependencies remediated**: fastify 5.12.5, @nestjs/platform-fastify 11.2.7, @fastify/static 10,
+  image-size 2.0.4, Next.js 16.3.8, Prisma 7.10; overrides for fast-uri, brace-expansion,
+  browserslist, sharp, and (Prisma CLI tooling only) mysql2/deepmerge-ts. 1 low + 2 moderate remain,
+  below the gate.
+- **Contract changes** (OpenAPI regenerated): MFA routes under `/v1/platform/auth/mfa*`;
+  `POST /v1/platform/auth/login` → `{ status: 'ok' | 'mfa_required', challengeToken? }`; audit
+  `schoolId` nullable; new error code `MFA_ENROLMENT_REQUIRED`; route ids now 400 when not UUIDs.
+- **Pre-existing breakage fixed in passing**: `rls.integration.test.ts` fixture lacked the
+  `examSessionId` B16 made required (typecheck failure).
 
 ---
 
@@ -4358,6 +4397,8 @@ Depends on B21's load profile so failures are induced under realistic conditions
 Provision production infrastructure, complete the deployment pipeline, finish operational documentation, and take the platform live.
 
 ## Scope
+
+- **Carried forward from B20 (2026-10-02):** legal review of the retention schedule, data-protection posture and DPA (ADR-0028 amendment); encryption-at-rest verification on the provisioned stores; production image (inherits B20's CI scan job); `TRUST_PROXY_HOPS=1` behind the ALB; `CSRF_SECRET`/`MFA_ENCRYPTION_KEY` in the secret manager (production refuses to boot without them); Actions SHA pinning. See B20's Deferred items.
 
 - Production infrastructure: AWS ECS/Fargate, RDS PostgreSQL with Multi-AZ, managed Redis, S3, load balancer, DNS, TLS (`09 §31`–`§33`).
 - Wildcard DNS and TLS if `ADR-0005` selected per-school subdomains.

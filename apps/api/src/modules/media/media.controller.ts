@@ -10,6 +10,7 @@ import {
   RequestMediaUploadResponseDto,
   SignedMediaUrlResponseDto,
 } from './dto/media.dto.js';
+import { RateLimitClass } from '../../security/rate-limit.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
@@ -29,6 +30,7 @@ export class MediaController {
   constructor(private readonly media: MediaService) {}
 
   @Post('uploads')
+  @RateLimitClass('heavy')
   @Authorized('media.upload')
   @ApiOperation({
     summary: 'Request an upload target for a question image/diagram/other asset (07 §11.3).',
@@ -50,6 +52,7 @@ export class MediaController {
   }
 
   @Post('uploads/:id/complete')
+  @RateLimitClass('heavy')
   @Authorized('media.upload')
   @ApiOperation({ summary: 'Finalise and validate an uploaded asset by content sniffing.' })
   @ApiOkResponse({ type: MediaAssetSummaryResponseDto })

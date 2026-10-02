@@ -189,9 +189,44 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     },
   },
 
+  // B20 (08 §16 "stronger controls" for administrative operations;
+  // project-owner decision 2026-10-02): Software Admin TOTP MFA. Software
+  // Admin only — MFA for school roles is Candidate/Deferred, so every school
+  // role is denied (fail-closed) rather than granted an unbuilt capability.
+  {
+    id: 'identity.mfa.manage',
+    section: 'Identity & Sessions',
+    label:
+      'Enrol, view or disable own second factor (TOTP) — B20, Software Admin only; not an explicit 02 row.',
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: granted('SELF'),
+      SCHOOL_ADMIN: denied(),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
+
   // ------------------------------------------------------------------
   // Platform / School
   // ------------------------------------------------------------------
+  {
+    id: 'platform.admin.resetMfa',
+    section: 'Platform / School',
+    label:
+      "Reset another Software Admin's second factor (lost device) — B20, reason required, audited.",
+    action: 'EXECUTE',
+    grants: {
+      SOFTWARE_ADMIN: granted('PLATFORM'),
+      SCHOOL_ADMIN: denied(),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
   {
     id: 'platform.school.viewAll',
     section: 'Platform / School',

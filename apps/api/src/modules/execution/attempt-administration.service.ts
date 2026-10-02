@@ -400,24 +400,22 @@ export class AttemptAdministrationService {
         entityId: attemptId,
         metadata: { examId: attempt.examId },
       },
-      async () => {
-        const updated = await withTenant(prisma, schoolId, (tx) =>
-          tx.examAttempt.updateMany({
-            where: {
-              schoolId,
-              id: attemptId,
-              state: { in: ['IN_PROGRESS', 'SUBMITTED', 'AUTO_SUBMITTED'] },
-            },
-            data: { state: 'INVALIDATED', invalidationReason: reason, invalidatedAt: new Date() },
-          }),
-        );
+      async (tx) => {
+        const updated = await tx.examAttempt.updateMany({
+          where: {
+            schoolId,
+            id: attemptId,
+            state: { in: ['IN_PROGRESS', 'SUBMITTED', 'AUTO_SUBMITTED'] },
+          },
+          data: { state: 'INVALIDATED', invalidationReason: reason, invalidatedAt: new Date() },
+        });
         if (updated.count !== 1) {
           throw new AppHttpException({
             code: 'CONFLICT',
             message: 'This attempt cannot be invalidated.',
           });
         }
-        await this.audit.record({
+        await this.audit.recordInTx(tx, {
           schoolId,
           actorUserId: actor.userId,
           actorRole: 'SOFTWARE_ADMIN',

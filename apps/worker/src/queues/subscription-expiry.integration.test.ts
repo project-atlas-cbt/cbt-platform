@@ -15,6 +15,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import { runSubscriptionExpirySweep } from './subscription-expiry.queue.js';
 import { PLATFORM_METRICS_CACHE_KEY, type PlatformMetricsSnapshot } from '@atlas/domain';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 const ownerDatabaseUrl = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,7 +85,7 @@ async function cleanupSchool(schoolId: string): Promise<void> {
     await tx.roleAssignment.deleteMany({ where: { schoolId } });
     await tx.subscription.deleteMany({ where: { schoolId } });
   });
-  await prisma.school.delete({ where: { id: schoolId } });
+  await ownerPrisma().school.delete({ where: { id: schoolId } });
   if (membership) await prisma.user.delete({ where: { id: membership.userId } });
 }
 

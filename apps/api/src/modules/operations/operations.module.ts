@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module.js';
-import { AuditActionRegistry } from './audit-action.registry.js';
 import { AuditVocabularyCoverageService } from './audit-vocabulary-coverage.service.js';
-import { AuditService } from './audit-event.service.js';
+import { AuditCoreModule } from './audit-core.module.js';
+import { OperationsAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 import { AuditQueryService } from './audit-query.service.js';
 import { AuditController } from './audit.controller.js';
 
@@ -43,9 +43,16 @@ import { AuditController } from './audit.controller.js';
  * different table/concern and needs its own BullMQ queue/worker wiring.
  */
 @Module({
-  imports: [IdentityModule],
+  imports: [IdentityModule, AuditCoreModule],
   controllers: [AuditController],
-  providers: [AuditService, AuditActionRegistry, AuditVocabularyCoverageService, AuditQueryService],
-  exports: [AuditService, AuditActionRegistry],
+  providers: [
+    AuditVocabularyCoverageService,
+    AuditQueryService,
+    OperationsAuditActionRegistrationProvider,
+  ],
+  // B20: AuditService/AuditActionRegistry now live in the global
+  // AuditCoreModule (see its doc comment); re-exported here so every
+  // existing `imports: [OperationsModule]` keeps resolving them unchanged.
+  exports: [AuditCoreModule],
 })
 export class OperationsModule {}

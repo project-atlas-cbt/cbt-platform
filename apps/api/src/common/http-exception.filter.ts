@@ -9,6 +9,7 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { buildErrorEnvelope } from '@atlas/validation';
 import { isKnownBaseErrorCode } from '@atlas/domain';
+import { captureError } from '@atlas/observability';
 import { AppHttpException } from './app-http-exception.js';
 
 /**
@@ -56,7 +57,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    this.logger.error(exception instanceof Error ? exception.stack : exception);
+    // B20: structured, with the correlation id the client also receives —
+    // the pino logger serialises `err` with its message/stack scrubbed
+    // (a driver error can quote row values). Never the request body.
+    this.logger.error({
+      msg: 'Unhandled exception',
+      err: exception,
+      correlationId,
+      method: req.method,
+      route: req.routeOptions?.url,
+    });
+    captureError(exception, { correlationId });
     res.status(HttpStatus.INTERNAL_SERVER_ERROR).send(
       buildErrorEnvelope({
         code: 'INTERNAL_ERROR',

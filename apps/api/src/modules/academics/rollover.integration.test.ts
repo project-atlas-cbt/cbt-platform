@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import { RolloverService } from './rollover.service.js';
+import { ownerPrisma } from '../../test-support/owner-prisma.js';
 
 const schoolIds: string[] = [];
 const userIds: string[] = [];
@@ -26,7 +27,7 @@ afterAll(async () => {
       await tx.roleAssignment.deleteMany({ where: { schoolId } });
       await tx.schoolMembership.deleteMany({ where: { schoolId } });
     });
-    await prisma.school.delete({ where: { id: schoolId } });
+    await ownerPrisma().school.delete({ where: { id: schoolId } });
   }
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
 });

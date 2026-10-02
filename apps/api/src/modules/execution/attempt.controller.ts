@@ -22,6 +22,7 @@ import {
   SaveAnswerDto,
   SaveAnswerResponseDto,
 } from './dto/attempt.dto.js';
+import { RateLimitClass } from '../../security/rate-limit.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
@@ -80,6 +81,7 @@ export class AttemptController {
   }
 
   @Put(':id/answers/:questionId')
+  @RateLimitClass('answer')
   @HttpCode(HttpStatus.OK)
   @Authorized('studentCbt.answer')
   @ApiOperation({ summary: 'Save one answer — idempotent, sequenced (ADR-0003/ADR-0007).' })
@@ -102,6 +104,7 @@ export class AttemptController {
   }
 
   @Post(':id/answers/batch')
+  @RateLimitClass('answer')
   @HttpCode(HttpStatus.OK)
   @Authorized('studentCbt.answer')
   @ApiOperation({ summary: 'Flush an offline answer queue — never all-or-nothing.' })
@@ -122,6 +125,7 @@ export class AttemptController {
   }
 
   @Post(':id/heartbeat')
+  @RateLimitClass('answer')
   @HttpCode(HttpStatus.OK)
   @Authorized('studentCbt.navigate')
   @ApiOperation({
@@ -140,6 +144,7 @@ export class AttemptController {
   }
 
   @Post(':id/events')
+  @RateLimitClass('answer')
   @HttpCode(HttpStatus.OK)
   @Authorized('studentCbt.navigate')
   @ApiOperation({
@@ -188,6 +193,7 @@ export class AttemptController {
   }
 
   @Get(':id/status')
+  @RateLimitClass('answer')
   @Authorized('studentCbt.resume')
   @ApiOperation({
     summary:

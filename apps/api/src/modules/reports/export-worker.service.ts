@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Worker } from 'bullmq';
-import type { Env } from '@atlas/config';
+import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import { EXPORT_EXPIRY_QUEUE_NAME, EXPORT_QUEUE_NAME, type ExportJobPayload } from '@atlas/domain';
 import { ExportService } from './export.service.js';
 
@@ -22,13 +22,13 @@ export class ExportWorkerService implements OnModuleInit, OnApplicationShutdown 
     this.worker = new Worker<ExportJobPayload>(
       EXPORT_QUEUE_NAME,
       async (job) => this.exports.generate(job.data.schoolId, job.data.exportJobId),
-      { connection: { host: url.hostname, port: Number(url.port) || 6379 } },
+      { connection: redisConnectionFromUrl(url.toString()) },
     );
     this.worker.on('error', (error) => this.logger.error(error.message, error.stack));
     this.expiryWorker = new Worker<ExportJobPayload>(
       EXPORT_EXPIRY_QUEUE_NAME,
       async (job) => this.exports.expire(job.data.schoolId, job.data.exportJobId),
-      { connection: { host: url.hostname, port: Number(url.port) || 6379 } },
+      { connection: redisConnectionFromUrl(url.toString()) },
     );
     this.expiryWorker.on('error', (error) => this.logger.error(error.message, error.stack));
     // Delayed jobs are the fast path; this bounded, tenant-safe sweep repairs

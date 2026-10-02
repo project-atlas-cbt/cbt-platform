@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Redis } from 'ioredis';
 import type { Env } from '@atlas/config';
+import { recordHealthCounter } from '@atlas/observability';
 import { REDIS_CLIENT } from '../../redis/redis.module.js';
 
 const KEY_PREFIX = 'atlas:auth:lockout:';
@@ -31,14 +32,21 @@ export class AuthLockoutService {
     return count !== null && Number(count) >= max;
   }
 
-  /** Increments the failure counter, starting its window on the first failure. */
-  async recordFailure(schoolId: string, loginIdentifier: string): Promise<void> {
+  /** Increments the failure counter, starting its window on the first
+   * failure. B20: returns `lockedNow` on the exact failure that crosses the
+   * threshold (so the caller audits a lockout once, not on every further
+   * attempt), and feeds the Exam Health Monitor's platform-wide
+   * auth-failure counter (AUTH_FAILURE_SPIKE — credential stuffing). */
+  async recordFailure(schoolId: string, loginIdentifier: string): Promise<{ lockedNow: boolean }> {
     const key = this.key(schoolId, loginIdentifier);
     const windowSeconds = this.config.get('AUTH_LOCKOUT_WINDOW_SECONDS', { infer: true });
     const count = await this.redis.incr(key);
     if (count === 1) {
       await this.redis.expire(key, windowSeconds);
     }
+    await recordHealthCounter(this.redis, 'auth_failure').catch(() => undefined);
+    const max = this.config.get('AUTH_LOCKOUT_MAX_ATTEMPTS', { infer: true });
+    return { lockedNow: count === max };
   }
 
   async recordSuccess(schoolId: string, loginIdentifier: string): Promise<void> {

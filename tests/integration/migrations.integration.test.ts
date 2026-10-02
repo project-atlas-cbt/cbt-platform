@@ -62,7 +62,10 @@ describe.skipIf(!testDatabaseUrl)('prisma migrations (create/apply/rollback)', (
     // migrations.seed) — --force alone now covers both the confirmation
     // prompt and any seed step.
     await runPrisma(['migrate', 'reset', '--force'], testDatabaseUrl);
-  });
+    // ~14s alone (a full reset, every migration, then grantAppRole's B20
+    // revoke pass); turbo runs it alongside other suites, where it crossed
+    // the 30s default.
+  }, 90_000);
 
   it('leaves a clean, empty schema after reset', async () => {
     const count = await prisma.school.count();

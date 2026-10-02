@@ -26,7 +26,7 @@
 
 **All decision gates are resolved; `B0` is done.** See §7 for what each gate settled.
 
-Two decisions carry conditions: [ADR-0028](../decisions/ADR-0028-data-protection-and-retention.md)'s retention schedule is provisional pending legal review at B20, and [ADR-0032](../decisions/ADR-0032-aws-region.md)'s region must be validated by measurement at B21.
+Two decisions carry conditions: [ADR-0028](../decisions/ADR-0028-data-protection-and-retention.md)'s retention schedule was formalised in B20 with its legal review carried to B23 as a launch-readiness item, and [ADR-0032](../decisions/ADR-0032-aws-region.md)'s region must be validated by measurement at B21.
 
 ---
 
@@ -399,5 +399,5 @@ Makeup` is now next on the critical path** — the phase that must also settle t
 2. **In parallel, build `F13`'s offline exam engine** — Dexie schema, sync queue, state machine, and timer, against the now-frozen, published `attempt.v1` contract (11 routes, `apps/api/openapi.json`/`packages/contracts`). This is the longest-lead frontend item and the most valuable parallelisation available; F0's PWA/service-worker scaffolding (`app/sw.ts`) is what F13 builds its runtime caching rules on top of. `ADR-0021`'s offline-media contract (cache media into the client at attempt start, using the attempt package's own media manifest) is ready for F13 to consume — B13 delivers the manifest with freshly-signed URLs; F13 owns the actual client-side caching/re-fetch-on-eviction behaviour.
 3. **Provision `eu-west-1`** per [ADR-0032](../decisions/ADR-0032-aws-region.md), with real wildcard DNS and TLS for the per-school subdomains required by [ADR-0005](../decisions/ADR-0005-tenant-resolution-at-login.md) — this is `B23` scope, not a blocker for any phase so far: B0 already delivers the resolution mechanism and a working local-dev subdomain convention. `B4`'s real AWS S3 bucket-policy/IAM provisioning is the same class of `B23` deferral.
 4. **Select the transactional email provider** per [ADR-0019](../decisions/ADR-0019-transactional-messaging-channel.md) and configure SPF, DKIM and DMARC — also `B23` scope: B0 ships the `NotificationChannel` abstraction with a console/dev provider, and B1's password-reset dispatch already proves it end to end against that provider; the real one swaps in later behind the same interface.
-5. **Carry the two conditional decisions forward**: schedule ADR-0028's legal review into B20 and ADR-0032's RTT measurement into B21, so neither is forgotten.
+5. **Carry the two conditional decisions forward**: ADR-0028's legal review (moved from B20 to B23 as a launch-readiness item by the 2026-10-02 amendment — schedule, posture and DPA drafted in B20) and ADR-0032's RTT measurement into B21, so neither is forgotten.
 6. **Consider real virus/malware scanning** (ClamAV or equivalent) for the media upload pipeline as a future security-hardening candidate — `B4` confirmed this out of scope for now (content-mismatch rejection via magic-byte sniffing is not malware detection).

@@ -24,7 +24,11 @@ admin.<root>                  → platform web (Software Admin), per 04 §2 / AD
   `atlas.app` — no leading dot needed; modern browsers treat a `Domain` attribute as including
   subdomains), `Secure`, `HttpOnly`, `SameSite=Lax`. This is what makes the cookie readable by
   `api.<root>` regardless of which school subdomain the browser is on.
-- **CORS**: any `https://` origin under `<root>` is allowed (see `apps/api/src/security/cors.ts`)
+- **Software Admin cookie** (B20): `atlas_platform_session` is **host-only** (no `Domain`
+  attribute), `SameSite=Strict`, 8-hour absolute / 30-minute idle — it is never sent to a school
+  subdomain. Only the school session cookie uses `Domain=<root>`.
+- **CORS**: an `https://` origin of exactly one well-formed DNS label under `<root>` is allowed
+  (B20 tightened this from "any subdomain"; nested names are refused) (see `apps/api/src/security/cors.ts`)
   — a single static origin can't express "every school's subdomain."
 - **Wildcard DNS/TLS provisioning** for `*.<root>` is deferred to `B23` (ADR-0005's own "Required
   changes" table) — B0 only delivers the resolution _mechanism_, not the production certificate.

@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, type ConnectionOptions } from 'bullmq';
-import type { Env } from '@atlas/config';
+import { redisConnectionFromUrl, type Env } from '@atlas/config';
 
 export const IMPORT_VALIDATION_QUEUE_NAME = 'atlas-import-validation';
 export const IMPORT_COMMIT_QUEUE_NAME = 'atlas-import-commit';
@@ -12,8 +12,8 @@ export interface ImportJobPayload {
 }
 
 export function importRedisConnectionOptions(redisUrl: string): ConnectionOptions {
-  const url = new URL(redisUrl);
-  return { host: url.hostname, port: Number(url.port) || 6379 };
+  // B20: full URL (credentials + TLS) — see @atlas/config's redis-connection.ts.
+  return redisConnectionFromUrl(redisUrl);
 }
 
 /**

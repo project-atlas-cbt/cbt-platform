@@ -26,6 +26,7 @@ import { AttemptMarkingQueueService } from './attempt-marking-queue.service.js';
 import { AttemptStatusService } from './attempt-status.service.js';
 import { StudentAssessmentController } from './student-assessment.controller.js';
 import { StudentAssessmentService } from './student-assessment.service.js';
+import { ExamTelemetryService } from './exam-telemetry.service.js';
 
 /**
  * `exam-control.v1` (B12 — Exam Activation & Control; ADR-0006, ADR-0009,
@@ -73,6 +74,7 @@ import { StudentAssessmentService } from './student-assessment.service.js';
   ],
   exports: [AttemptAdministrationService],
   providers: [
+    ExamTelemetryService,
     ExamLifecycleService,
     ExamSessionService,
     ExamSessionParticipantService,

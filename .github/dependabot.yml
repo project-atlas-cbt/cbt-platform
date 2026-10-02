@@ -1,0 +1,21 @@
+# B20: dependency freshness. Security advisories are still enforced at merge
+# time by the CI `supply-chain` job; this keeps the tree from drifting into
+# them in the first place.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /infra/docker
+    schedule:
+      interval: weekly

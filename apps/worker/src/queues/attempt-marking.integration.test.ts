@@ -21,6 +21,18 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { AttemptSnapshotDocumentV1 } from '@atlas/domain';
 import { runAttemptMarking } from './attempt-marking.queue.js';
+import {
+  CRITICAL_SPANS,
+  InMemorySpanExporter,
+  initTelemetry,
+  injectTraceContext,
+  withSpan,
+} from '@atlas/observability';
+
+// B20 DoD 5: result generation is traced, continuing the submit trace.
+const spanExporter = new InMemorySpanExporter();
+initTelemetry({ serviceName: 'atlas-worker-test', exporter: spanExporter });
+import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 const ownerDatabaseUrl = process.env.DATABASE_URL_TEST ?? process.env.DATABASE_URL;
 
@@ -357,7 +369,9 @@ async function cleanupSchool(schoolId: string): Promise<void> {
   await withTenant(prisma, schoolId, (tx) =>
     tx.schoolMembership.deleteMany({ where: { schoolId } }),
   ).catch(() => undefined);
-  await prisma.school.delete({ where: { id: schoolId } }).catch(() => undefined);
+  await ownerPrisma()
+    .school.delete({ where: { id: schoolId } })
+    .catch(() => undefined);
   for (const { userId } of userIds) {
     await prisma.user.delete({ where: { id: userId } }).catch(() => undefined);
   }
@@ -407,6 +421,32 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
       awardedMarks: 0,
       maximumMarks: 2,
     });
+  });
+
+  it('B20 DoD 5: result generation is traced and continues the trace of the submit that enqueued it', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+      { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+    ]);
+    // Stand-in for the API's submit span + AttemptMarkingQueueService's carrier.
+    let submitTraceId = '';
+    let trace: Record<string, string> = {};
+    await withSpan('attempt.submit', {}, (span) => {
+      submitTraceId = span.spanContext().traceId;
+      trace = injectTraceContext();
+      return Promise.resolve();
+    });
+    spanExporter.reset();
+
+    await runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId, trace });
+
+    const span = spanExporter
+      .getFinishedSpans()
+      .find((s) => s.name === CRITICAL_SPANS.resultGenerate);
+    expect(span?.spanContext().traceId).toBe(submitTraceId);
+    expect(span?.attributes['atlas.attempt_id']).toBe(attemptId);
+    expect(span?.status.code).toBe(1); // OK
   });
 
   it('DoD 9: re-running marking is idempotent — identical output, no duplicate rows', async () => {

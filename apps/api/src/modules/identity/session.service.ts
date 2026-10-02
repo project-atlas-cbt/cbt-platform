@@ -100,6 +100,33 @@ export class SessionService {
     );
   }
 
+  /**
+   * B20 (08 §16 "secure, revocable sessions"): revokes every live session a
+   * user holds at this school — after a password change, reset, or an
+   * administrator-forced reset, a stolen session must not outlive the
+   * credential it was issued against. `exceptSessionId` keeps the caller's
+   * own session (a user changing their password stays signed in on the
+   * device they did it from). Returns how many sessions were revoked.
+   */
+  async revokeAllForUser(
+    schoolId: string,
+    userId: string,
+    exceptSessionId?: string,
+  ): Promise<number> {
+    const { count } = await withTenant(prisma, schoolId, (tx) =>
+      tx.session.updateMany({
+        where: {
+          schoolId,
+          userId,
+          revokedAt: null,
+          ...(exceptSessionId !== undefined && { id: { not: exceptSessionId } }),
+        },
+        data: { revokedAt: new Date() },
+      }),
+    );
+    return count;
+  }
+
   clearCookie(res: FastifyReply): void {
     // Must carry the same Domain the cookie was originally set with, or the
     // browser treats this as an unrelated cookie and the real one survives.

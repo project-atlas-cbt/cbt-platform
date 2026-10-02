@@ -10,6 +10,10 @@ import { hash, type Algorithm } from '@node-rs/argon2';
 import { createPrismaClient } from '../src/client.js';
 
 const prisma = createPrismaClient();
+// B20: platform authority (platform_role_assignments) is no longer
+// writable by the runtime role — creating the first Software Admin is an
+// operator action, so it runs on the schema-owner connection.
+const owner = createPrismaClient(process.env.DATABASE_URL);
 
 // Mirrors apps/api/src/modules/identity/password.service.ts's Argon2id
 // profile exactly (same reasoning as this codebase's other "convention
@@ -38,17 +42,24 @@ async function main() {
   // scope, so this ships with a directly-usable password, not a
   // MUST_CHANGE_PASSWORD one). Idempotent: safe to re-run.
   const email = process.env.SEED_SOFTWARE_ADMIN_EMAIL ?? 'admin@atlas.local';
-  const password = process.env.SEED_SOFTWARE_ADMIN_PASSWORD ?? 'ChangeMe123!DevOnly';
+  // B20: the dev default is only ever used for a development database; any
+  // other environment must supply its own password explicitly.
+  const isDevelopment = (process.env.NODE_ENV ?? 'development') === 'development';
+  const password =
+    process.env.SEED_SOFTWARE_ADMIN_PASSWORD ?? (isDevelopment ? 'ChangeMe123!DevOnly' : undefined);
+  if (!password) {
+    throw new Error('SEED_SOFTWARE_ADMIN_PASSWORD is required outside NODE_ENV=development.');
+  }
 
-  const existing = await prisma.user.findFirst({
+  const existing = await owner.user.findFirst({
     where: { email, platformRoleAssignments: { some: { status: 'ACTIVE' } } },
   });
 
   if (existing) {
-    console.log(`[seed] software admin already exists: ${existing.id} (${email})`);
+    console.log(`[seed] software admin already exists: ${existing.id}`);
   } else {
     const passwordHash = await hash(password, ARGON2_OPTIONS);
-    const admin = await prisma.user.create({
+    const admin = await owner.user.create({
       data: {
         firstName: 'Software',
         lastName: 'Admin',
@@ -60,9 +71,12 @@ async function main() {
         platformRoleAssignments: { create: { role: 'SOFTWARE_ADMIN' } },
       },
     });
-    console.log(`[seed] software admin created: ${admin.id} (${email})`);
-    console.log(`[seed] software admin password: ${password}`);
-    console.log('[seed] CHANGE THIS PASSWORD before using anything but a local dev database.');
+    console.log(`[seed] software admin created: ${admin.id}`);
+    // B20 log hygiene: the password is never printed. In development it is
+    // the documented default (or SEED_SOFTWARE_ADMIN_PASSWORD if set).
+    if (!process.env.SEED_SOFTWARE_ADMIN_PASSWORD) {
+      console.log('[seed] using the documented development default password (see seed.ts).');
+    }
   }
 }
 
@@ -73,4 +87,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await owner.$disconnect();
   });

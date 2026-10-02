@@ -8,7 +8,7 @@ import { z } from 'zod';
  * PROJECT.md requirement: the product name must be read from environment,
  * never hardcoded — see PRODUCT_NAME below and packages/config/src/product.ts.
  */
-export const envSchema = z.object({
+const envObject = z.object({
   PRODUCT_NAME: z.string().min(1, 'PRODUCT_NAME must not be empty'),
 
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -34,7 +34,9 @@ export const envSchema = z.object({
   DATABASE_AUDIT_READER_URL: z.url({ protocol: /^postgresql?$/ }),
   DATABASE_AUDIT_READER_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
 
-  REDIS_URL: z.url({ protocol: /^redis$/ }),
+  // B20: `rediss://` (TLS) accepted, and required in production (see the
+  // production rules at the bottom of this file).
+  REDIS_URL: z.url({ protocol: /^rediss?$/ }),
 
   SESSION_COOKIE_SECRET: z.string().min(16, 'SESSION_COOKIE_SECRET must be at least 16 chars'),
   WEB_ORIGIN: z.url(),
@@ -200,6 +202,122 @@ export const envSchema = z.object({
   // value instead of silently falling back — an integrity parameter, never
   // a per-school policy. Default: 60 seconds.
   ATTEMPT_GRACE_WINDOW_SECONDS: z.coerce.number().int().min(0).default(60),
+
+  // ---- B20: Security hardening ---------------------------------------------
+  // Separate signing secret for the CSRF double-submit cookie, so the
+  // session and CSRF keys can rotate independently. Optional outside
+  // production (falls back to SESSION_COOKIE_SECRET); required there.
+  CSRF_SECRET: z.string().min(32, 'CSRF_SECRET must be at least 32 chars').optional(),
+
+  // How many reverse-proxy hops to trust for the client IP (X-Forwarded-For).
+  // 0 = trust none (local dev, direct exposure). Production behind the ALB
+  // is 1 (B23). Without this, every request behind a load balancer shares
+  // the balancer's IP — and every per-IP rate limit becomes one global one.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+
+  // Per-class rate limits (security/rate-limit.ts). `answer` is per
+  // authenticated session — never per IP, because a school lab puts 40
+  // students behind one NAT address (R-09). `authIdentifier` bounds
+  // guessing against one account; `authIp` bounds credential stuffing
+  // from one address while still letting a whole lab sign in at once.
+  RATE_LIMIT_ANSWER_MAX: z.coerce.number().int().positive().default(600),
+  RATE_LIMIT_HEAVY_MAX: z.coerce.number().int().positive().default(30),
+  RATE_LIMIT_AUTH_IDENTIFIER_MAX: z.coerce.number().int().positive().default(10),
+  RATE_LIMIT_AUTH_IP_MAX: z.coerce.number().int().positive().default(120),
+
+  // Software Admin session hardening (08 §16 "stronger controls" for
+  // administrative operations). Defaults: 8-hour absolute, 30-minute idle.
+  PLATFORM_SESSION_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(8 * 60 * 60),
+  PLATFORM_SESSION_IDLE_TIMEOUT_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30 * 60),
+
+  // Software Admin TOTP MFA. MFA_ENCRYPTION_KEY seals TOTP secrets at rest
+  // (AES-256-GCM); required in production. PLATFORM_MFA_REQUIRED turns on
+  // enforcement for unenrolled admins — left false until F20 ships the
+  // enrolment UI, so turning it on can't lock every admin out of the web app.
+  MFA_ENCRYPTION_KEY: z.string().min(32, 'MFA_ENCRYPTION_KEY must be at least 32 chars').optional(),
+  PLATFORM_MFA_REQUIRED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
+  // Observability (08 §18, 09 §35). All optional: unset means no export
+  // (logs still go to stdout as JSON).
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
+  SENTRY_DSN: z.url().optional(),
+  RELEASE_VERSION: z.string().optional(),
+
+  // Exam Health Monitor (09 §37) and operational/security alert dispatch.
+  // OPS_ALERT_EMAILS: comma-separated operator addresses, delivered through
+  // the NotificationChannel (console until B23's real provider).
+  OPS_ALERT_EMAILS: z.string().optional().default(''),
+  EXAM_HEALTH_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 1000),
+  EXAM_HEALTH_WINDOW_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
+  EXAM_HEALTH_ANSWER_SUCCESS_MIN: z.coerce.number().min(0).max(1).default(0.95),
+  EXAM_HEALTH_ANSWER_MIN_SAMPLE: z.coerce.number().int().min(1).default(50),
+
+  // Retention sweep (ADR-0028 amended in B20) — operational data only.
+  RETENTION_SWEEP_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(24 * 60 * 60 * 1000),
+});
+
+const DEV_SECRET_MARKERS = ['dev-only', 'change-me', 'changeme', 'ci-only', 'example', 'secret'];
+
+/**
+ * B20: production refuses to boot on configuration that is only safe in
+ * development — dev-default secrets, plaintext database/Redis transport,
+ * a missing CSRF or MFA key. Encryption in transit is enforced here because
+ * this is the last point the application can refuse it; encryption at rest
+ * is an infrastructure property verified at B23 provisioning.
+ */
+export const envSchema = envObject.superRefine((env, ctx) => {
+  if (env.NODE_ENV !== 'production') return;
+  const fail = (path: string, message: string) =>
+    ctx.addIssue({ code: 'custom', path: [path], message });
+
+  const weak = (v: string | undefined) =>
+    !v || v.length < 32 || DEV_SECRET_MARKERS.some((m) => v.toLowerCase().includes(m));
+  if (weak(env.SESSION_COOKIE_SECRET)) {
+    fail(
+      'SESSION_COOKIE_SECRET',
+      'must be ≥32 random chars and not a dev/CI default in production',
+    );
+  }
+  if (weak(env.CSRF_SECRET)) {
+    fail('CSRF_SECRET', 'is required in production (≥32 random chars, not a dev default)');
+  } else if (env.CSRF_SECRET === env.SESSION_COOKIE_SECRET) {
+    fail('CSRF_SECRET', 'must differ from SESSION_COOKIE_SECRET');
+  }
+  if (weak(env.MFA_ENCRYPTION_KEY)) {
+    fail('MFA_ENCRYPTION_KEY', 'is required in production (≥32 random chars)');
+  }
+  for (const key of ['DATABASE_URL', 'DATABASE_APP_URL', 'DATABASE_AUDIT_READER_URL'] as const) {
+    const mode = new URL(env[key]).searchParams.get('sslmode');
+    if (mode !== 'require' && mode !== 'verify-ca' && mode !== 'verify-full') {
+      fail(key, 'must set sslmode=require (or verify-ca/verify-full) in production');
+    }
+  }
+  if (!env.REDIS_URL.startsWith('rediss://')) {
+    fail('REDIS_URL', 'must use rediss:// (TLS) in production');
+  }
+  if (!env.COOKIE_DOMAIN) {
+    fail('COOKIE_DOMAIN', 'must be set in production (ADR-0022)');
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;

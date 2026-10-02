@@ -19,6 +19,10 @@ import { prisma, withTenant } from '@atlas/db';
 import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
+import {
+  grantSoftwareAdmin,
+  revokeSoftwareAdminFixtures,
+} from '../../test-support/owner-prisma.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -142,9 +146,7 @@ afterAll(async () => {
   }
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
   await prisma.platformSession.deleteMany({ where: { userId: { in: createdPlatformUserIds } } });
-  await prisma.platformRoleAssignment.deleteMany({
-    where: { userId: { in: createdPlatformUserIds } },
-  });
+  await revokeSoftwareAdminFixtures(createdPlatformUserIds);
   await prisma.user.deleteMany({ where: { id: { in: createdPlatformUserIds } } });
   await safeDeleteSchools(prisma, createdSchoolIds);
 });
@@ -162,9 +164,10 @@ async function seedPlatformAdmin(): Promise<{ userId: string; email: string; pas
       passwordHash,
       status: 'ACTIVE',
       credentialState: 'OK',
-      platformRoleAssignments: { create: { role: 'SOFTWARE_ADMIN' } },
     },
   });
+  // B20: platform authority is owner-provisioned; atlas_app can't write it.
+  await grantSoftwareAdmin(user.id);
   createdPlatformUserIds.push(user.id);
   return { userId: user.id, email, password };
 }

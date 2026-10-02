@@ -29,6 +29,12 @@ import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
 import { AttemptMarkingQueueService } from './attempt-marking-queue.service.js';
+import { CRITICAL_SPANS, InMemorySpanExporter, initTelemetry } from '@atlas/observability';
+
+// B20 DoD 5: the critical-flow spans are recorded in-memory for this suite,
+// which already drives the real start → answer save → submit paths.
+const spanExporter = new InMemorySpanExporter();
+initTelemetry({ serviceName: 'atlas-api-test', exporter: spanExporter });
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -968,6 +974,36 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
   // ---------------------------------------------------------------------
   // B14 — Submission & Marking
   // ---------------------------------------------------------------------
+
+  it('B20 DoD 5: start, answer save and submit are each traced, with id-only attributes', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    spanExporter.reset();
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const questionId = pkg.questions[0]!.examQuestionId;
+    const saveRes = await put(studentA, `/attempts/${pkg.attemptId}/answers/${questionId}`, {
+      selectedOptionId: pkg.questions[0]!.options[0]!.optionId,
+      sequenceNumber: 1,
+    });
+    expect(saveRes.statusCode).toBe(200);
+    expect((await post(studentA, `/attempts/${pkg.attemptId}/submit`, {})).statusCode).toBe(200);
+
+    const spans = spanExporter.getFinishedSpans();
+    const byName = (n: string) => spans.filter((sp) => sp.name === n);
+    const [start] = byName(CRITICAL_SPANS.attemptStart);
+    const [save] = byName(CRITICAL_SPANS.answerSave);
+    const [submit] = byName(CRITICAL_SPANS.attemptSubmit);
+    expect(start?.attributes['atlas.attempt_id']).toBe(pkg.attemptId);
+    expect(start?.attributes['atlas.exam_id']).toBe(examId);
+    expect(save?.attributes['atlas.attempt_id']).toBe(pkg.attemptId);
+    expect(save?.attributes['atlas.accepted']).toBe(true);
+    expect(submit?.attributes['atlas.attempt_id']).toBe(pkg.attemptId);
+    for (const sp of [start, save, submit]) {
+      expect(sp?.status.code).toBe(1); // OK
+      // Ids only — never the answer, the option text or anyone's name.
+      expect(JSON.stringify(sp?.attributes)).not.toMatch(/content|displayName|selectedOption/i);
+    }
+  });
 
   it('B14: submit enqueues exactly one marking job after the transition commits, and a duplicate submit never re-enqueues', async () => {
     const examId = await buildReadyExam();

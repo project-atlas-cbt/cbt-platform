@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '@atlas/db';
 import type { Env } from '@atlas/config';
+import { enrichLogContext } from '@atlas/observability';
 import { TenancyContextService } from './tenancy-context.service.js';
 import { parseTenantSubdomain } from './subdomain.js';
 
@@ -56,6 +57,7 @@ export class TenancyMiddleware implements NestMiddleware {
     prisma.school
       .findUnique({ where: { subdomain }, select: { id: true } })
       .then((school) => {
+        if (school) enrichLogContext({ schoolId: school.id });
         this.tenancy.run({ schoolId: school?.id ?? null, subdomain }, next);
       })
       .catch((err: unknown) => {
@@ -65,7 +67,7 @@ export class TenancyMiddleware implements NestMiddleware {
         // database outage distinctly; letting every other request 500 on
         // top of that would just be noise. B1/B2 decide what an
         // unresolved tenant means for a route that actually needs one.
-        this.logger.warn(`School lookup failed for subdomain "${subdomain}": ${String(err)}`);
+        this.logger.warn({ msg: 'School lookup failed for subdomain', err, subdomain });
         this.tenancy.run({ schoolId: null, subdomain }, next);
       });
   }

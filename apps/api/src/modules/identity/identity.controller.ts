@@ -1,6 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '@atlas/db';
 import { AppHttpException } from '../../common/app-http-exception.js';
@@ -18,12 +17,7 @@ import { PasswordResetConfirmDto, PasswordResetRequestDto } from './dto/password
 import { MeResponseDto } from './dto/me-response.dto.js';
 import { StatusResponseDto } from './dto/status-response.dto.js';
 import { TenantResolveResponseDto } from './dto/tenant-resolve-response.dto.js';
-
-// Tight, endpoint-specific overrides on top of SecurityModule's generous
-// global ThrottlerGuard baseline (security.module.ts's own comment
-// anticipates exactly this). Keyed 'default' to match the one throttler
-// SecurityModule registers.
-const AUTH_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
+import { RateLimitClass } from '../../security/rate-limit.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   // AuthGuard always sets this before a guarded handler runs; the
@@ -102,7 +96,7 @@ export class IdentityController {
 
   @Post('auth/login')
   @HttpCode(HttpStatus.OK)
-  @Throttle(AUTH_THROTTLE)
+  @RateLimitClass('auth')
   @PublicRoute('Pre-authentication by definition — this is what establishes a session.')
   @ApiOperation({ summary: 'Authenticate within the resolved tenant (ADR-0005).' })
   @ApiOkResponse({ type: StatusResponseDto })
@@ -171,13 +165,14 @@ export class IdentityController {
       user.userId,
       body.currentPassword,
       body.newPassword,
+      { sessionId: user.sessionId, membershipId: user.membershipId },
     );
     return { status: 'ok' as const };
   }
 
   @Post('auth/password/reset/request')
   @HttpCode(HttpStatus.OK)
-  @Throttle(AUTH_THROTTLE)
+  @RateLimitClass('auth')
   @PublicRoute('Pre-authentication by definition — the caller has no session yet.')
   @ApiOperation({ summary: 'Initiate a staff password reset (ADR-0019 — students have no email).' })
   @ApiOkResponse({ type: StatusResponseDto })
@@ -191,7 +186,7 @@ export class IdentityController {
 
   @Post('auth/password/reset/confirm')
   @HttpCode(HttpStatus.OK)
-  @Throttle(AUTH_THROTTLE)
+  @RateLimitClass('auth')
   @PublicRoute(
     'Pre-authentication — authorized by the single-use reset token itself, not a session.',
   )

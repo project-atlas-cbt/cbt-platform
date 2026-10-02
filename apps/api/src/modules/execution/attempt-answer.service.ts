@@ -15,6 +15,8 @@ import type {
   SaveAnswerDto,
   SaveAnswerResponseDto,
 } from './dto/attempt.dto.js';
+import { CRITICAL_SPANS, withSpan } from '@atlas/observability';
+import { ExamTelemetryService } from './exam-telemetry.service.js';
 
 interface UpsertOutcome {
   accepted: boolean;
@@ -54,9 +56,91 @@ export class AttemptAnswerService {
     private readonly authz: AuthorizationService,
     private readonly attemptEvents: AttemptEventService,
     private readonly finalization: AttemptFinalizationService,
+    private readonly telemetry: ExamTelemetryService,
   ) {}
 
+  /** B20: span + outcome metric around the unchanged save path (the Exam
+   * Health Monitor's answer-save success rate is computed from these). */
   async saveAnswer(
+    schoolId: string,
+    actor: AuthorizedActor,
+    attemptId: string,
+    examQuestionId: string,
+    dto: SaveAnswerDto,
+    receivedAt: Date,
+  ): Promise<SaveAnswerResponseDto> {
+    const began = performance.now();
+    return withSpan(
+      CRITICAL_SPANS.answerSave,
+      {
+        'atlas.school_id': schoolId,
+        'atlas.attempt_id': attemptId,
+        'atlas.exam_question_id': examQuestionId,
+      },
+      async (span) => {
+        try {
+          const result = await this.saveAnswerInner(
+            schoolId,
+            actor,
+            attemptId,
+            examQuestionId,
+            dto,
+            receivedAt,
+          );
+          span.setAttribute('atlas.accepted', result.accepted);
+          this.telemetry.answerSave(result.accepted ? 'ok' : 'rejected', performance.now() - began);
+          return result;
+        } catch (err) {
+          this.telemetry.answerSave(
+            ExamTelemetryService.classifyError(err),
+            performance.now() - began,
+          );
+          throw err;
+        }
+      },
+    );
+  }
+
+  async saveAnswerBatch(
+    schoolId: string,
+    actor: AuthorizedActor,
+    attemptId: string,
+    dto: SaveAnswerBatchDto,
+    receivedAt: Date,
+  ): Promise<SaveAnswerBatchResponseDto> {
+    return withSpan(
+      CRITICAL_SPANS.answerSaveBatch,
+      {
+        'atlas.school_id': schoolId,
+        'atlas.attempt_id': attemptId,
+        'atlas.batch_size': dto.answers.length,
+      },
+      async () => {
+        try {
+          const result = await this.saveAnswerBatchInner(
+            schoolId,
+            actor,
+            attemptId,
+            dto,
+            receivedAt,
+          );
+          // Per item: an unexpected server error inside one item surfaces
+          // as rejectionCode INTERNAL (saveBatchItem's catch-all).
+          for (const item of result.results) {
+            this.telemetry.answerSave(
+              item.accepted ? 'ok' : item.rejectionCode === 'INTERNAL' ? 'failed' : 'rejected',
+            );
+          }
+          return result;
+        } catch (err) {
+          this.telemetry.answerSave(ExamTelemetryService.classifyError(err));
+          throw err;
+        }
+      },
+    );
+  }
+
+  private async saveAnswerInner(
     schoolId: string,
     actor: AuthorizedActor,
     attemptId: string,
@@ -83,7 +167,7 @@ export class AttemptAnswerService {
    * let later items see a technically-later "now" the earlier items in the
    * same request didn't (every item in one flush is admissibility-checked
    * against the same moment). */
-  async saveAnswerBatch(
+  private async saveAnswerBatchInner(
     schoolId: string,
     actor: AuthorizedActor,
     attemptId: string,

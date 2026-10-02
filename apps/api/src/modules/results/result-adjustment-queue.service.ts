@@ -1,17 +1,12 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
-import type { Env } from '@atlas/config';
+import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import { RESULT_ADJUSTMENT_QUEUE_NAME, type ResultAdjustmentJobPayload } from '@atlas/domain';
 
-/** The same small "parse a redis:// URL" helper `AttemptMarkingQueueService`
- * and `NotificationDispatchQueueService` each carry — this codebase's
- * established "convention reuse, not literal code sharing" precedent for a
- * three-line utility with no module boundary worth crossing for. */
-function redisConnectionOptions(redisUrl: string): { host: string; port: number } {
-  const url = new URL(redisUrl);
-  return { host: url.hostname, port: Number(url.port) || 6379 };
-}
+/** B20: the hand-rolled `{ host, port }` parser this used to carry dropped
+ * the Redis password and TLS; @atlas/config now owns the one full parser. */
+const redisConnectionOptions = redisConnectionFromUrl;
 
 /**
  * Producer side of B15's bulk-adjustment queue, mirroring

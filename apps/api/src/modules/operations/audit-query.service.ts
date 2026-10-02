@@ -12,7 +12,7 @@ const DEFAULT_PAGE_SIZE = 25;
 function toResponseDto(
   event: {
     id: string;
-    schoolId: string;
+    schoolId: string | null;
     actorUserId: string;
     actorRole: string;
     action: string;

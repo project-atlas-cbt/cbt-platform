@@ -41,7 +41,17 @@
     "S3_BUCKET",
     "S3_ACCESS_KEY_ID",
     "S3_SECRET_ACCESS_KEY",
-    "S3_REGION"
+    "S3_REGION",
+    // B20 security hardening / observability
+    "CSRF_SECRET",
+    "MFA_ENCRYPTION_KEY",
+    "PLATFORM_MFA_REQUIRED",
+    "TRUST_PROXY_HOPS",
+    "LOG_LEVEL",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "SENTRY_DSN",
+    "RELEASE_VERSION",
+    "OPS_ALERT_EMAILS"
   ],
   "tasks": {
     "build": {
@@ -62,6 +72,11 @@
       "dependsOn": ["^build"]
     },
     "test:integration": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    // B20: endpoint-wide security suites — their own task/CI job.
+    "test:security": {
       "dependsOn": ["^build"],
       "cache": false
     },

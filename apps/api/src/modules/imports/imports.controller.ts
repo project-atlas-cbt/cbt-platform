@@ -32,6 +32,7 @@ import {
   RequestImportUploadDto,
   RequestImportUploadResponseDto,
 } from './dto/import.dto.js';
+import { RateLimitClass } from '../../security/rate-limit.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
@@ -75,6 +76,7 @@ export class ImportsController {
   constructor(private readonly imports: ImportsService) {}
 
   @Post('upload-target')
+  @RateLimitClass('heavy')
   @Authorized('users.import.students')
   @ApiOperation({ summary: 'Request an upload target for a student/teacher import file.' })
   @ApiOkResponse({ type: RequestImportUploadResponseDto })
@@ -87,6 +89,7 @@ export class ImportsController {
   }
 
   @Post('upload-target/:id/complete')
+  @RateLimitClass('heavy')
   @Authorized('users.import.students')
   @ApiOperation({ summary: 'Finalise and validate an uploaded import file by content.' })
   @ApiOkResponse({ type: MediaAssetSummaryResponseDto })
@@ -98,6 +101,7 @@ export class ImportsController {
   }
 
   @Post('students')
+  @RateLimitClass('heavy')
   @Authorized('users.import.students')
   @ApiOperation({ summary: 'Start validating a student import file (05 §10.1).' })
   @ApiOkResponse({ type: ImportJobResponseDto })
@@ -113,6 +117,7 @@ export class ImportsController {
   }
 
   @Post('teachers')
+  @RateLimitClass('heavy')
   @Authorized('users.import.teachers')
   @ApiOperation({ summary: 'Start validating a teacher import file (05 §10.1).' })
   @ApiOkResponse({ type: ImportJobResponseDto })
@@ -137,6 +142,7 @@ export class ImportsController {
   // (media.module.ts's doc comment) — delegates to the same, already
   // type-agnostic ImportsService methods, never duplicating them.
   @Post('questions/upload-target')
+  @RateLimitClass('heavy')
   @Authorized('questionBank.import')
   @ApiOperation({ summary: 'Request an upload target for a question import file.' })
   @ApiOkResponse({ type: RequestImportUploadResponseDto })
@@ -149,6 +155,7 @@ export class ImportsController {
   }
 
   @Post('questions/upload-target/:id/complete')
+  @RateLimitClass('heavy')
   @Authorized('questionBank.import')
   @ApiOperation({ summary: 'Finalise and validate an uploaded question import file by content.' })
   @ApiOkResponse({ type: MediaAssetSummaryResponseDto })
@@ -160,6 +167,7 @@ export class ImportsController {
   }
 
   @Post('questions')
+  @RateLimitClass('heavy')
   @Authorized('questionBank.import')
   @ApiOperation({ summary: 'Start validating a question import file (05 §18).' })
   @ApiOkResponse({ type: ImportJobResponseDto })
@@ -261,6 +269,7 @@ export class ImportsController {
   }
 
   @Post(':id/confirm')
+  @RateLimitClass('heavy')
   @HttpCode(HttpStatus.OK)
   @Authorized('questionBank.import')
   @ApiOperation({ summary: 'Commit every VALID row of a validated import (05 §10.2).' })

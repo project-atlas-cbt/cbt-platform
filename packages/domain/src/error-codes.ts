@@ -26,6 +26,11 @@ export const BASE_ERROR_CODES = {
   // centrally by AuthGuard so it can't be bypassed by calling another route.
   PASSWORD_CHANGE_REQUIRED: { httpStatus: 403, retryable: false },
 
+  // B20 (Security Hardening): with PLATFORM_MFA_REQUIRED on, a Software
+  // Admin without an enrolled second factor may only reach the enrolment
+  // routes — same central-gate shape as PASSWORD_CHANGE_REQUIRED above.
+  MFA_ENROLMENT_REQUIRED: { httpStatus: 403, retryable: false },
+
   // B3 (Platform, Schools & Subscriptions).
   //
   // ACTIVATION_KEY_INVALID: the one response for "no such key" AND "this key

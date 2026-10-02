@@ -84,7 +84,10 @@ describe('CSRF protection end-to-end (ADR-0022)', () => {
   it('a POST with a matching cookie and token succeeds', async () => {
     const getRes = await app.inject({ method: 'GET', url: '/csrf-probe' });
     const signedSecret = extractSignedSecret(getRes.headers['set-cookie']);
-    const secret = unsign(signedSecret, process.env.SESSION_COOKIE_SECRET ?? '');
+    const secret = unsign(
+      signedSecret,
+      process.env.CSRF_SECRET ?? process.env.SESSION_COOKIE_SECRET ?? '',
+    );
     if (secret === false)
       throw new Error('test setup failed to unsign the cookie it just received');
 

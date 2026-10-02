@@ -80,6 +80,23 @@ export class MediaService {
       });
     }
 
+    // B20: an image type refuses any declared MIME type it could never
+    // accept (e.g. image/svg+xml, text/html) before issuing an upload URL —
+    // completeUpload()'s magic-byte sniff remains the authority; this just
+    // stops a hostile file ever reaching storage. Import types are exempt:
+    // browsers declare CSV inconsistently (text/csv, application/vnd.ms-excel,
+    // empty), so their sniff-at-complete check stands alone.
+    const declared = declaredMimeType.trim().toLowerCase();
+    if (
+      limits.allowedMimeTypes.every((m) => m.startsWith('image/')) &&
+      !limits.allowedMimeTypes.includes(declared)
+    ) {
+      throw new AppHttpException({
+        code: 'MEDIA_CONTENT_TYPE_MISMATCH',
+        message: `Declared type "${declaredMimeType}" is not accepted for ${type}.`,
+      });
+    }
+
     const id = randomUUID();
     const storageKey = this.buildStorageKey(schoolId, type, id, filename);
     const uploadUrlExpiresAt = new Date(Date.now() + UPLOAD_URL_TTL_SECONDS * 1000);

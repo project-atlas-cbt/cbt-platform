@@ -24,6 +24,11 @@ import type { Role } from '@atlas/domain';
 import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
+import {
+  grantSoftwareAdmin,
+  ownerPrisma,
+  revokeSoftwareAdminFixtures,
+} from '../../test-support/owner-prisma.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const ADMIN_HOST = `admin.${ROOT_DOMAIN}`;
@@ -53,7 +58,9 @@ afterAll(async () => {
     // explicitly allows that), while attempts/sessions go first because they
     // RESTRICT on the exam.
     try {
-      await withTenant(prisma, schoolId, async (tx) => {
+      // B20: atlas_app holds no DELETE on academic evidence (exam_attempts —
+      // packages/db/src/privileges.ts); fixture teardown is an owner action.
+      await ownerPrisma().$transaction(async (tx) => {
         await tx.examAttempt.deleteMany({ where: { schoolId } });
         await tx.examSession.deleteMany({ where: { schoolId } });
         await tx.exam.deleteMany({ where: { schoolId } });
@@ -66,9 +73,7 @@ afterAll(async () => {
   }
   await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
   await prisma.platformSession.deleteMany({ where: { userId: { in: createdPlatformUserIds } } });
-  await prisma.platformRoleAssignment.deleteMany({
-    where: { userId: { in: createdPlatformUserIds } },
-  });
+  await revokeSoftwareAdminFixtures(createdPlatformUserIds);
   await prisma.user.deleteMany({ where: { id: { in: createdPlatformUserIds } } });
   await safeDeleteSchools(prisma, createdSchoolIds);
 });
@@ -157,9 +162,10 @@ async function seedPlatformAdmin(): Promise<{ userId: string; email: string; pas
       passwordHash,
       status: 'ACTIVE',
       credentialState: 'OK',
-      platformRoleAssignments: { create: { role: 'SOFTWARE_ADMIN' } },
     },
   });
+  // B20: platform authority is owner-provisioned; atlas_app can't write it.
+  await grantSoftwareAdmin(user.id);
   createdPlatformUserIds.push(user.id);
   return { userId: user.id, email, password };
 }

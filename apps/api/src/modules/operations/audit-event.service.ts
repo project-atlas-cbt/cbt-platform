@@ -48,6 +48,33 @@ export class AuditService {
     await withTenant(prisma, event.schoolId, (tx) => this.recordInTx(tx, event));
   }
 
+  /**
+   * B20: a platform-level event with no affected school — Software Admin
+   * MFA enrolment/reset, platform sign-in, operator commands. Stored with
+   * `school_id` NULL under the B20 `audit_events_platform_insert` RLS policy,
+   * which admits the INSERT and nothing else: atlas_app can never read
+   * these rows back (only `atlas_audit_reader` can). `createMany` because
+   * it issues no RETURNING, which would need SELECT visibility.
+   */
+  async recordPlatform(event: Omit<RecordAuditEventInput, 'schoolId'>): Promise<void> {
+    this.actions.warnIfUnknown(event.action);
+    await prisma.auditEvent.createMany({
+      data: [
+        {
+          schoolId: null,
+          actorUserId: event.actorUserId,
+          actorRole: event.actorRole,
+          action: event.action,
+          breakGlass: event.breakGlass ?? false,
+          ...(event.reason !== undefined && { reason: event.reason }),
+          ...(event.entityType !== undefined && { entityType: event.entityType }),
+          ...(event.entityId !== undefined && { entityId: event.entityId }),
+          ...(event.metadata !== undefined && { metadata: event.metadata }),
+        },
+      ],
+    });
+  }
+
   /** Critical workflows use this variant so their state transition and its
    * audit evidence succeed or roll back together. */
   async recordInTx(tx: Prisma.TransactionClient, event: RecordAuditEventInput): Promise<void> {

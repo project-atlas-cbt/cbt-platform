@@ -1,12 +1,30 @@
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
-import { loadEnv, loadRootEnv } from '@atlas/config';
+import { loadEnv, loadRootEnv, redisConnectionFromUrl } from '@atlas/config';
 import { prisma } from '@atlas/db';
 import { ATTEMPT_MARKING_QUEUE_NAME, type AttemptMarkingJobPayload } from '@atlas/domain';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
+  OPERATIONAL_ALERT_TEMPLATE,
+  operationalAlertVariables,
+  parseOpsAlertRecipients,
   type NotificationDispatchJobPayload,
+  type OperationalAlert,
 } from '@atlas/notifications';
+import {
+  DEFAULT_EXAM_HEALTH_THRESHOLDS,
+  captureAlert,
+  captureError,
+  createLogger,
+  flushSentry,
+  initMetrics,
+  initSentry,
+  initTelemetry,
+  registerHealthGauges,
+  runWithLogContext,
+  shutdownMetrics,
+  shutdownTelemetry,
+} from '@atlas/observability';
 import { createProbeWorker } from './queues/probe.queue.js';
 import {
   ATTEMPT_AUTO_SUBMIT_QUEUE_NAME,
@@ -45,10 +63,34 @@ import {
   createAnalyticsRefreshWorker,
   scheduleAnalyticsRefresh,
 } from './queues/analytics-refresh.queue.js';
+import {
+  EXAM_HEALTH_MONITOR_QUEUE_NAME,
+  createExamHealthMonitorWorker,
+  scheduleExamHealthMonitor,
+  type ExamHealthSnapshot,
+} from './queues/exam-health-monitor.queue.js';
+import {
+  RETENTION_QUEUE_NAME,
+  createRetentionWorker,
+  scheduleRetentionSweep,
+} from './queues/retention.queue.js';
 
 async function main() {
   loadRootEnv();
   const env = loadEnv();
+
+  // B20 (08 §18, 09 §35): tracing (result generation joins the submit
+  // trace via the job's carrier), metrics, Sentry, and the structured
+  // redacting logger — before any queue starts.
+  initTelemetry({ serviceName: 'atlas-worker', otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT });
+  initMetrics({ serviceName: 'atlas-worker', otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT });
+  initSentry({
+    dsn: env.SENTRY_DSN,
+    environment: env.NODE_ENV,
+    serviceName: 'atlas-worker',
+    release: env.RELEASE_VERSION,
+  });
+  const logger = createLogger({ service: 'worker', level: env.LOG_LEVEL });
 
   // Proves the worker process shares the tenancy-aware Prisma client with
   // the API (ADR-0023: "Background workers and exports inherit the same
@@ -56,7 +98,7 @@ async function main() {
   await prisma.$queryRaw`SELECT 1`;
 
   const redisUrl = new URL(env.REDIS_URL);
-  const connection = { host: redisUrl.hostname, port: Number(redisUrl.port) || 6379 };
+  const connection = redisConnectionFromUrl(redisUrl.toString());
 
   const probeWorker = createProbeWorker(connection);
   const redis = new Redis(env.REDIS_URL);
@@ -187,6 +229,63 @@ async function main() {
     env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS,
   );
 
+  // B20: operational/security alerts — structured log + Sentry + an email
+  // per OPS_ALERT_EMAILS operator, rendered by apps/api from the shared
+  // dispatch queue (this process registers no templates of its own).
+  const opsRecipients = parseOpsAlertRecipients(env.OPS_ALERT_EMAILS);
+  const dispatchAlert = async (alert: OperationalAlert): Promise<void> => {
+    const level = alert.severity === 'critical' ? 'error' : 'warn';
+    logger[level]({ alert }, 'Operational alert');
+    captureAlert(`${alert.title}: ${alert.summary}`, level === 'error' ? 'error' : 'warning', {
+      alertKey: alert.alertKey,
+      transition: alert.transition,
+    });
+    const variables = operationalAlertVariables(alert);
+    for (const to of opsRecipients) {
+      await enqueueDispatch({ to, template: OPERATIONAL_ALERT_TEMPLATE.name, variables });
+    }
+  };
+
+  // B20: Exam Health Monitor (09 §37) — answer-save success, submission
+  // latency, marking backlog, auth-failure spikes; alerts on transitions.
+  let lastHealthSnapshot: ExamHealthSnapshot | undefined;
+  registerHealthGauges(() => ({
+    activeAttempts: lastHealthSnapshot?.activeAttempts ?? 0,
+    queues: lastHealthSnapshot
+      ? {
+          [ATTEMPT_MARKING_QUEUE_NAME]: {
+            waiting: lastHealthSnapshot.markingQueue.waiting,
+            failed: lastHealthSnapshot.markingQueue.failed,
+          },
+        }
+      : {},
+  }));
+  const examHealthMonitorWorker = createExamHealthMonitorWorker(
+    connection,
+    {
+      redis,
+      markingQueue: attemptMarkingQueue,
+      dispatchAlert,
+      windowMinutes: env.EXAM_HEALTH_WINDOW_MINUTES,
+      thresholds: {
+        ...DEFAULT_EXAM_HEALTH_THRESHOLDS,
+        answerSaveSuccessMin: env.EXAM_HEALTH_ANSWER_SUCCESS_MIN,
+        answerSaveMinSample: env.EXAM_HEALTH_ANSWER_MIN_SAMPLE,
+      },
+      logger,
+    },
+    (snapshot) => {
+      lastHealthSnapshot = snapshot;
+    },
+  );
+  const examHealthMonitorQueue = new Queue(EXAM_HEALTH_MONITOR_QUEUE_NAME, { connection });
+  await scheduleExamHealthMonitor(examHealthMonitorQueue, env.EXAM_HEALTH_INTERVAL_MS);
+
+  // B20: retention sweep (ADR-0028 amended) — operational data only.
+  const retentionWorker = createRetentionWorker(connection, { logger });
+  const retentionQueue = new Queue(RETENTION_QUEUE_NAME, { connection });
+  await scheduleRetentionSweep(retentionQueue, env.RETENTION_SWEEP_INTERVAL_MS);
+
   // Same 'error'-event risk as the Workers below, for the Queue (enqueue)
   // side of each connection.
   for (const queue of [
@@ -199,9 +298,11 @@ async function main() {
     notificationDispatchQueue,
     attemptMarkingQueue,
     attemptAutoSubmitQueue,
+    examHealthMonitorQueue,
+    retentionQueue,
   ]) {
     queue.on('error', (err) => {
-      console.error(`[worker] queue "${queue.name}" connection error:`, err.message);
+      logger.error({ err, queue: queue.name }, 'Queue connection error');
     });
   }
 
@@ -216,12 +317,17 @@ async function main() {
     attemptMarkingWorker,
     attemptAutoSubmitWorker,
     resultAdjustmentWorker,
+    examHealthMonitorWorker,
+    retentionWorker,
   ]) {
     worker.on('completed', (job) => {
-      console.log(`[worker] job ${job.id} on queue "${worker.name}" completed`);
+      logger.debug({ jobId: job.id, queue: worker.name }, 'Job completed');
     });
     worker.on('failed', (job, err) => {
-      console.error(`[worker] job ${job?.id} on queue "${worker.name}" failed:`, err.message);
+      runWithLogContext({ queue: worker.name, ...(job?.id && { jobId: job.id }) }, () => {
+        logger.error({ err }, 'Job failed');
+      });
+      captureError(err, { queue: worker.name });
     });
     // Worker extends EventEmitter and emits 'error' for connection-level
     // failures (e.g. a dropped/failed Redis connection) — an unhandled
@@ -229,16 +335,33 @@ async function main() {
     // during B7's review of its own new import-expiry worker; applied to
     // every worker in this shared loop since none of them had one either.
     worker.on('error', (err) => {
-      console.error(`[worker] worker "${worker.name}" connection error:`, err.message);
+      logger.error({ err, queue: worker.name }, 'Worker connection error');
     });
   }
 
-  console.log(
-    `[worker] ${env.PRODUCT_NAME} worker listening on queues "${probeWorker.name}", "${subscriptionExpiryWorker.name}" (sweep every ${env.SUBSCRIPTION_SWEEP_INTERVAL_MS}ms), "${orphanMediaReportWorker.name}" (sweep every ${env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS}ms), "${importExpiryWorker.name}" (sweep every ${env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS}ms), "${unassignedStudentsDigestWorker.name}" (sweep every ${env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS}ms), "${examControlRefreshWorker.name}" (sweep every ${env.EXAM_CONTROL_REFRESH_INTERVAL_MS}ms), "${attemptAutoSubmitWorker.name}" (sweep every ${env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS}ms), "${attemptMarkingWorker.name}" (per-item, no schedule), "${resultAdjustmentWorker.name}" (per-item, no schedule), plus a "${NOTIFICATION_DISPATCH_QUEUE_NAME}" producer connection`,
+  logger.info(
+    {
+      queues: [
+        probeWorker.name,
+        subscriptionExpiryWorker.name,
+        orphanMediaReportWorker.name,
+        importExpiryWorker.name,
+        unassignedStudentsDigestWorker.name,
+        examControlRefreshWorker.name,
+        analyticsRefreshWorker.name,
+        attemptAutoSubmitWorker.name,
+        attemptMarkingWorker.name,
+        resultAdjustmentWorker.name,
+        examHealthMonitorWorker.name,
+        retentionWorker.name,
+      ],
+      producerQueues: [NOTIFICATION_DISPATCH_QUEUE_NAME],
+    },
+    `${env.PRODUCT_NAME} worker listening`,
   );
 
   const shutdown = async () => {
-    console.log('[worker] shutting down...');
+    logger.info('Worker shutting down');
     await Promise.all([
       probeWorker.close(),
       subscriptionExpiryWorker.close(),
@@ -250,6 +373,8 @@ async function main() {
       attemptMarkingWorker.close(),
       resultAdjustmentWorker.close(),
       attemptAutoSubmitWorker.close(),
+      examHealthMonitorWorker.close(),
+      retentionWorker.close(),
     ]);
     await subscriptionExpiryQueue.close();
     await orphanMediaReportQueue.close();
@@ -260,6 +385,9 @@ async function main() {
     await notificationDispatchQueue.close();
     await attemptMarkingQueue.close();
     await attemptAutoSubmitQueue.close();
+    await examHealthMonitorQueue.close();
+    await retentionQueue.close();
+    await Promise.all([shutdownTelemetry(), shutdownMetrics(), flushSentry()]);
     redis.disconnect();
     await prisma.$disconnect();
     process.exit(0);
@@ -269,7 +397,7 @@ async function main() {
   // unhandled) — see @typescript-eslint/no-misused-promises.
   const onSignal = () => {
     void shutdown().catch((err: unknown) => {
-      console.error('[worker] error during shutdown:', err);
+      logger.error({ err }, 'Error during shutdown');
       process.exit(1);
     });
   };
@@ -277,7 +405,9 @@ async function main() {
   process.on('SIGTERM', onSignal);
 }
 
-main().catch((err) => {
-  console.error('[worker] failed to start:', err);
+main().catch((err: unknown) => {
+  // The structured logger may not exist yet (env validation failed);
+  // EnvValidationError lists variable names, never values.
+  console.error('[worker] failed to start:', err instanceof Error ? err.message : err);
   process.exit(1);
 });
