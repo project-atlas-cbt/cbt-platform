@@ -12,7 +12,13 @@ FROM node:24-alpine
 # B20: pnpm is activated into a shared, non-root-readable location so the
 # unprivileged runtime user below never needs to download it at start-up.
 ENV COREPACK_HOME=/opt/corepack
-RUN corepack enable && corepack prepare pnpm@11.23.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.27.1 --activate
+
+# The base image's bundled npm is never used here (pnpm via corepack does
+# every install and script), and its own vendored dependencies are where
+# the image scan's HIGH findings live (brace-expansion, ip-address, tar,
+# undici — 2026-10-02). Removing the unused tool removes them.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /repo
 

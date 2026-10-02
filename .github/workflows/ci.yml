@@ -19,7 +19,7 @@ permissions:
 # the authoritative version-compatibility check.
 env:
   NODE_VERSION: '24.x'
-  PNPM_VERSION: '11.23.0'
+  PNPM_VERSION: '11.27.1'
 
 jobs:
   lint-typecheck-unit-build:
@@ -448,14 +448,20 @@ jobs:
           exit-code: '1'
           skip-dirs: '**/node_modules,apps/web/.next'
 
+      # Scanned from a `docker save` tarball, not through the daemon: with the
+      # runners' containerd image store, Trivy fails reading layers from the
+      # daemon ("unable to get uncompressed layer"). The tarball is the same
+      # image, read directly.
       - name: Build container image
-        run: docker build -f infra/docker/Dockerfile.node -t atlas-node:ci .
+        run: |
+          docker build -f infra/docker/Dockerfile.node -t atlas-node:ci .
+          docker save atlas-node:ci -o "$RUNNER_TEMP/atlas-node.tar"
 
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: atlas-node:ci
+          input: ${{ runner.temp }}/atlas-node.tar
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'

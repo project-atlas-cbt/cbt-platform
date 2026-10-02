@@ -20,6 +20,20 @@ product code:
 - **Stale B8 test:** "GET /questions/export…" now exercises B18's `POST /exports` QUESTION_BANK flow
   (job run directly, tokened download) and asserts the same template-shaped CSV; it passes.
 
+Second round, once the first fixes let the jobs get further:
+
+- **Database bootstrap (B20 regression).** `scripts/ci/bootstrap-db-roles.sh` defaulted
+  `PGHOST`/`PGUSER`/`PGDATABASE` as unexported shell variables, so `psql` fell back to a local Unix
+  socket and never reached the service container. Now passes `-h/-U/-d` explicitly, as the pre-B20
+  inline steps did. Reproduced and verified over TCP locally.
+- **Trivy image scan.** Trivy can't read layers through the runners' containerd image store
+  ("unable to get uncompressed layer"); the image is now `docker save`d and scanned as a tarball.
+  The scan then found HIGH advisories in the base image's bundled npm (unused — removed from the
+  image) and in the `undici` vendored inside pnpm 11.23.0 (pnpm bumped to 11.27.1, 12 days old,
+  which vendors the fix; frozen install unchanged). Dev-only `js-yaml` and `undici` 8.x advisories
+  that the image would carry got overrides in `pnpm-workspace.yaml`; `pnpm audit` (all deps) now
+  reports no high or critical.
+
 Consequence worth knowing: integration and security suites have **not run in CI** since MinIO broke,
 so the first green run is their first CI run in that period.
 
