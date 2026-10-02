@@ -74,8 +74,19 @@ async function main() {
     });
   });
 
+  // B20: the runtime role (atlas_app) can no longer delete schools
+  // (packages/db/src/privileges.ts), so the probe row is removed through the
+  // schema-owner connection, as test fixtures and operators do. The
+  // transaction above still runs as atlas_app, the path being validated.
   await step('cleanup: remove the spike school row', async () => {
-    await prisma.school.deleteMany({ where: { subdomain: probeSubdomain } });
+    const ownerUrl = process.env.DATABASE_URL;
+    if (!ownerUrl) throw new Error('DATABASE_URL (schema owner) is required for spike cleanup.');
+    const owner = createPrismaClient(ownerUrl);
+    try {
+      await owner.school.deleteMany({ where: { subdomain: probeSubdomain } });
+    } finally {
+      await owner.$disconnect();
+    }
   });
 
   // 3. BullMQ + Redis: enqueue and process one job end to end.

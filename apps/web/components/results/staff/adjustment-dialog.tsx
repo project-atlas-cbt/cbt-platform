@@ -114,9 +114,7 @@ export function AdjustmentDialog({
    */
   const parsedOverride = Number.parseInt(overrideMarks, 10);
   const overrideExceedsTotal =
-    mode.kind === 'override' &&
-    Number.isFinite(parsedOverride) &&
-    parsedOverride > mode.totalMarks;
+    mode.kind === 'override' && Number.isFinite(parsedOverride) && parsedOverride > mode.totalMarks;
 
   const canSubmit =
     trimmedReason.length > 0 &&
@@ -178,10 +176,7 @@ export function AdjustmentDialog({
           {mode.kind === 'question' ? (
             <div>
               <Label htmlFor="adjustment-type">Adjustment</Label>
-              <Select
-                value={type}
-                onValueChange={(next) => setType(next as ResultAdjustmentType)}
-              >
+              <Select value={type} onValueChange={(next) => setType(next as ResultAdjustmentType)}>
                 <SelectTrigger id="adjustment-type">
                   <SelectValue />
                 </SelectTrigger>

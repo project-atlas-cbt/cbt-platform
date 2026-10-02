@@ -19,7 +19,7 @@ permissions:
 # the authoritative version-compatibility check.
 env:
   NODE_VERSION: '24.x'
-  PNPM_VERSION: '11.23.0'
+  PNPM_VERSION: '11.27.1'
 
 jobs:
   lint-typecheck-unit-build:
@@ -127,12 +127,19 @@ jobs:
 
       # MinIO (S3-compatible) storage for OpenAPI generation (AppModule's
       # ObjectStorageService self-provisions the bucket on boot).
+      #
+      # Image: MinIO withdrew its public images (minio/minio on Docker Hub
+      # and quay.io no longer pull), so every job using it failed at this
+      # step. Chainguard's build of upstream MinIO, pinned by digest, is the
+      # same server and API. It runs as UID 65532 by default and can't
+      # write the root-owned /data volume, so this throwaway container runs
+      # as root (--user 0). Same image in all three jobs and docker-compose.
       - name: Start MinIO
         run: |
-          docker run -d --name minio -p 9000:9000 \
+          docker run -d --name minio -p 9000:9000 --user 0 \
             -e MINIO_ROOT_USER=atlas_minio_root \
             -e MINIO_ROOT_PASSWORD=atlas_minio_dev_password \
-            minio/minio:RELEASE.2025-04-08T15-41-24Z server /data
+            cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b server /data
           for _ in $(seq 1 30); do
             curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
           done
@@ -250,10 +257,10 @@ jobs:
       # (e.g. media.integration.test.ts) and AppModule boot.
       - name: Start MinIO
         run: |
-          docker run -d --name minio -p 9000:9000 \
+          docker run -d --name minio -p 9000:9000 --user 0 \
             -e MINIO_ROOT_USER=atlas_minio_root \
             -e MINIO_ROOT_PASSWORD=atlas_minio_dev_password \
-            minio/minio:RELEASE.2025-04-08T15-41-24Z server /data
+            cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b server /data
           for _ in $(seq 1 30); do
             curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
           done
@@ -291,6 +298,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The root script runs the api and worker suites one at a time, then
+      # the cross-cutting suite last: its migrations test drops and resets
+      # this same database (ending empty by design), which wiped the api
+      # suite's tables mid-run when turbo ran them in parallel.
       - name: Integration tests
         run: pnpm test:integration
 
@@ -358,10 +369,10 @@ jobs:
       # (e.g. media.integration.test.ts) and AppModule boot.
       - name: Start MinIO
         run: |
-          docker run -d --name minio -p 9000:9000 \
+          docker run -d --name minio -p 9000:9000 --user 0 \
             -e MINIO_ROOT_USER=atlas_minio_root \
             -e MINIO_ROOT_PASSWORD=atlas_minio_dev_password \
-            minio/minio:RELEASE.2025-04-08T15-41-24Z server /data
+            cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b server /data
           for _ in $(seq 1 30); do
             curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
           done
@@ -427,8 +438,11 @@ jobs:
       - name: pnpm audit (production, high+)
         run: pnpm audit:deps
 
+      # Pinned by commit SHA, not tag: this action's tags were rewritten by
+      # an attacker in 2026, and its tags are v-prefixed (the earlier
+      # `@0.33.1` never resolved). Dependabot keeps the SHA current.
       - name: Trivy filesystem scan (dependencies, secrets, IaC)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -436,16 +450,34 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
-          skip-dirs: node_modules,apps/web/.next
+          skip-dirs: '**/node_modules,apps/web/.next'
 
+      # The hosted runner starts with most of its disk taken by preinstalled
+      # toolchains this job never uses; building the image and saving it as
+      # a tarball ran out of space (2026-10-02). Removing them frees ~20 GB.
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af >/dev/null
+          df -h /
+
+      # Scanned from a `docker save` tarball, not through the daemon: with the
+      # runners' containerd image store, Trivy fails reading layers from the
+      # daemon ("unable to get uncompressed layer"). The tarball is the same
+      # image, read directly.
       - name: Build container image
-        run: docker build -f infra/docker/Dockerfile.node -t atlas-node:ci .
+        run: |
+          docker build -f infra/docker/Dockerfile.node -t atlas-node:ci .
+          docker save atlas-node:ci -o "$RUNNER_TEMP/atlas-node.tar"
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: atlas-node:ci
+          input: ${{ runner.temp }}/atlas-node.tar
+          # The whole-repo dev image (full node_modules) can outrun Trivy's
+          # 5-minute default analysis timeout.
+          timeout: 15m
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
@@ -457,8 +489,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # B20: a detected secret fails the build (it was advisory-only).
+      # The gitleaks CLI, not gitleaks-action: the action requires a paid
+      # GITLEAKS_LICENSE for organisation-owned repositories and failed
+      # before scanning anything. The CLI is the same scanner (MIT), pinned
+      # by digest; it reads .gitleaksignore from the repository root and
+      # scans the full history (fetch-depth: 0 above).
       - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # B20: a detected secret now fails the build (it was advisory-only).
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$GITHUB_WORKSPACE:/repo" \
+            ghcr.io/gitleaks/gitleaks@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854 \
+            git /repo --redact --no-banner --exit-code 1

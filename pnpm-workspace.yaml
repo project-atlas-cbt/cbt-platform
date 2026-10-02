@@ -24,6 +24,11 @@ overrides:
   # still pins these. Verified by prisma generate + migrate in CI.
   'mysql2@<3.22.0': '^3.22.0'
   'deepmerge-ts@<8.0.0': '^8.0.0'
+  # Dev/test tooling only (Nest CLI and openapi-typescript → js-yaml; jsdom
+  # → undici). Outside the --prod gate, but installed in the CI image that
+  # Trivy scans, so remediated the same way (2026-10-02 CI repair).
+  'js-yaml@>=4 <4.3.2': '^4.3.2'
+  'undici@>=8 <8.10.2': '^8.10.2'
 allowBuilds:
   # Prisma's own engine binaries — required for `prisma generate`/`migrate`
   # to work at all.

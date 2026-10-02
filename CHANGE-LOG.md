@@ -2,6 +2,58 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-02 — CI pipeline repaired
+
+Every CI job had been failing in about a minute on every PR since at least #10. None of it was
+product code:
+
+- **MinIO image withdrawn upstream.** `minio/minio` no longer pulls from Docker Hub or quay.io, so
+  the contract-drift, integration and security jobs died at "Start MinIO" (exit 125). Replaced in
+  CI and `docker-compose.yml` with Chainguard's build of upstream MinIO, pinned by digest, run as
+  root (its default UID can't write the root-owned data volume). Same server and API; verified
+  locally against the media, reports and question tests and as the dev compose service.
+- **Format check:** four web files from earlier F-phase work were never Prettier-formatted.
+- **B20's scanners:** `aquasecurity/trivy-action@0.33.1` never resolved (its tags are `v`-prefixed);
+  now pinned by commit SHA to `v0.36.0`, and `**/node_modules` is skipped. `gitleaks-action` needs
+  a paid license for organisation-owned repos, so the job now runs the gitleaks CLI image (MIT),
+  pinned by digest. A local run over all 158 commits found no leaks.
+- **Stale B8 test:** "GET /questions/export…" now exercises B18's `POST /exports` QUESTION_BANK flow
+  (job run directly, tokened download) and asserts the same template-shaped CSV; it passes.
+
+Second round, once the first fixes let the jobs get further:
+
+- **Database bootstrap (B20 regression).** `scripts/ci/bootstrap-db-roles.sh` defaulted
+  `PGHOST`/`PGUSER`/`PGDATABASE` as unexported shell variables, so `psql` fell back to a local Unix
+  socket and never reached the service container. Now passes `-h/-U/-d` explicitly, as the pre-B20
+  inline steps did. Reproduced and verified over TCP locally.
+- **Trivy image scan.** Trivy can't read layers through the runners' containerd image store
+  ("unable to get uncompressed layer"); the image is now `docker save`d and scanned as a tarball.
+  The scan then found HIGH advisories in the base image's bundled npm (unused — removed from the
+  image) and in the `undici` vendored inside pnpm 11.23.0 (pnpm bumped to 11.27.1, 12 days old,
+  which vendors the fix; frozen install unchanged). Dev-only `js-yaml` and `undici` 8.x advisories
+  that the image would carry got overrides in `pnpm-workspace.yaml`; `pnpm audit` (all deps) now
+  reports no high or critical.
+
+Third round:
+
+- **Integration suites ran in parallel on one database.** The cross-cutting migrations test resets
+  the schema (and ends empty by design) while turbo ran it alongside the api suite, so api tests
+  died with "table `public.schools` does not exist" and 36 attempt tests saw their school vanish.
+  Root `test:integration` now runs api and worker one at a time, then the cross-cutting suite
+  last.
+- **Export test race:** the app's own BullMQ export worker sometimes claims the job before the test
+  runs it; the test now waits for completion either way (passes 3/3 locally).
+- **Image too big for the runner.** The Dockerfile's trailing `chown -R` copied every file into a
+  second layer; it now builds as the `node` user from the start (`COPY --chown`, user-owned pnpm
+  cache mount), and the scan job frees the runner's unused preinstalled toolchains first.
+- **ADR-0031 spike (B20 regression):** its cleanup deleted the probe school as `atlas_app`, which B20
+  no longer allows; it now deletes through the schema-owner connection (the locked transaction
+  itself still runs as `atlas_app`). With this, the integration job's suites all passed in CI:
+  api 369/369 (including the 1,500-row import), worker 49/49, cross-cutting 159/159.
+
+Consequence worth knowing: integration and security suites have **not run in CI** since MinIO broke,
+so the first green run is their first CI run in that period.
+
 ### 2026-10-02 — B20 Security Hardening & Compliance
 
 B20 implemented; DoD 1–12 met (roadmap section has the per-item evidence). Project-owner decisions
