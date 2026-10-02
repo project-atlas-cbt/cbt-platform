@@ -429,8 +429,10 @@ describe('B8 — question import/export', () => {
   // B18 replaced `GET /questions/export` with the reports module's async
   // export (`POST /exports` type QUESTION_BANK → background job → tokened
   // download). Same CSV builder, so the re-importable template shape is
-  // asserted here, through the route that actually ships. The job is run
-  // directly, per this file's "background jobs invoked directly" precedent.
+  // asserted here, through the route that actually ships. The app's own
+  // BullMQ export worker may pick the job up first (it did in CI), so the
+  // test runs it directly only while it is still waiting, per this file's
+  // "background jobs invoked directly" precedent, then waits for completion.
   it('the QUESTION_BANK export produces a re-importable, template-shaped CSV', async () => {
     await post(teacher, '/questions', {
       subjectId: mathSubjectId,
@@ -450,14 +452,17 @@ describe('B8 — question import/export', () => {
     });
     expect(created.statusCode).toBe(202);
     const jobId = created.json<{ id: string }>().id;
+    // generate() is a no-op when the worker has already claimed the job.
     await app.get(ExportService).generate(schoolId, jobId);
-    const status = await get(teacher, `/exports/${jobId}`);
-    expect(status.statusCode).toBe(200);
-    const { status: jobStatus, downloadUrl } = status.json<{
-      status: string;
-      downloadUrl: string;
-    }>();
-    expect(jobStatus).toBe('COMPLETED');
+    let job: { status: string; downloadUrl?: string } = { status: 'PENDING' };
+    for (let i = 0; i < 50 && job.status !== 'COMPLETED' && job.status !== 'FAILED'; i++) {
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 200));
+      const status = await get(teacher, `/exports/${jobId}`);
+      expect(status.statusCode).toBe(200);
+      job = status.json<{ status: string; downloadUrl?: string }>();
+    }
+    expect(job.status).toBe('COMPLETED');
+    const downloadUrl = job.downloadUrl ?? '';
     const res = await get(teacher, downloadUrl.replace(/^\/v1/, ''));
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/csv');

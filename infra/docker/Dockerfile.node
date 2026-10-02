@@ -20,18 +20,27 @@ RUN corepack enable && corepack prepare pnpm@11.27.1 --activate
 # undici — 2026-10-02). Removing the unused tool removes them.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
+# B20 container hardening: never run as root. Everything from here on runs
+# as the official image's `node` user (uid 1000), so the repo is owned by it
+# as it is written. (A trailing `chown -R` instead duplicated every file,
+# node_modules included, into a second layer — roughly doubling the image
+# and filling the CI runner's disk, 2026-10-02.) CI builds this image and
+# Trivy-scans it (HIGH/CRITICAL blocks the merge); the B23 production image
+# inherits the same scan job.
+RUN mkdir /repo && chown node:node /repo && chown -R node:node /opt/corepack
 WORKDIR /repo
+USER node
 
 # Full monorepo context — pnpm's workspace install needs every
 # package.json present to resolve the lockfile correctly, and copying them
 # individually is more fragile than it's worth for a dev-only image.
-COPY . .
+COPY --chown=node:node . .
 
 # BuildKit cache mount: persists pnpm's content-addressable store across
 # builds (and across retries of this same build) instead of redownloading
 # every package from the registry each time — this registry has shown
 # transient timeouts on a cold install.
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+RUN --mount=type=cache,target=/home/node/.local/share/pnpm/store,uid=1000,gid=1000 \
     pnpm install --frozen-lockfile
 
 # A genuine ordering cycle between two things that each need the other
@@ -56,10 +65,3 @@ RUN pnpm db:generate
 RUN pnpm turbo run build --filter=@atlas/api --filter=@atlas/worker
 
 # docker-compose.yml sets `command:` per service to select api or worker.
-
-# B20 container hardening: never run as root. The official image's `node`
-# user (uid 1000) owns the built repo; nothing at runtime needs privilege.
-# CI builds this image and Trivy-scans it (HIGH/CRITICAL blocks the merge);
-# the B23 production image inherits the same scan job.
-RUN chown -R node:node /repo /opt/corepack
-USER node

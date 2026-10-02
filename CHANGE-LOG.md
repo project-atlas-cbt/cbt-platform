@@ -34,6 +34,19 @@ Second round, once the first fixes let the jobs get further:
   that the image would carry got overrides in `pnpm-workspace.yaml`; `pnpm audit` (all deps) now
   reports no high or critical.
 
+Third round:
+
+- **Integration suites ran in parallel on one database.** The cross-cutting migrations test resets
+  the schema (and ends empty by design) while turbo ran it alongside the api suite, so api tests
+  died with "table `public.schools` does not exist" and 36 attempt tests saw their school vanish.
+  Root `test:integration` now runs api and worker one at a time, then the cross-cutting suite
+  last.
+- **Export test race:** the app's own BullMQ export worker sometimes claims the job before the test
+  runs it; the test now waits for completion either way (passes 3/3 locally).
+- **Image too big for the runner.** The Dockerfile's trailing `chown -R` copied every file into a
+  second layer; it now builds as the `node` user from the start (`COPY --chown`, user-owned pnpm
+  cache mount), and the scan job frees the runner's unused preinstalled toolchains first.
+
 Consequence worth knowing: integration and security suites have **not run in CI** since MinIO broke,
 so the first green run is their first CI run in that period.
 

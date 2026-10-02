@@ -298,6 +298,10 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The root script runs the api and worker suites one at a time, then
+      # the cross-cutting suite last: its migrations test drops and resets
+      # this same database (ending empty by design), which wiped the api
+      # suite's tables mid-run when turbo ran them in parallel.
       - name: Integration tests
         run: pnpm test:integration
 
@@ -448,6 +452,15 @@ jobs:
           exit-code: '1'
           skip-dirs: '**/node_modules,apps/web/.next'
 
+      # The hosted runner starts with most of its disk taken by preinstalled
+      # toolchains this job never uses; building the image and saving it as
+      # a tarball ran out of space (2026-10-02). Removing them frees ~20 GB.
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af >/dev/null
+          df -h /
+
       # Scanned from a `docker save` tarball, not through the daemon: with the
       # runners' containerd image store, Trivy fails reading layers from the
       # daemon ("unable to get uncompressed layer"). The tarball is the same
@@ -462,6 +475,9 @@ jobs:
         with:
           scan-type: image
           input: ${{ runner.temp }}/atlas-node.tar
+          # The whole-repo dev image (full node_modules) can outrun Trivy's
+          # 5-minute default analysis timeout.
+          timeout: 15m
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
