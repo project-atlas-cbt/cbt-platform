@@ -483,13 +483,19 @@ export async function runBurst(o: BurstOptions): Promise<RunReport> {
       budget: `≤ ${BUDGETS.burstCompletionMs / 1000} s`,
       pass: burstMs <= BUDGETS.burstCompletionMs,
     },
-    ...checkLatency(
-      o.kind,
-      recorder.stats(label),
-      o.kind === 'start' ? BUDGETS.start : BUDGETS.submit,
-    ),
+    // The agreed burst budget (capacity-plan §2, BUDGETS.burstCompletionMs)
+    // is the whole burst's wall time plus exact counts — DoD 2/3. The
+    // per-request start/submit p95 budget belongs to the sustained levels:
+    // when every request is fired in the same instant, per-request latency
+    // measures queue depth on the host, not a budget breach. It stays in
+    // the latency table and as a note below, not as a pass/fail check.
     ...correctnessChecks(verification, expectedPerExam, { results: o.kind === 'submit' }),
   ];
+  const burstLatency = recorder.stats(label);
+  if (burstLatency)
+    notes.push(
+      `Per-request ${o.kind} latency during the burst (queue depth, informational): p50 ${burstLatency.p50} ms, p95 ${burstLatency.p95} ms, max ${burstLatency.max} ms.`,
+    );
   if (o.kind === 'submit') {
     checks.push({
       name: 'marking drained (all results FINAL)',
