@@ -21,6 +21,28 @@ report carries a "Host memory pressure" banner when it fell below 500 MB.
 | `2026-10-03T09-04-46-rtt-probe`                                                                                                                      | Valid — ADR-0032 RTT from this (Nigerian) network, machine idle.                                                                                                                                                                                                                                                                                                     |
 | `2026-10-03T09-*-lab-burst-*`                                                                                                                        | Valid — one API process, after memory was freed (Docker VM capped at 2 GB; SQL Server, VS Code and browsers closed). The clean-link run dipped to 425 MB free once (flagged); it passed with wide margins.                                                                                                                                                           |
 
-The 500/1,000-level, burst, endurance and stress runs are being completed in a Claude Code cloud
-session (project-owner decision, 2026-10-03), where the host is not shared with other applications.
-Their reports will land here with the host's measured CPU, memory and disk fsync rate.
+## Cloud runs (2026-10-03)
+
+Completed in a Claude Code cloud session (project-owner decision, 2026-10-03): Intel Xeon @ 2.10 GHz,
+4 vCPU, 15.7 GB RAM, disk fdatasync 4,113 ops/s, PostgreSQL 16 + PgBouncer 1.22 (transaction mode),
+2 API processes and the worker — **and the load generator — on the same host**. Host memory never
+fell below 10 GB free; no run is affected by paging. Each report records the environment.
+
+| Run(s)                                                                                  | Status                                                                              |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `…09-43-25-levels-20-cloud`, `…09-55-49-levels-100-cloud`, `…10-08-14-levels-500-cloud` | **Valid.** All budgets met.                                                         |
+| `…10-20-39-levels-1000-cloud`                                                           | **Valid.** Latency budgets missed (arrival ramp, submit wave), correctness exact.   |
+| `…10-34-08-…-diag-series`, `…10-42-47-…-diag-profile`, `…10-46-44-…-diag-profile`       | Valid diagnostics (per-minute series; ramp CPU profile). Short sustain by design.   |
+| `…10-51-10-levels-1000-cloud-ramp120`                                                   | **Valid.** Same 1,000 arrivals over 120 s.                                          |
+| `…11-01-06-start-burst-cloud`, `…11-01-45-submit-burst-cloud`                           | **Valid.** Exact counts (DoD 2, 3); per-request p95 is queue depth.                 |
+| `…11-06-00-levels-1000-cloud-endurance`                                                 | **Valid.** One hour; two unexplained stalls (capacity plan §13).                    |
+| `…12-08-48-levels-1500-cloud-stress`, `…12-20-02-levels-2000-cloud-stress`              | **Valid** as stress: beyond this host's capacity by design.                         |
+| `…12-34-52-shed-500-cloud-shed`, `…12-54-12-…-shed-examp95`                             | **Valid as the failure that led to the fix** — shedding did not engage.             |
+| `…13-05-15-…-shed-elu`                                                                  | Valid. Shedding engaged; flood ignored `Retry-After` (hostile client).              |
+| `…13-13-36-…-shed-elu-backoff`                                                          | **Valid — DoD 9 evidence.**                                                         |
+| `…12-42-25-sse-500-cloud-sse`                                                           | **Valid — DoD 7 evidence.**                                                         |
+| `…13-33-37-analytics-cloud`, `…13-37-27-…-participation-fix`                            | Valid as the before state of the analytics fixes (later samples in each were shed). |
+| `…13-46-04-analytics-cloud-sql-aggregates`                                              | **Valid — DoD 10 evidence.**                                                        |
+
+Later runs on this branch (the endurance re-run with stall diagnostics, the final shed run) carry
+their own reports; the capacity plan cites them.

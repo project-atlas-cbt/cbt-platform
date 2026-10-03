@@ -47,7 +47,7 @@ Server-side, as observed by the client on a clean network (`tools/load/src/metri
 | 7. SSE scaling                                           | **Met.** 60 Control Center streams held for a 500-attempt exam, 10,805 frames, 0 errors, all exam budgets met; new streams refused (polling fallback) while shedding.                                                                         | `…12-42-25-sse-500-cloud-sse`                                                                            |
 | 8. Nigerian network conditions incl. 40-client lab burst | **Met for text and typical links; not met for media-heavy papers on a congested 2 Mbit lab link** — a bandwidth limit, not a server one (§9).                                                                                                 | `…09-1*-lab-burst-*` (workstation, valid)                                                                |
 | 9. Load shedding preserves exam execution                | **Met after a fix found here** (§6): answer-save p95 93 ms / p99 249 ms under a 20-session reporting flood, reporting degraded to 503 + `Retry-After`.                                                                                        | `…13-13-36-shed-500-cloud-shed-elu-backoff` (before: `…12-34-52`, `…12-54-12`)                           |
-| 10. Analytics on realistic volumes                       | See §10.                                                                                                                                                                                                                                      | `analytics` reports                                                                                      |
+| 10. Analytics on realistic volumes                       | **Met after two fixes found here** (§10): every view within budget on a term's data (school cold 2.5 s, previously > 30 s).                                                                                                                   | `…13-46-04-analytics-cloud-sql-aggregates` (before: `…13-33-37`)                                         |
 | 11. Capacity plan and runbook from evidence              | This document and `scaling-runbook.md`. Reviewed and accepted at B23 with the staging re-run.                                                                                                                                                 | —                                                                                                        |
 
 Correctness held in **every** run, including the overloaded stress levels: **no duplicate attempt and
@@ -146,7 +146,31 @@ Measured per attempt (40-question paper, `pg_total_relation_size` deltas includi
 | `exam_attempts`, `attempt_events`, `results`, participation rows          | ~3,000                                                   |
 | **Total**                                                                 | **≈ 57 KB per attempt** (≈ 1.4 KB per question answered) |
 
-STORAGE_PROJECTION_PLACEHOLDER
+**A term of a large school, measured.** `dataset --name analytics --exams 47` built one school of
+1,200 students in 30 arms sitting 47 real exams (each created, opened and marked through the API,
+the rest of the attempts cloned in SQL with every trigger active): **53,680 attempts, 2.1 million
+answer and per-question result rows, 1.78 GB** — ≈ 34.8 KB per attempt _without_ the per-change
+answer events (the clone writes final answers only). Adding the measured ≈ 17.7 KB of events gives
+**≈ 52 KB per attempt, ≈ 2.8 GB per term** for that school, consistent with the 57 KB measured under
+live load.
+
+| School size                        | Attempts / term (≈ 45 per student) | Per year (3 terms) |
+| ---------------------------------- | ---------------------------------- | ------------------ |
+| 300 students                       | ~13,400                            | ~2.1 GB            |
+| 1,200 students                     | ~53,700                            | ~8.4 GB            |
+| 100 schools averaging 600 students | ~2.7 M                             | ~420 GB            |
+
+All of it is academic evidence kept indefinitely (retention schedule, ADR-0028 amendment), so the
+total only grows. **Storage strategy: adequate for launch without partitioning.** Every hot table
+leads its indexes with `school_id` (ADR-0023), every exam-path query is a point lookup on
+(`school_id`, attempt), and no exam-path statement degraded as the tables grew from empty to the
+dataset's 2.1 M-row tables (answer-save p95 is the same in the 20-attempt run and in the
+1,000-attempt runs that followed the dataset). **Revisit trigger:** when `attempt_answers` or
+`attempt_question_results` pass ~200 M rows, or the database passes ~1 TB, decide between
+partitioning by `school_id` hash and archiving closed sessions — a B23-or-later decision, measured
+on production growth. Opening an exam session writes one participant row per eligible student
+(ADR-0006): **5.4–8.0 s for 1,200 students** — a one-off staff action, within reason, noted for
+schools larger than this.
 
 ## 9. Network and the 40-client lab (R-08, R-09, DoD 8)
 
@@ -173,7 +197,31 @@ idle machine): `af-south-1` p50 115 ms, `eu-west-2` 159 ms, `eu-west-1` 186 ms, 
 
 ## 10. Analytics on realistic volumes (DoD 10)
 
-ANALYTICS_PLACEHOLDER
+Measured on the term dataset above (53,680 results, 2.1 M per-question rows), School Admin view (the
+widest scope), each endpoint cold (cache version bumped) and cached, 10 samples each:
+
+| View           | Cold p95   | Cached p95 | Before the B21 fixes   |
+| -------------- | ---------- | ---------- | ---------------------- |
+| School         | **2.51 s** | 22 ms      | **> 30 s** (timed out) |
+| Department     | 1.54 s     | 22 ms      | **> 30 s** (timed out) |
+| Exam           | 1.26 s     | 73 ms      | 1.23 s                 |
+| Exam questions | 420 ms     | 61 ms      | 301 ms                 |
+| Class          | 439 ms     | 48 ms      | 428 ms                 |
+| Student        | 103 ms     | 56 ms      | —                      |
+
+All within budget (cold ≤ 3 s, cached ≤ 300 ms). Two defects were found and fixed here:
+
+- **Participation roll-up was quadratic** — each of ~56,000 participant groups scanned every
+  participation and attempt row (~3 billion comparisons on the event loop). Now indexed once.
+- **Metrics loaded every result row into the process** once per breakdown (per department, per
+  session trend). They are now aggregated in the database (count, mean, highest, lowest, and grade
+  counts for the frozen pass rate). All 10 analytics endpoints returned identical JSON before and
+  after (3,206 values, 0 differences); the count-based pass rate is unit-tested equal to the
+  row-based one.
+
+The school-wide cold view is the closest to budget (2.5 of 3 s) and grows with a school's history;
+the per-term filter the UI applies keeps it bounded, and the cached path (Redis, invalidated on
+result changes) serves repeats in ~20 ms.
 
 ## 11. Background work
 
@@ -213,3 +261,31 @@ capacity signals, not noise, at these thresholds.
   pre-cache paper media ahead of the exam window; keep the F13 batching/debounce the harness models.
 - **ADR-0032** region decision with the owner at B23 (§9).
 - **Candidate / Deferred:** per-request API CPU reduction on the exam path (§4).
+
+## 14. Conflicts between specifications, ADRs, roadmap and code (re-derived)
+
+The B21 plan's list of conflicts was written in an earlier session whose notes are not in the
+repository. This list is re-derived from the specifications, ADRs, audit findings and code, and
+records how each was settled.
+
+1. **No latency budgets anywhere in the specifications.** `08 §20` and `09 §40` define the load
+   levels and the write-pressure model but no numbers. Settled by the project owner (2026-10-02),
+   §2.
+2. **Pooler: "PgBouncer or RDS Proxy"** (roadmap) — owner chose RDS Proxy in production with
+   PgBouncer as the local stand-in (2026-10-02). Transaction-local tenant context makes both safe
+   (ADR-0023 amendment); RDS Proxy pinning is a B23 check.
+3. **ADR-0020 vs audit R-03.** ADR-0020 has answer saves update `last_seen_at`; R-03 says answer
+   writes never touch the parent attempt row. Settled in code: a post-commit, coalesced (15 s),
+   conditional update outside the answer transaction (ADR-0020 amendment).
+4. **ADR-0007 left "sample the event log?" to B21.** Decided: keep full logging (ADR-0007 amendment).
+5. **DoD 1/4 at 1,000 attempts vs a single shared test host.** Steady state meets budget; the
+   arrival ramp and submit wave do not on 4 shared vCPU. Owner decision (2026-10-03): document,
+   size production from per-process costs, gate on the B23 staging re-run (§4).
+6. **The roadmap says F20's client behaviour is part of what B21 measures**, but F20 is not built.
+   The harness models the F13 client (batching, one flush in flight, sequence numbers, 30 s
+   heartbeat). Two client requirements B21 found are carried to F20: back off on `503 Retry-After`
+   (the web client has no handling today) and pre-cache paper media before the exam window.
+7. **ADR-0021 (Start blocked until media cached) vs the 60 s lab-burst target** on a congested 2 Mbit
+   link with a media-heavy paper — physically incompatible (§9). Settled operationally: pre-cache
+   ahead of the window (F20, B23 guidance); not a server change.
+8. **ADR-0032's region** met its own revisit condition — left to the owner at B23 (§9).
