@@ -15,6 +15,13 @@ export interface AuthenticatedSession {
   schoolId: string;
 }
 
+/** A session row that exists, is not revoked and has not expired. */
+export function isLiveSession<T extends { revokedAt: Date | null; expiresAt: Date }>(
+  session: T | null,
+): session is T {
+  return session !== null && session.revokedAt === null && session.expiresAt >= new Date();
+}
+
 function hashToken(rawToken: string): string {
   // Sessions are high-entropy random tokens, not low-entropy passwords —
   // sha256 (fast, deterministic) is the right primitive for a lookup key,
@@ -76,6 +83,20 @@ export class SessionService {
    * route (AuthGuard throws; POST /auth/refresh treats it as already-logged-out).
    */
   async resolve(req: FastifyRequest, schoolId: string): Promise<AuthenticatedSession | null> {
+    const tokenHash = this.tokenHashFromRequest(req);
+    if (!tokenHash) return null;
+    const session = await withTenant(prisma, schoolId, (tx) =>
+      tx.session.findUnique({ where: { tokenHash } }),
+    );
+    return isLiveSession(session)
+      ? { sessionId: session.id, userId: session.userId, schoolId: session.schoolId }
+      : null;
+  }
+
+  /** The signed cookie's token hash, or null for a missing/forged cookie —
+   * no database access. B21: lets AuthGuard look the session up inside its
+   * own single tenant transaction. */
+  tokenHashFromRequest(req: FastifyRequest): string | null {
     const cookies = parseCookie(req.headers.cookie ?? '');
     const rawCookie = cookies[SESSION_COOKIE_NAME];
     if (!rawCookie) return null;
@@ -83,14 +104,7 @@ export class SessionService {
     const signingSecret = this.config.get('SESSION_COOKIE_SECRET', { infer: true });
     const unsigned = unsign(rawCookie, signingSecret);
     if (typeof unsigned !== 'string') return null;
-
-    const tokenHash = hashToken(unsigned);
-    const session = await withTenant(prisma, schoolId, (tx) =>
-      tx.session.findUnique({ where: { tokenHash } }),
-    );
-    if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
-
-    return { sessionId: session.id, userId: session.userId, schoolId: session.schoolId };
+    return hashToken(unsigned);
   }
 
   /** Revokes a session by id (logout, or the old half of a refresh rotation). */

@@ -128,7 +128,7 @@ export class AttemptFinalizationService {
         entityType: 'ExamAttempt',
         entityId: attemptId,
       });
-      await this.stream.publishUpdate(schoolId, attempt.examId);
+      await this.stream.publishSoon(schoolId, attempt.examId);
       await this.marking.enqueue({ schoolId, attemptId }, `mark-${attemptId}`);
     } catch (error) {
       // The transition above already committed — this is a best-effort

@@ -1,9 +1,11 @@
 import { Worker, type ConnectionOptions, type Job, type Queue } from 'bullmq';
 import type { Redis } from 'ioredis';
 import { prisma, withTenant } from '@atlas/db';
-import { rollUpParticipation } from '@atlas/domain';
+import { rollUpExamParticipation } from '@atlas/domain';
 import {
+  EXAM_CONTROL_ACTIVE_SET_KEY,
   EXAM_CONTROL_CACHE_TTL_SECONDS,
+  encodeExamControlEvent,
   examControlChannel,
   examControlStreamKey,
   type ExamControlCenterSnapshot,
@@ -21,9 +23,17 @@ export interface ExamControlRefreshSweepDeps {
   // `xadd`'s real ioredis type is a complex overloaded variadic signature —
   // `Pick` off the real client type rather than hand-rolling an interface
   // that can never quite match it (found by `tsc`, not by inspection).
-  redis: Pick<Redis, 'get' | 'set' | 'publish' | 'xadd' | 'expire'>;
+  redis: Pick<Redis, 'get' | 'set' | 'publish' | 'xadd' | 'expire'> &
+    Partial<Pick<Redis, 'smembers' | 'srem'>>;
   staleThresholdMs: number;
   now?: () => Date;
+  /**
+   * B21: when given (the real worker always passes it), each tick refreshes
+   * only exams in EXAM_CONTROL_ACTIVE_SET_KEY and runs the every-school full
+   * scan at most once per `fullScanEveryMs`. Without it (unit/integration
+   * harnesses), every tick is a full scan — the pre-B21 behaviour.
+   */
+  activity?: { fullScanEveryMs: number; lastFullScanAt: number };
 }
 
 /**
@@ -51,6 +61,18 @@ export interface ExamControlRefreshSweepDeps {
  */
 export async function runExamControlRefreshSweep(deps: ExamControlRefreshSweepDeps): Promise<void> {
   const now = deps.now?.() ?? new Date();
+  const activity = deps.activity;
+  const fullScanDue =
+    !activity ||
+    !deps.redis.smembers ||
+    now.getTime() - activity.lastFullScanAt >= activity.fullScanEveryMs;
+
+  if (!fullScanDue && deps.redis.smembers) {
+    await refreshActiveExams(deps, now);
+    return;
+  }
+  if (activity) activity.lastFullScanAt = now.getTime();
+
   const schools = await prisma.school.findMany({ select: { id: true } });
 
   for (const school of schools) {
@@ -66,41 +88,85 @@ export async function runExamControlRefreshSweep(deps: ExamControlRefreshSweepDe
       );
 
       for (const exam of exams) {
-        const snapshot = await computeSnapshot(
-          school.id,
-          exam.id,
-          exam.status,
-          deps.staleThresholdMs,
-          now,
-        );
-        const key = examControlChannel(school.id, exam.id);
-        const payload = JSON.stringify(snapshot);
-
-        const prior = await deps.redis.get(key);
-        // A TTL, not a plain SET: this sweep only ever iterates exams
-        // currently OPEN/CLOSED, so once an exam moves to
-        // COMPLETED/CANCELLED/ARCHIVED nothing touches this key again — a
-        // plain SET would leave that exam's last snapshot in Redis forever,
-        // served by GET /control indefinitely (found in review). The TTL
-        // is refreshed on every tick this sweep still considers the exam
-        // live, and matches the write-through TTL apps/api's own
-        // publishUpdate() uses for the same key.
-        await deps.redis.set(key, payload, 'EX', EXAM_CONTROL_CACHE_TTL_SECONDS);
-
-        // Publish/append only on a MATERIAL change — `computedAt` alone
-        // changes every tick regardless, so comparing the raw JSON would
-        // always differ and defeat the point of this check entirely.
-        if (!snapshotsEqualIgnoringComputedAt(prior, payload)) {
-          const streamKey = examControlStreamKey(school.id, exam.id);
-          await deps.redis.publish(key, payload);
-          await deps.redis.xadd(streamKey, 'MAXLEN', '~', STREAM_MAXLEN, '*', 'event', payload);
-          await deps.redis.expire(streamKey, STREAM_TTL_SECONDS);
-        }
+        await refreshExam(deps, school.id, exam.id, exam.status, now);
       }
     } catch (err) {
       console.error(`[worker] exam-control-refresh sweep failed for school ${school.id}:`, err);
     }
   }
+}
+
+/** B21: the per-tick pass — only exams with live activity. */
+async function refreshActiveExams(deps: ExamControlRefreshSweepDeps, now: Date): Promise<void> {
+  const members = (await deps.redis.smembers?.(EXAM_CONTROL_ACTIVE_SET_KEY)) ?? [];
+  for (const member of members) {
+    const [schoolId, examId] = member.split(':');
+    if (!schoolId || !examId) {
+      await deps.redis.srem?.(EXAM_CONTROL_ACTIVE_SET_KEY, member);
+      continue;
+    }
+    try {
+      const exam = await withTenant(prisma, schoolId, (tx) =>
+        tx.exam.findUnique({ where: { id: examId }, select: { status: true } }),
+      );
+      if (!exam || (exam.status !== 'OPEN' && exam.status !== 'CLOSED')) {
+        await deps.redis.srem?.(EXAM_CONTROL_ACTIVE_SET_KEY, member);
+        continue;
+      }
+      const snapshot = await refreshExam(deps, schoolId, examId, exam.status, now);
+      // Nothing time-sensitive left: the slower full scan keeps covering it
+      // (staleness), and the next start/submit re-adds it.
+      if (snapshot.aggregate.inProgressCount === 0) {
+        await deps.redis.srem?.(EXAM_CONTROL_ACTIVE_SET_KEY, member);
+      }
+    } catch (err) {
+      console.error(`[worker] exam-control-refresh failed for exam ${examId}:`, err);
+    }
+  }
+}
+
+async function refreshExam(
+  deps: ExamControlRefreshSweepDeps,
+  schoolId: string,
+  examId: string,
+  status: string,
+  now: Date,
+): Promise<ExamControlCenterSnapshot> {
+  const snapshot = await computeSnapshot(schoolId, examId, status, deps.staleThresholdMs, now);
+  const key = examControlChannel(schoolId, examId);
+  const payload = JSON.stringify(snapshot);
+
+  const prior = await deps.redis.get(key);
+  // A TTL, not a plain SET: this sweep only ever iterates exams
+  // currently OPEN/CLOSED, so once an exam moves to
+  // COMPLETED/CANCELLED/ARCHIVED nothing touches this key again — a
+  // plain SET would leave that exam's last snapshot in Redis forever,
+  // served by GET /control indefinitely (found in review). The TTL
+  // is refreshed on every tick this sweep still considers the exam
+  // live, and matches the write-through TTL apps/api's own
+  // publishUpdate() uses for the same key.
+  await deps.redis.set(key, payload, 'EX', EXAM_CONTROL_CACHE_TTL_SECONDS);
+
+  // Publish/append only on a MATERIAL change — `computedAt` alone
+  // changes every tick regardless, so comparing the raw JSON would
+  // always differ and defeat the point of this check entirely.
+  if (!snapshotsEqualIgnoringComputedAt(prior, payload)) {
+    const streamKey = examControlStreamKey(schoolId, examId);
+    // B21 (R-04): append first, then publish with the replay id so
+    // live SSE frames carry an `id:` (encodeExamControlEvent).
+    const id = await deps.redis.xadd(
+      streamKey,
+      'MAXLEN',
+      '~',
+      STREAM_MAXLEN,
+      '*',
+      'event',
+      payload,
+    );
+    await deps.redis.expire(streamKey, STREAM_TTL_SECONDS);
+    await deps.redis.publish(key, id ? encodeExamControlEvent(id, payload) : payload);
+  }
+  return snapshot;
 }
 
 function snapshotsEqualIgnoringComputedAt(priorRaw: string | null, currentRaw: string): boolean {
@@ -178,31 +244,12 @@ async function computeSnapshot(
       where: { schoolId, examId },
       select: { studentProfileId: true, examSessionId: true, status: true },
     });
-    const rollups = [
-      ...new Set(participants.map((participant) => participant.studentProfileId)),
-    ].map((studentProfileId) =>
-      rollUpParticipation(
-        participants
-          .filter((participant) => participant.studentProfileId === studentProfileId)
-          .map((participant) => {
-            const participation = participations.find(
-              (entry) =>
-                entry.studentProfileId === studentProfileId &&
-                entry.examSessionId === participant.examSessionId,
-            );
-            return {
-              status: participation?.status ?? null,
-              hasNonInvalidatedAttempt: allAttempts.some(
-                (attempt) =>
-                  attempt.studentProfileId === studentProfileId &&
-                  attempt.examSessionId === participant.examSessionId &&
-                  attempt.state !== 'INVALIDATED' &&
-                  attempt.state !== 'CANCELLED',
-              ),
-            };
-          }),
-      ),
-    );
+    // B21: linear-time roll-up, shared with the API snapshot.
+    const rollups = rollUpExamParticipation({
+      participants,
+      participations,
+      attempts: allAttempts,
+    });
     const absentCount = rollups.filter((status) => status === 'ABSENT').length;
 
     // F12 gap closure: resolved the same way `apps/api`'s own

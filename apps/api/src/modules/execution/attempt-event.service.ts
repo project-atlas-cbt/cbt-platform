@@ -4,8 +4,14 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { AttemptFinalizationService } from './attempt-finalization.service.js';
-import { loadAttemptWithOwnerOrThrow } from './attempt-mappers.js';
+import { loadAttemptHeaderOrThrow } from './attempt-mappers.js';
 import type { RecordAttemptEventDto } from './dto/attempt.dto.js';
+
+/** B21: `last_seen_at` granularity for answer-save touches. Nothing reads
+ * it finer than this (the F12 disconnected indicator is minutes-scale), and
+ * the heartbeat still writes on every tick. */
+export const LAST_SEEN_RESOLUTION_MS = 15_000;
+const LAST_TOUCHED_MAX_ENTRIES = 50_000;
 
 /**
  * ADR-0020: integrity signals and liveness — both deliberately kept OFF the
@@ -17,6 +23,7 @@ import type { RecordAttemptEventDto } from './dto/attempt.dto.js';
 @Injectable()
 export class AttemptEventService {
   private readonly logger = new Logger(AttemptEventService.name);
+  private readonly lastTouched = new Map<string, number>();
 
   constructor(
     private readonly authz: AuthorizationService,
@@ -33,7 +40,7 @@ export class AttemptEventService {
     attemptId: string,
     dto: RecordAttemptEventDto,
   ): Promise<void> {
-    const attempt = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+    const attempt = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     const decision = await this.authz.evaluate(actor, 'studentCbt.navigate', {
       schoolId,
       ownerUserId: attempt.studentProfile.membership.userId,
@@ -79,7 +86,7 @@ export class AttemptEventService {
     attemptId: string,
     requestCtx: { ipAddress?: string; deviceId?: string },
   ): Promise<void> {
-    const attempt = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+    const attempt = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     const decision = await this.authz.evaluate(actor, 'studentCbt.navigate', {
       schoolId,
       ownerUserId: attempt.studentProfile.membership.userId,
@@ -159,16 +166,46 @@ export class AttemptEventService {
    * endpoint itself degrades to a quiet no-op rather than a 500 on a pure
    * liveness signal).
    */
-  async touchLastSeen(schoolId: string, attemptId: string): Promise<void> {
+  async touchLastSeen(
+    schoolId: string,
+    attemptId: string,
+    opts: { coalesce?: boolean } = {},
+  ): Promise<void> {
+    // B21 (R-03, ADR-0020 "must not update the parent ExamAttempt row on
+    // every answer save"): answer saves coalesce — at most one parent-row
+    // write per attempt per LAST_SEEN_RESOLUTION_MS, skipped in-process
+    // without a database round trip, and conditional in SQL so several API
+    // processes coalesce too. The heartbeat (its own ~30 s cadence) always
+    // writes: it is the dedicated liveness path.
+    const now = Date.now();
+    if (opts.coalesce) {
+      const previous = this.lastTouched.get(attemptId);
+      if (previous !== undefined && now - previous < LAST_SEEN_RESOLUTION_MS) return;
+    }
+    this.rememberTouch(attemptId, now);
     try {
       await withTenant(prisma, schoolId, (tx) =>
         tx.examAttempt.updateMany({
-          where: { schoolId, id: attemptId, state: 'IN_PROGRESS' },
-          data: { lastSeenAt: new Date() },
+          where: {
+            schoolId,
+            id: attemptId,
+            state: 'IN_PROGRESS',
+            ...(opts.coalesce && {
+              lastSeenAt: { lt: new Date(now - LAST_SEEN_RESOLUTION_MS) },
+            }),
+          },
+          data: { lastSeenAt: new Date(now) },
         }),
       );
     } catch (error) {
       this.logger.warn(`touchLastSeen failed for attempt ${attemptId}: ${String(error)}`);
     }
+  }
+
+  private rememberTouch(attemptId: string, now: number): void {
+    // Bounded: one entry per live attempt on this process; a full map is
+    // simply cleared (the cost is one extra coalesced write per attempt).
+    if (this.lastTouched.size >= LAST_TOUCHED_MAX_ENTRIES) this.lastTouched.clear();
+    this.lastTouched.set(attemptId, now);
   }
 }

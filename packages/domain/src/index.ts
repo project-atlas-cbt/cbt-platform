@@ -41,6 +41,10 @@ export {
 export {
   examControlChannel,
   examControlStreamKey,
+  decodeExamControlEvent,
+  encodeExamControlEvent,
+  LOAD_SHED_SIGNAL_KEY,
+  EXAM_CONTROL_ACTIVE_SET_KEY,
   EXAM_CONTROL_CACHE_TTL_SECONDS,
   type ExamControlCenterAggregateSnapshot,
   type ExamControlCenterSessionSnapshot,
@@ -185,7 +189,11 @@ export {
   ATTEMPT_MARKING_QUEUE_NAME,
   type AttemptMarkingJobPayload,
 } from './execution/attempt-marking-queue.js';
-export { rollUpParticipation, type ParticipationRollupInput } from './execution/participation.js';
+export {
+  rollUpExamParticipation,
+  rollUpParticipation,
+  type ParticipationRollupInput,
+} from './execution/participation.js';
 export {
   computePercentage,
   computeResultTotals,

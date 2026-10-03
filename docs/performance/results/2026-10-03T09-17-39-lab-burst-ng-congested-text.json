@@ -1,0 +1,200 @@
+{
+  "scenario": "lab-burst",
+  "title": "B21 lab burst: 40 clients behind one link",
+  "startedAt": "2026-10-03T09:17:39.404Z",
+  "durationSeconds": 61,
+  "environment": {
+    "host": "DESKTOP-2S8H6BV",
+    "platform": "win32 10.0.26200",
+    "cpu": "12th Gen Intel(R) Core(TM) i3-1215U",
+    "logicalCpus": 8,
+    "memoryGb": 7.7,
+    "node": "v22.18.0",
+    "network": "ng-congested (≈300 ms RTT ±100, ~3% loss, 2 Mbit shared) via netem relay",
+    "pooler": "none (direct)"
+  },
+  "parameters": {
+    "clients": 40,
+    "arrivalWindowSeconds": 20,
+    "questions": 40,
+    "mediaKbPerQuestion": 0
+  },
+  "latency": [
+    {
+      "label": "answer.batch",
+      "count": 139,
+      "ok": 139,
+      "status": {
+        "200": 139
+      },
+      "networkFailures": 0,
+      "p50": 460.29,
+      "p95": 564.22,
+      "p99": 1087.49,
+      "max": 1136.64,
+      "mean": 476.35,
+      "bytes": 39256
+    },
+    {
+      "label": "attempt.heartbeat",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 468.74,
+      "p95": 829.44,
+      "p99": 1031.17,
+      "max": 1031.17,
+      "mean": 499.4,
+      "bytes": 680
+    },
+    {
+      "label": "attempt.start",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 1176.58,
+      "p95": 1576.96,
+      "p99": 1816.58,
+      "max": 1816.58,
+      "mean": 1213.19,
+      "bytes": 1118040
+    },
+    {
+      "label": "auth.login",
+      "count": 41,
+      "ok": 41,
+      "status": {
+        "200": 41
+      },
+      "networkFailures": 0,
+      "p50": 575.49,
+      "p95": 660.99,
+      "p99": 735.74,
+      "max": 735.74,
+      "mean": 577.52,
+      "bytes": 4139
+    },
+    {
+      "label": "session.open",
+      "count": 1,
+      "ok": 1,
+      "status": {
+        "201": 1
+      },
+      "networkFailures": 0,
+      "p50": 1174.53,
+      "p95": 1174.53,
+      "p99": 1174.53,
+      "max": 1174.53,
+      "mean": 1174.02,
+      "bytes": 441
+    },
+    {
+      "label": "setup",
+      "count": 4,
+      "ok": 4,
+      "status": {
+        "200": 3,
+        "201": 1
+      },
+      "networkFailures": 0,
+      "p50": 854.53,
+      "p95": 1171.46,
+      "p99": 1171.46,
+      "max": 1171.46,
+      "mean": 875.07,
+      "bytes": 59566
+    },
+    {
+      "label": "student.assessment",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 522.5,
+      "p95": 601.6,
+      "p99": 1183.74,
+      "max": 1183.74,
+      "mean": 541.73,
+      "bytes": 7360
+    },
+    {
+      "label": "student.preview",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 564.74,
+      "p95": 665.09,
+      "p99": 1107.97,
+      "max": 1107.97,
+      "mean": 574.89,
+      "bytes": 14480
+    },
+    {
+      "label": "tenant.resolve",
+      "count": 41,
+      "ok": 41,
+      "status": {
+        "200": 41
+      },
+      "networkFailures": 0,
+      "p50": 1115.14,
+      "p95": 1828.86,
+      "p99": 2089.98,
+      "max": 2089.98,
+      "mean": 1181.17,
+      "bytes": 10332
+    }
+  ],
+  "checks": [
+    {
+      "name": "clients ready (signed in, started, media cached)",
+      "actual": "40/40",
+      "budget": "40",
+      "pass": true
+    },
+    {
+      "name": "whole lab ready (first arrival → last ready)",
+      "actual": "23.2 s",
+      "budget": "≤ 60 s",
+      "pass": true
+    },
+    {
+      "name": "answer save success",
+      "actual": "100.000%",
+      "budget": "≥ 99.9%",
+      "pass": true
+    }
+  ],
+  "sampler": {
+    "samples": 12,
+    "peakConnections": 8,
+    "peakActive": 2,
+    "peakIdleInTransaction": 4,
+    "peakWaitingLocks": 0,
+    "avgCommitsPerSecond": 95,
+    "peakCommitsPerSecond": 186,
+    "peakRedisClients": 56,
+    "peakRedisMemoryMb": 16.3,
+    "minHostFreeMemoryMb": 249,
+    "hostMemoryPressure": true
+  },
+  "notes": [],
+  "extra": {
+    "perClientReadyP95Seconds": 4.8,
+    "perClientReadyMaxSeconds": 5.4,
+    "mediaBytesTransferred": 0,
+    "mediaFiles": 0
+  }
+}

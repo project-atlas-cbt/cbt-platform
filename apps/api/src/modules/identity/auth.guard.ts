@@ -7,7 +7,7 @@ import { enrichLogContext } from '@atlas/observability';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
 import { AccessGateService } from '../platform/access-gate.service.js';
-import { SessionService } from './session.service.js';
+import { SessionService, isLiveSession } from './session.service.js';
 import { ALLOW_PENDING_PASSWORD_CHANGE_KEY } from './decorators.js';
 
 export interface AuthenticatedUser {
@@ -86,7 +86,12 @@ export class AuthGuard implements CanActivate {
     // not the full recompute-and-persist path. Deliberately NOT checked for
     // EXPIRED-alone (no override) — ADR-0015 keeps login/reads working
     // through an expired subscription.
-    const override = await this.accessGate.getPlatformOverride(schoolId);
+    // B21: TenancyMiddleware already read the override in the same lookup
+    // that resolved the school, this request — reuse it rather than read
+    // the `schools` row a second time.
+    const preloaded = this.tenancy.platformOverride;
+    const override =
+      preloaded !== undefined ? preloaded : await this.accessGate.getPlatformOverride(schoolId);
     if (override === 'SUSPENDED') {
       throw new AppHttpException({
         code: 'SCHOOL_ACCESS_SUSPENDED',
@@ -100,25 +105,29 @@ export class AuthGuard implements CanActivate {
       });
     }
 
-    const session = await this.sessions.resolve(req, schoolId);
-    if (!session) throw unauthenticated();
+    const tokenHash = this.sessions.tokenHashFromRequest(req);
+    if (!tokenHash) throw unauthenticated();
 
-    const [user, membership] = await Promise.all([
-      prisma.user.findUnique({ where: { id: session.userId } }),
-      withTenant(prisma, schoolId, (tx) =>
-        tx.schoolMembership.findFirst({
-          where: { userId: session.userId, schoolId, status: 'ACTIVE' },
-        }),
-      ),
-    ]);
+    // B21: session, membership (with its active roles) and user in ONE
+    // tenant transaction — this guard runs on every authenticated request,
+    // and four separate transactions (each BEGIN + set_config + query +
+    // COMMIT) were the largest fixed cost of an answer save. Same checks,
+    // same current-state evaluation (AGENTS.md §6), one round of locking.
+    const resolved = await withTenant(prisma, schoolId, async (tx) => {
+      const session = await tx.session.findUnique({ where: { tokenHash } });
+      if (!isLiveSession(session)) return null;
+      const membership = await tx.schoolMembership.findFirst({
+        where: { userId: session.userId, schoolId, status: 'ACTIVE' },
+        include: { roleAssignments: { where: { schoolId, status: 'ACTIVE' } } },
+      });
+      const user = await tx.user.findUnique({ where: { id: session.userId } });
+      return { session, membership, user };
+    });
+    if (!resolved) throw unauthenticated();
+    const { session, membership, user } = resolved;
 
     if (!user || user.status !== 'ACTIVE' || !membership) throw unauthenticated();
-
-    const roleAssignments = await withTenant(prisma, schoolId, (tx) =>
-      tx.roleAssignment.findMany({
-        where: { schoolId, membershipId: membership.id, status: 'ACTIVE' },
-      }),
-    );
+    const roleAssignments = membership.roleAssignments;
 
     const allowPending = this.reflector.getAllAndOverride<boolean>(
       ALLOW_PENDING_PASSWORD_CHANGE_KEY,
@@ -136,7 +145,7 @@ export class AuthGuard implements CanActivate {
       userId: user.id,
       schoolId,
       membershipId: membership.id,
-      sessionId: session.sessionId,
+      sessionId: session.id,
       roles: roleAssignments.map((r) => r.role),
     };
     enrichLogContext({ userId: user.id });

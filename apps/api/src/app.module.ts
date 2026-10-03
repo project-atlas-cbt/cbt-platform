@@ -28,11 +28,16 @@ import { OperationsModule } from './modules/operations/operations.module.js';
 import { NotificationCenterModule } from './modules/notification-center/notification-center.module.js';
 import { MediaModule } from './modules/media/media.module.js';
 import { ReportsModule } from './modules/reports/reports.module.js';
+import { LoadModule } from './load/load.module.js';
+import { InFlightMiddleware } from './load/load-shedding.middleware.js';
 
 @Module({
   imports: [
     AppConfigModule,
     RedisModule,
+    // B21: before SecurityModule, so the load-shedding APP_GUARD runs ahead
+    // of the throttler/CSRF guards — a shed request does no session work.
+    LoadModule,
     TenancyModule,
     SecurityModule,
     AuthorizationModule,
@@ -108,6 +113,8 @@ export class AppModule implements NestModule {
     // TenancyContextService.schoolId — middleware always runs before
     // guards in Nest's pipeline, so ordering is automatic, not something
     // this chain needs to express.
-    consumer.apply(CorrelationIdMiddleware, TenancyMiddleware).forRoutes('*');
+    // InFlightMiddleware (B21) counts concurrent requests for load shedding
+    // before the tenancy lookup does any database work.
+    consumer.apply(CorrelationIdMiddleware, InFlightMiddleware, TenancyMiddleware).forRoutes('*');
   }
 }

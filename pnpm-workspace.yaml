@@ -2,6 +2,8 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'tests'
+  # B21: the load/capacity harness — drives a running API, never shipped.
+  - 'tools/*'
 overrides:
   # @nestjs/platform-fastify@11.2.1 pins an exact fastify version; without
   # forcing the whole tree to the same one, our own direct `fastify`

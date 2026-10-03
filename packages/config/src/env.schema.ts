@@ -34,6 +34,13 @@ const envObject = z.object({
   DATABASE_AUDIT_READER_URL: z.url({ protocol: /^postgresql?$/ }),
   DATABASE_AUDIT_READER_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
 
+  // B21: per-process connection pool size (node-postgres `max`). Total
+  // demand is DATABASE_POOL_MAX × processes, which must fit the pooler's
+  // client limit (production: RDS Proxy; locally PgBouncer) — never the raw
+  // Postgres max_connections. Sizing: docs/performance/capacity-plan.md.
+  // (packages/db reads the same variable directly; this validates it.)
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(200).default(10),
+
   // B20: `rediss://` (TLS) accepted, and required in production (see the
   // production rules at the bottom of this file).
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
@@ -156,6 +163,15 @@ const envObject = z.object({
     .int()
     .positive()
     .default(5 * 1000),
+  // B21: the every-school Control Center scan (staleness detection) runs at
+  // most this often; exams with live attempts are still refreshed every
+  // EXAM_CONTROL_REFRESH_INTERVAL_MS. Staleness is hours-scale, so a minute
+  // is ample.
+  EXAM_CONTROL_FULL_SCAN_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 1000),
 
   // B17 derived analytics cache-maintenance sweep. This never stores
   // academic facts; it only keeps tenant refresh health observable.
@@ -274,6 +290,28 @@ const envObject = z.object({
     .int()
     .positive()
     .default(24 * 60 * 60 * 1000),
+
+  // B21 load shedding (R-12). Under saturation the API sheds reporting
+  // (analytics, exports, search, imports) with 503 SERVICE_UNAVAILABLE +
+  // Retry-After so answer saves and submissions keep their capacity; exam
+  // execution and sign-in are never shed. Thresholds measured in B21 —
+  // docs/performance/capacity-plan.md and docs/performance/scaling-runbook.md.
+  LOAD_SHED_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** Event-loop delay p99 (per 1 s window) above which this process sheds. */
+  LOAD_SHED_EVENT_LOOP_P99_MS: z.coerce.number().int().positive().default(200),
+  /** Concurrent in-flight requests above which this process sheds. */
+  LOAD_SHED_MAX_IN_FLIGHT: z.coerce.number().int().positive().default(256),
+  /** Minimum time shedding stays on once tripped (hysteresis), and the TTL of the cluster-wide signal. */
+  LOAD_SHED_HOLD_MS: z.coerce.number().int().positive().default(30_000),
+  /** B21: concurrent Argon2 hash/verify per API process (they share Node's libuv threadpool with DNS and file I/O; read directly by PasswordService). */
+  ARGON2_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
+  /** B21: parallel marking jobs per worker process (each holds one pooled connection while it runs). */
+  MARKING_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
+  /** Control Center SSE streams one API process will hold; beyond it, clients fall back to polling (R-04). */
+  SSE_MAX_CONNECTIONS_PER_PROCESS: z.coerce.number().int().positive().default(500),
 });
 
 const DEV_SECRET_MARKERS = ['dev-only', 'change-me', 'changeme', 'ci-only', 'example', 'secret'];

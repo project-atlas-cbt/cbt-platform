@@ -30,20 +30,49 @@ const DUMMY_HASH_PROMISE = hash(
   ARGON2_OPTIONS,
 );
 
+/**
+ * B21: Argon2 runs on Node's libuv threadpool (4 threads by default) — the
+ * same pool DNS lookups, file I/O and zlib use. Measured in the 1,000-student
+ * lab sign-in burst: unbounded concurrent hashes filled the threadpool, so
+ * every pg connection open (a DNS lookup) queued behind them and even a
+ * one-query request waited seconds. Capping concurrent Argon2 work keeps
+ * the threadpool shared; logins queue for each other, not everything else.
+ * Hash strength is unchanged.
+ */
+const ARGON2_MAX_CONCURRENCY = Math.max(1, Number(process.env.ARGON2_MAX_CONCURRENCY ?? '2') || 2);
+let argon2Active = 0;
+const argon2Waiting: (() => void)[] = [];
+
+async function withArgon2Slot<T>(fn: () => Promise<T>): Promise<T> {
+  if (argon2Active >= ARGON2_MAX_CONCURRENCY) {
+    await new Promise<void>((resolve) => argon2Waiting.push(resolve));
+  } else {
+    argon2Active += 1;
+  }
+  try {
+    return await fn();
+  } finally {
+    const next = argon2Waiting.shift();
+    // Hand the slot straight to the next waiter (argon2Active unchanged).
+    if (next) next();
+    else argon2Active -= 1;
+  }
+}
+
 @Injectable()
 export class PasswordService {
   hash(plaintext: string): Promise<string> {
-    return hash(plaintext, ARGON2_OPTIONS);
+    return withArgon2Slot(() => hash(plaintext, ARGON2_OPTIONS));
   }
 
   verify(passwordHash: string, plaintext: string): Promise<boolean> {
-    return verify(passwordHash, plaintext, ARGON2_OPTIONS);
+    return withArgon2Slot(() => verify(passwordHash, plaintext, ARGON2_OPTIONS));
   }
 
   /** See DUMMY_HASH_PROMISE — always awaited, never short-circuited. */
   async verifyDummy(): Promise<void> {
     const dummyHash = await DUMMY_HASH_PROMISE;
-    await verify(dummyHash, 'irrelevant', ARGON2_OPTIONS);
+    await withArgon2Slot(() => verify(dummyHash, 'irrelevant', ARGON2_OPTIONS));
   }
 
   /**

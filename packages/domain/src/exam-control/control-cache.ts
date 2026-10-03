@@ -96,3 +96,42 @@ export interface ExamControlCenterSnapshot {
   staleness: ExamControlCenterStalenessSnapshot;
   computedAt: string;
 }
+
+/**
+ * B21 (R-04): the pub/sub message carries the replay-stream entry id with
+ * the snapshot, so live SSE frames get an `id:` and a reconnect's
+ * `Last-Event-ID` resumes from the right point. Format: `<id>\n<json>`
+ * (`JSON.stringify` never emits a raw newline). A message with no newline
+ * is a bare snapshot from a pre-B21 publisher — still delivered, without id.
+ */
+export function encodeExamControlEvent(id: string, payload: string): string {
+  return `${id}\n${payload}`;
+}
+
+export function decodeExamControlEvent(message: string): { id?: string; payload: string } {
+  const newline = message.indexOf('\n');
+  if (newline <= 0) return { payload: message };
+  return { id: message.slice(0, newline), payload: message.slice(newline + 1) };
+}
+
+/**
+ * B21 (R-12): the cluster-wide load-shedding signal. Any API process that
+ * trips its saturation threshold sets this key (with a TTL equal to its
+ * hold time); every API process sheds reporting while it exists, and the
+ * worker pauses its non-critical queues — so background work never starves
+ * the interactive exam path.
+ */
+export const LOAD_SHED_SIGNAL_KEY = 'atlas:load:shed';
+
+/**
+ * B21: exams with live activity, as `<schoolId>:<examId>` members. The API
+ * adds an exam on every attempt start/submit/auto-submit; the worker's
+ * Control Center refresh sweep re-computes these every tick (time remaining
+ * changes continuously) and drops an exam once it has no attempt in
+ * progress. The full every-school scan — needed only for staleness
+ * detection — then runs at a much slower cadence, so the sweep's cost
+ * follows exam *activity*, not the number of schools and open exams
+ * (measured: 500 schools / 455 open exams ≈ 700 transactions/s at a 5 s
+ * full-scan cadence).
+ */
+export const EXAM_CONTROL_ACTIVE_SET_KEY = 'atlas:exam-control:active';

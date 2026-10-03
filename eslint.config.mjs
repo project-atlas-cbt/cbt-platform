@@ -47,6 +47,10 @@ export default tseslint.config(
             // against whatever's staged, root files included.
             'eslint.config.mjs',
             'scripts/*.mjs',
+            // B21 load-harness helpers run as plain Node ESM (a --import
+            // preload and a container relay), outside the package's TS build.
+            'tools/*/scripts/*.mjs',
+            'tools/*/netem/*.mjs',
           ],
           // Without this, the ad-hoc "default project" typescript-eslint
           // builds for the files above has no module/moduleResolution

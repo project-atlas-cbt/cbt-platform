@@ -1,0 +1,30 @@
+# B21 load-testing overlay — local only, never production. Use with:
+#   docker compose -f docker-compose.yml -f infra/load/docker-compose.load.yml up -d postgres redis minio pgbouncer
+# Adds pg_stat_statements (statement-level evidence for index tuning, roadmap
+# B21 "Index tuning informed by measured query plans") and PgBouncer in
+# transaction mode as the stand-in for production RDS Proxy.
+services:
+  postgres:
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=top
+      - -c
+      - track_io_timing=on
+
+  pgbouncer:
+    # edoburu/pgbouncer 1.26.0, pinned by digest (the Chainguard build is
+    # not publicly pullable).
+    image: edoburu/pgbouncer@sha256:9c78945868a6a142c7fc40ccd843bbe5a606df163c7ffce4de70e0d628d696a2
+    container_name: atlas-pgbouncer
+    restart: unless-stopped
+    ports:
+      - '6432:6432'
+    volumes:
+      - ./infra/load/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./infra/load/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    depends_on:
+      postgres:
+        condition: service_healthy

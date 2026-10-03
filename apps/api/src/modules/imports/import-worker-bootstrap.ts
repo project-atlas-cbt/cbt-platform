@@ -10,6 +10,7 @@ import {
 } from './import-queue.service.js';
 import { ImportValidationService } from './import-validation.service.js';
 import { ImportCommitService } from './import-commit.service.js';
+import { LoadMonitorService } from '../../load/load-monitor.service.js';
 
 export interface ImportWorkers {
   close: () => Promise<void>;
@@ -59,6 +60,11 @@ export function startImportWorkers(app: INestApplicationContext): ImportWorkers 
       console.error(`[api] import worker "${worker.name}" connection error:`, err.message);
     });
   }
+
+  // B21 (R-12): imports yield to live exams under load.
+  const load = app.get(LoadMonitorService);
+  load.pauseWhileShedding(validationWorker);
+  load.pauseWhileShedding(commitWorker);
 
   return {
     close: async () => {

@@ -1,0 +1,227 @@
+{
+  "scenario": "lab-burst",
+  "title": "B21 lab burst: 40 clients behind one link",
+  "startedAt": "2026-10-03T09:10:09.547Z",
+  "durationSeconds": 53,
+  "environment": {
+    "host": "DESKTOP-2S8H6BV",
+    "platform": "win32 10.0.26200",
+    "cpu": "12th Gen Intel(R) Core(TM) i3-1215U",
+    "logicalCpus": 8,
+    "memoryGb": 7.7,
+    "node": "v22.18.0",
+    "network": "clean (loopback)",
+    "pooler": "none (direct)"
+  },
+  "parameters": {
+    "clients": 40,
+    "arrivalWindowSeconds": 20,
+    "questions": 40,
+    "mediaKbPerQuestion": 150
+  },
+  "latency": [
+    {
+      "label": "answer.batch",
+      "count": 138,
+      "ok": 138,
+      "status": {
+        "200": 138
+      },
+      "networkFailures": 0,
+      "p50": 67.46,
+      "p95": 97.92,
+      "p99": 132.22,
+      "max": 138.62,
+      "mean": 70.14,
+      "bytes": 38226
+    },
+    {
+      "label": "attempt.heartbeat",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 66.11,
+      "p95": 85.25,
+      "p99": 94.14,
+      "max": 94.14,
+      "mean": 66.36,
+      "bytes": 680
+    },
+    {
+      "label": "attempt.start",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 517.89,
+      "p95": 699.9,
+      "p99": 923.14,
+      "max": 923.14,
+      "mean": 520.68,
+      "bytes": 2143240
+    },
+    {
+      "label": "auth.login",
+      "count": 41,
+      "ok": 41,
+      "status": {
+        "200": 41
+      },
+      "networkFailures": 0,
+      "p50": 204.42,
+      "p95": 343.81,
+      "p99": 415.23,
+      "max": 415.23,
+      "mean": 201.98,
+      "bytes": 4139
+    },
+    {
+      "label": "media.get",
+      "count": 1600,
+      "ok": 1600,
+      "status": {
+        "200": 1600
+      },
+      "networkFailures": 0,
+      "p50": 99.14,
+      "p95": 201.98,
+      "p99": 360.19,
+      "max": 426.5,
+      "mean": 106.51,
+      "bytes": 245707200
+    },
+    {
+      "label": "session.open",
+      "count": 1,
+      "ok": 1,
+      "status": {
+        "201": 1
+      },
+      "networkFailures": 0,
+      "p50": 669.18,
+      "p95": 669.18,
+      "p99": 669.18,
+      "max": 669.18,
+      "mean": 668.93,
+      "bytes": 441
+    },
+    {
+      "label": "setup",
+      "count": 4,
+      "ok": 4,
+      "status": {
+        "200": 3,
+        "201": 1
+      },
+      "networkFailures": 0,
+      "p50": 181.12,
+      "p95": 273.92,
+      "p99": 273.92,
+      "max": 273.92,
+      "mean": 196.06,
+      "bytes": 59566
+    },
+    {
+      "label": "student.assessment",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 87.68,
+      "p95": 240.77,
+      "p99": 302.08,
+      "max": 302.08,
+      "mean": 123.65,
+      "bytes": 7360
+    },
+    {
+      "label": "student.preview",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 144.64,
+      "p95": 326.66,
+      "p99": 481.02,
+      "max": 481.02,
+      "mean": 173.28,
+      "bytes": 14480
+    },
+    {
+      "label": "tenant.resolve",
+      "count": 41,
+      "ok": 41,
+      "status": {
+        "200": 41
+      },
+      "networkFailures": 0,
+      "p50": 23.84,
+      "p95": 101.95,
+      "p99": 147.84,
+      "max": 147.84,
+      "mean": 37.41,
+      "bytes": 10004
+    }
+  ],
+  "checks": [
+    {
+      "name": "clients ready (signed in, started, media cached)",
+      "actual": "40/40",
+      "budget": "40",
+      "pass": true
+    },
+    {
+      "name": "whole lab ready (first arrival → last ready)",
+      "actual": "20.5 s",
+      "budget": "≤ 60 s",
+      "pass": true
+    },
+    {
+      "name": "answer save p95",
+      "actual": "97.92 ms",
+      "budget": "≤ 250 ms",
+      "pass": true
+    },
+    {
+      "name": "answer save p99",
+      "actual": "132.22 ms",
+      "budget": "≤ 750 ms",
+      "pass": true
+    },
+    {
+      "name": "answer save success",
+      "actual": "100.000%",
+      "budget": "≥ 99.9%",
+      "pass": true
+    }
+  ],
+  "sampler": {
+    "samples": 12,
+    "peakConnections": 7,
+    "peakActive": 1,
+    "peakIdleInTransaction": 4,
+    "peakWaitingLocks": 0,
+    "avgCommitsPerSecond": 86,
+    "peakCommitsPerSecond": 165,
+    "peakRedisClients": 56,
+    "peakRedisMemoryMb": 15,
+    "minHostFreeMemoryMb": 425,
+    "hostMemoryPressure": true
+  },
+  "notes": [],
+  "extra": {
+    "perClientReadyP95Seconds": 1.9,
+    "perClientReadyMaxSeconds": 1.9,
+    "mediaBytesTransferred": 245707200,
+    "mediaFiles": 1600
+  }
+}

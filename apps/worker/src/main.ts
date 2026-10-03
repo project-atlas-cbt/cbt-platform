@@ -32,6 +32,7 @@ import {
   scheduleAttemptAutoSubmitSweep,
 } from './queues/attempt-auto-submit.queue.js';
 import { createAttemptMarkingWorker } from './queues/attempt-marking.queue.js';
+import { startLoadShedGate } from './load-shed-gate.js';
 import { createResultAdjustmentWorker } from './queues/result-adjustment.queue.js';
 import {
   SUBSCRIPTION_EXPIRY_QUEUE_NAME,
@@ -165,6 +166,9 @@ async function main() {
   const examControlRefreshWorker = createExamControlRefreshWorker(connection, {
     redis,
     staleThresholdMs: env.EXAM_STALENESS_THRESHOLD_MS,
+    // B21: active exams every tick; the every-school scan (staleness only)
+    // at this slower cadence.
+    activity: { fullScanEveryMs: env.EXAM_CONTROL_FULL_SCAN_INTERVAL_MS, lastFullScanAt: 0 },
   });
   const examControlRefreshQueue = new Queue(EXAM_CONTROL_REFRESH_QUEUE_NAME, { connection });
   await scheduleExamControlRefreshSweep(
@@ -198,12 +202,16 @@ async function main() {
       removeOnFail: 10,
     });
   };
-  const attemptMarkingWorker = createAttemptMarkingWorker(connection, {
-    invalidateAnalytics: async (schoolId) => {
-      await redis.incr(`atlas:analytics:school:${schoolId}:version`);
-      await redis.del('atlas:analytics:platform:overview');
+  const attemptMarkingWorker = createAttemptMarkingWorker(
+    connection,
+    {
+      invalidateAnalytics: async (schoolId) => {
+        await redis.incr(`atlas:analytics:school:${schoolId}:version`);
+        await redis.del('atlas:analytics:platform:overview');
+      },
     },
-  });
+    env.MARKING_CONCURRENCY,
+  );
 
   // B14: ADR-0004's sweeper — the authority half of "a background sweeper
   // as the authority, plus opportunistic finalisation, sharing one
@@ -339,6 +347,21 @@ async function main() {
     });
   }
 
+  // B21 (R-12): background work yields to live exams under load.
+  const loadShedGate = startLoadShedGate(
+    redis,
+    [
+      analyticsRefreshWorker,
+      unassignedStudentsDigestWorker,
+      orphanMediaReportWorker,
+      importExpiryWorker,
+      subscriptionExpiryWorker,
+      resultAdjustmentWorker,
+      retentionWorker,
+    ],
+    logger,
+  );
+
   logger.info(
     {
       queues: [
@@ -362,6 +385,7 @@ async function main() {
 
   const shutdown = async () => {
     logger.info('Worker shutting down');
+    loadShedGate.stop();
     await Promise.all([
       probeWorker.close(),
       subscriptionExpiryWorker.close(),

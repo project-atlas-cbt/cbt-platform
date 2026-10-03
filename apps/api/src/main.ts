@@ -46,6 +46,14 @@ async function bootstrap() {
     // Trust function form: the first TRUST_PROXY_HOPS proxies (counted
     // from the socket) are trusted, nothing beyond them.
     new FastifyAdapter({
+      // B21 (R-04): keep-alive must outlive the load balancer's idle
+      // timeout (ALB default 60 s; set in B23) or the ALB reuses a socket the
+      // API has just closed and the client sees a 502. requestTimeout bounds
+      // how long a client may take to *send* a request (a slow-loris guard);
+      // it does not limit long-lived SSE responses. Both measured in B21 —
+      // docs/performance/capacity-plan.md.
+      keepAliveTimeout: 65_000,
+      requestTimeout: 30_000,
       trustProxy:
         env.TRUST_PROXY_HOPS > 0
           ? (_address: string, hop: number) => hop < env.TRUST_PROXY_HOPS

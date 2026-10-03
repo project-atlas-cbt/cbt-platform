@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
-import { computeResultTotals, type AttemptSnapshotDocumentV1 } from '@atlas/domain';
+import { computeResultTotals } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { AttemptFinalizationService } from './attempt-finalization.service.js';
-import { loadAttemptWithOwnerOrThrow, type AttemptWithOwner } from './attempt-mappers.js';
+import { loadAttemptHeaderOrThrow, type AttemptHeader } from './attempt-mappers.js';
+import { loadSnapshotIndex } from './attempt-write-context.js';
 import type { AttemptStatusResponseDto } from './dto/attempt.dto.js';
 
 /**
@@ -37,7 +38,7 @@ export class AttemptStatusService {
     actor: AuthorizedActor,
     attemptId: string,
   ): Promise<AttemptStatusResponseDto> {
-    const attempt = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+    const attempt = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     const decision = await this.authz.evaluate(actor, 'studentCbt.resume', {
       schoolId,
       ownerUserId: attempt.studentProfile.membership.userId,
@@ -49,13 +50,17 @@ export class AttemptStatusService {
       });
     }
 
-    let current: AttemptWithOwner = attempt;
+    let current: AttemptHeader = attempt;
     if (attempt.state === 'IN_PROGRESS') {
       await this.finalization.finalizeIfExpired(schoolId, attemptId, new Date());
-      current = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+      current = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     }
 
-    if (!current.snapshot) {
+    // B21: post-submit status is polled every 5 s by every student (F13),
+    // so the question count comes from the cached immutable-snapshot index
+    // rather than re-reading the whole snapshot document per poll.
+    const index = await loadSnapshotIndex(schoolId, attemptId);
+    if (!index) {
       // Structurally impossible — start()'s own transaction always writes
       // the attempt and its snapshot together, or neither (B13 DoD item 1).
       throw new AppHttpException({
@@ -64,8 +69,7 @@ export class AttemptStatusService {
         httpStatus: 500,
       });
     }
-    const document = current.snapshot.document as unknown as AttemptSnapshotDocumentV1;
-    const questionCount = document.questions.length;
+    const questionCount = index.size;
 
     const results = await withTenant(prisma, schoolId, (tx) =>
       tx.attemptQuestionResult.findMany({

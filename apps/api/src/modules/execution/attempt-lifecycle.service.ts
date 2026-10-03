@@ -21,6 +21,7 @@ import { AttemptFinalizationService } from './attempt-finalization.service.js';
 import { AttemptMarkingQueueService } from './attempt-marking-queue.service.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
 import {
+  loadAttemptHeaderOrThrow,
   loadAttemptWithOwnerOrThrow,
   toAttemptStateResponseDto,
   type AttemptWithOwner,
@@ -223,14 +224,21 @@ export class AttemptLifecycleService {
       // row count and never tries.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-      // Completion uses the same row lock. Holding it for the whole start
-      // transaction means completion either observes this new IN_PROGRESS
-      // attempt or finishes first, in which case the current session state
-      // below rejects an ordinary post-completion start.
+      // Completion (and every other exam-row writer: lifecycle, session
+      // open/close) takes FOR UPDATE on this row. Holding a SHARE lock for
+      // the whole start transaction means completion either observes this
+      // new IN_PROGRESS attempt or finishes first, in which case the current
+      // session state below rejects an ordinary post-completion start.
+      // B21: FOR SHARE, not FOR UPDATE — shared locks don't conflict with
+      // each other, so different students' starts no longer queue behind
+      // one another on the exam row (measured: the single largest statement
+      // by total time at 100 concurrent starts), while still conflicting
+      // with every FOR UPDATE writer exactly as before. Same-student
+      // duplicates stay serialised by the advisory lock above.
       await tx.$queryRaw`
         SELECT id FROM exams
         WHERE id = ${examId}::uuid AND school_id = ${schoolId}::uuid
-        FOR UPDATE
+        FOR SHARE
       `;
 
       const existing = await tx.examAttempt.findFirst({
@@ -455,7 +463,7 @@ export class AttemptLifecycleService {
         entityId: outcome.attemptId,
         metadata: { examId },
       });
-      await this.stream.publishUpdate(schoolId, examId);
+      await this.stream.publishSoon(schoolId, examId);
     }
 
     const attempt = await loadAttemptWithOwnerOrThrow(schoolId, outcome.attemptId);
@@ -521,7 +529,7 @@ export class AttemptLifecycleService {
     receivedAt: Date,
     auditCtx: ActorContext,
   ): Promise<AttemptStateResponseDto> {
-    const attempt = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+    const attempt = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     const decision = await this.authz.evaluate(actor, 'studentCbt.submit', {
       schoolId,
       ownerUserId: attempt.studentProfile.membership.userId,
@@ -537,7 +545,7 @@ export class AttemptLifecycleService {
       const admissibility = evaluateWriteAdmissibility(attempt.expiresAt, receivedAt);
       if (admissibility === 'REJECTED') {
         await this.finalization.finalizeIfExpired(schoolId, attemptId, receivedAt);
-        const current = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+        const current = await loadAttemptHeaderOrThrow(schoolId, attemptId);
         return toAttemptStateResponseDto(current);
       }
     }
@@ -566,7 +574,7 @@ export class AttemptLifecycleService {
       // DoD item 9: a repeated identical submit is idempotent — if the
       // attempt is ALREADY in the state this call would have produced,
       // return it as a clean success rather than an error.
-      const current = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+      const current = await loadAttemptHeaderOrThrow(schoolId, attemptId);
       if (current.state === 'SUBMITTED' || current.state === 'AUTO_SUBMITTED') {
         return toAttemptStateResponseDto(current);
       }
@@ -584,10 +592,10 @@ export class AttemptLifecycleService {
       entityType: 'ExamAttempt',
       entityId: attemptId,
     });
-    await this.stream.publishUpdate(schoolId, attempt.examId);
+    await this.stream.publishSoon(schoolId, attempt.examId);
     await this.marking.enqueue({ schoolId, attemptId }, `mark-${attemptId}`);
 
-    const updated = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+    const updated = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     return toAttemptStateResponseDto(updated);
   }
 
@@ -601,7 +609,7 @@ export class AttemptLifecycleService {
     attemptId: string,
     auditCtx: ActorContext,
   ): Promise<AttemptStateResponseDto> {
-    const attempt = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+    const attempt = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     const exam = await withTenant(prisma, schoolId, (tx) =>
       tx.exam.findUniqueOrThrow({
         where: { id: attempt.examId },
@@ -654,7 +662,7 @@ export class AttemptLifecycleService {
     await this.stream.publishUpdate(schoolId, attempt.examId);
     await this.marking.enqueue({ schoolId, attemptId }, `mark-${attemptId}`);
 
-    const updated = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+    const updated = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     return toAttemptStateResponseDto(updated);
   }
 
