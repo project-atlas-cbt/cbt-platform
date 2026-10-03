@@ -44,5 +44,10 @@ fell below 10 GB free; no run is affected by paging. Each report records the env
 | `…13-33-37-analytics-cloud`, `…13-37-27-…-participation-fix`                            | Valid as the before state of the analytics fixes (later samples in each were shed). |
 | `…13-46-04-analytics-cloud-sql-aggregates`                                              | **Valid — DoD 10 evidence.**                                                        |
 
-Later runs on this branch (the endurance re-run with stall diagnostics, the final shed run) carry
-their own reports; the capacity plan cites them.
+| `…13-47-24-levels-1000-cloud-endurance-diag` | **Not latency evidence** — an unidentified host process took up to 286 % CPU (13:55–14:00), the load generator stalled up to 5.9 s and its fixed-interval heartbeats stayed in lockstep afterwards. Correctness holds. |
+| `…14-50-57-…-shed-final`, `…16-13-29-…-shed-final2`, `…16-22-…-shed-elu075`, `…16-32-…-shed-bulkhead`, `…16-42-…-shed-bulkhead-rate` | Valid as the defect hunt: shedding did not engage because the monitor never saw exam writes (`req.url` under middie). |
+| `…15-01-06-levels-1000-cloud-dataset-open` | Valid control: the analytics dataset's 47 open exams do not affect steady state. |
+| `…15-10-45-levels-1000-cloud-endurance-jitter` | **Valid — endurance evidence** (clean host, jittered heartbeats): whole hour p95 97 ms, p99 545 ms. |
+| `…16-52-26-shed-500-cloud-shed-fixed` | **Valid — DoD 9 evidence on the final code.** |
+| `…17-00-55-sse-500-cloud-sse-final` | **Valid — DoD 7 evidence on the final code** (60 streams, 0 refused, 0 errors). |
+| `…17-08-22-levels-1000-cloud-final` | Valid regression on the final code: steady p95 51–78 ms; ramp-weighted p99 as DoD 1. |

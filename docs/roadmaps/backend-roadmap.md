@@ -4199,7 +4199,7 @@ session hardening; (3) web CSP is F20's (policy documented here); (4) build an a
 
 # B21 — Performance & Load
 
-**Status:** NOT STARTED · **Decided ADRs:** 0032 (region selection)
+**Status:** ✅ DONE (2026-10-03) — DoD 1 and 4 at 1,000 attempts are partial and gated to the B23 staging re-run by project-owner decision (2026-10-03) · **Decided ADRs:** 0032 (region selection — revisit condition met at B21; region decision is the owner's at B23)
 
 ## Objective
 
@@ -4271,28 +4271,83 @@ Results feed B23's capacity plan and may require revisiting `ADR-0008` (snapshot
 
 ## Definition of Done
 
-1. 1,000 concurrent attempts sustained with answer-save success and latency within agreed budgets.
-2. 500 simultaneous starts create exactly 500 attempts — no duplicates, no failures.
-3. 500 simultaneous submissions produce exactly 500 results.
-4. Answer-save p95 and p99 latency meet budget at every level.
-5. Connection pooling prevents exhaustion under horizontal scaling.
-6. Snapshot and answer growth is measured and projected; the storage strategy is confirmed adequate.
-7. SSE connection scaling validated for the expected number of simultaneous Control Centers.
-8. The system behaves acceptably under simulated Nigerian network conditions, including the 40-client lab burst.
-9. Load shedding preserves exam execution while degrading reporting, verified under stress.
-10. Analytics queries meet budget on realistic data volumes.
-11. Capacity plan and scaling runbook documented from measured evidence, not estimates.
+Evidence: [`docs/performance/capacity-plan.md`](../performance/capacity-plan.md) §3 (per-item) and
+[`docs/performance/results/`](../performance/results/README.md) (every run, with validity).
+
+1. ◐ **Partial — gated to B23 (owner decision 2026-10-03).** 1,000 concurrent attempts sustained
+   for an hour with 100 % answer-save success and 0 lost answers; answer saves met budget over the
+   clean hour _including_ the arrival ramp (p95 97 ms, p99 545 ms). Start p95 (3.4–6.4 s) misses
+   while 1,000 students sign in and start within 60 s on one 4-vCPU host that also runs Postgres
+   and the load generator; spread over 120 s it passes (1.18 s). Re-run on the production topology
+   at B23.
+2. ✅ 500 simultaneous starts (each double-fired) → exactly 500 attempts, 0 duplicates, 15.1 s.
+3. ✅ 500 simultaneous submissions → exactly 500 results, marking drained in 10.1 s.
+4. ◐ ✅ at 20, 100, 500 (p95 36 / 31 / 37 ms). 1,000: as item 1 — steady state p95 51–107 ms per
+   minute; 10-minute runs miss on the ramp-weighted p99. Gated with item 1.
+5. ✅ Behind PgBouncer (transaction mode, stand-in for RDS Proxy) 45–48 server connections at every
+   level up to 2,000 attempts, 0 lock waits; pooler tenant isolation proven
+   (`pooler-tenant-isolation.integration.test.ts`). Connection budget in the capacity plan §7.
+6. ✅ ≈ 57 KB per 40-question attempt measured under load; a term of a 1,200-student school
+   (53,680 attempts) built and measured (≈ 2.8 GB with the event log); projection and the
+   no-partitioning-at-launch decision with its revisit trigger in §8.
+7. ✅ 60 Control Center streams through a 500-attempt exam on the final code: 0 refused, 0 errors,
+   10,932 frames, all exam budgets met.
+8. ✅ / ◐ 40-client lab bursts pass on clean, `ng-typical` and congested text-only links; a
+   media-heavy paper on a congested 2 Mbit lab cannot cache within 60 s (bandwidth arithmetic,
+   §9) — carried to F20/B23 as media pre-caching ahead of the exam window.
+9. ✅ After fixes found here: under a 20-session reporting flood at level 500, answer-save p95 83 ms
+   / p99 284 ms while reporting is degraded with 503 + `Retry-After`.
+10. ✅ After fixes found here: every analytics view within budget on the term dataset (school cold
+    2.5 s, previously > 30 s; cached ~20 ms).
+11. ✅ Capacity plan and scaling runbook written from these measurements; _acceptance_ is at B23
+    with the staging re-run (exit criteria).
 
 ## Exit criteria
 
-- ADR-0032 decided; region validated with measured RTT.
-- All load levels pass; regressions are tracked in CI where practical.
-- Capacity plan reviewed and accepted.
+- ◐ ADR-0032 measured (RTT probe from Nigeria): `af-south-1` p50 115 ms vs `eu-west-1` 186 ms —
+  the ADR's own revisit condition is met; the region decision is the project owner's before B23
+  provisions production (ADR-0032 2026-10-03 amendment).
+- ✅ Levels 20/100/500 pass; 1,000 per DoD 1. Regressions tracked in CI: the `load-smoke` job runs
+  20/100-attempt levels and a 100-way start/submit burst on every pull request.
+- ◐ Capacity plan written; review and acceptance at B23 with the staging re-run.
 
 ## Deferred items
 
 - Multi-region deployment (`08 §26` lists it as a decision topic; single-region initially).
 - Read replicas unless load evidence requires them.
+- **Carried to B23:** the staging re-run of level 1,000 (60 s ramp), 500-bursts and the endurance
+  hour on the production topology with an off-host load generator (gate for DoD 1/4 and capacity-plan
+  acceptance); RDS Proxy pinning check; ADR-0032 region decision; Redis sizing for Control Center
+  replay streams (capacity plan §11).
+- **Carried to F20:** back off on `503 Retry-After`; jitter the 30 s heartbeat; pre-cache paper media
+  before the exam window.
+- **Candidate / Deferred:** per-request API CPU reduction on the exam path (fewer Prisma round trips
+  in the auth guard and answer save — needs a review of the guard's live-state checks).
+
+## Implementation notes (2026-10-03)
+
+Built in two sessions: a local workstation (harness, first optimisation round, RTT probe, lab
+bursts) and a Claude Code cloud session (4 vCPU / 15.7 GB, everything co-located) for the
+500/1,000/burst/endurance/stress/analytics runs, after the workstation paged under load.
+
+- **Harness** (`tools/load`, `@atlas/load`): F13-shaped virtual students over real HTTP, provisioner,
+  scenarios (levels, bursts, lab, shed flood, SSE, analytics), database correctness oracle, CPU and
+  pool samplers, netem relay, RTT probe, realistic-term dataset generator. Reports in
+  `docs/performance/results/`; `load-testing.md` is the procedure.
+- **Exam path** (first round): single-transaction auth guard; snapshot-free attempt loads with a
+  cached question index; coalesced `last_seen_at`; batched answer flush in one transaction with
+  savepoints; Control Center publish off the request path. 100-attempt answer-save p95 1,088 → 334 ms.
+- **Pooling:** `DATABASE_POOL_MAX`, PgBouncer transaction mode (CI and local), Argon2 concurrency
+  gate, marking concurrency.
+- **Load shedding (R-12):** priority tiers; triggers on event-loop utilisation, delay, exam-path
+  latency and in-flight; a reporting bulkhead (concurrency + rate) while exams are served; cluster
+  signal pausing worker queues. Three defects found under stress and fixed: no trigger fired under a
+  CPU-bound flood; an admin dashboard request with no exam running shed cluster-wide; the monitor
+  read `req.url`, which middie rewrites to `/`, so it never saw exam traffic.
+- **Analytics:** quadratic participation roll-up made linear; metrics aggregated in SQL. All 10
+  analytics endpoints returned identical JSON before and after (3,206 values).
+- **Docs:** capacity plan, scaling runbook, Exam Health Monitor review, ADR-0004/0007/0020/0023/0032
+  amendments.
 
 ---
 
@@ -4534,6 +4589,6 @@ Rows B0–B9 were left at their original NOT STARTED placeholder since this tabl
 | B18   | COMPLETE    | 2026-09-18 | 2026-09-19 | Async private CSV jobs, scoped search and print-data contracts; F18 confirmed browser consumption (2026-09-19).                                                                                                                                                                  |
 | B19   | NOT STARTED | —          | —          | Decided: ADR-0026                                                                                                                                                                                                                                                                |
 | B20   | NOT STARTED | —          | —          | Decided: ADR-0028                                                                                                                                                                                                                                                                |
-| B21   | NOT STARTED | —          | —          | Decided: ADR-0032                                                                                                                                                                                                                                                                |
+| B21   | COMPLETE    | 2026-10-02 | 2026-10-03 | Decided: ADR-0032 (revisit condition met; region to owner at B23). DoD 1/4 at 1,000 attempts gated to the B23 staging re-run (owner decision).                                                                                                                                   |
 | B22   | NOT STARTED | —          | —          |                                                                                                                                                                                                                                                                                  |
 | B23   | NOT STARTED | —          | —          |                                                                                                                                                                                                                                                                                  |
