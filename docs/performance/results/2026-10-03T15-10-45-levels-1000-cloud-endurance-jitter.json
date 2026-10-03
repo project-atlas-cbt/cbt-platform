@@ -1,0 +1,1360 @@
+{
+  "scenario": "levels",
+  "title": "B21 levels: 1000 concurrent attempts",
+  "startedAt": "2026-10-03T15:10:45.032Z",
+  "durationSeconds": 3748,
+  "environment": {
+    "host": "vm",
+    "platform": "linux 6.18.44-fc-v64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGb": 15.7,
+    "node": "v22.22.0",
+    "network": "clean (loopback)",
+    "pooler": "PgBouncer 1.22 transaction mode (default_pool_size 40, max_db_connections 60)",
+    "diskFsync": "fdatasync 4,113 ops/s (243 µs/op), pg_test_fsync",
+    "database": "PostgreSQL 16.14 + uuidv7 shim, max_connections 100, shared_buffers 128MB, same host"
+  },
+  "parameters": {
+    "level": 1000,
+    "schools": 5,
+    "questions": 40,
+    "mediaKbPerQuestion": 0,
+    "rampSeconds": 60,
+    "sustainSeconds": 3600,
+    "submitSpreadSeconds": 60,
+    "answerIntervalMs": 10000,
+    "heartbeatMs": 30000,
+    "apiProcesses": 2,
+    "sseClients": 0,
+    "reportingFlood": 0,
+    "floodHostile": false,
+    "offeredAnswerChangesPerSecond": 100
+  },
+  "latency": [
+    {
+      "label": "answer.batch",
+      "count": 366868,
+      "ok": 366868,
+      "status": {
+        "200": 366868
+      },
+      "networkFailures": 0,
+      "p50": 24.08,
+      "p95": 97.34,
+      "p99": 544.77,
+      "max": 3270.66,
+      "mean": 50.49,
+      "bytes": 101983475
+    },
+    {
+      "label": "attempt.event",
+      "count": 17978,
+      "ok": 17978,
+      "status": {
+        "200": 17978
+      },
+      "networkFailures": 0,
+      "p50": 20.34,
+      "p95": 73.92,
+      "p99": 164.86,
+      "max": 1009.66,
+      "mean": 30.07,
+      "bytes": 1366328
+    },
+    {
+      "label": "attempt.heartbeat",
+      "count": 122364,
+      "ok": 122364,
+      "status": {
+        "200": 122364
+      },
+      "networkFailures": 0,
+      "p50": 24.38,
+      "p95": 101.12,
+      "p99": 666.11,
+      "max": 3913.73,
+      "mean": 56.45,
+      "bytes": 2080188
+    },
+    {
+      "label": "attempt.start",
+      "count": 1000,
+      "ok": 1000,
+      "status": {
+        "200": 1000
+      },
+      "networkFailures": 0,
+      "p50": 1532.93,
+      "p95": 6451.2,
+      "p99": 6643.71,
+      "max": 6864.9,
+      "mean": 2365.65,
+      "bytes": 27951000
+    },
+    {
+      "label": "attempt.status",
+      "count": 1000,
+      "ok": 1000,
+      "status": {
+        "200": 1000
+      },
+      "networkFailures": 0,
+      "p50": 3104.77,
+      "p95": 3463.17,
+      "p99": 3508.22,
+      "max": 3516.42,
+      "mean": 3094.34,
+      "bytes": 356098
+    },
+    {
+      "label": "attempt.submit",
+      "count": 1000,
+      "ok": 1000,
+      "status": {
+        "200": 1000
+      },
+      "networkFailures": 0,
+      "p50": 54.05,
+      "p95": 282.37,
+      "p99": 445.95,
+      "max": 541.7,
+      "mean": 87.18,
+      "bytes": 320000
+    },
+    {
+      "label": "auth.login",
+      "count": 1005,
+      "ok": 1005,
+      "status": {
+        "200": 1005
+      },
+      "networkFailures": 0,
+      "p50": 773.63,
+      "p95": 4956.16,
+      "p99": 5263.36,
+      "max": 5414.91,
+      "mean": 1462.38,
+      "bytes": 101495
+    },
+    {
+      "label": "session.open",
+      "count": 5,
+      "ok": 5,
+      "status": {
+        "201": 5
+      },
+      "networkFailures": 0,
+      "p50": 1069.06,
+      "p95": 1136.64,
+      "p99": 1136.64,
+      "max": 1136.64,
+      "mean": 1061.17,
+      "bytes": 2205
+    },
+    {
+      "label": "setup",
+      "count": 20,
+      "ok": 20,
+      "status": {
+        "200": 15,
+        "201": 5
+      },
+      "networkFailures": 0,
+      "p50": 54.75,
+      "p95": 76.48,
+      "p99": 77.25,
+      "max": 77.25,
+      "mean": 53.58,
+      "bytes": 326355
+    },
+    {
+      "label": "student.assessment",
+      "count": 1000,
+      "ok": 1000,
+      "status": {
+        "200": 1000
+      },
+      "networkFailures": 0,
+      "p50": 601.09,
+      "p95": 3422.21,
+      "p99": 3682.3,
+      "max": 3905.54,
+      "mean": 1070.62,
+      "bytes": 184000
+    },
+    {
+      "label": "student.preview",
+      "count": 1000,
+      "ok": 1000,
+      "status": {
+        "200": 1000
+      },
+      "networkFailures": 0,
+      "p50": 501.5,
+      "p95": 2199.55,
+      "p99": 2443.26,
+      "max": 2498.56,
+      "mean": 768.02,
+      "bytes": 362000
+    },
+    {
+      "label": "tenant.resolve",
+      "count": 1005,
+      "ok": 1005,
+      "status": {
+        "200": 1005
+      },
+      "networkFailures": 0,
+      "p50": 168.7,
+      "p95": 1114.11,
+      "p99": 1246.21,
+      "max": 1521.66,
+      "mean": 325.84,
+      "bytes": 245220
+    }
+  ],
+  "checks": [
+    {
+      "name": "starts failed",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "answer save p95",
+      "actual": "97.34 ms",
+      "budget": "≤ 250 ms",
+      "pass": true
+    },
+    {
+      "name": "answer save p99",
+      "actual": "544.77 ms",
+      "budget": "≤ 750 ms",
+      "pass": true
+    },
+    {
+      "name": "answer save success",
+      "actual": "100.000%",
+      "budget": "≥ 99.9%",
+      "pass": true
+    },
+    {
+      "name": "start p95",
+      "actual": "6451.2 ms",
+      "budget": "≤ 2000 ms",
+      "pass": false
+    },
+    {
+      "name": "submit p95",
+      "actual": "282.37 ms",
+      "budget": "≤ 2000 ms",
+      "pass": true
+    },
+    {
+      "name": "submits accepted",
+      "actual": "1000/1000",
+      "budget": "1000",
+      "pass": true
+    },
+    {
+      "name": "attempts created",
+      "actual": "1000",
+      "budget": "exactly 1000",
+      "pass": true
+    },
+    {
+      "name": "duplicate attempts",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "results produced",
+      "actual": "1000",
+      "budget": "exactly 1000",
+      "pass": true
+    },
+    {
+      "name": "acknowledged answers lost",
+      "actual": "0 of 40000",
+      "budget": "0",
+      "pass": true
+    }
+  ],
+  "sampler": {
+    "samples": 750,
+    "peakConnections": 46,
+    "peakActive": 8,
+    "peakIdleInTransaction": 36,
+    "peakWaitingLocks": 0,
+    "avgCommitsPerSecond": 617,
+    "peakCommitsPerSecond": 773,
+    "peakRedisClients": 75,
+    "peakRedisMemoryMb": 363.1,
+    "minHostFreeMemoryMb": 13151,
+    "hostMemoryPressure": false,
+    "peakHarnessLoopDelayMs": 137,
+    "harnessStalls": []
+  },
+  "statements": [
+    {
+      "query": "INSERT INTO attempt_answers (id, school_id, attempt_id, exam_question_id, selected_option_id, state, sequence_number, answered_at, last_saved_at, grade_window_f",
+      "calls": 368109,
+      "totalMs": 68381,
+      "meanMs": 0.186,
+      "rows": 368109
+    },
+    {
+      "query": "INSERT INTO \"public\".\"attempt_answer_events\" (\"school_id\",\"attempt_id\",\"exam_question_id\",\"sequence_number\",\"selected_option_id\",\"received_at\",\"source\",\"grade_w",
+      "calls": 368109,
+      "totalMs": 48483,
+      "meanMs": 0.132,
+      "rows": 368109
+    },
+    {
+      "query": "SELECT \"public\".\"sessions\".\"id\", \"public\".\"sessions\".\"school_id\", \"public\".\"sessions\".\"user_id\", \"public\".\"sessions\".\"token_hash\", \"public\".\"sessions\".\"created_",
+      "calls": 512210,
+      "totalMs": 13802,
+      "meanMs": 0.027,
+      "rows": 512210
+    },
+    {
+      "query": "SELECT \"public\".\"school_memberships\".\"id\", \"public\".\"school_memberships\".\"school_id\", \"public\".\"school_memberships\".\"user_id\", \"public\".\"school_memberships\".\"lo",
+      "calls": 512210,
+      "totalMs": 12239,
+      "meanMs": 0.024,
+      "rows": 512210
+    },
+    {
+      "query": "SELECT \"public\".\"role_assignments\".\"id\", \"public\".\"role_assignments\".\"school_id\", \"public\".\"role_assignments\".\"membership_id\", \"public\".\"role_assignments\".\"role",
+      "calls": 512210,
+      "totalMs": 11993,
+      "meanMs": 0.023,
+      "rows": 512210
+    },
+    {
+      "query": "SELECT \"public\".\"exam_attempts\".\"id\" FROM \"public\".\"exam_attempts\" WHERE (\"public\".\"exam_attempts\".\"school_id\" = $1 AND \"public\".\"exam_attempts\".\"state\" = CAST(",
+      "calls": 3237,
+      "totalMs": 11477,
+      "meanMs": 3.545,
+      "rows": 0
+    },
+    {
+      "query": "SELECT \"public\".\"users\".\"id\", \"public\".\"users\".\"first_name\", \"public\".\"users\".\"last_name\", \"public\".\"users\".\"display_name\", \"public\".\"users\".\"email\", \"public\".\"",
+      "calls": 513210,
+      "totalMs": 11465,
+      "meanMs": 0.022,
+      "rows": 513210
+    },
+    {
+      "query": "SELECT set_config($1, $2, $3)",
+      "calls": 1790645,
+      "totalMs": 10348,
+      "meanMs": 0.006,
+      "rows": 1790645
+    },
+    {
+      "query": "SELECT \"public\".\"student_profiles\".\"id\", \"public\".\"student_profiles\".\"school_id\", \"public\".\"student_profiles\".\"membership_id\" FROM \"public\".\"student_profiles\" W",
+      "calls": 512211,
+      "totalMs": 9206,
+      "meanMs": 0.018,
+      "rows": 512211
+    },
+    {
+      "query": "SELECT \"public\".\"exam_session_participants\".\"id\", \"public\".\"exam_session_participants\".\"student_profile_id\", \"public\".\"exam_session_participants\".\"exam_session_",
+      "calls": 13839,
+      "totalMs": 9126,
+      "meanMs": 0.659,
+      "rows": 6647400
+    },
+    {
+      "query": "SELECT \"public\".\"exam_attempts\".\"id\", \"public\".\"exam_attempts\".\"student_profile_id\", \"public\".\"exam_attempts\".\"state\"::text FROM \"public\".\"exam_attempts\" WHERE ",
+      "calls": 13839,
+      "totalMs": 9085,
+      "meanMs": 0.656,
+      "rows": 4954198
+    },
+    {
+      "query": "SELECT \"public\".\"exam_attempts\".\"id\", \"public\".\"exam_attempts\".\"school_id\", \"public\".\"exam_attempts\".\"state\"::text, \"public\".\"exam_attempts\".\"expires_at\", \"publ",
+      "calls": 366868,
+      "totalMs": 9020,
+      "meanMs": 0.025,
+      "rows": 366868
+    },
+    {
+      "query": "SELECT \"public\".\"school_memberships\".\"id\", \"public\".\"school_memberships\".\"user_id\", \"public\".\"school_memberships\".\"school_id\" FROM \"public\".\"school_memberships\"",
+      "calls": 512211,
+      "totalMs": 8735,
+      "meanMs": 0.017,
+      "rows": 512211
+    },
+    {
+      "query": "SELECT \"public\".\"exam_participations\".\"id\", \"public\".\"exam_participations\".\"student_profile_id\", \"public\".\"exam_participations\".\"exam_session_id\", \"public\".\"exa",
+      "calls": 13839,
+      "totalMs": 7783,
+      "meanMs": 0.562,
+      "rows": 5114730
+    },
+    {
+      "query": "SELECT \"public\".\"exam_attempts\".\"id\", \"public\".\"exam_attempts\".\"student_profile_id\", \"public\".\"exam_attempts\".\"exam_session_id\", \"public\".\"exam_attempts\".\"state",
+      "calls": 13839,
+      "totalMs": 7192,
+      "meanMs": 0.52,
+      "rows": 4954243
+    }
+  ],
+  "verification": [
+    {
+      "examId": "01a10251-5004-738c-8a85-9d44b9c817d2",
+      "expectedAttempts": 200,
+      "attempts": 200,
+      "distinctStudents": 200,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 200
+      },
+      "results": 200,
+      "resultsFinal": 200,
+      "answersChecked": 8000,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10251-55bd-7714-be21-b57129962dc5",
+      "expectedAttempts": 200,
+      "attempts": 200,
+      "distinctStudents": 200,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 200
+      },
+      "results": 200,
+      "resultsFinal": 200,
+      "answersChecked": 8000,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10251-5b47-77bb-88be-4170801ab0c6",
+      "expectedAttempts": 200,
+      "attempts": 200,
+      "distinctStudents": 200,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 200
+      },
+      "results": 200,
+      "resultsFinal": 200,
+      "answersChecked": 8000,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10251-60bc-71f0-9120-563009ec8622",
+      "expectedAttempts": 200,
+      "attempts": 200,
+      "distinctStudents": 200,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 200
+      },
+      "results": 200,
+      "resultsFinal": 200,
+      "answersChecked": 8000,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10251-65af-73be-ad2b-df73aabbdf7c",
+      "expectedAttempts": 200,
+      "attempts": 200,
+      "distinctStudents": 200,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 200
+      },
+      "results": 200,
+      "resultsFinal": 200,
+      "answersChecked": 8000,
+      "answersMismatched": 0
+    }
+  ],
+  "growth": {
+    "before": [
+      {
+        "table": "exam_attempts",
+        "rows": 69434,
+        "totalBytes": 55902208
+      },
+      {
+        "table": "attempt_question_snapshots",
+        "rows": 69434,
+        "totalBytes": 737705984
+      },
+      {
+        "table": "attempt_answers",
+        "rows": 2543364,
+        "totalBytes": 749649920
+      },
+      {
+        "table": "attempt_answer_events",
+        "rows": 1194310,
+        "totalBytes": 279617536
+      },
+      {
+        "table": "attempt_question_results",
+        "rows": 2777360,
+        "totalBytes": 773373952
+      },
+      {
+        "table": "attempt_events",
+        "rows": 58172,
+        "totalBytes": 11812864
+      },
+      {
+        "table": "results",
+        "rows": 69434,
+        "totalBytes": 30326784
+      },
+      {
+        "table": "exam_session_participants",
+        "rows": 90600,
+        "totalBytes": 26812416
+      },
+      {
+        "table": "exam_participations",
+        "rows": 72154,
+        "totalBytes": 22487040
+      },
+      {
+        "table": "audit_events",
+        "rows": 59179,
+        "totalBytes": 31596544
+      }
+    ],
+    "after": [
+      {
+        "table": "exam_attempts",
+        "rows": 70434,
+        "totalBytes": 56442880
+      },
+      {
+        "table": "attempt_question_snapshots",
+        "rows": 70434,
+        "totalBytes": 748552192
+      },
+      {
+        "table": "attempt_answers",
+        "rows": 2583364,
+        "totalBytes": 762306560
+      },
+      {
+        "table": "attempt_answer_events",
+        "rows": 1562419,
+        "totalBytes": 356524032
+      },
+      {
+        "table": "attempt_question_results",
+        "rows": 2817360,
+        "totalBytes": 784506880
+      },
+      {
+        "table": "attempt_events",
+        "rows": 76150,
+        "totalBytes": 14548992
+      },
+      {
+        "table": "results",
+        "rows": 70434,
+        "totalBytes": 31154176
+      },
+      {
+        "table": "exam_session_participants",
+        "rows": 92100,
+        "totalBytes": 27205632
+      },
+      {
+        "table": "exam_participations",
+        "rows": 73154,
+        "totalBytes": 22913024
+      },
+      {
+        "table": "audit_events",
+        "rows": 62214,
+        "totalBytes": 33488896
+      }
+    ],
+    "attempts": 1000
+  },
+  "series": {
+    "answer.batch": [
+      {
+        "minute": 0,
+        "count": 2108,
+        "p95": 1618.94,
+        "p99": 1856.51
+      },
+      {
+        "minute": 1,
+        "count": 5578,
+        "p95": 2775.04,
+        "p99": 3047.42
+      },
+      {
+        "minute": 2,
+        "count": 5937,
+        "p95": 76.8,
+        "p99": 159.36
+      },
+      {
+        "minute": 3,
+        "count": 6007,
+        "p95": 74.05,
+        "p99": 123.58
+      },
+      {
+        "minute": 4,
+        "count": 5937,
+        "p95": 73.6,
+        "p99": 123.26
+      },
+      {
+        "minute": 5,
+        "count": 5824,
+        "p95": 62.53,
+        "p99": 104.9
+      },
+      {
+        "minute": 6,
+        "count": 6065,
+        "p95": 72.32,
+        "p99": 155.52
+      },
+      {
+        "minute": 7,
+        "count": 5975,
+        "p95": 70.34,
+        "p99": 117.18
+      },
+      {
+        "minute": 8,
+        "count": 6109,
+        "p95": 72.9,
+        "p99": 218.24
+      },
+      {
+        "minute": 9,
+        "count": 6024,
+        "p95": 67.26,
+        "p99": 173.44
+      },
+      {
+        "minute": 10,
+        "count": 5936,
+        "p95": 67.58,
+        "p99": 124.99
+      },
+      {
+        "minute": 11,
+        "count": 6003,
+        "p95": 63.33,
+        "p99": 114.05
+      },
+      {
+        "minute": 12,
+        "count": 5971,
+        "p95": 87.55,
+        "p99": 171.78
+      },
+      {
+        "minute": 13,
+        "count": 6050,
+        "p95": 102.08,
+        "p99": 210.43
+      },
+      {
+        "minute": 14,
+        "count": 5929,
+        "p95": 87.49,
+        "p99": 152.7
+      },
+      {
+        "minute": 15,
+        "count": 6046,
+        "p95": 107.33,
+        "p99": 254.59
+      },
+      {
+        "minute": 16,
+        "count": 5958,
+        "p95": 103.94,
+        "p99": 176.26
+      },
+      {
+        "minute": 17,
+        "count": 5986,
+        "p95": 100.67,
+        "p99": 177.02
+      },
+      {
+        "minute": 18,
+        "count": 6106,
+        "p95": 84.74,
+        "p99": 162.18
+      },
+      {
+        "minute": 19,
+        "count": 5975,
+        "p95": 74.82,
+        "p99": 126.21
+      },
+      {
+        "minute": 20,
+        "count": 6009,
+        "p95": 73.09,
+        "p99": 150.27
+      },
+      {
+        "minute": 21,
+        "count": 6040,
+        "p95": 302.59,
+        "p99": 903.68
+      },
+      {
+        "minute": 22,
+        "count": 6074,
+        "p95": 120.83,
+        "p99": 304.9
+      },
+      {
+        "minute": 23,
+        "count": 6218,
+        "p95": 80.26,
+        "p99": 137.98
+      },
+      {
+        "minute": 24,
+        "count": 5916,
+        "p95": 71.3,
+        "p99": 134.02
+      },
+      {
+        "minute": 25,
+        "count": 6127,
+        "p95": 77.25,
+        "p99": 164.35
+      },
+      {
+        "minute": 26,
+        "count": 5964,
+        "p95": 79.49,
+        "p99": 155.01
+      },
+      {
+        "minute": 27,
+        "count": 5912,
+        "p95": 80.19,
+        "p99": 156.03
+      },
+      {
+        "minute": 28,
+        "count": 6015,
+        "p95": 74.11,
+        "p99": 147.58
+      },
+      {
+        "minute": 29,
+        "count": 5784,
+        "p95": 68.1,
+        "p99": 127.49
+      },
+      {
+        "minute": 30,
+        "count": 6026,
+        "p95": 540.16,
+        "p99": 759.81
+      },
+      {
+        "minute": 31,
+        "count": 5992,
+        "p95": 93.38,
+        "p99": 172.03
+      },
+      {
+        "minute": 32,
+        "count": 5989,
+        "p95": 83.14,
+        "p99": 171.39
+      },
+      {
+        "minute": 33,
+        "count": 5888,
+        "p95": 89.79,
+        "p99": 174.08
+      },
+      {
+        "minute": 34,
+        "count": 5952,
+        "p95": 78.85,
+        "p99": 157.44
+      },
+      {
+        "minute": 35,
+        "count": 5852,
+        "p95": 93.06,
+        "p99": 148.35
+      },
+      {
+        "minute": 36,
+        "count": 5961,
+        "p95": 80.64,
+        "p99": 122.94
+      },
+      {
+        "minute": 37,
+        "count": 5972,
+        "p95": 77.06,
+        "p99": 156.42
+      },
+      {
+        "minute": 38,
+        "count": 5983,
+        "p95": 105.34,
+        "p99": 335.36
+      },
+      {
+        "minute": 39,
+        "count": 6048,
+        "p95": 68.1,
+        "p99": 120.51
+      },
+      {
+        "minute": 40,
+        "count": 5912,
+        "p95": 72.64,
+        "p99": 118.14
+      },
+      {
+        "minute": 41,
+        "count": 5919,
+        "p95": 66.18,
+        "p99": 129.41
+      },
+      {
+        "minute": 42,
+        "count": 6100,
+        "p95": 81.02,
+        "p99": 137.34
+      },
+      {
+        "minute": 43,
+        "count": 6025,
+        "p95": 82.69,
+        "p99": 138.75
+      },
+      {
+        "minute": 44,
+        "count": 6012,
+        "p95": 70.34,
+        "p99": 150.4
+      },
+      {
+        "minute": 45,
+        "count": 5995,
+        "p95": 71.55,
+        "p99": 139.39
+      },
+      {
+        "minute": 46,
+        "count": 6116,
+        "p95": 164.22,
+        "p99": 293.12
+      },
+      {
+        "minute": 47,
+        "count": 6039,
+        "p95": 70.27,
+        "p99": 120.96
+      },
+      {
+        "minute": 48,
+        "count": 5934,
+        "p95": 56.86,
+        "p99": 103.62
+      },
+      {
+        "minute": 49,
+        "count": 5970,
+        "p95": 71.42,
+        "p99": 129.54
+      },
+      {
+        "minute": 50,
+        "count": 6034,
+        "p95": 69.63,
+        "p99": 122.24
+      },
+      {
+        "minute": 51,
+        "count": 5950,
+        "p95": 110.98,
+        "p99": 622.59
+      },
+      {
+        "minute": 52,
+        "count": 6109,
+        "p95": 70.34,
+        "p99": 115.71
+      },
+      {
+        "minute": 53,
+        "count": 5971,
+        "p95": 74.18,
+        "p99": 111.36
+      },
+      {
+        "minute": 54,
+        "count": 6005,
+        "p95": 63.36,
+        "p99": 100.8
+      },
+      {
+        "minute": 55,
+        "count": 6046,
+        "p95": 66.88,
+        "p99": 115.78
+      },
+      {
+        "minute": 56,
+        "count": 5956,
+        "p95": 83.46,
+        "p99": 267.26
+      },
+      {
+        "minute": 57,
+        "count": 5942,
+        "p95": 69.57,
+        "p99": 136.32
+      },
+      {
+        "minute": 58,
+        "count": 5972,
+        "p95": 76.99,
+        "p99": 124.74
+      },
+      {
+        "minute": 59,
+        "count": 6198,
+        "p95": 99.52,
+        "p99": 267.52
+      },
+      {
+        "minute": 60,
+        "count": 5918,
+        "p95": 275.97,
+        "p99": 424.96
+      },
+      {
+        "minute": 61,
+        "count": 5069,
+        "p95": 233.73,
+        "p99": 319.23
+      },
+      {
+        "minute": 62,
+        "count": 430,
+        "p95": 76.29,
+        "p99": 124.35
+      }
+    ],
+    "attempt.heartbeat": [
+      {
+        "minute": 0,
+        "count": 626,
+        "p95": 1983.49,
+        "p99": 2254.85
+      },
+      {
+        "minute": 1,
+        "count": 1913,
+        "p95": 3489.79,
+        "p99": 3702.78
+      },
+      {
+        "minute": 2,
+        "count": 2008,
+        "p95": 80.9,
+        "p99": 173.18
+      },
+      {
+        "minute": 3,
+        "count": 1993,
+        "p95": 68.16,
+        "p99": 116.86
+      },
+      {
+        "minute": 4,
+        "count": 2006,
+        "p95": 78.27,
+        "p99": 123.58
+      },
+      {
+        "minute": 5,
+        "count": 2013,
+        "p95": 65.02,
+        "p99": 108.93
+      },
+      {
+        "minute": 6,
+        "count": 1992,
+        "p95": 75.01,
+        "p99": 175.87
+      },
+      {
+        "minute": 7,
+        "count": 2006,
+        "p95": 75.9,
+        "p99": 124.29
+      },
+      {
+        "minute": 8,
+        "count": 2004,
+        "p95": 77.44,
+        "p99": 234.62
+      },
+      {
+        "minute": 9,
+        "count": 1986,
+        "p95": 70.91,
+        "p99": 161.79
+      },
+      {
+        "minute": 10,
+        "count": 2008,
+        "p95": 72.26,
+        "p99": 135.04
+      },
+      {
+        "minute": 11,
+        "count": 2002,
+        "p95": 69.25,
+        "p99": 119.36
+      },
+      {
+        "minute": 12,
+        "count": 2001,
+        "p95": 89.34,
+        "p99": 193.02
+      },
+      {
+        "minute": 13,
+        "count": 2004,
+        "p95": 92.86,
+        "p99": 212.86
+      },
+      {
+        "minute": 14,
+        "count": 1977,
+        "p95": 96.64,
+        "p99": 154.37
+      },
+      {
+        "minute": 15,
+        "count": 2019,
+        "p95": 104.06,
+        "p99": 285.44
+      },
+      {
+        "minute": 16,
+        "count": 2003,
+        "p95": 108.1,
+        "p99": 185.98
+      },
+      {
+        "minute": 17,
+        "count": 1993,
+        "p95": 104.96,
+        "p99": 185.22
+      },
+      {
+        "minute": 18,
+        "count": 2003,
+        "p95": 88.45,
+        "p99": 175.1
+      },
+      {
+        "minute": 19,
+        "count": 1996,
+        "p95": 75.65,
+        "p99": 125.82
+      },
+      {
+        "minute": 20,
+        "count": 2023,
+        "p95": 83.01,
+        "p99": 160.77
+      },
+      {
+        "minute": 21,
+        "count": 2000,
+        "p95": 365.57,
+        "p99": 1133.57
+      },
+      {
+        "minute": 22,
+        "count": 1997,
+        "p95": 136.32,
+        "p99": 314.88
+      },
+      {
+        "minute": 23,
+        "count": 2004,
+        "p95": 81.86,
+        "p99": 145.79
+      },
+      {
+        "minute": 24,
+        "count": 2013,
+        "p95": 69.57,
+        "p99": 143.1
+      },
+      {
+        "minute": 25,
+        "count": 1995,
+        "p95": 80,
+        "p99": 163.97
+      },
+      {
+        "minute": 26,
+        "count": 2002,
+        "p95": 79.55,
+        "p99": 157.44
+      },
+      {
+        "minute": 27,
+        "count": 2005,
+        "p95": 93.57,
+        "p99": 170.5
+      },
+      {
+        "minute": 28,
+        "count": 1996,
+        "p95": 76.35,
+        "p99": 149.25
+      },
+      {
+        "minute": 29,
+        "count": 1990,
+        "p95": 73.92,
+        "p99": 137.98
+      },
+      {
+        "minute": 30,
+        "count": 1988,
+        "p95": 680.45,
+        "p99": 922.11
+      },
+      {
+        "minute": 31,
+        "count": 2007,
+        "p95": 99.84,
+        "p99": 180.35
+      },
+      {
+        "minute": 32,
+        "count": 1985,
+        "p95": 88.77,
+        "p99": 168.32
+      },
+      {
+        "minute": 33,
+        "count": 2014,
+        "p95": 89.22,
+        "p99": 188.29
+      },
+      {
+        "minute": 34,
+        "count": 2000,
+        "p95": 74.37,
+        "p99": 154.5
+      },
+      {
+        "minute": 35,
+        "count": 2004,
+        "p95": 93.57,
+        "p99": 144.9
+      },
+      {
+        "minute": 36,
+        "count": 1994,
+        "p95": 84.8,
+        "p99": 132.99
+      },
+      {
+        "minute": 37,
+        "count": 1994,
+        "p95": 76.48,
+        "p99": 153.86
+      },
+      {
+        "minute": 38,
+        "count": 1993,
+        "p95": 107.9,
+        "p99": 355.84
+      },
+      {
+        "minute": 39,
+        "count": 2005,
+        "p95": 65.92,
+        "p99": 110.02
+      },
+      {
+        "minute": 40,
+        "count": 2010,
+        "p95": 71.87,
+        "p99": 118.4
+      },
+      {
+        "minute": 41,
+        "count": 1995,
+        "p95": 69.82,
+        "p99": 140.67
+      },
+      {
+        "minute": 42,
+        "count": 2004,
+        "p95": 84.48,
+        "p99": 138.75
+      },
+      {
+        "minute": 43,
+        "count": 1996,
+        "p95": 87.04,
+        "p99": 148.22
+      },
+      {
+        "minute": 44,
+        "count": 2003,
+        "p95": 72,
+        "p99": 148.86
+      },
+      {
+        "minute": 45,
+        "count": 2008,
+        "p95": 71.81,
+        "p99": 130.05
+      },
+      {
+        "minute": 46,
+        "count": 2009,
+        "p95": 171.9,
+        "p99": 315.65
+      },
+      {
+        "minute": 47,
+        "count": 1993,
+        "p95": 76.42,
+        "p99": 136.06
+      },
+      {
+        "minute": 48,
+        "count": 2004,
+        "p95": 57.09,
+        "p99": 126.21
+      },
+      {
+        "minute": 49,
+        "count": 1996,
+        "p95": 70.14,
+        "p99": 136.19
+      },
+      {
+        "minute": 50,
+        "count": 1991,
+        "p95": 72.77,
+        "p99": 121.98
+      },
+      {
+        "minute": 51,
+        "count": 2006,
+        "p95": 131.07,
+        "p99": 707.07
+      },
+      {
+        "minute": 52,
+        "count": 1987,
+        "p95": 70.98,
+        "p99": 112.13
+      },
+      {
+        "minute": 53,
+        "count": 2006,
+        "p95": 77.5,
+        "p99": 119.68
+      },
+      {
+        "minute": 54,
+        "count": 1993,
+        "p95": 60.58,
+        "p99": 100.99
+      },
+      {
+        "minute": 55,
+        "count": 2003,
+        "p95": 66.88,
+        "p99": 131.71
+      },
+      {
+        "minute": 56,
+        "count": 2005,
+        "p95": 81.98,
+        "p99": 148.99
+      },
+      {
+        "minute": 57,
+        "count": 2004,
+        "p95": 76.86,
+        "p99": 142.21
+      },
+      {
+        "minute": 58,
+        "count": 2007,
+        "p95": 81.15,
+        "p99": 127.74
+      },
+      {
+        "minute": 59,
+        "count": 2002,
+        "p95": 107.65,
+        "p99": 288.77
+      },
+      {
+        "minute": 60,
+        "count": 1996,
+        "p95": 246.02,
+        "p99": 444.16
+      },
+      {
+        "minute": 61,
+        "count": 1640,
+        "p95": 224.9,
+        "p99": 325.63
+      },
+      {
+        "minute": 62,
+        "count": 144,
+        "p95": 68.8,
+        "p99": 109.95
+      }
+    ]
+  },
+  "notes": [],
+  "extra": {
+    "sessionOpenMs": [
+      1103,
+      1136,
+      1069,
+      1021,
+      979
+    ],
+    "markingDrainSeconds": 3.5,
+    "studentsSawResult": "1000/1000"
+  }
+}
