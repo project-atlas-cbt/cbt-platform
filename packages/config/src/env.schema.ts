@@ -310,6 +310,13 @@ const envObject = z.object({
    * process sheds reporting — the signal for a CPU-pegged process, whose
    * requests queue before any middleware can time them. */
   LOAD_SHED_ELU: z.coerce.number().min(0.5).max(1).default(0.9),
+  /** Reporting requests one API process runs at once while it is serving
+   * exam writes (the bulkhead); the rest get 503 + Retry-After. No cap when
+   * no exam traffic is present. */
+  LOAD_SHED_REPORTING_CONCURRENCY: z.coerce.number().int().min(1).max(256).default(4),
+  /** Reporting requests per second one API process admits while it is
+   * serving exam writes (token bucket); the rest get 503 + Retry-After. */
+  LOAD_SHED_REPORTING_RATE: z.coerce.number().int().min(1).max(1000).default(10),
   /** Concurrent in-flight requests above which this process sheds. */
   LOAD_SHED_MAX_IN_FLIGHT: z.coerce.number().int().positive().default(256),
   /** Minimum time shedding stays on once tripped (hysteresis), and the TTL of the cluster-wide signal. */

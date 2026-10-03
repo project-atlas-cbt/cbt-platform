@@ -37,7 +37,11 @@ export interface LoadSnapshot {
   eventLoopUtilization: number;
   /** p95 of the exam write path over the last 1 s window (0 when too few samples). */
   examP95Ms: number;
+  /** This process served exam writes in the last 1 s window. */
+  examActive: boolean;
   inFlight: number;
+  /** Reporting (`deferrable`) requests in flight on this process. */
+  reportingInFlight: number;
   sseConnections: number;
   clusterSignal: boolean;
 }
@@ -62,6 +66,15 @@ export interface LoadSnapshot {
  *   *before* any middleware sees them, so neither delay nor measured
  *   latency rises while clients wait 900 ms. Utilisation does.
  *
+ * Plus a **reporting bulkhead**, independent of any threshold: while this
+ * process is serving exam writes, at most LOAD_SHED_REPORTING_CONCURRENCY
+ * reporting requests run at once; the rest get 503 + Retry-After. Added
+ * when cheap analytics queries (B21's SQL aggregation) let a reporting flood
+ * saturate the shared database and CPU without any single process looking
+ * busy enough to trip — answer-save p95 rose to 540 ms. The bulkhead bounds
+ * reporting's share both ways: concurrency (slow, heavy reports) and rate
+ * (LOAD_SHED_REPORTING_RATE per second — many cheap ones, the measured case).
+ *
  * Tripping either sheds the `deferrable` tier (reporting) for at least
  * LOAD_SHED_HOLD_MS and raises the cluster-wide Redis signal so every API
  * process sheds reporting and the worker pauses non-critical queues. Twice
@@ -76,6 +89,12 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
   private readonly maxInFlight: number;
   private readonly examP95ThresholdMs: number;
   private readonly eluThreshold: number;
+  private readonly reportingCap: number;
+  private reportingInFlight = 0;
+  private readonly reportingRate: number;
+  private reportingTokens = 0;
+  private reportingRefilledAt = 0;
+  private examActive = false;
   private readonly holdMs: number;
   readonly sseMax: number;
   private readonly instance = `${hostname()}:${process.pid}`;
@@ -116,6 +135,9 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
     this.maxInFlight = config.get('LOAD_SHED_MAX_IN_FLIGHT', { infer: true });
     this.examP95ThresholdMs = config.get('LOAD_SHED_EXAM_P95_MS', { infer: true });
     this.eluThreshold = config.get('LOAD_SHED_ELU', { infer: true });
+    this.reportingCap = config.get('LOAD_SHED_REPORTING_CONCURRENCY', { infer: true });
+    this.reportingRate = config.get('LOAD_SHED_REPORTING_RATE', { infer: true });
+    this.reportingTokens = this.reportingRate;
     this.holdMs = config.get('LOAD_SHED_HOLD_MS', { infer: true });
     this.sseMax = config.get('SSE_MAX_CONNECTIONS_PER_PROCESS', { infer: true });
   }
@@ -152,6 +174,14 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
       this.examWindow.push(examWriteMs);
   }
 
+  reportingStarted(): void {
+    this.reportingInFlight += 1;
+  }
+
+  reportingFinished(): void {
+    this.reportingInFlight = Math.max(0, this.reportingInFlight - 1);
+  }
+
   streamOpened(): void {
     this.sseCount += 1;
   }
@@ -170,8 +200,30 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
 
   shouldShed(tier: LoadTier): boolean {
     const level = this.level;
-    if (tier === 'critical' || level === 'none') return false;
+    if (tier === 'critical') return false;
+    // The bulkhead: counted on arrival (this request included), so a request
+    // beyond the cap is refused while exams are being served.
+    if (tier === 'deferrable' && this.enabled && this.examActive) {
+      if (this.reportingInFlight > this.reportingCap) return true;
+      if (!this.takeReportingToken()) return true;
+    }
+    if (level === 'none') return false;
     return tier === 'deferrable' || level === 'standard';
+  }
+
+  /** Token bucket: up to `reportingRate` reporting requests per second
+   * (burst of one second's worth), only consulted while exams are served. */
+  private takeReportingToken(): boolean {
+    const now = Date.now();
+    const elapsed = (now - this.reportingRefilledAt) / 1000;
+    this.reportingRefilledAt = now;
+    this.reportingTokens = Math.min(
+      this.reportingRate,
+      this.reportingTokens + elapsed * this.reportingRate,
+    );
+    if (this.reportingTokens < 1) return false;
+    this.reportingTokens -= 1;
+    return true;
   }
 
   /** New Control Center streams are refused while shedding or at the per-process cap. */
@@ -189,7 +241,9 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
       eventLoopP99Ms: this.lastP99Ms,
       eventLoopUtilization: this.lastElu,
       examP95Ms: this.lastExamP95Ms,
+      examActive: this.examActive,
       inFlight: this.inFlightCount,
+      reportingInFlight: this.reportingInFlight,
       sseConnections: this.sseCount,
       clusterSignal: this.clusterSignal,
     };
@@ -229,6 +283,7 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
     // serving exam writes; the exam-latency signal needs them by definition,
     // and the in-flight signal (bursts) stays unconditional.
     const examActive = this.examWindow.length >= MIN_EXAM_SAMPLES;
+    this.examActive = examActive;
     this.overWindows =
       warmedUp && examActive && this.lastP99Ms > this.p99ThresholdMs ? this.overWindows + 1 : 0;
     if (this.overWindows >= CONSECUTIVE_WINDOWS) {

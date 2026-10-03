@@ -11,6 +11,8 @@ const CONFIG: Partial<Env> = {
   LOAD_SHED_MAX_IN_FLIGHT: 256,
   LOAD_SHED_EXAM_P95_MS: 200,
   LOAD_SHED_ELU: 0.9,
+  LOAD_SHED_REPORTING_CONCURRENCY: 4,
+  LOAD_SHED_REPORTING_RATE: 10,
   LOAD_SHED_HOLD_MS: 30_000,
   SSE_MAX_CONNECTIONS_PER_PROCESS: 500,
 };
@@ -129,6 +131,48 @@ describe('LoadMonitorService exam-latency signal (B21, R-12)', () => {
     for (let w = 0; w < 5; w++) window(m, 5, 20);
     expect(m.level).toBe('none');
     expect(redis.set).not.toHaveBeenCalled();
+    m.onModuleDestroy();
+  });
+
+  it('caps concurrent reporting while exams are served, and only then', () => {
+    const { m } = monitor();
+    vi.advanceTimersByTime(16_000);
+    const arrive = (n: number) => {
+      for (let i = 0; i < n; i++) m.reportingStarted();
+    };
+    // No exam traffic: no cap.
+    arrive(10);
+    expect(m.shouldShed('deferrable')).toBe(false);
+    for (let i = 0; i < 10; i++) m.reportingFinished();
+    // Exam writes in the last window (fast — no other signal trips).
+    window(m, 50, 20);
+    arrive(4);
+    expect(m.shouldShed('deferrable')).toBe(false); // the 4th is within the cap
+    arrive(1);
+    expect(m.shouldShed('deferrable')).toBe(true); // the 5th is refused
+    expect(m.shouldShed('standard')).toBe(false);
+    expect(m.shouldShed('critical')).toBe(false);
+    m.reportingFinished();
+    expect(m.shouldShed('deferrable')).toBe(false);
+    expect(m.level).toBe('none'); // the bulkhead is not a shed level
+    m.onModuleDestroy();
+  });
+
+  it('caps the reporting rate while exams are served, refilling over time', () => {
+    const { m } = monitor();
+    vi.advanceTimersByTime(16_000);
+    window(m, 50, 20); // exam traffic present
+    let admitted = 0;
+    for (let i = 0; i < 30; i++) {
+      m.reportingStarted();
+      if (!m.shouldShed('deferrable')) admitted += 1;
+      m.reportingFinished();
+    }
+    expect(admitted).toBe(10); // one second's worth
+    vi.advanceTimersByTime(500);
+    let later = 0;
+    for (let i = 0; i < 30; i++) if (!m.shouldShed('deferrable')) later += 1;
+    expect(later).toBe(5); // half a second refills half the bucket
     m.onModuleDestroy();
   });
 });
