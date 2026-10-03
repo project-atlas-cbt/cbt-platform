@@ -6,7 +6,7 @@ import { InFlightMiddleware } from './load-shedding.middleware.js';
 
 const ID = '01a0feab-0000-7000-8000-000000000001';
 
-function run(originalUrl: string) {
+function run(originalUrl: string, statusCode = 200) {
   const monitor = {
     requestStarted: vi.fn(),
     requestFinished: vi.fn(),
@@ -17,7 +17,7 @@ function run(originalUrl: string) {
   // What @fastify/middie hands Nest middleware: `url` rewritten to the mount
   // point, `originalUrl` the real path.
   const req = { url: '/', originalUrl } as unknown as FastifyRequest['raw'];
-  const res = new EventEmitter() as unknown as FastifyReply['raw'];
+  const res = Object.assign(new EventEmitter(), { statusCode }) as unknown as FastifyReply['raw'];
   const next = vi.fn();
   mw.use(req, res, next);
   (res as unknown as EventEmitter).emit('finish');
@@ -44,5 +44,16 @@ describe('InFlightMiddleware (B21)', () => {
     const { monitor } = run('/v1/questions');
     expect(monitor.requestFinished).toHaveBeenCalledWith(undefined);
     expect(monitor.reportingStarted).not.toHaveBeenCalled();
+  });
+
+  it('does not count a refused exam-path request as exam traffic', () => {
+    for (const status of [401, 403, 404, 409]) {
+      const { monitor } = run(`/v1/attempts/${ID}/heartbeat`, status);
+      expect(monitor.requestFinished).toHaveBeenCalledWith(undefined);
+    }
+    // A server error on the exam path is exam traffic in trouble — counted.
+    expect(
+      run(`/v1/attempts/${ID}/answers/batch`, 503).monitor.requestFinished,
+    ).toHaveBeenCalledWith(expect.any(Number));
   });
 });

@@ -43,13 +43,15 @@ describe('B21 load shedding (R-12)', () => {
 
   it('sheds reporting with 503 SERVICE_UNAVAILABLE + Retry-After before any session work', async () => {
     monitor.forceForTests('deferrable', 2_000);
-    for (const url of [
-      '/analytics/school',
-      `/analytics/exams/${randomUUID()}`,
-      '/search?q=ab',
-      '/exports',
-    ]) {
-      const res = await get(url);
+    for (const [method, url] of [
+      ['GET', '/analytics/school'],
+      ['GET', `/analytics/exams/${randomUUID()}`],
+      ['GET', '/search?q=ab'],
+      // Exports are created with POST; there is no GET /exports route (a
+      // missing route 404s before any guard runs).
+      ['POST', '/exports'],
+    ] as const) {
+      const res = await app.inject({ method, url, remoteAddress: ip });
       expect(res.statusCode).toBe(503);
       expect(res.json<{ error: { code: string; retryable: boolean } }>().error).toMatchObject({
         code: 'SERVICE_UNAVAILABLE',

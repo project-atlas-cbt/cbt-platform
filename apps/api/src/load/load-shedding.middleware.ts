@@ -25,7 +25,12 @@ export class InFlightMiddleware implements NestMiddleware {
     const finish = () => {
       if (done) return;
       done = true;
-      this.monitor.requestFinished(examWrite ? performance.now() - began : undefined);
+      // A refused exam-path call (4xx — a probe, the security suites, a stale
+      // client) is not exam traffic: it must neither switch exam protection
+      // on nor stand in for exam-path latency. A server error (5xx) is real
+      // exam traffic in trouble and still counts.
+      const servedExamWrite = examWrite && (res.statusCode < 400 || res.statusCode >= 500);
+      this.monitor.requestFinished(servedExamWrite ? performance.now() - began : undefined);
       if (reporting) this.monitor.reportingFinished();
     };
     res.once('finish', finish);

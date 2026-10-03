@@ -267,7 +267,9 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
   forceForTests(level: Exclude<ShedLevel, 'none'>, ms: number): void {
     const until = Date.now() + ms;
     this.shedUntil = until;
-    if (level === 'standard') this.severeUntil = until;
+    // Exactly the level asked for: a severe window left by an earlier call
+    // must not leak into a 'deferrable' one.
+    this.severeUntil = level === 'standard' ? until : 0;
   }
 
   private tick(): void {
