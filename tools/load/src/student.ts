@@ -120,7 +120,13 @@ export class VirtualStudent {
     const tick = () => {
       if (this.stopped) return;
       void this.heartbeat();
-      this.heartbeatTimer = setTimeout(tick, this.o.heartbeatMs);
+      // ±10 % jitter on every tick, not only the first: a fixed interval
+      // keeps any phase alignment forever. B21's second endurance run lost
+      // its spread to a 6 s load-generator stall (every overdue timer fired
+      // together) and then beat 1,000 heartbeats in lockstep every 30 s for
+      // the rest of the hour. The F20 web client needs the same jitter: a lab
+      // released together otherwise heartbeats in phase for the whole exam.
+      this.heartbeatTimer = setTimeout(tick, this.o.heartbeatMs * (0.9 + Math.random() * 0.2));
     };
     // Spread first heartbeats so a lab doesn't beat in lockstep.
     this.heartbeatTimer = setTimeout(tick, Math.random() * this.o.heartbeatMs);
