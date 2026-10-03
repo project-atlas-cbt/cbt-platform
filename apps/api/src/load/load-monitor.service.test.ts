@@ -112,11 +112,23 @@ describe('LoadMonitorService exam-latency signal (B21, R-12)', () => {
     vi.advanceTimersByTime(16_000);
     expect(m.level).toBe('none');
     busy = 0.97;
-    vi.advanceTimersByTime(2_000);
+    // Fast exam traffic (well under the latency threshold) while pegged.
+    window(m, 50, 20);
+    window(m, 50, 20);
     expect(m.level).toBe('none');
-    vi.advanceTimersByTime(1_000);
+    window(m, 50, 20);
     expect(m.level).toBe('deferrable'); // never 'standard' from utilisation alone
     expect(m.snapshot().eventLoopUtilization).toBe(0.97);
+    m.onModuleDestroy();
+  });
+
+  it('does not shed a pegged process that is serving no exam traffic', () => {
+    const { m, redis } = monitor();
+    vi.advanceTimersByTime(16_000);
+    busy = 0.99; // e.g. one school-wide analytics request, no exam running
+    for (let w = 0; w < 5; w++) window(m, 5, 20);
+    expect(m.level).toBe('none');
+    expect(redis.set).not.toHaveBeenCalled();
     m.onModuleDestroy();
   });
 });

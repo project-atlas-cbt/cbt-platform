@@ -60,11 +60,20 @@ export async function runAnalyticsBench(
     ...students.map((s): [string, string] => ['student', `/analytics/students/${s.id}`]),
   ];
   const statuses: Record<string, number> = {};
+  const timeouts: string[] = [];
   for (const [kind, path] of targets) {
     await bump();
-    const cold = await admin.request('GET', path, { label: `analytics.${kind}.cold` });
-    const warm = await admin.request('GET', path, { label: `analytics.${kind}.cached` });
-    for (const s of [cold.status, warm.status]) statuses[s] = (statuses[s] ?? 0) + 1;
+    // A request past the client timeout is a result to report (it fails the
+    // 200 check below), not a reason to abandon the remaining endpoints.
+    const get = (label: string) =>
+      admin
+        .request('GET', path, { label })
+        .then((r) => String(r.status))
+        .catch(() => 'timeout');
+    const cold = await get(`analytics.${kind}.cold`);
+    const warm = await get(`analytics.${kind}.cached`);
+    for (const s of [cold, warm]) statuses[s] = (statuses[s] ?? 0) + 1;
+    if (cold === 'timeout') timeouts.push(`${kind} ${path}`);
   }
   redis.disconnect();
   admin.close();
@@ -115,7 +124,7 @@ export async function runAnalyticsBench(
     },
     latency: recorder.all(),
     checks,
-    notes: [],
-    extra: { tableSizesAfter: sizes },
+    notes: timeouts.map((t) => `cold request timed out (30 s): ${t}`),
+    extra: { tableSizesAfter: sizes, statuses },
   };
 }

@@ -58,3 +58,25 @@ export function frozenPassRate(
     graded.length,
   );
 }
+
+export interface GradeCount {
+  gradingScaleVersionId: string | null;
+  grade: string | null;
+  count: number;
+}
+
+/** B21: `frozenPassRate` over (scale version, grade) counts aggregated in the
+ * database instead of one row per result — same rule, same result. */
+export function frozenPassRateFromCounts(
+  counts: GradeCount[],
+  passingBands: PassingBand[],
+): number | null {
+  const graded = counts.filter((row) => row.gradingScaleVersionId !== null);
+  const gradedCount = graded.reduce((n, row) => n + row.count, 0);
+  if (gradedCount === 0 || passingBands.length === 0) return null;
+  const passing = new Set(passingBands.map((band) => `${band.versionId}:${band.label}`));
+  const passingCount = graded
+    .filter((row) => row.grade !== null && passing.has(`${row.gradingScaleVersionId}:${row.grade}`))
+    .reduce((n, row) => n + row.count, 0);
+  return rate(passingCount, gradedCount);
+}

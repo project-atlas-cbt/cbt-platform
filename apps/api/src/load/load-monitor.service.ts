@@ -221,7 +221,16 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
     this.lastP99Ms = Math.round(this.histogram.percentile(99) / 1e6);
     this.histogram.reset();
     const warmedUp = Date.now() - this.startedAt >= WARMUP_MS;
-    this.overWindows = warmedUp && this.lastP99Ms > this.p99ThresholdMs ? this.overWindows + 1 : 0;
+    // Shedding exists to protect exam execution. A busy or blocked process
+    // with no exam traffic (one admin opening a school-wide dashboard) has
+    // nothing to protect, and shedding there would refuse reporting across
+    // the cluster for the hold time — measured in B21 before this guard.
+    // So the delay and utilisation signals count only while this process is
+    // serving exam writes; the exam-latency signal needs them by definition,
+    // and the in-flight signal (bursts) stays unconditional.
+    const examActive = this.examWindow.length >= MIN_EXAM_SAMPLES;
+    this.overWindows =
+      warmedUp && examActive && this.lastP99Ms > this.p99ThresholdMs ? this.overWindows + 1 : 0;
     if (this.overWindows >= CONSECUTIVE_WINDOWS) {
       this.trip(this.lastP99Ms > this.p99ThresholdMs * 2);
     }
@@ -237,7 +246,7 @@ export class LoadMonitorService implements OnModuleInit, OnModuleDestroy {
       Math.round(performance.eventLoopUtilization(mark, this.eluMark).utilization * 100) / 100;
     this.eluMark = mark;
     this.eluOverWindows =
-      warmedUp && this.lastElu > this.eluThreshold ? this.eluOverWindows + 1 : 0;
+      warmedUp && examActive && this.lastElu > this.eluThreshold ? this.eluOverWindows + 1 : 0;
     // Utilisation cannot exceed 1, so it has no "twice the threshold": it
     // sheds reporting only; severe shedding stays with the other signals.
     if (this.eluOverWindows >= CONSECUTIVE_WINDOWS) this.trip(false);
