@@ -36,19 +36,19 @@ Server-side, as observed by the client on a clean network (`tools/load/src/metri
 
 ## 3. Results against the Definition of Done
 
-| DoD                                                      | Result                                                                                                                                                                                                                                        | Evidence                                                                                                 |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 1. 1,000 sustained within budget                         | **Partial — gated to B23.** Steady state meets budget (answer-save p95 53–98 ms, p99 ≤ 272 ms minute by minute); the whole-run aggregate misses because of the arrival ramp and submit wave on this host (§4). 100 % success, 0 lost answers. | `…10-20-39-levels-1000-cloud`, `…10-34-08-…-diag-series`, `…10-51-10-…-ramp120`, `…11-06-00-…-endurance` |
-| 2. 500 simultaneous starts → exactly 500                 | **Met.** 1,000 requests (each start double-fired) → 500 attempts, 0 duplicates, burst 15.1 s. Per-request p95 15 s is queue depth, not a correctness issue.                                                                                   | `…11-01-06-start-burst-cloud`                                                                            |
-| 3. 500 simultaneous submissions → exactly 500 results    | **Met.** 500 results, 0 lost answers, burst 7.7 s, marking drained in 10.1 s.                                                                                                                                                                 | `…11-01-45-submit-burst-cloud`                                                                           |
-| 4. Answer-save p95/p99 at every level                    | **Met at 20, 100, 500** (p95 36 / 31 / 37 ms). **1,000: as DoD 1.**                                                                                                                                                                           | `…09-43-25-levels-20-cloud`, `…09-55-49-levels-100-cloud`, `…10-08-14-levels-500-cloud`                  |
-| 5. Pooling prevents exhaustion                           | **Met.** Peak 45–48 server connections at every level up to 2,000 attempts behind PgBouncer; 0 lock waits; pooler tenant-isolation test (§7).                                                                                                 | sampler in every report                                                                                  |
-| 6. Snapshot/answer growth measured and projected         | **Met** (§8).                                                                                                                                                                                                                                 | `…10-20-39-levels-1000-cloud` growth table, analytics dataset                                            |
-| 7. SSE scaling                                           | **Met.** 60 Control Center streams held for a 500-attempt exam, 10,805 frames, 0 errors, all exam budgets met; new streams refused (polling fallback) while shedding.                                                                         | `…12-42-25-sse-500-cloud-sse`                                                                            |
-| 8. Nigerian network conditions incl. 40-client lab burst | **Met for text and typical links; not met for media-heavy papers on a congested 2 Mbit lab link** — a bandwidth limit, not a server one (§9).                                                                                                 | `…09-1*-lab-burst-*` (workstation, valid)                                                                |
-| 9. Load shedding preserves exam execution                | **Met after a fix found here** (§6): answer-save p95 93 ms / p99 249 ms under a 20-session reporting flood, reporting degraded to 503 + `Retry-After`.                                                                                        | `…13-13-36-shed-500-cloud-shed-elu-backoff` (before: `…12-34-52`, `…12-54-12`)                           |
-| 10. Analytics on realistic volumes                       | **Met after two fixes found here** (§10): every view within budget on a term's data (school cold 2.5 s, previously > 30 s).                                                                                                                   | `…13-46-04-analytics-cloud-sql-aggregates` (before: `…13-33-37`)                                         |
-| 11. Capacity plan and runbook from evidence              | This document and `scaling-runbook.md`. Reviewed and accepted at B23 with the staging re-run.                                                                                                                                                 | —                                                                                                        |
+| DoD                                                      | Result                                                                                                                                                                                                                                                                                                                                                                | Evidence                                                                                                        |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1. 1,000 sustained within budget                         | **Partial — gated to B23.** Answer saves meet budget over the clean endurance hour _including_ the arrival ramp (p95 97 ms, p99 545 ms, 100 % success); start p95 (6.4 s) misses during the 60 s arrival of 1,000 students on this shared host, and 10-minute runs miss on answer-save too because the ramp weighs more in a short run (§4). 0 lost answers anywhere. | `…10-20-39-levels-1000-cloud`, `…10-34-08-…-diag-series`, `…10-51-10-…-ramp120`, `…15-10-45-…-endurance-jitter` |
+| 2. 500 simultaneous starts → exactly 500                 | **Met.** 1,000 requests (each start double-fired) → 500 attempts, 0 duplicates, burst 15.1 s. Per-request p95 15 s is queue depth, not a correctness issue.                                                                                                                                                                                                           | `…11-01-06-start-burst-cloud`                                                                                   |
+| 3. 500 simultaneous submissions → exactly 500 results    | **Met.** 500 results, 0 lost answers, burst 7.7 s, marking drained in 10.1 s.                                                                                                                                                                                                                                                                                         | `…11-01-45-submit-burst-cloud`                                                                                  |
+| 4. Answer-save p95/p99 at every level                    | **Met at 20, 100, 500** (p95 36 / 31 / 37 ms). **1,000: as DoD 1.**                                                                                                                                                                                                                                                                                                   | `…09-43-25-levels-20-cloud`, `…09-55-49-levels-100-cloud`, `…10-08-14-levels-500-cloud`                         |
+| 5. Pooling prevents exhaustion                           | **Met.** Peak 45–48 server connections at every level up to 2,000 attempts behind PgBouncer; 0 lock waits; pooler tenant-isolation test (§7).                                                                                                                                                                                                                         | sampler in every report                                                                                         |
+| 6. Snapshot/answer growth measured and projected         | **Met** (§8).                                                                                                                                                                                                                                                                                                                                                         | `…10-20-39-levels-1000-cloud` growth table, analytics dataset                                                   |
+| 7. SSE scaling                                           | **Met.** 60 Control Center streams held for a 500-attempt exam, 10,805 frames, 0 errors, all exam budgets met; new streams refused (polling fallback) while shedding.                                                                                                                                                                                                 | `…12-42-25-sse-500-cloud-sse`                                                                                   |
+| 8. Nigerian network conditions incl. 40-client lab burst | **Met for text and typical links; not met for media-heavy papers on a congested 2 Mbit lab link** — a bandwidth limit, not a server one (§9).                                                                                                                                                                                                                         | `…09-1*-lab-burst-*` (workstation, valid)                                                                       |
+| 9. Load shedding preserves exam execution                | **Met after fixes found here** (§6): answer-save p95 83 ms / p99 284 ms under a 20-session reporting flood, reporting degraded to 503 + `Retry-After`.                                                                                                                                                                                                                | `…16-52-26-shed-500-cloud-shed-fixed` (history: §6)                                                             |
+| 10. Analytics on realistic volumes                       | **Met after two fixes found here** (§10): every view within budget on a term's data (school cold 2.5 s, previously > 30 s).                                                                                                                                                                                                                                           | `…13-46-04-analytics-cloud-sql-aggregates` (before: `…13-33-37`)                                                |
+| 11. Capacity plan and runbook from evidence              | This document and `scaling-runbook.md`. Reviewed and accepted at B23 with the staging re-run.                                                                                                                                                                                                                                                                         | —                                                                                                               |
 
 Correctness held in **every** run, including the overloaded stress levels: **no duplicate attempt and
 no lost acknowledged answer** in 27 runs (413,538 acknowledged answers checked against the
@@ -95,22 +95,39 @@ more 1-vCPU tasks, not larger ones. Tasks are stateless (`08 §6`, `09 §41`).
 
 ## 6. Load shedding (R-12) — what the stress runs changed
 
-The B21 monitor shipped with two triggers: event-loop delay p99 and in-flight requests. Under a
-20-session reporting flood at level 500 **neither fired** while answer-save p95 rose to 679–876 ms.
-A CPU-pegged Node process leaves requests waiting in socket buffers before any middleware runs, so
-event-loop delay stays ~30 ms and server-timed latency stays low. Two triggers were added:
+The B21 monitor shipped with two triggers, event-loop delay p99 and in-flight requests. Under a
+20-session reporting flood at level 500 **neither fired** while answer-save p95 rose to 679–876 ms:
+a CPU-pegged Node process leaves requests waiting in socket buffers before any middleware runs, so
+event-loop delay stays ~30 ms. Four rounds of evidence produced the final design:
 
-| Trigger                                                          | Default                           | Catches                                           |
-| ---------------------------------------------------------------- | --------------------------------- | ------------------------------------------------- |
-| Event-loop utilisation over 3 consecutive 1 s windows            | `LOAD_SHED_ELU=0.9`               | CPU-pegged process (the measured failure)         |
-| Exam write-path (`/attempts/*`) p95 over 3 windows, ≥ 20 samples | `LOAD_SHED_EXAM_P95_MS=200`       | Slow database (requests reach the API, then wait) |
-| Event-loop delay p99 (unchanged)                                 | `LOAD_SHED_EVENT_LOOP_P99_MS=200` | Blocking work on the loop                         |
-| In-flight (unchanged)                                            | `LOAD_SHED_MAX_IN_FLIGHT=256`     | Bursts                                            |
+1. Event-loop **utilisation** and exam write-path **latency** triggers added — utilisation tripped,
+   answer-save p95 93 ms (`…13-13-36-…-shed-elu-backoff`).
+2. A single school-wide analytics request with no exam running then shed reporting cluster-wide for
+   30 s, so the CPU-shaped triggers were gated on exam traffic being present.
+3. After the analytics fix made reporting cheap, the flood sent ~90 req/s and nothing tripped
+   (p95 520–594 ms). The cause was a defect, not calibration: under Fastify's middleware layer
+   `req.url` reads `/`, so the monitor had **never seen an exam write** — the latency signal was dead
+   from the start and the gated signals died with step 2. Fixed (`originalUrl`, unit-tested).
+4. A **reporting bulkhead** bounds reporting's share regardless of thresholds.
 
-Result with clients that honour `Retry-After`: answer-save p95 **93 ms**, p99 249 ms, start p95 0.9 s,
-while ~375 reporting requests were shed and ~2,500 still served across 30 s shed cycles. A client
-that ignores `Retry-After` and retries at once still costs CPU per refused request (~2,000 req/s of
-503s held p95 at 295 ms) — **the web client must back off on 503** (F20, below).
+| Mechanism (per API process)                                  | Default                             | Active                          | Catches                                |
+| ------------------------------------------------------------ | ----------------------------------- | ------------------------------- | -------------------------------------- |
+| Reporting bulkhead: concurrency                              | `LOAD_SHED_REPORTING_CONCURRENCY=4` | while serving exam writes       | slow, heavy reports                    |
+| Reporting bulkhead: rate (token bucket)                      | `LOAD_SHED_REPORTING_RATE=10`/s     | while serving exam writes       | many cheap reports (the measured case) |
+| Event-loop utilisation, 3 consecutive 1 s windows            | `LOAD_SHED_ELU=0.9`                 | while serving exam writes       | CPU-pegged process                     |
+| Event-loop delay p99, 3 windows                              | `LOAD_SHED_EVENT_LOOP_P99_MS=200`   | while serving exam writes       | blocking work on the loop              |
+| Exam write-path (`/attempts/*`) p95, 3 windows, ≥ 20 samples | `LOAD_SHED_EXAM_P95_MS=200`         | needs exam writes by definition | slow database                          |
+| In-flight requests                                           | `LOAD_SHED_MAX_IN_FLIGHT=256`       | always                          | bursts                                 |
+
+"Serving exam writes" = at least 20 exam write-path requests in the last second on that process.
+A trip sheds reporting for `LOAD_SHED_HOLD_MS` (30 s) on every process (cluster signal) and pauses
+the worker's non-critical queues; the bulkhead refuses individual requests and is not a shed level.
+
+**Result on the final code** (`…16-52-26-…-shed-fixed`): answer-save p95 **83 ms**, p99 284 ms, start
+p95 1.4 s, submit p95 0.5 s, while reporting was degraded — ~5,200 requests served, ~350 refused
+with 503 + `Retry-After` — not switched off. A client that ignores `Retry-After` and retries at once
+still costs CPU per refused request (~2,000 req/s of 503s held p95 at 295 ms in round 1) — **the web
+client must back off on 503** (F20).
 
 ## 7. Connection budget
 
@@ -252,10 +269,17 @@ capacity signals, not noise, at these thresholds.
 
 - **B23 staging re-run (gate):** level 1,000 (60 s ramp), 500-bursts and the endurance hour on the
   production topology, load generator off-host. Accept DoD 1 and 4 there.
-- **Unexplained endurance stalls:** two windows (minutes 44–45 and 56–57 of the hour) where
-  answer-save p95 rose to 1.3–4.7 s with ~250 requests in flight per API and a responsive event loop.
-  Not checkpoints, Redis snapshots or session refresh. Postgres lock-wait, slow-statement and
-  autovacuum logging and harness-stall detection were added for the re-run — STALL_PLACEHOLDER
+- **Endurance stalls — not reproduced on a clean host.** The first endurance hour had two
+  windows (minutes 44–45, 56–57) at p95 1.3–4.7 s with ~250 requests in flight per API; the re-run
+  was disturbed by an unidentified host process (up to 286 % CPU, 13:55–14:00) that stalled the
+  load generator for up to 5.9 s, after which its fixed-interval heartbeats stayed in lockstep (1,000
+  heartbeats every 30 s; heartbeat p50 33 → 257 ms). Postgres logged no lock waits, no checkpoint
+  pressure and no slow exam-path statement in either. With the harness heartbeat jittered and a
+  quiet host, the **third hour was clean**: whole-run answer-save p95 97 ms, p99 545 ms, 100 %
+  success, no drift (`…15-10-45-levels-1000-cloud-endurance-jitter`). The cause of the first run's
+  stalls is not proven; the B23 staging endurance hour (off-host generator) is the confirmation.
+  **F20:** jitter the web client's heartbeat (`setInterval(30 s)` today) — a lab released together
+  otherwise heartbeats in phase for the whole exam.
 - **RDS Proxy pinning** check at B23 (§7).
 - **F20:** honour `503 Retry-After` with backoff in the web client (it has no handling today);
   pre-cache paper media ahead of the exam window; keep the F13 batching/debounce the harness models.

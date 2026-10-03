@@ -9,15 +9,21 @@ where they come from) and [`../operations/exam-health-monitor.md`](../operations
 1. **The student's browser.** Every answer is written to IndexedDB first and flushed in batches
    (F13). A slow or refused API call delays confirmation; it never loses an answer, and per-question
    sequence numbers make the eventual replay safe (ADR-0007).
-2. **Priority load shedding** (each API process, automatic). It trips when, for 3 consecutive
+2. **A reporting bulkhead** (each API process, automatic, only while it is serving exam writes —
+   at least 20 exam write-path requests in the last second): at most
+   `LOAD_SHED_REPORTING_CONCURRENCY` (4) reporting requests at once and `LOAD_SHED_REPORTING_RATE`
+   (10) per second; the rest get `503` + `Retry-After`. This bounds reporting's share however cheap
+   or expensive its requests are, and is what held answer saves at p95 83 ms under a reporting
+   flood in B21. It refuses individual requests; it is not a shed level and logs nothing.
+3. **Priority load shedding** (each API process, automatic). It trips when, for 3 consecutive
    seconds, **any** of these holds — or at once when more than `LOAD_SHED_MAX_IN_FLIGHT` (256)
-   requests are in flight:
-   - event-loop utilisation above `LOAD_SHED_ELU` (0.9) — the process is CPU-pegged. This is the
-     signal that fired under a reporting flood in B21; the next two did not, because a pegged
+   requests are in flight. The first two count only while the process is serving exam writes (a
+   busy process with no exam running has nothing to protect):
+   - event-loop utilisation above `LOAD_SHED_ELU` (0.9) — the process is CPU-pegged; a pegged
      process leaves requests queued in socket buffers before anything can time them;
+   - event-loop delay p99 above `LOAD_SHED_EVENT_LOOP_P99_MS` (200 ms) — blocking work on the loop;
    - exam write-path (`/attempts/*`) p95 above `LOAD_SHED_EXAM_P95_MS` (200 ms, ≥ 20 requests in
-     the second) — usually a slow database;
-   - event-loop delay p99 above `LOAD_SHED_EVENT_LOOP_P99_MS` (200 ms) — blocking work on the loop.
+     the second) — usually a slow database.
 
    While tripped it:
    - answers **reporting** (analytics, reports, exports, search, imports) with
@@ -33,18 +39,18 @@ where they come from) and [`../operations/exam-health-monitor.md`](../operations
      resolution, health. Marking, the auto-submit sweeper, the Control Center refresh and the Exam
      Health Monitor keep running.
 
-3. **Rate limits** (per session; per account+IP and per IP for sign-in) stop a runaway client, sized
+4. **Rate limits** (per session; per account+IP and per IP for sign-in) stop a runaway client, sized
    so a 40-student lab behind one NAT is never throttled (B20, re-validated in B21).
 
 ## Signals and what they mean
 
-| Signal                                                | Where                                                                            | Meaning                                                   |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `Load shedding active …` (warn, `LoadMonitorService`) | API logs, with `eventLoopUtilization`, `examP95Ms`, `eventLoopP99Ms`, `inFlight` | This process is saturated and is protecting the exam path |
-| `atlas:load:shed` exists                              | Redis (`EXISTS atlas:load:shed`)                                                 | At least one API process tripped in the last hold window  |
-| `Load shedding: non-critical queues paused`           | worker logs                                                                      | Background work is yielding                               |
-| `ANSWER_SAVE_SUCCESS_LOW`                             | Exam Health Monitor                                                              | Answers are failing — shedding alone did not hold         |
-| `SUBMISSION_LATENCY_HIGH`, `MARKING_QUEUE_BACKLOG`    | Exam Health Monitor                                                              | Database or worker capacity                               |
+| Signal                                                | Where                                                                                                               | Meaning                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `Load shedding active …` (warn, `LoadMonitorService`) | API logs, with `eventLoopUtilization`, `examP95Ms`, `examActive`, `eventLoopP99Ms`, `inFlight`, `reportingInFlight` | This process is saturated and is protecting the exam path |
+| `atlas:load:shed` exists                              | Redis (`EXISTS atlas:load:shed`)                                                                                    | At least one API process tripped in the last hold window  |
+| `Load shedding: non-critical queues paused`           | worker logs                                                                                                         | Background work is yielding                               |
+| `ANSWER_SAVE_SUCCESS_LOW`                             | Exam Health Monitor                                                                                                 | Answers are failing — shedding alone did not hold         |
+| `SUBMISSION_LATENCY_HIGH`, `MARKING_QUEUE_BACKLOG`    | Exam Health Monitor                                                                                                 | Database or worker capacity                               |
 
 ## Responding to sustained shedding
 
@@ -68,7 +74,8 @@ capacity is short. In order:
 
 ## Tuning
 
-All thresholds are environment variables (no code change): `LOAD_SHED_ENABLED`, `LOAD_SHED_ELU`,
+All thresholds are environment variables (no code change): `LOAD_SHED_ENABLED`,
+`LOAD_SHED_REPORTING_CONCURRENCY`, `LOAD_SHED_REPORTING_RATE`, `LOAD_SHED_ELU`,
 `LOAD_SHED_EXAM_P95_MS`, `LOAD_SHED_EVENT_LOOP_P99_MS`, `LOAD_SHED_MAX_IN_FLIGHT`, `LOAD_SHED_HOLD_MS`,
 `SSE_MAX_CONNECTIONS_PER_PROCESS`, `DATABASE_POOL_MAX`, `MARKING_CONCURRENCY`,
 `ARGON2_MAX_CONCURRENCY`, `EXAM_CONTROL_REFRESH_INTERVAL_MS`, `EXAM_CONTROL_FULL_SCAN_INTERVAL_MS`.
