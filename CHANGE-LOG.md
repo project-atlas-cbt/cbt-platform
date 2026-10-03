@@ -53,7 +53,17 @@ RTT probe, dataset generator); PgBouncer in CI and a `load-smoke` CI job; `DATAB
 Exam Health Monitor review, ADR-0004/0007/0020/0023/0032 amendments (ADR-0007: keep the answer-event
 log unsampled), F20 roadmap requirements.
 
-**Tests:** pending — the integration and security suites are running; results replace this line.
+**Tests (cloud session, final code):** lint + typecheck 31/31 tasks; unit tests all green (api
+237, web 906, domain 154, …, `@atlas/load` 4); API integration 374/375; worker integration 50/50;
+security suites 41/41; cross-cutting 159/161 including `pooler-tenant-isolation` through PgBouncer.
+The three failures are this environment's known gaps, not B21: the media signed-URL test (s3rver
+has no private-bucket semantics) and the migrations reset/re-apply pair (PostgreSQL 16 has no
+`uuidv7()`; the session shim's reinstall trigger was missing, so the reset dropped it) — CI on
+PostgreSQL 18 + MinIO is authoritative for both. The 1,500-row import timing test passes on this
+host (27.8 s), closing the B20 open item. Found and fixed while running them: the security suites'
+refused `/attempts/*` probes counted as exam traffic and tripped the reporting bulkhead; two
+`load-shedding.integration.test` defects (a `GET /exports` probe of a route that does not exist,
+and a test seam leaking a severe level between tests).
 
 **Carried forward:** to **B23** — staging re-run of level 1,000, the bursts and the endurance hour on
 the production topology with an off-host load generator (gate for DoD 1/4 and capacity-plan

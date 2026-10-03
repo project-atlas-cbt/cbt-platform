@@ -240,7 +240,6 @@ Open items carried forward:
   (`frontend-roadmap.md` F20). From B21 → B23: staging re-run of level 1,000 / bursts / endurance
   (gate), RDS Proxy pinning check, ADR-0032 region decision (RTT favoured `af-south-1`). Capacity
   plan: `docs/performance/capacity-plan.md`.
-- The 1,500-row import timing test (B20 open item) is being re-measured in this session; result pending.
 - Local and CI object storage is Chainguard's MinIO build pinned by digest (MinIO withdrew its
   public images, 2026-10-02 CI repair entry).
 
