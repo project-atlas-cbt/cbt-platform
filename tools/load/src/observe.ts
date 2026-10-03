@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { Redis } from 'ioredis';
 import { createPrismaClient, type PrismaClient } from '@atlas/db';
 
@@ -33,6 +34,10 @@ export interface Sample {
   redisClients: number;
   redisMemoryMb: number;
   hostFreeMemoryMb: number;
+  /** The harness's own worst event-loop delay since the previous sample. A
+   * harness pause inflates every in-flight request's measured latency and then
+   * releases a burst, so it must be told apart from a server stall. */
+  harnessLoopMaxMs: number;
 }
 
 /** Below this much free host RAM the OS pages — latency then measures the
@@ -51,12 +56,16 @@ export interface SamplerSummary {
   peakRedisMemoryMb: number;
   minHostFreeMemoryMb: number;
   hostMemoryPressure: boolean;
+  peakHarnessLoopDelayMs: number;
+  /** Samples where the harness itself stalled for over a second (ISO time → ms). */
+  harnessStalls: string[];
 }
 
 export class Sampler {
   private timer: NodeJS.Timeout | undefined;
   readonly samples: Sample[] = [];
   private readonly redis: Redis;
+  private readonly loop = monitorEventLoopDelay({ resolution: 20 });
 
   constructor(private readonly intervalMs = 5_000) {
     this.redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
@@ -66,6 +75,7 @@ export class Sampler {
 
   async start(): Promise<void> {
     await this.redis.connect().catch(() => undefined);
+    this.loop.enable();
     await this.sample();
     this.timer = setInterval(() => void this.sample().catch(() => undefined), this.intervalMs);
   }
@@ -73,11 +83,14 @@ export class Sampler {
   async stop(): Promise<SamplerSummary> {
     if (this.timer) clearInterval(this.timer);
     await this.sample().catch(() => undefined);
+    this.loop.disable();
     this.redis.disconnect();
     return this.summary();
   }
 
   private async sample(): Promise<void> {
+    const harnessLoopMaxMs = Math.round(this.loop.max / 1e6);
+    this.loop.reset();
     const db = ownerDb();
     const [activity] = await db.$queryRaw<
       { total: bigint; active: bigint; idle_tx: bigint }[]
@@ -111,6 +124,7 @@ export class Sampler {
       redisClients,
       redisMemoryMb: Math.round(redisMemoryMb * 10) / 10,
       hostFreeMemoryMb: Math.round(os.freemem() / 1_048_576),
+      harnessLoopMaxMs,
     });
   }
 
@@ -139,6 +153,10 @@ export class Sampler {
         Number.POSITIVE_INFINITY,
       ),
       hostMemoryPressure: s.some((x) => x.hostFreeMemoryMb < HOST_MEMORY_PRESSURE_MB),
+      peakHarnessLoopDelayMs: max((x) => x.harnessLoopMaxMs),
+      harnessStalls: s
+        .filter((x) => x.harnessLoopMaxMs > 1_000)
+        .map((x) => `${new Date(x.t).toISOString()} ${x.harnessLoopMaxMs} ms`),
     };
   }
 }

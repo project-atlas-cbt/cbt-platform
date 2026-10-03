@@ -83,6 +83,12 @@ export function renderMarkdown(r: RunReport): string {
     );
     out.push('');
   }
+  if (r.sampler?.harnessStalls?.length) {
+    out.push(
+      `> **Harness stalls:** the load generator's own event loop paused for over a second at ${r.sampler.harnessStalls.join('; ')}. Requests in flight then are over-measured by up to that pause, and the queued traffic is released as a burst — read the per-minute series around those times with that in mind.`,
+    );
+    out.push('');
+  }
   out.push('## Budget checks');
   out.push('');
   out.push(
