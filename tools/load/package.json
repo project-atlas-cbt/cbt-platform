@@ -1,0 +1,29 @@
+{
+  "name": "@atlas/load",
+  "version": "0.0.0",
+  "private": true,
+  "description": "B21 load, concurrency, network-profile and capacity harness. Drives a running API over real HTTP the way the F13 exam client does. See docs/performance/load-testing.md.",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "load": "tsx src/cli.ts",
+    "provision": "tsx src/cli.ts provision",
+    "dataset": "tsx src/dataset.ts",
+    "rtt-probe": "tsx src/rtt-probe.ts"
+  },
+  "dependencies": {
+    "@atlas/config": "workspace:*",
+    "@atlas/db": "workspace:*",
+    "@node-rs/argon2": "^2.2.1",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "image-size": "^2.0.4",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

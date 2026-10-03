@@ -64,3 +64,28 @@ export function toAttemptStateResponseDto(attempt: {
     invalidationReason: attempt.invalidationReason,
   };
 }
+
+/** B21: the attempt row and its owner WITHOUT the snapshot document — for
+ * every path that needs only state/timing/ownership (submit, end,
+ * heartbeat, events). The snapshot is the largest per-attempt payload and
+ * those paths never read it. */
+export const ATTEMPT_HEADER_INCLUDE = {
+  studentProfile: { select: { membership: { select: { userId: true } } } },
+} satisfies Prisma.ExamAttemptInclude;
+
+export type AttemptHeader = Prisma.ExamAttemptGetPayload<{
+  include: typeof ATTEMPT_HEADER_INCLUDE;
+}>;
+
+export async function loadAttemptHeaderOrThrow(
+  schoolId: string,
+  attemptId: string,
+): Promise<AttemptHeader> {
+  const attempt = await withTenant(prisma, schoolId, (tx) =>
+    tx.examAttempt.findUnique({ where: { id: attemptId }, include: ATTEMPT_HEADER_INCLUDE }),
+  );
+  if (!attempt || attempt.schoolId !== schoolId) {
+    throw new AppHttpException({ code: 'NOT_FOUND', message: 'Attempt not found.' });
+  }
+  return attempt;
+}

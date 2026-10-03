@@ -1,11 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, withTenant } from '@atlas/db';
-import { evaluateWriteAdmissibility, type AttemptSnapshotDocumentV1 } from '@atlas/domain';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
+import { evaluateWriteAdmissibility } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { AttemptFinalizationService } from './attempt-finalization.service.js';
-import { loadAttemptWithOwnerOrThrow, type AttemptWithOwner } from './attempt-mappers.js';
+import {
+  loadAttemptWriteContextOrThrow,
+  type AttemptWriteContext,
+} from './attempt-write-context.js';
 import { AttemptEventService } from './attempt-event.service.js';
 import type {
   BatchAnswerItemDto,
@@ -22,6 +25,18 @@ interface UpsertOutcome {
   accepted: boolean;
   sequenceNumber: number;
   answeredAt: Date;
+}
+
+interface WritePlan {
+  answerState: 'ANSWERED' | 'UNANSWERED';
+  gradeWindowFlag: boolean;
+}
+
+function staleSequence(): AppHttpException {
+  return new AppHttpException({
+    code: 'ATTEMPT_ANSWER_SEQUENCE_STALE',
+    message: 'A newer answer for this question already exists.',
+  });
 }
 
 /**
@@ -150,7 +165,7 @@ export class AttemptAnswerService {
   ): Promise<SaveAnswerResponseDto> {
     const attempt = await this.authorizeAndLoad(schoolId, actor, attemptId);
     const outcome = await this.writeAnswer(schoolId, attempt, examQuestionId, dto, receivedAt);
-    void this.attemptEvents.touchLastSeen(schoolId, attemptId);
+    void this.attemptEvents.touchLastSeen(schoolId, attemptId, { coalesce: true });
     return {
       examQuestionId,
       accepted: outcome.accepted,
@@ -175,11 +190,8 @@ export class AttemptAnswerService {
     receivedAt: Date,
   ): Promise<SaveAnswerBatchResponseDto> {
     const attempt = await this.authorizeAndLoad(schoolId, actor, attemptId);
-    const results: BatchAnswerResultDto[] = [];
-    for (const item of dto.answers) {
-      results.push(await this.saveBatchItem(schoolId, attempt, item, receivedAt));
-    }
-    void this.attemptEvents.touchLastSeen(schoolId, attemptId);
+    const results = await this.writeBatch(schoolId, attempt, dto.answers, receivedAt);
+    void this.attemptEvents.touchLastSeen(schoolId, attemptId, { coalesce: true });
     return { results };
   }
 
@@ -187,11 +199,11 @@ export class AttemptAnswerService {
     schoolId: string,
     actor: AuthorizedActor,
     attemptId: string,
-  ): Promise<AttemptWithOwner> {
-    const attempt = await loadAttemptWithOwnerOrThrow(schoolId, attemptId);
+  ): Promise<AttemptWriteContext> {
+    const attempt = await loadAttemptWriteContextOrThrow(schoolId, attemptId);
     const decision = await this.authz.evaluate(actor, 'studentCbt.answer', {
       schoolId,
-      ownerUserId: attempt.studentProfile.membership.userId,
+      ownerUserId: attempt.ownerUserId,
     });
     if (!decision.allowed) {
       throw new AppHttpException({
@@ -202,34 +214,117 @@ export class AttemptAnswerService {
     return attempt;
   }
 
-  private async saveBatchItem(
+  /**
+   * B21: the whole flush in ONE transaction, one SAVEPOINT per item — still
+   * never all-or-nothing (a failed item rolls back to its own savepoint and
+   * is reported; the others commit), but one durable commit per flush
+   * instead of one per item. Measured motivation: the commit (WAL flush) is
+   * the dominant cost of the write path, and an offline-replay flush after
+   * an outage is exactly when hundreds of clients send many items at once.
+   * Every rejection still leaves its AttemptAnswerEvent, in the same
+   * transaction.
+   */
+  private async writeBatch(
     schoolId: string,
-    attempt: AttemptWithOwner,
-    item: BatchAnswerItemDto,
+    attempt: AttemptWriteContext,
+    items: BatchAnswerItemDto[],
     receivedAt: Date,
-  ): Promise<BatchAnswerResultDto> {
+  ): Promise<BatchAnswerResultDto[]> {
+    const planned: { item: BatchAnswerItemDto; plan?: WritePlan; error?: unknown }[] = [];
+    for (const item of items) {
+      try {
+        planned.push({
+          item,
+          plan: await this.validateWrite(schoolId, attempt, item.examQuestionId, item, receivedAt),
+        });
+      } catch (error) {
+        planned.push({ item, error });
+      }
+    }
+
+    const reject = (item: BatchAnswerItemDto, error: unknown): BatchAnswerResultDto => ({
+      examQuestionId: item.examQuestionId,
+      accepted: false,
+      rejectionCode: error instanceof AppHttpException ? error.code : 'INTERNAL',
+      gradeWindowFlag: false,
+    });
+    const reason = (error: unknown) =>
+      error instanceof AppHttpException
+        ? error.message
+        : 'Unexpected error while saving this answer.';
+
     try {
-      const outcome = await this.writeAnswer(
-        schoolId,
-        attempt,
-        item.examQuestionId,
-        item,
-        receivedAt,
-      );
-      return {
-        examQuestionId: item.examQuestionId,
-        accepted: outcome.accepted,
-        gradeWindowFlag:
-          evaluateWriteAdmissibility(attempt.expiresAt, receivedAt) === 'GRACE_WINDOW',
-      };
+      return await withTenant(prisma, schoolId, async (tx) => {
+        const results: BatchAnswerResultDto[] = [];
+        const rejected: { item: BatchAnswerItemDto; error: unknown }[] = [];
+        for (const { item, plan, error } of planned) {
+          if (!plan) {
+            rejected.push({ item, error });
+            results.push(reject(item, error));
+            continue;
+          }
+          await tx.$executeRawUnsafe('SAVEPOINT answer_item');
+          try {
+            const upserted = await this.upsertInTransaction(
+              tx,
+              schoolId,
+              attempt.id,
+              item.examQuestionId,
+              item,
+              receivedAt,
+              plan,
+            );
+            await tx.$executeRawUnsafe('RELEASE SAVEPOINT answer_item');
+            if (upserted === null) {
+              rejected.push({ item, error: staleSequence() });
+              results.push(reject(item, staleSequence()));
+            } else {
+              results.push({
+                examQuestionId: item.examQuestionId,
+                accepted: true,
+                gradeWindowFlag: plan.gradeWindowFlag,
+              });
+            }
+          } catch (itemError) {
+            // e.g. the not-in-progress trigger after a concurrent submit.
+            await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT answer_item');
+            rejected.push({ item, error: itemError });
+            results.push(reject(item, itemError));
+          }
+        }
+        if (rejected.length > 0) {
+          await tx.attemptAnswerEvent.createMany({
+            data: rejected.map(({ item, error }) => ({
+              schoolId,
+              attemptId: attempt.id,
+              examQuestionId: item.examQuestionId,
+              sequenceNumber: item.sequenceNumber,
+              selectedOptionId: item.selectedOptionId ?? null,
+              receivedAt,
+              source: item.source ?? 'online',
+              gradeWindowFlag: false,
+              accepted: false,
+              rejectionReason: reason(error),
+            })),
+          });
+        }
+        return results;
+      });
     } catch (error) {
-      const code = error instanceof AppHttpException ? error.code : 'INTERNAL';
-      return {
-        examQuestionId: item.examQuestionId,
-        accepted: false,
-        rejectionCode: code,
-        gradeWindowFlag: false,
-      };
+      // The flush transaction itself failed (connection loss, timeout):
+      // nothing in it committed — every item is reported as a retryable
+      // INTERNAL, and the forensic trail is written best-effort outside it.
+      for (const { item } of planned) {
+        await this.recordRejectedEvent(
+          schoolId,
+          attempt.id,
+          item.examQuestionId,
+          item,
+          receivedAt,
+          reason(error),
+        ).catch(() => undefined);
+      }
+      return planned.map(({ item }) => reject(item, error));
     }
   }
 
@@ -247,7 +342,7 @@ export class AttemptAnswerService {
    * replace the original error. */
   private async writeAnswer(
     schoolId: string,
-    attempt: AttemptWithOwner,
+    attempt: AttemptWriteContext,
     examQuestionId: string,
     dto: Pick<SaveAnswerDto, 'selectedOptionId' | 'sequenceNumber' | 'source'>,
     receivedAt: Date,
@@ -277,11 +372,33 @@ export class AttemptAnswerService {
    * `recordRejectedEvent` directly any more. */
   private async writeAnswerInner(
     schoolId: string,
-    attempt: AttemptWithOwner,
+    attempt: AttemptWriteContext,
     examQuestionId: string,
     dto: Pick<SaveAnswerDto, 'selectedOptionId' | 'sequenceNumber' | 'source'>,
     receivedAt: Date,
   ): Promise<UpsertOutcome> {
+    const plan = await this.validateWrite(schoolId, attempt, examQuestionId, dto, receivedAt);
+    const upserted = await withTenant(prisma, schoolId, (tx) =>
+      this.upsertInTransaction(tx, schoolId, attempt.id, examQuestionId, dto, receivedAt, plan),
+    );
+    if (upserted === null) throw staleSequence();
+    return {
+      accepted: true,
+      sequenceNumber: upserted.sequence_number,
+      answeredAt: upserted.answered_at,
+    };
+  }
+
+  /** Everything that can refuse a write before the database is touched:
+   * writability, ADR-0003 admissibility (server receipt time), snapshot
+   * membership. Throws the client-facing rejection. */
+  private async validateWrite(
+    schoolId: string,
+    attempt: AttemptWriteContext,
+    examQuestionId: string,
+    dto: Pick<SaveAnswerDto, 'selectedOptionId'>,
+    receivedAt: Date,
+  ): Promise<WritePlan> {
     // Fast-fail service-layer check — the real, unconditional backstop is
     // `attempt_answers_immutable_when_attempt_not_in_progress` (the DB
     // trigger), matching this codebase's universal service-check +
@@ -311,80 +428,75 @@ export class AttemptAnswerService {
         message: 'This attempt has expired and the grace window for late answers has closed.',
       });
     }
-    const gradeWindowFlag = admissibility === 'GRACE_WINDOW';
-
-    const document = attempt.snapshot?.document as unknown as AttemptSnapshotDocumentV1 | undefined;
-    const question = document?.questions.find((q) => q.examQuestionId === examQuestionId);
-    if (!question) {
+    const optionIds = attempt.questions.get(examQuestionId);
+    if (!optionIds) {
       throw new AppHttpException({
         code: 'ATTEMPT_QUESTION_NOT_IN_SNAPSHOT',
         message: 'This question does not belong to this attempt.',
       });
     }
-    if (
-      dto.selectedOptionId != null &&
-      !question.options.some((o) => o.optionId === dto.selectedOptionId)
-    ) {
+    if (dto.selectedOptionId != null && !optionIds.has(dto.selectedOptionId)) {
       throw new AppHttpException({
         code: 'ATTEMPT_QUESTION_NOT_IN_SNAPSHOT',
         message: 'This option does not belong to this question.',
       });
     }
 
-    const answerState = dto.selectedOptionId != null ? 'ANSWERED' : 'UNANSWERED';
-    const upserted = await withTenant(prisma, schoolId, async (tx) => {
-      // Atomic, race-free "keep only the higher-or-equal-sequence write" —
-      // see this file's own header comment for why this single statement
-      // replaces a SELECT-then-branch-then-write. `<=` (not `<`) so a
-      // genuine retry of the SAME sequence number is accepted as an
-      // idempotent no-op-equivalent success (DoD item 9), while a
-      // strictly lower sequence is rejected (DoD item 8/X-04).
-      const rows = await tx.$queryRaw<{ sequence_number: number; answered_at: Date }[]>`
-        INSERT INTO attempt_answers
-          (id, school_id, attempt_id, exam_question_id, selected_option_id, state, sequence_number, answered_at, last_saved_at, grade_window_flag)
-        VALUES
-          (uuidv7(), ${schoolId}::uuid, ${attempt.id}::uuid, ${examQuestionId}::uuid, ${dto.selectedOptionId ?? null}::uuid, ${answerState}::"AttemptAnswerState", ${dto.sequenceNumber}::int, ${receivedAt}::timestamptz, ${receivedAt}::timestamptz, ${gradeWindowFlag}::boolean)
-        ON CONFLICT (school_id, attempt_id, exam_question_id)
-        DO UPDATE SET
-          selected_option_id = EXCLUDED.selected_option_id,
-          state = EXCLUDED.state,
-          sequence_number = EXCLUDED.sequence_number,
-          answered_at = EXCLUDED.answered_at,
-          last_saved_at = EXCLUDED.last_saved_at,
-          grade_window_flag = EXCLUDED.grade_window_flag
-        WHERE attempt_answers.sequence_number <= EXCLUDED.sequence_number
-        RETURNING sequence_number, answered_at
-      `;
-      if (rows.length === 0) return null;
-
-      await tx.attemptAnswerEvent.create({
-        data: {
-          schoolId,
-          attemptId: attempt.id,
-          examQuestionId,
-          sequenceNumber: dto.sequenceNumber,
-          selectedOptionId: dto.selectedOptionId ?? null,
-          receivedAt,
-          source: dto.source ?? 'online',
-          gradeWindowFlag,
-          accepted: true,
-        },
-      });
-      return rows[0]!;
-    });
-
-    if (upserted === null) {
-      throw new AppHttpException({
-        code: 'ATTEMPT_ANSWER_SEQUENCE_STALE',
-        message: 'A newer answer for this question already exists.',
-      });
-    }
-
     return {
-      accepted: true,
-      sequenceNumber: upserted.sequence_number,
-      answeredAt: upserted.answered_at,
+      answerState: dto.selectedOptionId != null ? 'ANSWERED' : 'UNANSWERED',
+      gradeWindowFlag: admissibility === 'GRACE_WINDOW',
     };
+  }
+
+  /** The upsert and its accepted event, inside the caller's transaction.
+   * Returns null when a newer sequence is already stored (stale). */
+  private async upsertInTransaction(
+    tx: Prisma.TransactionClient,
+    schoolId: string,
+    attemptId: string,
+    examQuestionId: string,
+    dto: Pick<SaveAnswerDto, 'selectedOptionId' | 'sequenceNumber' | 'source'>,
+    receivedAt: Date,
+    plan: WritePlan,
+  ): Promise<{ sequence_number: number; answered_at: Date } | null> {
+    // Atomic, race-free "keep only the higher-or-equal-sequence write" —
+    // see this file's own header comment for why this single statement
+    // replaces a SELECT-then-branch-then-write. `<=` (not `<`) so a
+    // genuine retry of the SAME sequence number is accepted as an
+    // idempotent no-op-equivalent success (DoD item 9), while a
+    // strictly lower sequence is rejected (DoD item 8/X-04).
+    const rows = await tx.$queryRaw<{ sequence_number: number; answered_at: Date }[]>`
+      INSERT INTO attempt_answers
+        (id, school_id, attempt_id, exam_question_id, selected_option_id, state, sequence_number, answered_at, last_saved_at, grade_window_flag)
+      VALUES
+        (uuidv7(), ${schoolId}::uuid, ${attemptId}::uuid, ${examQuestionId}::uuid, ${dto.selectedOptionId ?? null}::uuid, ${plan.answerState}::"AttemptAnswerState", ${dto.sequenceNumber}::int, ${receivedAt}::timestamptz, ${receivedAt}::timestamptz, ${plan.gradeWindowFlag}::boolean)
+      ON CONFLICT (school_id, attempt_id, exam_question_id)
+      DO UPDATE SET
+        selected_option_id = EXCLUDED.selected_option_id,
+        state = EXCLUDED.state,
+        sequence_number = EXCLUDED.sequence_number,
+        answered_at = EXCLUDED.answered_at,
+        last_saved_at = EXCLUDED.last_saved_at,
+        grade_window_flag = EXCLUDED.grade_window_flag
+      WHERE attempt_answers.sequence_number <= EXCLUDED.sequence_number
+      RETURNING sequence_number, answered_at
+    `;
+    if (rows.length === 0) return null;
+
+    await tx.attemptAnswerEvent.create({
+      data: {
+        schoolId,
+        attemptId,
+        examQuestionId,
+        sequenceNumber: dto.sequenceNumber,
+        selectedOptionId: dto.selectedOptionId ?? null,
+        receivedAt,
+        source: dto.source ?? 'online',
+        gradeWindowFlag: plan.gradeWindowFlag,
+        accepted: true,
+      },
+    });
+    return rows[0]!;
   }
 
   private async recordRejectedEvent(

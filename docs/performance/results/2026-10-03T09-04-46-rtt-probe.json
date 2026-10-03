@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-03T09:04:46.195Z",
+  "label": "Project-owner workstation, Nigeria (home/office ISP, not a school lab); machine idle",
+  "rows": [
+    {
+      "region": "eu-west-1",
+      "name": "Ireland",
+      "samples": 60,
+      "failures": 0,
+      "tcpP50": 186.3,
+      "tcpP95": 595.1,
+      "tcpMin": 133.2,
+      "tcpP90": 372.1,
+      "synRetransmits": 2,
+      "httpsWarmP50": null
+    },
+    {
+      "region": "eu-west-2",
+      "name": "London",
+      "samples": 60,
+      "failures": 0,
+      "tcpP50": 159.2,
+      "tcpP95": 430.7,
+      "tcpMin": 126.1,
+      "tcpP90": 326.4,
+      "synRetransmits": 0,
+      "httpsWarmP50": null
+    },
+    {
+      "region": "af-south-1",
+      "name": "Cape Town",
+      "samples": 60,
+      "failures": 0,
+      "tcpP50": 114.5,
+      "tcpP95": 1124.4,
+      "tcpMin": 94.7,
+      "tcpP90": 326.1,
+      "synRetransmits": 4,
+      "httpsWarmP50": null
+    },
+    {
+      "region": "eu-central-1",
+      "name": "Frankfurt",
+      "samples": 60,
+      "failures": 0,
+      "tcpP50": 185.4,
+      "tcpP95": 1220,
+      "tcpMin": 143.3,
+      "tcpP90": 456.2,
+      "synRetransmits": 3,
+      "httpsWarmP50": null
+    }
+  ]
+}

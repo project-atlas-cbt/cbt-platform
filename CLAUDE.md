@@ -219,11 +219,11 @@ screens against them). Why these two, and which skills were considered and rejec
 
 ### Current Phase
 
-Backend `B0`–`B20` and frontend `F0`–`F19` are implemented, plus the 2026-09-23..25 gap
+Backend `B0`–`B21` and frontend `F0`–`F19` are implemented, plus the 2026-09-23..25 gap
 closures (teacher bulk submit-for-review, School Admin Questions oversight, F12 live attempt table,
-F3 School Detail Usage/Users/Exams tabs, web test-suite repair — 906/906 green). B20 (security
-hardening & compliance, 2026-10-02) is next to be followed by **B21**, then F20 (which pairs with
-both). Each phase's DoD
+F3 School Detail Usage/Users/Exams tabs, web test-suite repair — 906/906 green). B21 (performance &
+load, 2026-10-03) is done with DoD 1/4 at 1,000 attempts gated to the B23 staging re-run (owner
+decision). **F20** is next (pairs with B20 and B21). Each phase's DoD
 outcome, honestly-partial items and design reasoning are in its dated `CHANGE-LOG.md` entry and its
 roadmap section; read those before resuming related work.
 
@@ -236,8 +236,10 @@ Open items carried forward:
 - From B20 → F20: web CSP (`docs/security/web-csp-policy.md`), Software Admin MFA UI, then
   `PLATFORM_MFA_REQUIRED=true`. From B20 → B23: legal review of retention/DPA (ADR-0028 amendment),
   encryption-at-rest verification, production secrets (`CSRF_SECRET`, `MFA_ENCRYPTION_KEY`).
-- Known failing integration test: the 1,500-row import timing budget (fails identically on pre-B20
-  code locally — workstation throughput; B21 to re-measure) — see the B20 `CHANGE-LOG.md` entry.
+- From B21 → F20: back off on `503 Retry-After`, jitter the 30 s heartbeat, pre-cache paper media
+  (`frontend-roadmap.md` F20). From B21 → B23: staging re-run of level 1,000 / bursts / endurance
+  (gate), RDS Proxy pinning check, ADR-0032 region decision (RTT favoured `af-south-1`). Capacity
+  plan: `docs/performance/capacity-plan.md`.
 - Local and CI object storage is Chainguard's MinIO build pinned by digest (MinIO withdrew its
   public images, 2026-10-02 CI repair entry).
 
@@ -256,6 +258,9 @@ Engineering facts every session needs:
   connection (`test-support/owner-prisma.ts`); never widen the grants to make a test pass.
 - Every route is in the security suites automatically (`pnpm test:security`, route inventory from
   Nest metadata) — a new route must pass tenant isolation and privilege escalation on its first run.
+- B21 load shedding: the in-flight middleware must read `req.originalUrl` — under Fastify's
+  middleware layer `req.url` is rewritten to `/`. Reporting routes are shed/bulkheaded while exams
+  run (`apps/api/src/load/`); the web client must honour `Retry-After`.
 - Logging goes through `@atlas/observability` (redacting pino); never log request bodies, answers,
   tokens or PII. Route params named `id`/`…Id` must be UUIDs (global pipe).
 

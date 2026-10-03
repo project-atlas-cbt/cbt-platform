@@ -36,7 +36,21 @@ export function createPrismaClient(connectionString?: string): PrismaClient {
       'DATABASE_APP_URL is not set. Copy .env.example to .env at the repo root, or pass a connection string explicitly.',
     );
   }
-  const adapter = new PrismaPg({ connectionString: url });
+  // B21: pool size from DATABASE_POOL_MAX (default 10 = node-postgres's own
+  // default, unchanged unless configured). Read here rather than through
+  // @atlas/config's schema so this package stays usable by tooling that
+  // never loads the full application env.
+  const poolMax = Number(process.env.DATABASE_POOL_MAX ?? '10');
+  const adapter = new PrismaPg({
+    connectionString: url,
+    max: Number.isInteger(poolMax) && poolMax > 0 ? poolMax : 10,
+    // B21: node-postgres closes idle connections after 10 s by default, so
+    // a bursty exam load (quiet, then a lab of 40 at once) re-opens them —
+    // each a DNS lookup + TLS + auth on the critical path. A minute keeps
+    // the pool warm across the gaps; the pooler (RDS Proxy / PgBouncer)
+    // owns the real server-side connection budget.
+    idleTimeoutMillis: 60_000,
+  });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],

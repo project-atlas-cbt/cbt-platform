@@ -1,0 +1,3 @@
+"atlas_app" "atlas_app_dev_password"
+"atlas" "atlas_dev_password"
+"atlas_audit_reader" "atlas_audit_reader_dev_password"

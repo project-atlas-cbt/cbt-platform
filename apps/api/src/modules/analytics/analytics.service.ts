@@ -13,6 +13,7 @@ import { loadExamOrThrow } from '../exams/exam-mappers.js';
 import {
   distribution,
   frozenPassRate,
+  frozenPassRateFromCounts,
   rate,
   round,
   summarizePercentages,
@@ -653,7 +654,7 @@ export class AnalyticsService {
     };
   }
 
-  private async resultsFor(
+  private resultWhere(
     schoolId: string,
     filter: {
       examId?: string;
@@ -662,8 +663,8 @@ export class AnalyticsService {
       subjectId?: string;
       departmentId?: string;
     },
-  ): Promise<ResultRow[]> {
-    const where: Prisma.ResultWhereInput = {
+  ): Prisma.ResultWhereInput {
+    return {
       ...aggregatableResultWhere(schoolId),
       ...(filter.examId && { examId: filter.examId }),
       ...(filter.examIds && { examId: { in: filter.examIds } }),
@@ -679,6 +680,13 @@ export class AnalyticsService {
           }
         : {}),
     };
+  }
+
+  private async resultsFor(
+    schoolId: string,
+    filter: Parameters<AnalyticsService['resultWhere']>[1],
+  ): Promise<ResultRow[]> {
+    const where = this.resultWhere(schoolId, filter);
     return withTenant(prisma, schoolId, (tx) =>
       tx.result.findMany({
         where,
@@ -687,17 +695,73 @@ export class AnalyticsService {
     );
   }
 
+  /**
+   * B21: aggregated in the database. Loading every result row into the
+   * process to sum it cost seconds per breakdown on a term's data (a
+   * school-wide view runs this once per department and per session) and
+   * blocked the event loop. Same figures as `metricRows`: count, mean,
+   * highest, lowest, and the frozen pass rate from (scale version, grade)
+   * counts against the passing bands of the versions actually present.
+   */
   private async metricsFor(
     schoolId: string,
-    filter: {
-      examId?: string;
-      examIds?: string[];
-      classId?: string;
-      subjectId?: string;
-      departmentId?: string;
-    },
+    filter: Parameters<AnalyticsService['resultWhere']>[1],
   ): Promise<PercentageMetricDto> {
-    return this.metricRows(schoolId, await this.resultsFor(schoolId, filter));
+    const where = this.resultWhere(schoolId, filter);
+    const [summary, grades] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.result.aggregate({
+          where,
+          _count: { _all: true },
+          _avg: { percentage: true },
+          _max: { percentage: true },
+          _min: { percentage: true },
+        }),
+        tx.result.groupBy({
+          by: ['gradingScaleVersionId', 'grade'],
+          where,
+          _count: { _all: true },
+        }),
+      ]),
+    );
+    const count = summary._count._all;
+    const toNumber = (value: Prisma.Decimal | null) => (value === null ? null : Number(value));
+    const average = toNumber(summary._avg.percentage);
+    return {
+      resultCount: count,
+      averagePercentage: count && average !== null ? round(average) : null,
+      highestPercentage: count ? toNumber(summary._max.percentage) : null,
+      lowestPercentage: count ? toNumber(summary._min.percentage) : null,
+      passRate: await this.passRateFromCounts(schoolId, grades),
+    };
+  }
+
+  private async passRateFromCounts(
+    schoolId: string,
+    grades: {
+      gradingScaleVersionId: string | null;
+      grade: string | null;
+      _count: { _all: number };
+    }[],
+  ): Promise<number | null> {
+    const counts = grades.map((row) => ({
+      gradingScaleVersionId: row.gradingScaleVersionId,
+      grade: row.grade,
+      count: row._count._all,
+    }));
+    const ids = [
+      ...new Set(
+        counts.map((row) => row.gradingScaleVersionId).filter((id): id is string => id !== null),
+      ),
+    ];
+    if (!ids.length) return null;
+    const bands = await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScaleBand.findMany({
+        where: { schoolId, versionId: { in: ids }, isPassing: true },
+        select: { versionId: true, label: true },
+      }),
+    );
+    return frozenPassRateFromCounts(counts, bands);
   }
 
   private async metricRows(schoolId: string, rows: ResultRow[]): Promise<PercentageMetricDto> {
@@ -820,6 +884,22 @@ export class AnalyticsService {
       }),
     );
     const examBySession = new Map(sessionExamIds.map((session) => [session.id, session.examId]));
+    // B21: participations and attempts are indexed once by (student, session).
+    // The per-participant `find`/`some` scans this replaces were quadratic —
+    // a school-wide view over a term (~56,000 participants) ran past 30 s and
+    // pegged the API process. The first matching participation still wins.
+    const sittingKey = (row: { studentProfileId: string; examSessionId: string }) =>
+      `${row.studentProfileId}:${row.examSessionId}`;
+    const statusBySitting = new Map<string, (typeof participations)[number]['status']>();
+    for (const fact of participations) {
+      const key = sittingKey(fact);
+      if (!statusBySitting.has(key)) statusBySitting.set(key, fact.status);
+    }
+    const sittingsWithAttempt = new Set(
+      attempts
+        .filter((attempt) => attempt.state !== 'INVALIDATED' && attempt.state !== 'CANCELLED')
+        .map(sittingKey),
+    );
     // ADR-0024 rolls a student across sessions of ONE exam. A school/dept
     // aggregate therefore groups by (exam, student), never student alone.
     const groups = new Map<string, typeof participants>();
@@ -827,24 +907,15 @@ export class AnalyticsService {
       const examId = examBySession.get(participant.examSessionId);
       if (!examId) continue;
       const key = `${examId}:${participant.studentProfileId}`;
-      groups.set(key, [...(groups.get(key) ?? []), participant]);
+      const group = groups.get(key);
+      if (group) group.push(participant);
+      else groups.set(key, [participant]);
     }
     const states = [...groups.values()].map((entries) =>
       rollUpParticipation(
         entries.map((entry) => ({
-          status:
-            participations.find(
-              (fact) =>
-                fact.studentProfileId === entry.studentProfileId &&
-                fact.examSessionId === entry.examSessionId,
-            )?.status ?? null,
-          hasNonInvalidatedAttempt: attempts.some(
-            (attempt) =>
-              attempt.studentProfileId === entry.studentProfileId &&
-              attempt.examSessionId === entry.examSessionId &&
-              attempt.state !== 'INVALIDATED' &&
-              attempt.state !== 'CANCELLED',
-          ),
+          status: statusBySitting.get(sittingKey(entry)) ?? null,
+          hasNonInvalidatedAttempt: sittingsWithAttempt.has(sittingKey(entry)),
         })),
       ),
     );

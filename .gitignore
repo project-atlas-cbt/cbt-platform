@@ -22,3 +22,4 @@ packages/db/generated/
 # static assets.
 apps/web/public/sw.js
 apps/web/public/sw.js.map
+tools/load/.state/

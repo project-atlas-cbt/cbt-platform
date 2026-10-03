@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   distribution,
   frozenPassRate,
+  frozenPassRateFromCounts,
   rate,
   summarizePercentages,
 } from './analytics-metrics.util.js';
@@ -52,5 +53,45 @@ describe('analytics metric helpers', () => {
     expect(
       frozenPassRate([{ percentage: 70, grade: null, gradingScaleVersionId: null }], []),
     ).toBeNull();
+  });
+
+  it('computes the same pass rate from database grade counts as from rows (B21)', () => {
+    const versions = ['v1', 'v2', 'v3', null];
+    const grades = ['A', 'B', 'C', 'F', null];
+    const bands = [
+      { versionId: 'v1', label: 'A' },
+      { versionId: 'v1', label: 'B' },
+      { versionId: 'v2', label: 'C' },
+    ];
+    let seed = 7;
+    const next = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    for (let trial = 0; trial < 200; trial++) {
+      const rows = Array.from({ length: next(40) }, () => ({
+        percentage: next(101),
+        grade: grades[next(grades.length)]!,
+        gradingScaleVersionId: versions[next(versions.length)]!,
+      }));
+      const counts = new Map<
+        string,
+        { gradingScaleVersionId: string | null; grade: string | null; count: number }
+      >();
+      for (const row of rows) {
+        const key = `${row.gradingScaleVersionId}:${row.grade}`;
+        const entry = counts.get(key) ?? {
+          gradingScaleVersionId: row.gradingScaleVersionId,
+          grade: row.grade,
+          count: 0,
+        };
+        entry.count += 1;
+        counts.set(key, entry);
+      }
+      const usedBands = trial % 5 === 0 ? [] : bands;
+      expect(frozenPassRateFromCounts([...counts.values()], usedBands)).toBe(
+        frozenPassRate(rows, usedBands),
+      );
+    }
   });
 });

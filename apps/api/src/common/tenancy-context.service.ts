@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable } from '@nestjs/common';
+import type { PlatformOverride } from '@atlas/domain';
 
 export interface TenancyStore {
   schoolId: string | null;
@@ -12,6 +13,12 @@ export interface TenancyStore {
    * it", which need different responses.
    */
   subdomain: string | null;
+  /**
+   * B21: the school's platform override, read in the same lookup that
+   * resolved the tenant (one `schools` read per request instead of two).
+   * `undefined` when not loaded — AuthGuard then reads it itself.
+   */
+  platformOverride?: PlatformOverride;
 }
 
 /**
@@ -32,6 +39,10 @@ export class TenancyContextService {
 
   get schoolId(): string | null {
     return this.storage.getStore()?.schoolId ?? null;
+  }
+
+  get platformOverride(): PlatformOverride | undefined {
+    return this.storage.getStore()?.platformOverride;
   }
 
   get subdomain(): string | null {

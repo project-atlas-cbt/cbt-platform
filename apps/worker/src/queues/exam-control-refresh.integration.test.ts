@@ -209,6 +209,38 @@ describe.skipIf(!ownerDatabaseUrl)('exam-control-refresh sweep (B12)', () => {
     expect(relevantSetCall).toEqual([key, cached, 'EX', EXAM_CONTROL_CACHE_TTL_SECONDS]);
   });
 
+  it('B21: between full scans, refreshes only exams in the active set and drops idle ones', async () => {
+    const active = await createFixtureSchool();
+    const untouched = await createFixtureSchool();
+    schools.push(active.schoolId, untouched.schoolId);
+    const members = new Set([`${active.schoolId}:${active.examId}`, 'not-a-member']);
+    const redis = Object.assign(fakeRedis(), {
+      smembers: () => Promise.resolve([...members]),
+      srem: (_key: string, member: string) => {
+        members.delete(member);
+        return Promise.resolve(1);
+      },
+    }) as unknown as ReturnType<typeof fakeRedis>;
+    // lastFullScanAt = now: the full scan is not due, so this tick is the
+    // activity-only pass.
+    await runExamControlRefreshSweep({
+      redis,
+      staleThresholdMs: 4 * 60 * 60 * 1000,
+      activity: { fullScanEveryMs: 60_000, lastFullScanAt: Date.now() },
+    });
+    expect(publishesFor(redis, active.schoolId, active.examId)).toBe(1);
+    expect(publishesFor(redis, untouched.schoolId, untouched.examId)).toBe(0);
+    // No attempt in progress → dropped (the full scan still covers it);
+    // a malformed member is dropped too.
+    expect(members.size).toBe(0);
+
+    // Once the full scan is due, every OPEN exam is visited again.
+    const activity = { fullScanEveryMs: 60_000, lastFullScanAt: 0 };
+    await runExamControlRefreshSweep({ redis, staleThresholdMs: 4 * 60 * 60 * 1000, activity });
+    expect(publishesFor(redis, untouched.schoolId, untouched.examId)).toBe(1);
+    expect(activity.lastFullScanAt).toBeGreaterThan(0);
+  });
+
   it('does not re-publish on a second tick when nothing materially changed', async () => {
     const school = await createFixtureSchool();
     schools.push(school.schoolId);

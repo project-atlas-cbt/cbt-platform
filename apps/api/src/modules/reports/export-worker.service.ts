@@ -4,6 +4,7 @@ import { Worker } from 'bullmq';
 import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import { EXPORT_EXPIRY_QUEUE_NAME, EXPORT_QUEUE_NAME, type ExportJobPayload } from '@atlas/domain';
 import { ExportService } from './export.service.js';
+import { LoadMonitorService } from '../../load/load-monitor.service.js';
 
 /** A real BullMQ consumer; S3 access stays behind B4's API-owned abstraction. */
 @Injectable()
@@ -15,6 +16,7 @@ export class ExportWorkerService implements OnModuleInit, OnApplicationShutdown 
   constructor(
     private readonly config: ConfigService<Env, true>,
     private readonly exports: ExportService,
+    private readonly load: LoadMonitorService,
   ) {}
   onModuleInit(): void {
     if (process.env.ATLAS_OPENAPI_EMIT === 'true') return;
@@ -25,6 +27,8 @@ export class ExportWorkerService implements OnModuleInit, OnApplicationShutdown 
       { connection: redisConnectionFromUrl(url.toString()) },
     );
     this.worker.on('error', (error) => this.logger.error(error.message, error.stack));
+    // B21 (R-12): exports yield to live exams under load.
+    this.load.pauseWhileShedding(this.worker);
     this.expiryWorker = new Worker<ExportJobPayload>(
       EXPORT_EXPIRY_QUEUE_NAME,
       async (job) => this.exports.expire(job.data.schoolId, job.data.exportJobId),

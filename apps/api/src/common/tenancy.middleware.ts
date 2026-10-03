@@ -55,10 +55,17 @@ export class TenancyMiddleware implements NestMiddleware {
     // request genuinely pauses here because nothing downstream runs until
     // `next()` fires, async or not.
     prisma.school
-      .findUnique({ where: { subdomain }, select: { id: true } })
+      .findUnique({ where: { subdomain }, select: { id: true, platformOverride: true } })
       .then((school) => {
         if (school) enrichLogContext({ schoolId: school.id });
-        this.tenancy.run({ schoolId: school?.id ?? null, subdomain }, next);
+        this.tenancy.run(
+          {
+            schoolId: school?.id ?? null,
+            subdomain,
+            ...(school && { platformOverride: school.platformOverride }),
+          },
+          next,
+        );
       })
       .catch((err: unknown) => {
         // A lookup failure resolves no tenant rather than failing the

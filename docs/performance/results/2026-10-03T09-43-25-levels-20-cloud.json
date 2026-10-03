@@ -1,0 +1,589 @@
+{
+  "scenario": "levels",
+  "title": "B21 levels: 20 concurrent attempts",
+  "startedAt": "2026-10-03T09:43:25.346Z",
+  "durationSeconds": 729,
+  "environment": {
+    "host": "vm",
+    "platform": "linux 6.18.44-fc-v64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGb": 15.7,
+    "node": "v22.22.0",
+    "network": "clean (loopback)",
+    "pooler": "PgBouncer 1.22 transaction mode (default_pool_size 40, max_db_connections 60)",
+    "diskFsync": "fdatasync 4,113 ops/s (243 µs/op), pg_test_fsync",
+    "database": "PostgreSQL 16.14 + uuidv7 shim, max_connections 100, shared_buffers 128MB, same host"
+  },
+  "parameters": {
+    "level": 20,
+    "schools": 5,
+    "questions": 40,
+    "mediaKbPerQuestion": 0,
+    "rampSeconds": 60,
+    "sustainSeconds": 600,
+    "submitSpreadSeconds": 60,
+    "answerIntervalMs": 10000,
+    "heartbeatMs": 30000,
+    "apiProcesses": 2,
+    "sseClients": 0,
+    "reportingFlood": 0,
+    "offeredAnswerChangesPerSecond": 2
+  },
+  "latency": [
+    {
+      "label": "answer.batch",
+      "count": 1335,
+      "ok": 1335,
+      "status": {
+        "200": 1335
+      },
+      "networkFailures": 0,
+      "p50": 25.02,
+      "p95": 35.2,
+      "p99": 42.46,
+      "max": 106.94,
+      "mean": 26.02,
+      "bytes": 370046
+    },
+    {
+      "label": "attempt.event",
+      "count": 199,
+      "ok": 199,
+      "status": {
+        "200": 199
+      },
+      "networkFailures": 0,
+      "p50": 22.3,
+      "p95": 30.61,
+      "p99": 37.06,
+      "max": 42.94,
+      "mean": 23.18,
+      "bytes": 15124
+    },
+    {
+      "label": "attempt.heartbeat",
+      "count": 436,
+      "ok": 436,
+      "status": {
+        "200": 436
+      },
+      "networkFailures": 0,
+      "p50": 24.9,
+      "p95": 33.7,
+      "p99": 41.47,
+      "max": 65.92,
+      "mean": 25.66,
+      "bytes": 7412
+    },
+    {
+      "label": "attempt.start",
+      "count": 20,
+      "ok": 20,
+      "status": {
+        "200": 20
+      },
+      "networkFailures": 0,
+      "p50": 79.74,
+      "p95": 100.61,
+      "p99": 107.07,
+      "max": 107.07,
+      "mean": 83.78,
+      "bytes": 559020
+    },
+    {
+      "label": "attempt.status",
+      "count": 21,
+      "ok": 21,
+      "status": {
+        "200": 21
+      },
+      "networkFailures": 0,
+      "p50": 275.71,
+      "p95": 289.54,
+      "p99": 289.79,
+      "max": 289.79,
+      "mean": 255.15,
+      "bytes": 7472
+    },
+    {
+      "label": "attempt.submit",
+      "count": 20,
+      "ok": 20,
+      "status": {
+        "200": 20
+      },
+      "networkFailures": 0,
+      "p50": 34.56,
+      "p95": 46.02,
+      "p99": 47.04,
+      "max": 47.04,
+      "mean": 36.63,
+      "bytes": 6400
+    },
+    {
+      "label": "auth.login",
+      "count": 25,
+      "ok": 25,
+      "status": {
+        "200": 25
+      },
+      "networkFailures": 0,
+      "p50": 86.66,
+      "p95": 117.5,
+      "p99": 118.34,
+      "max": 118.34,
+      "mean": 85.19,
+      "bytes": 2515
+    },
+    {
+      "label": "session.open",
+      "count": 5,
+      "ok": 5,
+      "status": {
+        "201": 5
+      },
+      "networkFailures": 0,
+      "p50": 1169.41,
+      "p95": 1248.26,
+      "p99": 1248.26,
+      "max": 1248.26,
+      "mean": 1167.05,
+      "bytes": 2205
+    },
+    {
+      "label": "setup",
+      "count": 20,
+      "ok": 20,
+      "status": {
+        "200": 15,
+        "201": 5
+      },
+      "networkFailures": 0,
+      "p50": 58.34,
+      "p95": 77.06,
+      "p99": 79.74,
+      "max": 79.74,
+      "mean": 59.04,
+      "bytes": 326355
+    },
+    {
+      "label": "student.assessment",
+      "count": 20,
+      "ok": 20,
+      "status": {
+        "200": 20
+      },
+      "networkFailures": 0,
+      "p50": 20.82,
+      "p95": 30.7,
+      "p99": 41.98,
+      "max": 41.98,
+      "mean": 22.97,
+      "bytes": 3680
+    },
+    {
+      "label": "student.preview",
+      "count": 20,
+      "ok": 20,
+      "status": {
+        "200": 20
+      },
+      "networkFailures": 0,
+      "p50": 23.92,
+      "p95": 30.45,
+      "p99": 34.14,
+      "max": 34.14,
+      "mean": 23.93,
+      "bytes": 7240
+    },
+    {
+      "label": "tenant.resolve",
+      "count": 25,
+      "ok": 25,
+      "status": {
+        "200": 25
+      },
+      "networkFailures": 0,
+      "p50": 6.8,
+      "p95": 10.3,
+      "p99": 11.58,
+      "max": 11.58,
+      "mean": 7.08,
+      "bytes": 6100
+    }
+  ],
+  "checks": [
+    {
+      "name": "starts failed",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "answer save p95",
+      "actual": "35.2 ms",
+      "budget": "≤ 250 ms",
+      "pass": true
+    },
+    {
+      "name": "answer save p99",
+      "actual": "42.46 ms",
+      "budget": "≤ 750 ms",
+      "pass": true
+    },
+    {
+      "name": "answer save success",
+      "actual": "100.000%",
+      "budget": "≥ 99.9%",
+      "pass": true
+    },
+    {
+      "name": "start p95",
+      "actual": "100.61 ms",
+      "budget": "≤ 2000 ms",
+      "pass": true
+    },
+    {
+      "name": "submit p95",
+      "actual": "46.02 ms",
+      "budget": "≤ 2000 ms",
+      "pass": true
+    },
+    {
+      "name": "submits accepted",
+      "actual": "20/20",
+      "budget": "20",
+      "pass": true
+    },
+    {
+      "name": "attempts created",
+      "actual": "20",
+      "budget": "exactly 20",
+      "pass": true
+    },
+    {
+      "name": "duplicate attempts",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "results produced",
+      "actual": "20",
+      "budget": "exactly 20",
+      "pass": true
+    },
+    {
+      "name": "acknowledged answers lost",
+      "actual": "0 of 800",
+      "budget": "0",
+      "pass": true
+    }
+  ],
+  "sampler": {
+    "samples": 146,
+    "peakConnections": 19,
+    "peakActive": 2,
+    "peakIdleInTransaction": 1,
+    "peakWaitingLocks": 0,
+    "avgCommitsPerSecond": 17,
+    "peakCommitsPerSecond": 42,
+    "peakRedisClients": 75,
+    "peakRedisMemoryMb": 4.7,
+    "minHostFreeMemoryMb": 13713,
+    "hostMemoryPressure": false
+  },
+  "statements": [
+    {
+      "query": "SELECT \"public\".\"exam_session_participants\".\"id\", \"public\".\"exam_session_participants\".\"student_profile_id\", \"public\".\"exam_session_participants\".\"exam_session_",
+      "calls": 792,
+      "totalMs": 328,
+      "meanMs": 0.414,
+      "rows": 237600
+    },
+    {
+      "query": "INSERT INTO attempt_answers (id, school_id, attempt_id, exam_question_id, selected_option_id, state, sequence_number, answered_at, last_saved_at, grade_window_f",
+      "calls": 1336,
+      "totalMs": 325,
+      "meanMs": 0.243,
+      "rows": 1336
+    },
+    {
+      "query": "INSERT INTO \"public\".\"attempt_answer_events\" (\"school_id\",\"attempt_id\",\"exam_question_id\",\"sequence_number\",\"selected_option_id\",\"received_at\",\"source\",\"grade_w",
+      "calls": 1336,
+      "totalMs": 180,
+      "meanMs": 0.135,
+      "rows": 1336
+    },
+    {
+      "query": "INSERT INTO \"public\".\"attempt_question_results\" (\"school_id\",\"attempt_id\",\"exam_question_id\",\"correctness\",\"awarded_marks\",\"maximum_marks\",\"created_at\",\"updated",
+      "calls": 800,
+      "totalMs": 105,
+      "meanMs": 0.132,
+      "rows": 800
+    },
+    {
+      "query": "SELECT \"public\".\"schools\".\"id\", \"public\".\"schools\".\"platform_override\"::text FROM \"public\".\"schools\" WHERE (\"public\".\"schools\".\"subdomain\" = $1 AND $4=$5) LIMIT",
+      "calls": 2111,
+      "totalMs": 73,
+      "meanMs": 0.034,
+      "rows": 2111
+    },
+    {
+      "query": "SELECT set_config($1, $2, $3)",
+      "calls": 9127,
+      "totalMs": 72,
+      "meanMs": 0.008,
+      "rows": 9127
+    },
+    {
+      "query": "SELECT \"public\".\"sessions\".\"id\", \"public\".\"sessions\".\"school_id\", \"public\".\"sessions\".\"user_id\", \"public\".\"sessions\".\"token_hash\", \"public\".\"sessions\".\"created_",
+      "calls": 2071,
+      "totalMs": 70,
+      "meanMs": 0.034,
+      "rows": 2071
+    },
+    {
+      "query": "SELECT \"public\".\"school_memberships\".\"id\", \"public\".\"school_memberships\".\"school_id\", \"public\".\"school_memberships\".\"user_id\", \"public\".\"school_memberships\".\"lo",
+      "calls": 2071,
+      "totalMs": 69,
+      "meanMs": 0.033,
+      "rows": 2071
+    },
+    {
+      "query": "SELECT \"public\".\"role_assignments\".\"id\", \"public\".\"role_assignments\".\"school_id\", \"public\".\"role_assignments\".\"membership_id\", \"public\".\"role_assignments\".\"role",
+      "calls": 2071,
+      "totalMs": 57,
+      "meanMs": 0.027,
+      "rows": 2071
+    },
+    {
+      "query": "SELECT \"public\".\"users\".\"id\", \"public\".\"users\".\"first_name\", \"public\".\"users\".\"last_name\", \"public\".\"users\".\"display_name\", \"public\".\"users\".\"email\", \"public\".\"",
+      "calls": 2091,
+      "totalMs": 54,
+      "meanMs": 0.026,
+      "rows": 2091
+    },
+    {
+      "query": "SELECT \"public\".\"student_profiles\".\"id\", \"public\".\"student_profiles\".\"school_id\", \"public\".\"student_profiles\".\"membership_id\" FROM \"public\".\"student_profiles\" W",
+      "calls": 2104,
+      "totalMs": 46,
+      "meanMs": 0.022,
+      "rows": 2104
+    },
+    {
+      "query": "INSERT INTO \"public\".\"attempt_events\" (\"school_id\",\"attempt_id\",\"type\",\"occurred_at\",\"created_at\") VALUES ($1,$2,CAST($3::text AS \"public\".\"AttemptEventType\"),$",
+      "calls": 199,
+      "totalMs": 45,
+      "meanMs": 0.229,
+      "rows": 199
+    },
+    {
+      "query": "SELECT \"public\".\"school_memberships\".\"id\", \"public\".\"school_memberships\".\"user_id\", \"public\".\"school_memberships\".\"school_id\" FROM \"public\".\"school_memberships\"",
+      "calls": 2104,
+      "totalMs": 40,
+      "meanMs": 0.019,
+      "rows": 2104
+    },
+    {
+      "query": "SELECT \"public\".\"exam_attempts\".\"id\", \"public\".\"exam_attempts\".\"school_id\", \"public\".\"exam_attempts\".\"state\"::text, \"public\".\"exam_attempts\".\"expires_at\", \"publ",
+      "calls": 1335,
+      "totalMs": 34,
+      "meanMs": 0.025,
+      "rows": 1335
+    },
+    {
+      "query": "UPDATE \"public\".\"exam_attempts\" SET \"last_seen_at\" = $1, \"updated_at\" = $2 WHERE (\"public\".\"exam_attempts\".\"school_id\" = $3 AND \"public\".\"exam_attempts\".\"id\" = ",
+      "calls": 436,
+      "totalMs": 31,
+      "meanMs": 0.072,
+      "rows": 436
+    }
+  ],
+  "verification": [
+    {
+      "examId": "01a10125-a187-7d4a-a214-93c795117c92",
+      "expectedAttempts": 4,
+      "attempts": 4,
+      "distinctStudents": 4,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 4
+      },
+      "results": 4,
+      "resultsFinal": 4,
+      "answersChecked": 160,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10125-a7fd-7dc1-9bd3-0a8c0d84e5ab",
+      "expectedAttempts": 4,
+      "attempts": 4,
+      "distinctStudents": 4,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 4
+      },
+      "results": 4,
+      "resultsFinal": 4,
+      "answersChecked": 160,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10125-adaf-7930-a4af-193852ce8d11",
+      "expectedAttempts": 4,
+      "attempts": 4,
+      "distinctStudents": 4,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 4
+      },
+      "results": 4,
+      "resultsFinal": 4,
+      "answersChecked": 160,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10125-b31a-72a2-9d15-a33e0f43cfe9",
+      "expectedAttempts": 4,
+      "attempts": 4,
+      "distinctStudents": 4,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 4
+      },
+      "results": 4,
+      "resultsFinal": 4,
+      "answersChecked": 160,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10125-b8cc-78c2-a528-031a89330b11",
+      "expectedAttempts": 4,
+      "attempts": 4,
+      "distinctStudents": 4,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 4
+      },
+      "results": 4,
+      "resultsFinal": 4,
+      "answersChecked": 160,
+      "answersMismatched": 0
+    }
+  ],
+  "growth": {
+    "before": [
+      {
+        "table": "exam_attempts",
+        "rows": 20,
+        "totalBytes": 212992
+      },
+      {
+        "table": "attempt_question_snapshots",
+        "rows": 20,
+        "totalBytes": 311296
+      },
+      {
+        "table": "attempt_answers",
+        "rows": 224,
+        "totalBytes": 172032
+      },
+      {
+        "table": "attempt_answer_events",
+        "rows": 229,
+        "totalBytes": 155648
+      },
+      {
+        "table": "attempt_question_results",
+        "rows": 800,
+        "totalBytes": 352256
+      },
+      {
+        "table": "attempt_events",
+        "rows": 19,
+        "totalBytes": 81920
+      },
+      {
+        "table": "results",
+        "rows": 20,
+        "totalBytes": 131072
+      },
+      {
+        "table": "exam_session_participants",
+        "rows": 1500,
+        "totalBytes": 663552
+      },
+      {
+        "table": "exam_participations",
+        "rows": 20,
+        "totalBytes": 98304
+      },
+      {
+        "table": "audit_events",
+        "rows": 850,
+        "totalBytes": 630784
+      }
+    ],
+    "after": [
+      {
+        "table": "exam_attempts",
+        "rows": 40,
+        "totalBytes": 262144
+      },
+      {
+        "table": "attempt_question_snapshots",
+        "rows": 40,
+        "totalBytes": 516096
+      },
+      {
+        "table": "attempt_answers",
+        "rows": 1024,
+        "totalBytes": 434176
+      },
+      {
+        "table": "attempt_answer_events",
+        "rows": 1565,
+        "totalBytes": 507904
+      },
+      {
+        "table": "attempt_question_results",
+        "rows": 1600,
+        "totalBytes": 638976
+      },
+      {
+        "table": "attempt_events",
+        "rows": 218,
+        "totalBytes": 139264
+      },
+      {
+        "table": "results",
+        "rows": 40,
+        "totalBytes": 131072
+      },
+      {
+        "table": "exam_session_participants",
+        "rows": 3000,
+        "totalBytes": 1130496
+      },
+      {
+        "table": "exam_participations",
+        "rows": 40,
+        "totalBytes": 98304
+      },
+      {
+        "table": "audit_events",
+        "rows": 945,
+        "totalBytes": 663552
+      }
+    ],
+    "attempts": 20
+  },
+  "notes": [],
+  "extra": {
+    "sessionOpenMs": [1249, 1178, 1109, 1169, 1133],
+    "markingDrainSeconds": 5.3,
+    "studentsSawResult": "20/20"
+  }
+}

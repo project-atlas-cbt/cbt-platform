@@ -1,5 +1,5 @@
 import { prisma, withTenant } from '@atlas/db';
-import { rollUpParticipation } from '@atlas/domain';
+import { rollUpExamParticipation } from '@atlas/domain';
 import type { ExamControlCenterSnapshot } from '@atlas/domain';
 import { resolveMembershipDisplayNames, toExamSessionResponseDto } from './exam-control-mappers.js';
 
@@ -77,30 +77,14 @@ export async function computeExamControlSnapshot(
       where: { schoolId, examId },
       select: { studentProfileId: true, examSessionId: true, status: true },
     });
-    const studentIds = new Set(participants.map((participant) => participant.studentProfileId));
-    const rollups = [...studentIds].map((studentProfileId) =>
-      rollUpParticipation(
-        participants
-          .filter((participant) => participant.studentProfileId === studentProfileId)
-          .map((participant) => {
-            const participation = participations.find(
-              (entry) =>
-                entry.studentProfileId === studentProfileId &&
-                entry.examSessionId === participant.examSessionId,
-            );
-            return {
-              status: participation?.status ?? null,
-              hasNonInvalidatedAttempt: allAttempts.some(
-                (attempt) =>
-                  attempt.studentProfileId === studentProfileId &&
-                  attempt.examSessionId === participant.examSessionId &&
-                  attempt.state !== 'INVALIDATED' &&
-                  attempt.state !== 'CANCELLED',
-              ),
-            };
-          }),
-      ),
-    );
+    // B21: linear-time roll-up shared with the worker sweep (the previous
+    // per-student filter/find/some scan was O(students × rows) and ran on
+    // every start/submit publish).
+    const rollups = rollUpExamParticipation({
+      participants,
+      participations,
+      attempts: allAttempts,
+    });
     const absentCount = rollups.filter((status) => status === 'ABSENT').length;
     const nowMs = Date.now();
     const names = await resolveMembershipDisplayNames(

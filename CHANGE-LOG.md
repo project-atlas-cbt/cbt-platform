@@ -2,6 +2,77 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-03 — B21 Performance & Load
+
+B21 is done, with DoD 1 and 4 at 1,000 attempts **partial and gated to the B23 staging re-run**
+(project-owner decision, 2026-10-03). Full evidence: `docs/performance/capacity-plan.md`; every run
+and its validity: `docs/performance/results/README.md`. Built across two sessions — the workstation
+paged under 500/1,000-attempt load (7.7 GB RAM), so those runs moved to a Claude Code cloud session
+(4 vCPU, 15.7 GB, Postgres 16 + PgBouncer 1.22, two API processes, worker and load generator all on
+one host).
+
+**Measured (budgets agreed 2026-10-02: answer save p95 ≤ 250 ms / p99 ≤ 750 ms, start/submit p95 ≤ 2 s):**
+
+- Levels 20/100/500 pass (answer-save p95 36/31/37 ms). 1,000: steady state p95 51–107 ms per minute
+  for an hour, whole clean hour p95 97 ms / p99 545 ms, 100 % success; start p95 3.4–6.4 s while
+  1,000 students sign in and start within 60 s on the shared 4-vCPU host (1.18 s over 120 s). Each
+  API process costs ≈ 10 ms CPU per exam request (mostly the Prisma runtime) — production sizing in
+  the capacity plan §5.
+- 500 simultaneous starts → exactly 500 attempts; 500 simultaneous submissions → exactly 500 results.
+- Correctness everywhere, including 1,500/2,000-attempt overload: 0 duplicate attempts and 0 lost
+  acknowledged answers across every run.
+- 60 Control Center streams through a 500-attempt exam: 0 errors. Pooling: 45–48 server
+  connections at every level behind PgBouncer.
+- ≈ 57 KB per 40-question attempt; a 1,200-student school's term (53,680 attempts) ≈ 2.8 GB. No
+  partitioning at launch; revisit trigger recorded.
+- RTT from Nigeria: `af-south-1` p50 115 ms vs `eu-west-1` 186 ms — ADR-0032's revisit condition is
+  met; the region decision is the owner's at B23.
+- Lab bursts pass on clean, typical and congested text-only links; a media-heavy paper on a 2 Mbit
+  lab link cannot cache within 60 s (pure bandwidth) → pre-cache ahead of the window (F20/B23).
+
+**Defects found under load and fixed:**
+
+- **Load shedding never engaged when it mattered.** Three separate causes: no trigger reacted to a
+  CPU-bound process (added event-loop utilisation and exam-path latency); an admin dashboard request
+  with no exam running shed reporting cluster-wide (CPU-shaped triggers now count only while exam
+  writes are served); and the monitor read `req.url`, which Fastify's middleware layer rewrites to
+  `/`, so it had never seen an exam request (now `originalUrl`, unit-tested). Plus a reporting
+  bulkhead (≤ 4 concurrent, ≤ 10/s per process while exams run). Under a 20-session reporting flood
+  answer-save p95 went from 594–876 ms to **75 ms** (p99 198 ms), reporting degraded with 503 + `Retry-After`. Refused (4xx) exam-path calls do not count as exam traffic — found when the security suites' probes switched protection on.
+- **School and department analytics timed out (> 30 s) on a term's data** — a quadratic
+  participation roll-up and metrics computed by loading every result row into the process. Now
+  linear and aggregated in SQL: school cold 2.5 s, department 1.5 s, cached ~20 ms; all 10 analytics
+  endpoints return identical JSON before and after (3,206 values compared).
+- Earlier round (workstation): single-transaction auth guard, snapshot-free attempt loads, coalesced
+  `last_seen_at`, batched answer flush — 100-attempt answer-save p95 1,088 → 334 ms.
+
+**Added:** `tools/load` harness (F13-shaped clients, correctness oracle, samplers, network relay,
+RTT probe, dataset generator); PgBouncer in CI and a `load-smoke` CI job; `DATABASE_POOL_MAX`; env
+`LOAD_SHED_*` (`ELU`, `EXAM_P95_MS`, `REPORTING_CONCURRENCY`, `REPORTING_RATE`, …), `ARGON2_MAX_CONCURRENCY`,
+`MARKING_CONCURRENCY`, `SSE_MAX_CONNECTIONS_PER_PROCESS`. Docs: capacity plan, scaling runbook,
+Exam Health Monitor review, ADR-0004/0007/0020/0023/0032 amendments (ADR-0007: keep the answer-event
+log unsampled), F20 roadmap requirements.
+
+**Tests (cloud session, final code):** lint + typecheck 31/31 tasks; unit tests all green (api
+237, web 906, domain 154, …, `@atlas/load` 4); API integration 374/375; worker integration 50/50;
+security suites 41/41; cross-cutting 159/161 including `pooler-tenant-isolation` through PgBouncer.
+The three failures are this environment's known gaps, not B21: the media signed-URL test (s3rver
+has no private-bucket semantics) and the migrations reset/re-apply pair (PostgreSQL 16 has no
+`uuidv7()`; the session shim's reinstall trigger was missing, so the reset dropped it) — CI on
+PostgreSQL 18 + MinIO is authoritative for both. The 1,500-row import timing test passes on this
+host (27.8 s), closing the B20 open item. Found and fixed while running them: the security suites'
+refused `/attempts/*` probes counted as exam traffic and tripped the reporting bulkhead; two
+`load-shedding.integration.test` defects (a `GET /exports` probe of a route that does not exist,
+and a test seam leaking a severe level between tests).
+
+**Carried forward:** to **B23** — staging re-run of level 1,000, the bursts and the endurance hour on
+the production topology with an off-host load generator (gate for DoD 1/4 and capacity-plan
+acceptance), RDS Proxy pinning check, ADR-0032 region decision. To **F20** — back off on `503
+Retry-After`, jitter the 30 s heartbeat, pre-cache paper media. **Candidate / Deferred** — reduce
+per-request API CPU on the exam path. The first endurance hour's two mid-run stalls did not recur
+on a clean host and are unexplained; the staging endurance hour is the confirmation. The roadmap's
+phase status table still showed B19/B20 as not started (pre-existing); only B21's row was updated.
+
 ### 2026-10-02 — CI pipeline repaired
 
 Every CI job had been failing in about a minute on every PR since at least #10. None of it was

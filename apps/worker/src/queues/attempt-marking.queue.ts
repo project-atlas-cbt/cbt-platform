@@ -200,12 +200,16 @@ async function markAttempt(
 export function createAttemptMarkingWorker(
   connection: ConnectionOptions,
   deps: AttemptMarkingWorkerDeps,
+  // B21: marking is one transaction per attempt and independent across
+  // attempts (idempotent per jobId), so a submit burst drains in parallel.
+  // Sized against the pool: see docs/performance/capacity-plan.md.
+  concurrency = 1,
 ): Worker<AttemptMarkingJobPayload> {
   return new Worker<AttemptMarkingJobPayload>(
     ATTEMPT_MARKING_QUEUE_NAME,
     async (job) => {
       await runAttemptMarking(deps, job.data);
     },
-    { connection },
+    { connection, concurrency },
   );
 }

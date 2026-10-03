@@ -1,6 +1,6 @@
 # ADR-0032 — AWS region and latency posture
 
-**Status:** Accepted (validate with measurement at B21)
+**Status:** Accepted — revisit condition met at B21 (see the 2026-10-03 amendment); the region decision is the project owner's at B23
 **Date:** 2026-08-24
 **Deciders:** Project owner, engineering takeover review
 **Audit findings:** R-08 (HIGH), R-09 (MEDIUM)
@@ -57,3 +57,29 @@ The region choice matters less than designing so latency does not govern the stu
 ## Revisiting
 
 If B21 shows `eu-west-1` RTT is materially worse than `af-south-1` from real Nigerian school networks, this ADR is amended before B23 provisions production.
+
+## Amendment — 2026-10-03 (B21)
+
+B21 measured RTT as this ADR required (`tools/load` `rtt-probe`, report
+`docs/performance/results/2026-10-03T09-04-46-rtt-probe.md`): TCP connect time from the project
+owner's connection in Nigeria (a home/office ISP, not a school lab), 60 samples per region, idle
+machine.
+
+| Region                   | p50        | p90    | p95      | SYN retransmits |
+| ------------------------ | ---------- | ------ | -------- | --------------- |
+| `af-south-1` Cape Town   | **115 ms** | 326 ms | 1,124 ms | 4/60            |
+| `eu-west-2` London       | 159 ms     | 326 ms | 431 ms   | 0/60            |
+| `eu-west-1` Ireland      | 186 ms     | 372 ms | 595 ms   | 2/60            |
+| `eu-central-1` Frankfurt | 185 ms     | 456 ms | 1,220 ms | 3/60            |
+
+**This meets the "Revisiting" condition above:** `eu-west-1`'s median is ~70 ms worse than
+`af-south-1`'s from this network. It is one connection, not a sample of school networks, and the tail
+(p95) favours `eu-west-2`; loss, not distance, drives the tail. Engineering does not change the
+region on this evidence alone. **Decision deferred to the project owner at B23**, before production
+is provisioned, ideally with probes from two or three real school connections (`rtt-probe` runs
+anywhere Node does).
+
+What B21 established regardless of region: answer saves do not depend on RTT for the student's
+experience (the F13 offline queue confirms asynchronously; lab bursts on a 150 ms/1 %-loss profile
+passed), while **bandwidth, not latency, is the lab constraint** for media-heavy papers
+([capacity plan](../performance/capacity-plan.md) §9).

@@ -3221,6 +3221,21 @@ Bring the frontend to production standard: accessibility, performance on real la
 
 **Pairs with B20** for CSP and headers, and **B21** for the constrained-network profile.
 
+**Carried in from B21 (2026-10-03)** — client requirements the load tests found
+([`docs/performance/capacity-plan.md`](../performance/capacity-plan.md) §6, §9, §13):
+
+- **Back off on `503` + `Retry-After`.** Under load the API sheds reporting (analytics, reports,
+  exports, search, imports) and refuses new Control Center streams with `503 SERVICE_UNAVAILABLE`
+  (`retryable: true`) and `Retry-After`. The web client has no handling today; it must wait at
+  least `Retry-After` (with jitter) and show a calm "temporarily unavailable" state, never a
+  retry loop — a client that retries at once costs the server CPU per refusal (measured).
+- **Jitter the heartbeat.** `use-attempt-sync-engine.ts` uses a fixed `setInterval(30 s)`; a lab
+  released together then heartbeats in phase for the whole exam. Randomise each interval (e.g.
+  ±10 %), as the B21 harness now does.
+- **Pre-cache paper media before the exam window.** A 40-question paper with 150 KB images is
+  6 MB per student; a 40-seat lab on a 2 Mbit/s link needs ~16 minutes to cache it, and ADR-0021
+  blocks Start until cached. Offer the pre-cache step when the lab session opens, not at the bell.
+
 ## Screens / routes / components
 
 No new screens. Adds `CompatibilityCheck` to the preview and accessibility affordances throughout.
