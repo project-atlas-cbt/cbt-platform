@@ -196,6 +196,8 @@ export interface LevelOptions extends CommonOptions {
   sseClients: number;
   /** Staff sessions flooding reporting endpoints during the run (R-12 shed test). */
   reportingFlood: number;
+  /** Flood clients ignore 503 Retry-After and retry at once (a misbehaving client). */
+  floodHostile?: boolean;
   windowSeries: boolean;
   scenario: string;
 }
@@ -230,7 +232,7 @@ export async function runLevel(o: LevelOptions): Promise<RunReport> {
       : undefined;
   const flood =
     o.reportingFlood > 0
-      ? reportingFlood(o, exams, o.reportingFlood, recorder, stopBackground.signal)
+      ? reportingFlood(o, exams, o.reportingFlood, recorder, stopBackground.signal, o.floodHostile)
       : undefined;
 
   // Ramp: arrivals uniformly spread over the ramp window.
@@ -351,6 +353,7 @@ export async function runLevel(o: LevelOptions): Promise<RunReport> {
       apiProcesses: o.target.length,
       sseClients: o.sseClients,
       reportingFlood: o.reportingFlood,
+      floodHostile: o.floodHostile ?? false,
       offeredAnswerChangesPerSecond: Math.round((o.level / (o.answerIntervalMs / 1000)) * 10) / 10,
     },
     latency: recorder.all(),
@@ -706,6 +709,7 @@ async function reportingFlood(
   sessions: number,
   recorder: Recorder,
   signal: AbortSignal,
+  hostile = false,
 ) {
   const counts: Record<string, number> = {};
   const workers = Array.from({ length: sessions }, async (_, i) => {
@@ -742,6 +746,12 @@ async function reportingFlood(
       const res = await c.request(method, path, { label, body }).catch(() => undefined);
       const key = `${label}:${res?.status ?? 'net'}`;
       counts[key] = (counts[key] ?? 0) + 1;
+      // A staff browser that is told 503 + Retry-After waits (with jitter);
+      // the hostile variant hammers on regardless.
+      if (res?.status === 503 && !hostile) {
+        const seconds = Number(res.headers['retry-after'] ?? 5) || 5;
+        await sleep(seconds * 1000 * (0.5 + Math.random() * 0.5));
+      }
     }
     c.close();
   });

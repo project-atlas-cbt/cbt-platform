@@ -40,6 +40,17 @@ export function loadTierOf(rawUrl: string, prefix = '/v1'): LoadTier {
   return 'standard';
 }
 
+/** B21: the exam write path whose latency budget (answer save, heartbeat,
+ * events, submit — `docs/performance/capacity-plan.md`) the monitor's
+ * latency signal watches. Start and sign-in are critical but deliberately
+ * slower per request (snapshot creation, Argon2), so they are not in it. */
+export function isExamWritePath(rawUrl: string, prefix = '/v1'): boolean {
+  const q = rawUrl.indexOf('?');
+  let path = q >= 0 ? rawUrl.slice(0, q) : rawUrl;
+  if (path.startsWith(prefix)) path = path.slice(prefix.length) || '/';
+  return /^\/attempts\//.test(path);
+}
+
 /** The Control Center stream is shed separately: new connections are
  * refused while saturated, and the web client's existing 5 s polling
  * fallback takes over (R-04 "a dropped stream degrades rather than breaks"). */

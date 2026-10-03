@@ -41,6 +41,7 @@ const { positionals, values } = parseArgs({
     'marking-timeout': { type: 'string', default: '600000' },
     sse: { type: 'string', default: '0' },
     flood: { type: 'string', default: '0' },
+    'flood-hostile': { type: 'boolean', default: false },
     series: { type: 'boolean', default: false },
     kind: { type: 'string', default: 'start' },
     n: { type: 'string', default: '500' },
@@ -102,6 +103,7 @@ async function main(): Promise<number> {
         markingTimeoutMs: int('marking-timeout'),
         sseClients: int('sse'),
         reportingFlood: int('flood'),
+        floodHostile: values['flood-hostile'],
         windowSeries: values.series,
         scenario: values.scenario ?? 'levels',
       });

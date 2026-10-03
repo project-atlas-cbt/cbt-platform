@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isControlStream, loadTierOf } from './load-tiers.js';
+import { isControlStream, isExamWritePath, loadTierOf } from './load-tiers.js';
 
 const ID = '01a0feab-0000-7000-8000-000000000001';
 
@@ -51,5 +51,14 @@ describe('loadTierOf (B21, R-12)', () => {
   it('recognises the Control Center stream', () => {
     expect(isControlStream(`/v1/exams/${ID}/control/stream`)).toBe(true);
     expect(isControlStream(`/v1/exams/${ID}/control`)).toBe(false);
+  });
+
+  it('times only the exam write path for the latency signal', () => {
+    expect(isExamWritePath(`/v1/attempts/${ID}/answers/batch`)).toBe(true);
+    expect(isExamWritePath(`/v1/attempts/${ID}/heartbeat?x=1`)).toBe(true);
+    expect(isExamWritePath(`/v1/attempts/${ID}/submit`)).toBe(true);
+    expect(isExamWritePath(`/v1/exams/${ID}/attempts`)).toBe(false);
+    expect(isExamWritePath('/v1/auth/login')).toBe(false);
+    expect(isExamWritePath('/v1/analytics/school')).toBe(false);
   });
 });

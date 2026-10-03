@@ -302,6 +302,14 @@ const envObject = z.object({
     .transform((v) => v === 'true'),
   /** Event-loop delay p99 (per 1 s window) above which this process sheds. */
   LOAD_SHED_EVENT_LOOP_P99_MS: z.coerce.number().int().positive().default(200),
+  /** Exam write-path (answer save, heartbeat, events, submit) p95 per 1 s
+   * window above which this process sheds — below the 250 ms answer-save
+   * budget, so reporting yields before the budget is breached. */
+  LOAD_SHED_EXAM_P95_MS: z.coerce.number().int().positive().default(200),
+  /** Event-loop utilisation (busy fraction of each 1 s) above which this
+   * process sheds reporting — the signal for a CPU-pegged process, whose
+   * requests queue before any middleware can time them. */
+  LOAD_SHED_ELU: z.coerce.number().min(0.5).max(1).default(0.9),
   /** Concurrent in-flight requests above which this process sheds. */
   LOAD_SHED_MAX_IN_FLIGHT: z.coerce.number().int().positive().default(256),
   /** Minimum time shedding stays on once tripped (hysteresis), and the TTL of the cluster-wide signal. */
