@@ -44,6 +44,9 @@ export function environment(): Record<string, string | number> {
     node: process.version,
     network: process.env.LOAD_NETWORK_PROFILE ?? 'clean (loopback)',
     pooler: process.env.LOAD_POOLER ?? 'none (direct)',
+    // Measured once per host with pg_test_fsync; commit latency is bounded by it.
+    ...(process.env.LOAD_HOST_FSYNC ? { diskFsync: process.env.LOAD_HOST_FSYNC } : {}),
+    ...(process.env.LOAD_DATABASE ? { database: process.env.LOAD_DATABASE } : {}),
   };
 }
 
