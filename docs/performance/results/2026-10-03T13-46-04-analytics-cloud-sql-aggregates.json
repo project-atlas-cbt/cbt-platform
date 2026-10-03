@@ -1,0 +1,377 @@
+{
+  "scenario": "analytics",
+  "title": "B21 analytics on a realistic school dataset",
+  "startedAt": "2026-10-03T13:46:04.988Z",
+  "durationSeconds": 45,
+  "environment": {
+    "host": "vm",
+    "platform": "linux 6.18.44-fc-v64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGb": 15.7,
+    "node": "v22.22.0",
+    "network": "clean (loopback)",
+    "pooler": "PgBouncer 1.22 transaction mode (default_pool_size 40, max_db_connections 60)",
+    "diskFsync": "fdatasync 4,113 ops/s (243 µs/op), pg_test_fsync",
+    "database": "PostgreSQL 16.14 + uuidv7 shim, max_connections 100, shared_buffers 128MB, same host"
+  },
+  "parameters": {
+    "exams": 47,
+    "largestExamResults": 1160,
+    "results": 53680,
+    "attemptQuestionResults": 2147200,
+    "attempts": 53680,
+    "classes": 30,
+    "samplesPerEndpoint": 10
+  },
+  "latency": [
+    {
+      "label": "analytics.class.cached",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 30.93,
+      "p95": 47.68,
+      "p99": 47.68,
+      "max": 47.68,
+      "mean": 31.6,
+      "bytes": 93171
+    },
+    {
+      "label": "analytics.class.cold",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 376.06,
+      "p95": 439.3,
+      "p99": 439.3,
+      "max": 439.3,
+      "mean": 379.96,
+      "bytes": 93171
+    },
+    {
+      "label": "analytics.department.cached",
+      "count": 1,
+      "ok": 1,
+      "status": {
+        "200": 1
+      },
+      "networkFailures": 0,
+      "p50": 22.26,
+      "p95": 22.26,
+      "p99": 22.26,
+      "max": 22.26,
+      "mean": 22.25,
+      "bytes": 9660
+    },
+    {
+      "label": "analytics.department.cold",
+      "count": 1,
+      "ok": 1,
+      "status": {
+        "200": 1
+      },
+      "networkFailures": 0,
+      "p50": 1536,
+      "p95": 1536,
+      "p99": 1536,
+      "max": 1536,
+      "mean": 1535.49,
+      "bytes": 9660
+    },
+    {
+      "label": "analytics.exam.cached",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 51.01,
+      "p95": 72.83,
+      "p99": 72.83,
+      "max": 72.83,
+      "mean": 51.55,
+      "bytes": 98269
+    },
+    {
+      "label": "analytics.exam.cold",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 947.71,
+      "p95": 1261.57,
+      "p99": 1261.57,
+      "max": 1261.57,
+      "mean": 973.03,
+      "bytes": 98269
+    },
+    {
+      "label": "analytics.questions.cached",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 39.71,
+      "p95": 60.61,
+      "p99": 60.61,
+      "max": 60.61,
+      "mean": 42.64,
+      "bytes": 157931
+    },
+    {
+      "label": "analytics.questions.cold",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 308.74,
+      "p95": 419.58,
+      "p99": 419.58,
+      "max": 419.58,
+      "mean": 319.33,
+      "bytes": 157931
+    },
+    {
+      "label": "analytics.school.cached",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 17.09,
+      "p95": 21.58,
+      "p99": 21.58,
+      "max": 21.58,
+      "mean": 17.33,
+      "bytes": 8280
+    },
+    {
+      "label": "analytics.school.cold",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 2351.1,
+      "p95": 2508.8,
+      "p99": 2508.8,
+      "max": 2508.8,
+      "mean": 2269.44,
+      "bytes": 8280
+    },
+    {
+      "label": "analytics.student.cached",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 50.59,
+      "p95": 56.48,
+      "p99": 56.48,
+      "max": 56.48,
+      "mean": 49.91,
+      "bytes": 91071
+    },
+    {
+      "label": "analytics.student.cold",
+      "count": 10,
+      "ok": 10,
+      "status": {
+        "200": 10
+      },
+      "networkFailures": 0,
+      "p50": 78.27,
+      "p95": 103.42,
+      "p99": 103.42,
+      "max": 103.42,
+      "mean": 80.06,
+      "bytes": 91071
+    },
+    {
+      "label": "auth.login",
+      "count": 1,
+      "ok": 1,
+      "status": {
+        "200": 1
+      },
+      "networkFailures": 0,
+      "p50": 95.81,
+      "p95": 95.81,
+      "p99": 95.81,
+      "max": 95.81,
+      "mean": 95.78,
+      "bytes": 100
+    },
+    {
+      "label": "tenant.resolve",
+      "count": 1,
+      "ok": 1,
+      "status": {
+        "200": 1
+      },
+      "networkFailures": 0,
+      "p50": 21.12,
+      "p95": 21.12,
+      "p99": 21.12,
+      "max": 21.12,
+      "mean": 21.11,
+      "bytes": 256
+    }
+  ],
+  "checks": [
+    {
+      "name": "exam cold p95",
+      "actual": "1261.57 ms",
+      "budget": "≤ 3000 ms",
+      "pass": true
+    },
+    {
+      "name": "exam cached p95",
+      "actual": "72.83 ms",
+      "budget": "≤ 300 ms",
+      "pass": true
+    },
+    {
+      "name": "questions cold p95",
+      "actual": "419.58 ms",
+      "budget": "≤ 3000 ms",
+      "pass": true
+    },
+    {
+      "name": "questions cached p95",
+      "actual": "60.61 ms",
+      "budget": "≤ 300 ms",
+      "pass": true
+    },
+    {
+      "name": "class cold p95",
+      "actual": "439.3 ms",
+      "budget": "≤ 3000 ms",
+      "pass": true
+    },
+    {
+      "name": "class cached p95",
+      "actual": "47.68 ms",
+      "budget": "≤ 300 ms",
+      "pass": true
+    },
+    {
+      "name": "department cold p95",
+      "actual": "1536 ms",
+      "budget": "≤ 3000 ms",
+      "pass": true
+    },
+    {
+      "name": "department cached p95",
+      "actual": "22.26 ms",
+      "budget": "≤ 300 ms",
+      "pass": true
+    },
+    {
+      "name": "school cold p95",
+      "actual": "2508.8 ms",
+      "budget": "≤ 3000 ms",
+      "pass": true
+    },
+    {
+      "name": "school cached p95",
+      "actual": "21.58 ms",
+      "budget": "≤ 300 ms",
+      "pass": true
+    },
+    {
+      "name": "student cold p95",
+      "actual": "103.42 ms",
+      "budget": "≤ 3000 ms",
+      "pass": true
+    },
+    {
+      "name": "student cached p95",
+      "actual": "56.48 ms",
+      "budget": "≤ 300 ms",
+      "pass": true
+    },
+    {
+      "name": "analytics responses 200",
+      "actual": "0 non-200",
+      "budget": "0",
+      "pass": true
+    }
+  ],
+  "notes": [],
+  "extra": {
+    "tableSizesAfter": [
+      {
+        "table": "exam_attempts",
+        "rows": 66934,
+        "totalBytes": 53215232
+      },
+      {
+        "table": "attempt_question_snapshots",
+        "rows": 66934,
+        "totalBytes": 710418432
+      },
+      {
+        "table": "attempt_answers",
+        "rows": 2452046,
+        "totalBytes": 721870848
+      },
+      {
+        "table": "attempt_answer_events",
+        "rows": 769468,
+        "totalBytes": 186998784
+      },
+      {
+        "table": "attempt_question_results",
+        "rows": 2677360,
+        "totalBytes": 744718336
+      },
+      {
+        "table": "attempt_events",
+        "rows": 38148,
+        "totalBytes": 7749632
+      },
+      {
+        "table": "results",
+        "rows": 66934,
+        "totalBytes": 28377088
+      },
+      {
+        "table": "exam_session_participants",
+        "rows": 86100,
+        "totalBytes": 25550848
+      },
+      {
+        "table": "exam_participations",
+        "rows": 69654,
+        "totalBytes": 21233664
+      },
+      {
+        "table": "audit_events",
+        "rows": 48946,
+        "totalBytes": 26058752
+      }
+    ],
+    "statuses": {
+      "200": 102
+    }
+  }
+}
