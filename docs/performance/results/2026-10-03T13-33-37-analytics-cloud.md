@@ -4,18 +4,18 @@
 
 ## Environment
 
-| Key | Value |
-| --- | --- |
-| host | vm |
-| platform | linux 6.18.44-fc-v64 |
-| cpu | Intel(R) Xeon(R) Processor @ 2.10GHz |
-| logicalCpus | 4 |
-| memoryGb | 15.7 |
-| node | v22.22.0 |
-| network | clean (loopback) |
-| pooler | PgBouncer 1.22 transaction mode (default_pool_size 40, max_db_connections 60) |
-| diskFsync | fdatasync 4,113 ops/s (243 µs/op), pg_test_fsync |
-| database | PostgreSQL 16.14 + uuidv7 shim, max_connections 100, shared_buffers 128MB, same host |
+| Key         | Value                                                                                |
+| ----------- | ------------------------------------------------------------------------------------ |
+| host        | vm                                                                                   |
+| platform    | linux 6.18.44-fc-v64                                                                 |
+| cpu         | Intel(R) Xeon(R) Processor @ 2.10GHz                                                 |
+| logicalCpus | 4                                                                                    |
+| memoryGb    | 15.7                                                                                 |
+| node        | v22.22.0                                                                             |
+| network     | clean (loopback)                                                                     |
+| pooler      | PgBouncer 1.22 transaction mode (default_pool_size 40, max_db_connections 60)        |
+| diskFsync   | fdatasync 4,113 ops/s (243 µs/op), pg_test_fsync                                     |
+| database    | PostgreSQL 16.14 + uuidv7 shim, max_connections 100, shared_buffers 128MB, same host |
 
 ## Parameters
 
@@ -33,40 +33,40 @@
 
 ## Budget checks
 
-| Check | Actual | Budget | Result |
-| --- | --- | --- | --- |
-| exam cold p95 | 1228.8 ms | ≤ 3000 ms | PASS |
-| exam cached p95 | 61.57 ms | ≤ 300 ms | PASS |
-| questions cold p95 | 300.8 ms | ≤ 3000 ms | PASS |
-| questions cached p95 | 47.87 ms | ≤ 300 ms | PASS |
-| class cold p95 | 428.29 ms | ≤ 3000 ms | PASS |
-| class cached p95 | 34.27 ms | ≤ 300 ms | PASS |
-| department cold p95 | 30031.87 ms | ≤ 3000 ms | FAIL |
-| department cached p95 | 3211.26 ms | ≤ 300 ms | FAIL |
-| school cold p95 | 30015.49 ms | ≤ 3000 ms | FAIL |
-| school cached p95 | 2598.91 ms | ≤ 300 ms | FAIL |
-| student cold p95 | 82.69 ms | ≤ 3000 ms | PASS |
-| student cached p95 | 115.14 ms | ≤ 300 ms | PASS |
-| analytics responses 200 | 41 non-200 | 0 | FAIL |
+| Check                   | Actual      | Budget    | Result |
+| ----------------------- | ----------- | --------- | ------ |
+| exam cold p95           | 1228.8 ms   | ≤ 3000 ms | PASS   |
+| exam cached p95         | 61.57 ms    | ≤ 300 ms  | PASS   |
+| questions cold p95      | 300.8 ms    | ≤ 3000 ms | PASS   |
+| questions cached p95    | 47.87 ms    | ≤ 300 ms  | PASS   |
+| class cold p95          | 428.29 ms   | ≤ 3000 ms | PASS   |
+| class cached p95        | 34.27 ms    | ≤ 300 ms  | PASS   |
+| department cold p95     | 30031.87 ms | ≤ 3000 ms | FAIL   |
+| department cached p95   | 3211.26 ms  | ≤ 300 ms  | FAIL   |
+| school cold p95         | 30015.49 ms | ≤ 3000 ms | FAIL   |
+| school cached p95       | 2598.91 ms  | ≤ 300 ms  | FAIL   |
+| student cold p95        | 82.69 ms    | ≤ 3000 ms | PASS   |
+| student cached p95      | 115.14 ms   | ≤ 300 ms  | PASS   |
+| analytics responses 200 | 41 non-200  | 0         | FAIL   |
 
 ## Latency by operation (client-observed)
 
-| Operation | Count | 2xx | Other statuses | Net fail | p50 ms | p95 ms | p99 ms | max ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| analytics.class.cached | 10 | 10 | — | 0 | 27.52 | 34.27 | 34.27 | 34.27 |
-| analytics.class.cold | 10 | 10 | — | 0 | 296.7 | 428.29 | 428.29 | 428.29 |
-| analytics.department.cached | 1 | 1 | — | 0 | 3211.26 | 3211.26 | 3211.26 | 3211.26 |
-| analytics.department.cold | 1 | 0 | — | 1 | 30031.87 | 30031.87 | 30031.87 | 30031.87 |
-| analytics.exam.cached | 10 | 10 | — | 0 | 43.2 | 61.57 | 61.57 | 61.57 |
-| analytics.exam.cold | 10 | 10 | — | 0 | 902.66 | 1228.8 | 1228.8 | 1228.8 |
-| analytics.questions.cached | 10 | 10 | — | 0 | 40.35 | 47.87 | 47.87 | 47.87 |
-| analytics.questions.cold | 10 | 10 | — | 0 | 249.6 | 300.8 | 300.8 | 300.8 |
-| analytics.school.cached | 10 | 0 | 503×10 | 0 | 7.9 | 2598.91 | 2598.91 | 2598.91 |
-| analytics.school.cold | 10 | 0 | 503×9 | 1 | 6.89 | 30015.49 | 30015.49 | 30015.49 |
-| analytics.student.cached | 10 | 0 | 503×10 | 0 | 4.46 | 115.14 | 115.14 | 115.14 |
-| analytics.student.cold | 10 | 0 | 503×10 | 0 | 6.32 | 82.69 | 82.69 | 82.69 |
-| auth.login | 1 | 1 | — | 0 | 173.7 | 173.7 | 173.7 | 173.7 |
-| tenant.resolve | 1 | 1 | — | 0 | 27.57 | 27.57 | 27.57 | 27.57 |
+| Operation                   | Count | 2xx | Other statuses | Net fail | p50 ms   | p95 ms   | p99 ms   | max ms   |
+| --------------------------- | ----- | --- | -------------- | -------- | -------- | -------- | -------- | -------- |
+| analytics.class.cached      | 10    | 10  | —              | 0        | 27.52    | 34.27    | 34.27    | 34.27    |
+| analytics.class.cold        | 10    | 10  | —              | 0        | 296.7    | 428.29   | 428.29   | 428.29   |
+| analytics.department.cached | 1     | 1   | —              | 0        | 3211.26  | 3211.26  | 3211.26  | 3211.26  |
+| analytics.department.cold   | 1     | 0   | —              | 1        | 30031.87 | 30031.87 | 30031.87 | 30031.87 |
+| analytics.exam.cached       | 10    | 10  | —              | 0        | 43.2     | 61.57    | 61.57    | 61.57    |
+| analytics.exam.cold         | 10    | 10  | —              | 0        | 902.66   | 1228.8   | 1228.8   | 1228.8   |
+| analytics.questions.cached  | 10    | 10  | —              | 0        | 40.35    | 47.87    | 47.87    | 47.87    |
+| analytics.questions.cold    | 10    | 10  | —              | 0        | 249.6    | 300.8    | 300.8    | 300.8    |
+| analytics.school.cached     | 10    | 0   | 503×10         | 0        | 7.9      | 2598.91  | 2598.91  | 2598.91  |
+| analytics.school.cold       | 10    | 0   | 503×9          | 1        | 6.89     | 30015.49 | 30015.49 | 30015.49 |
+| analytics.student.cached    | 10    | 0   | 503×10         | 0        | 4.46     | 115.14   | 115.14   | 115.14   |
+| analytics.student.cold      | 10    | 0   | 503×10         | 0        | 6.32     | 82.69    | 82.69    | 82.69    |
+| auth.login                  | 1     | 1   | —              | 0        | 173.7    | 173.7    | 173.7    | 173.7    |
+| tenant.resolve              | 1     | 1   | —              | 0        | 27.57    | 27.57    | 27.57    | 27.57    |
 
 ## Additional measurements
 

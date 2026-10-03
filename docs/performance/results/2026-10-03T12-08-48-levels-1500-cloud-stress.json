@@ -724,19 +724,9 @@
       }
     ]
   },
-  "notes": [
-    "First start failures: timeout after 30000ms"
-  ],
+  "notes": ["First start failures: timeout after 30000ms"],
   "extra": {
-    "sessionOpenMs": [
-      1867,
-      1852,
-      1752,
-      1797,
-      1780,
-      1556,
-      1556
-    ],
+    "sessionOpenMs": [1867, 1852, 1752, 1797, 1780, 1556, 1556],
     "markingDrainSeconds": 23.1,
     "studentsSawResult": "1458/1458"
   }

@@ -38,7 +38,7 @@ one host).
   writes are served); and the monitor read `req.url`, which Fastify's middleware layer rewrites to
   `/`, so it had never seen an exam request (now `originalUrl`, unit-tested). Plus a reporting
   bulkhead (≤ 4 concurrent, ≤ 10/s per process while exams run). Under a 20-session reporting flood
-  answer-save p95 went from 594–876 ms to **83 ms**, reporting degraded with 503 + `Retry-After`.
+  answer-save p95 went from 594–876 ms to **75 ms** (p99 198 ms), reporting degraded with 503 + `Retry-After`. Refused (4xx) exam-path calls do not count as exam traffic — found when the security suites' probes switched protection on.
 - **School and department analytics timed out (> 30 s) on a term's data** — a quadratic
   participation roll-up and metrics computed by loading every result row into the process. Now
   linear and aggregated in SQL: school cold 2.5 s, department 1.5 s, cached ~20 ms; all 10 analytics

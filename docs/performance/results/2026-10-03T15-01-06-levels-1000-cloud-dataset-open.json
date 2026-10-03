@@ -687,13 +687,7 @@
   },
   "notes": [],
   "extra": {
-    "sessionOpenMs": [
-      987,
-      1025,
-      884,
-      994,
-      1035
-    ],
+    "sessionOpenMs": [987, 1025, 884, 994, 1035],
     "markingDrainSeconds": 4.2,
     "studentsSawResult": "1000/1000"
   }

@@ -4295,8 +4295,8 @@ Evidence: [`docs/performance/capacity-plan.md`](../performance/capacity-plan.md)
 8. ✅ / ◐ 40-client lab bursts pass on clean, `ng-typical` and congested text-only links; a
    media-heavy paper on a congested 2 Mbit lab cannot cache within 60 s (bandwidth arithmetic,
    §9) — carried to F20/B23 as media pre-caching ahead of the exam window.
-9. ✅ After fixes found here: under a 20-session reporting flood at level 500, answer-save p95 83 ms
-   / p99 284 ms while reporting is degraded with 503 + `Retry-After`.
+9. ✅ After fixes found here: under a 20-session reporting flood at level 500, answer-save p95 75 ms
+   / p99 198 ms while reporting is degraded with 503 + `Retry-After`.
 10. ✅ After fixes found here: every analytics view within budget on the term dataset (school cold
     2.5 s, previously > 30 s; cached ~20 ms).
 11. ✅ Capacity plan and scaling runbook written from these measurements; _acceptance_ is at B23

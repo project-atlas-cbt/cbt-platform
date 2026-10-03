@@ -665,13 +665,7 @@
   },
   "notes": [],
   "extra": {
-    "sessionOpenMs": [
-      1538,
-      1454,
-      1424,
-      1330,
-      1420
-    ],
+    "sessionOpenMs": [1538, 1454, 1424, 1330, 1420],
     "markingDrainSeconds": 2.3,
     "studentsSawResult": "500/500",
     "reportingFlood": {

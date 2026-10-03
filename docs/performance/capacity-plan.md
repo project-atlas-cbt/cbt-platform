@@ -46,7 +46,7 @@ Server-side, as observed by the client on a clean network (`tools/load/src/metri
 | 6. Snapshot/answer growth measured and projected         | **Met** (§8).                                                                                                                                                                                                                                                                                                                                                         | `…10-20-39-levels-1000-cloud` growth table, analytics dataset                                                   |
 | 7. SSE scaling                                           | **Met.** 60 Control Center streams held for a 500-attempt exam, 10,805 frames, 0 errors, all exam budgets met; new streams refused (polling fallback) while shedding.                                                                                                                                                                                                 | `…12-42-25-sse-500-cloud-sse`                                                                                   |
 | 8. Nigerian network conditions incl. 40-client lab burst | **Met for text and typical links; not met for media-heavy papers on a congested 2 Mbit lab link** — a bandwidth limit, not a server one (§9).                                                                                                                                                                                                                         | `…09-1*-lab-burst-*` (workstation, valid)                                                                       |
-| 9. Load shedding preserves exam execution                | **Met after fixes found here** (§6): answer-save p95 83 ms / p99 284 ms under a 20-session reporting flood, reporting degraded to 503 + `Retry-After`.                                                                                                                                                                                                                | `…16-52-26-shed-500-cloud-shed-fixed` (history: §6)                                                             |
+| 9. Load shedding preserves exam execution                | **Met after fixes found here** (§6): answer-save p95 75 ms / p99 198 ms under a 20-session reporting flood, reporting degraded to 503 + `Retry-After`.                                                                                                                                                                                                                | `…17-34-53-shed-500-cloud-shed-final-code` (history: §6)                                                        |
 | 10. Analytics on realistic volumes                       | **Met after two fixes found here** (§10): every view within budget on a term's data (school cold 2.5 s, previously > 30 s).                                                                                                                                                                                                                                           | `…13-46-04-analytics-cloud-sql-aggregates` (before: `…13-33-37`)                                                |
 | 11. Capacity plan and runbook from evidence              | This document and `scaling-runbook.md`. Reviewed and accepted at B23 with the staging re-run.                                                                                                                                                                                                                                                                         | —                                                                                                               |
 
@@ -109,6 +109,10 @@ event-loop delay stays ~30 ms. Four rounds of evidence produced the final design
    `req.url` reads `/`, so the monitor had **never seen an exam write** — the latency signal was dead
    from the start and the gated signals died with step 2. Fixed (`originalUrl`, unit-tested).
 4. A **reporting bulkhead** bounds reporting's share regardless of thresholds.
+5. The security suites then failed: their hundreds of refused `/attempts/*` probes per second
+   (401/403/404) counted as exam traffic, switched protection on and the bulkhead refused import
+   and report routes. Refused (4xx) exam-path calls no longer count; successes and server errors
+   do — so neither a probe nor an attacker can switch exam protection on.
 
 | Mechanism (per API process)                                  | Default                             | Active                          | Catches                                |
 | ------------------------------------------------------------ | ----------------------------------- | ------------------------------- | -------------------------------------- |
@@ -123,9 +127,9 @@ event-loop delay stays ~30 ms. Four rounds of evidence produced the final design
 A trip sheds reporting for `LOAD_SHED_HOLD_MS` (30 s) on every process (cluster signal) and pauses
 the worker's non-critical queues; the bulkhead refuses individual requests and is not a shed level.
 
-**Result on the final code** (`…16-52-26-…-shed-fixed`): answer-save p95 **83 ms**, p99 284 ms, start
-p95 1.4 s, submit p95 0.5 s, while reporting was degraded — ~5,200 requests served, ~350 refused
-with 503 + `Retry-After` — not switched off. A client that ignores `Retry-After` and retries at once
+**Result on the final code** (`…17-34-53-…-shed-final-code`): answer-save p95 **75 ms**, p99 198 ms,
+start p95 1.3 s, submit p95 0.4 s — every budget met — while reporting was degraded (~5,450
+requests served, ~350 refused with 503 + `Retry-After`), not switched off. A client that ignores `Retry-After` and retries at once
 still costs CPU per refused request (~2,000 req/s of 503s held p95 at 295 ms in round 1) — **the web
 client must back off on 503** (F20).
 

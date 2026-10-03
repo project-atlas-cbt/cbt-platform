@@ -1385,13 +1385,7 @@
     "Client-side sync errors (5185): batch 500 | batch network: timeout after 30000ms | batch network: read ECONNRESET"
   ],
   "extra": {
-    "sessionOpenMs": [
-      2250,
-      2310,
-      1816,
-      1992,
-      1858
-    ],
+    "sessionOpenMs": [2250, 2310, 1816, 1992, 1858],
     "markingDrainSeconds": 3.3,
     "studentsSawResult": "1000/1000"
   }
