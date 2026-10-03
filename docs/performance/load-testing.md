@@ -6,7 +6,9 @@ numbers, batch flushes with at most one in flight, a 30 s heartbeat, post-submit
 and checks the results against the database afterwards. No new runtime dependency: `node:http`,
 `perf_hooks` histograms, `tsx`.
 
-Results land in `docs/performance/results/` as `<timestamp>-<scenario>-<tag>.{md,json}`.
+Results land in `docs/performance/results/` as `<timestamp>-<scenario>-<tag>.{md,json}`. The harness writes
+them unformatted; run `pnpm exec prettier --write docs/performance/results` before committing (CI's
+`format:check` covers them).
 
 ## 1. Infrastructure
 
