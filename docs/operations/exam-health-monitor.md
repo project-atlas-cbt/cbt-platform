@@ -48,3 +48,13 @@ Policy rejections never count as failures — a lab finishing at the bell produc
 
 Thresholds are environment variables (see `.env.example`); B21's load results are the input for
 re-tuning them. Changing them needs no deployment of new code.
+
+**B21 review (2026-10-03):** the defaults stay. In every healthy load run answer-save success was
+100 %, so `ANSWER_SAVE_SUCCESS_LOW` at 95 % has wide margin and only a real failure trips it.
+Submission p95 exceeded 5 s only beyond capacity (1,500/2,000 concurrent attempts on the test host,
+or 500 submissions fired in the same instant), and the marking backlog never approached 500 jobs
+(1,000 results drained in ~4.5 s). So `SUBMISSION_LATENCY_HIGH` and `MARKING_QUEUE_BACKLOG` are real
+capacity signals at these thresholds: when they fire, follow
+[`../performance/scaling-runbook.md`](../performance/scaling-runbook.md) (add API tasks; check the
+database before adding more). Load shedding logs (`Load shedding active`) are the earlier warning —
+they precede these alerts. Evidence: [`../performance/capacity-plan.md`](../performance/capacity-plan.md) §12.

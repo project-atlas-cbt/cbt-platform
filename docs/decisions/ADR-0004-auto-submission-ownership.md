@@ -51,3 +51,16 @@ Related, resolving `A-14`: `COMPLETED` remains an **explicit, audited operator a
 - B14 testing: simultaneous submit + expiry + sweeper yields exactly one submission; a fully abandoned attempt is finalised and marked.
 - B20: sweeper health alerting.
 - B23: sweeper enabled as a scheduled production job.
+
+## Amendment — 2026-10-03 (B21)
+
+Sizing from the B21 load runs ([capacity plan](../performance/capacity-plan.md) §11), recorded here
+rather than rewriting the decision above:
+
+- **Sweeper cadence stays at 15 s** (`ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS`). Its queries never
+  appeared among the top statements at any level up to 2,000 concurrent attempts, and no contention
+  with the answer path was observed. Shortening it buys nothing (opportunistic finalisation already
+  handles connected students); lengthening it only delays abandoned attempts.
+- **Marking** keeps pace: 1,000 results FINAL within ~4.5 s of the last submission
+  (`MARKING_CONCURRENCY=4`), a 500-way simultaneous submission drained in 10 s.
+- Under load shedding the sweeper and marking are **never paused** — only non-critical queues are.

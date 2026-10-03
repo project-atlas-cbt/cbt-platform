@@ -52,3 +52,15 @@ Two related gaps.
 - B21: size the heartbeat interval.
 - F12: neutral presentation of signal counts.
 - F13: emit events and heartbeats without blocking answering.
+
+## Amendment — 2026-10-03 (B21)
+
+Heartbeat sizing from the B21 load runs ([capacity plan](../performance/capacity-plan.md) §11):
+
+- **Heartbeat interval stays at 30 s** (F13). At 1,000 attempts heartbeats were ~22 % of exam
+  requests (~33/s); their `UPDATE … last_seen_at` averages 0.07 ms and never appeared as a
+  contention point. A longer interval would coarsen the disconnected indicator for little gain.
+- **Answer saves touch `last_seen_at` coalesced**, after their own transaction commits and at most
+  once per attempt per 15 s (`LAST_SEEN_RESOLUTION_MS`, conditional in SQL so several API processes
+  coalesce too). This keeps `R-03` (answer writes never update the parent attempt row inside their
+  transaction) while still letting saves count as liveness. The heartbeat always writes.

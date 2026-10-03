@@ -51,3 +51,17 @@ Software Admin cross-tenant access runs through an explicit, audited path that s
 - B0: `school_id` convention with a schema lint, composite FK convention, RLS bootstrap and policy template, pooler-safe session variable handling.
 - B2: generated cross-tenant suite wired as a merge blocker.
 - B21: verify RLS overhead under load and confirm the pooler does not leak tenant context.
+
+## Amendment — 2026-10-03 (B21)
+
+B21 verified both items this ADR assigned to it ([capacity plan](../performance/capacity-plan.md) §7):
+
+- **RLS overhead is negligible.** Every request sets the tenant inside its transaction
+  (`set_config(…, true)`); at 1,000 attempts that call averaged 0.007 ms over ~350,000 calls, and no
+  RLS-filtered statement was a hot spot.
+- **The pooler does not leak tenant context.** The setting is transaction-local and every tenant
+  query runs inside that transaction, so transaction pooling (PgBouncer locally, RDS Proxy in
+  production) cannot carry it to another client.
+  `tests/tenancy/pooler-tenant-isolation.integration.test.ts` proves it through PgBouncer in
+  transaction mode. **B23:** confirm RDS Proxy does not pin sessions on this pattern
+  (`DatabaseConnectionsCurrentlySessionPinned`).
