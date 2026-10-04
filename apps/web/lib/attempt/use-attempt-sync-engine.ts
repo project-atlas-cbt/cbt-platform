@@ -93,6 +93,7 @@ export function useAttemptSyncEngine(
       if (heartbeatTimer) clearTimeout(heartbeatTimer);
       if (hintTimer) clearTimeout(hintTimer);
       stopWatchingHints();
+      engine.dispose();
     };
   }, [attemptId, engine]);
 

@@ -211,6 +211,14 @@ describe('ExamRuntime (integration)', () => {
     expect(screen.queryByText('What is 2+2?')).not.toBeInTheDocument();
   });
 
+  it('F20 (DoD 2) — focus starts on the first question heading once the paper renders', async () => {
+    renderRuntime();
+    await screen.findByText('What is 2+2?');
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /question 1 of 2/i })).toHaveFocus(),
+    );
+  });
+
   it('F20 (DoD 2) — Alt+N / Alt+P move between questions and focus the new question heading', async () => {
     renderRuntime();
     await screen.findByText('What is 2+2?');

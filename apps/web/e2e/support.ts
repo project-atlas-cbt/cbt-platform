@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 
 export interface Fixture {
@@ -97,4 +99,72 @@ export async function watchCspViolations(page: Page): Promise<() => Promise<stri
   });
   return () =>
     page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations ?? []);
+}
+
+/**
+ * Fetches a `<school>.localhost` URL from the test process. Browsers resolve
+ * `*.localhost` to loopback themselves; Node defers to the system resolver,
+ * which (glibc without nss-myhostname) may not — so connect to 127.0.0.1 and
+ * send the real Host header.
+ */
+export function fetchViaLoopback(
+  url: string,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; headers: Record<string, string>; body: string }> {
+  const target = new URL(url);
+  return new Promise((resolve, reject) => {
+    const request = http.request(
+      {
+        host: '127.0.0.1',
+        port: target.port,
+        path: `${target.pathname}${target.search}`,
+        headers: { ...headers, host: target.host, 'accept-encoding': 'identity' },
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => {
+          const out: Record<string, string> = {};
+          for (const [key, value] of Object.entries(response.headers)) {
+            if (value === undefined || key === 'content-length' || key === 'transfer-encoding')
+              continue;
+            out[key] = Array.isArray(value) ? value.join(', ') : value;
+          }
+          resolve({
+            status: response.statusCode ?? 0,
+            headers: out,
+            body: Buffer.concat(chunks).toString('utf8'),
+          });
+        });
+      },
+    );
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+/** Waits until the page has no loading skeletons or busy regions left. */
+export async function settle(page: Page): Promise<void> {
+  await page.locator('main').first().waitFor({ state: 'visible' });
+  await expect(page.locator('.animate-pulse, [aria-busy="true"]')).toHaveCount(0, {
+    timeout: 30_000,
+  });
+}
+
+const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+/**
+ * F20 DoD 1 — WCAG 2.1/2.2 AA automated scan. Fails with a readable list of
+ * rule, impact and offending selectors rather than axe's raw JSON.
+ */
+export async function expectNoAxeViolations(page: Page, label: string): Promise<void> {
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+  const summary = results.violations.map(
+    (v) =>
+      `${v.id} (${v.impact ?? 'n/a'}): ${v.help}\n    ${v.nodes
+        .slice(0, 5)
+        .map((n) => n.target.join(' '))
+        .join('\n    ')}`,
+  );
+  expect(summary, `axe violations on ${label}`).toEqual([]);
 }

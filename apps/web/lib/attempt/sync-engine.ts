@@ -41,8 +41,12 @@ export function flushBackoffDelay(
     FLUSH_BACKOFF_MAX_MS,
     FLUSH_BACKOFF_BASE_MS * 2 ** Math.max(0, consecutiveFailures - 1),
   );
-  const backoff = Math.round(ceiling / 2 + (ceiling / 2) * random());
-  return Math.max(backoff, retryAfterMs ?? 0);
+  const jitter = random();
+  const backoff = Math.round(ceiling / 2 + (ceiling / 2) * jitter);
+  // Retry-After is a floor, jittered upward (as lib/api/retry.ts does): a
+  // lab refused together must not come back together.
+  const floor = retryAfterMs === undefined ? 0 : Math.round(retryAfterMs * (1 + 0.3 * jitter));
+  return Math.max(backoff, floor);
 }
 
 /**
@@ -71,6 +75,9 @@ export class AttemptSyncEngine {
   /** F20: backoff state — see `flushBackoffDelay`. */
   private consecutiveFailures = 0;
   private nextFlushAt = 0;
+  /** End of the server's last `Retry-After`, which even `force`d flushes
+   * (heartbeat, reconnect) wait out — only `flushNow()` does not. */
+  private retryAfterUntil = 0;
   private deferredFlush: ReturnType<typeof setTimeout> | null = null;
 
   /** Bug fix (see `recordAnswer`'s own doc comment): serializes the read-
@@ -157,9 +164,14 @@ export class AttemptSyncEngine {
 
   /** Chains `flush()` onto the engine's single serialized queue — safe to
    * call any number of times; only one network request is ever in flight. */
-  scheduleFlush(options: { force?: boolean } = {}): void {
-    const wait = this.nextFlushAt - Date.now();
-    if (!options.force && wait > 0) {
+  scheduleFlush(options: { force?: boolean; ignoreRetryAfter?: boolean } = {}): void {
+    // `force` skips the client's own backoff (a heartbeat or reconnect is
+    // a fresh reason to try), never the server's Retry-After (F20 e2e
+    // finding: a heartbeat retried 0.9 s into a 3 s Retry-After).
+    const wait = options.ignoreRetryAfter
+      ? 0
+      : (options.force ? this.retryAfterUntil : this.nextFlushAt) - Date.now();
+    if (wait > 0) {
       // Inside a backoff window: coalesce into one flush when it ends.
       this.deferredFlush ??= setTimeout(() => {
         this.deferredFlush = null;
@@ -173,11 +185,23 @@ export class AttemptSyncEngine {
   private recordFlushSuccess(): void {
     this.consecutiveFailures = 0;
     this.nextFlushAt = 0;
+    this.retryAfterUntil = 0;
   }
 
   private recordFlushFailure(retryAfterMs?: number): void {
     this.consecutiveFailures += 1;
     this.nextFlushAt = Date.now() + flushBackoffDelay(this.consecutiveFailures, retryAfterMs);
+    this.retryAfterUntil = retryAfterMs === undefined ? 0 : this.nextFlushAt;
+    // Retry by itself when the window ends (F20 e2e finding): otherwise the
+    // student's last answers waited for the next heartbeat, up to ~30 s,
+    // after a refusal. A no-op if nothing is pending by then.
+    this.scheduleFlush();
+  }
+
+  /** Stops the backoff retry timer (the runtime unmounted). */
+  dispose(): void {
+    if (this.deferredFlush) clearTimeout(this.deferredFlush);
+    this.deferredFlush = null;
   }
 
   /** Awaits the current flush chain to settle — used before a final submit
@@ -186,7 +210,8 @@ export class AttemptSyncEngine {
    * answers are still `pending` locally; this is a best-effort courtesy,
    * not a correctness dependency). */
   async flushNow(): Promise<void> {
-    this.scheduleFlush({ force: true });
+    // The student pressed Submit: one request now, whatever the backoff.
+    this.scheduleFlush({ force: true, ignoreRetryAfter: true });
     await this.flushChain;
   }
 

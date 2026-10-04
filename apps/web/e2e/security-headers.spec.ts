@@ -6,6 +6,7 @@ import {
   schoolUrl,
   signIn,
   startExam,
+  fetchViaLoopback,
   watchCspViolations,
 } from './support';
 
@@ -47,12 +48,12 @@ test('markup injected into a page cannot run script (reflected/stored XSS shape)
   // its HTML, keeping the server's own CSP header — exactly what an HTML
   // injection would produce. The browser must refuse to run it.
   await page.route(schoolUrl('/login'), async (route) => {
-    const response = await route.fetch();
-    const html = (await response.text()).replace(
+    const response = await fetchViaLoopback(schoolUrl('/login'), route.request().headers());
+    const html = response.body.replace(
       /<body([^>]*)>/,
       '<body$1><script>window.__injected = true;</script>',
     );
-    await route.fulfill({ response, body: html });
+    await route.fulfill({ status: response.status, headers: response.headers, body: html });
   });
   await page.goto(schoolUrl('/login'));
   await page.waitForTimeout(300);

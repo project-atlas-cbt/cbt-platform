@@ -218,18 +218,22 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
     };
   }, [largerText]);
 
-  // F20 (DoD 2): after moving between questions, focus goes to the new
-  // question's heading, so a screen reader announces "Question N of M" and
-  // keyboard users continue from the top of the question — never from a
-  // Next button that may now be a Submit button. Not on first render.
-  const isFirstQuestionRender = useRef(true);
+  // F20 (DoD 2): focus goes to the question heading when the paper first
+  // renders and after every move between questions, so a screen reader
+  // announces "Question N of M" and keyboard users continue from the top of
+  // the question — never from wherever the previous page left the focus
+  // point, nor from a Next button that may now be a Submit button.
+  const paperRendered = Boolean(
+    reconciled.data?.isRunning &&
+    lock.role !== 'blocked' &&
+    lock.role !== 'pending' &&
+    attemptPackageRow &&
+    questions.length > 0,
+  );
   useEffect(() => {
-    if (isFirstQuestionRender.current) {
-      isFirstQuestionRender.current = false;
-      return;
-    }
+    if (!paperRendered) return;
     document.getElementById('question-heading')?.focus();
-  }, [currentIndex]);
+  }, [currentIndex, paperRendered]);
 
   if (reconciled.isPending) {
     return (
@@ -320,6 +324,11 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
         <div className="flex-1">
           {currentQuestion ? (
             <QuestionDisplay
+              // F20 (e2e/keyboard.spec.ts finding): one fresh answer group
+              // per question. Reused across questions, Radix's roving-focus
+              // state carried the previous question's tab stop over, and the
+              // first arrow key on the next question selected the wrong option.
+              key={currentQuestion.examQuestionId}
               attemptId={attemptId}
               examQuestionId={currentQuestion.examQuestionId}
               displaySequence={currentQuestion.displaySequence}

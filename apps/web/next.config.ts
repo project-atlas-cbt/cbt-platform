@@ -75,6 +75,14 @@ const withSerwist = withSerwistInit({
   swSrc: 'app/sw.ts',
   swDest: 'public/sw.js',
   disable: process.env.NODE_ENV === 'development',
+  // F20 (e2e/network.spec.ts finding): Serwist's default reloads the whole
+  // page on every `online` event. Mid-exam that threw the student back to
+  // question 1 on each reconnect (answers survived in IndexedDB; their place
+  // did not), and on a flapping lab network it reloaded repeatedly. The
+  // attempt runtime already resyncs on reconnect itself
+  // (use-attempt-sync-engine.ts), and server-state queries refetch on
+  // reconnect (TanStack Query), so nothing needs a reload.
+  reloadOnOnline: false,
 });
 
 export default withSerwist(nextConfig);

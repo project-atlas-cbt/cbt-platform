@@ -16,6 +16,9 @@ const ROOT = 'localhost';
 const API_PORT = 3001;
 const WEB_PORT = 3000;
 const MINIO = process.env.E2E_S3_ENDPOINT ?? 'http://localhost:9000';
+// A pre-installed Chromium whose revision differs from this Playwright's
+// (e.g. a sandboxed dev container); CI installs the matching browsers.
+const CHROMIUM_EXECUTABLE = process.env.E2E_CHROMIUM_EXECUTABLE;
 
 const apiEnv: Record<string, string> = {
   NODE_ENV: 'development',
@@ -53,7 +56,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1366, height: 768 } },
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1366, height: 768 },
+        ...(CHROMIUM_EXECUTABLE ? { launchOptions: { executablePath: CHROMIUM_EXECUTABLE } } : {}),
+      },
     },
     {
       name: 'firefox',
