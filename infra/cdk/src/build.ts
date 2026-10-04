@@ -82,6 +82,7 @@ export function optionsFromContext(app: App): BuildOptions {
         .filter(Boolean),
       ...(certificate ? { apiCertificateArn: certificate } : {}),
       ...(sentryDsn ? { sentryDsn } : {}),
+      ...(get('bootstrap') === 'true' ? { bootstrap: true } : {}),
     },
   };
 }

@@ -94,4 +94,7 @@ export interface DeployInputs {
   readonly sentryDsn?: string;
   /** `PRODUCT_NAME` — never hard-coded (PROJECT.md). */
   readonly productName: string;
+  /** First deployment only: create the services with no tasks, so nothing
+   * starts before the first migration has run (docs/operations/infrastructure.md). */
+  readonly bootstrap?: boolean;
 }

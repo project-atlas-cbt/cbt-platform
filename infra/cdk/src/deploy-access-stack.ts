@@ -83,6 +83,15 @@ export class DeployAccessStack extends Stack {
         },
       }),
     );
+    // The migration runs the new release's ops image before any service
+    // changes: a new revision of the ops task definition is registered with
+    // that image (the roles it may carry are limited by PassRole below).
+    this.role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['ecs:DescribeTaskDefinition', 'ecs:RegisterTaskDefinition'],
+        resources: ['*'],
+      }),
+    );
     this.role.addToPolicy(
       new iam.PolicyStatement({
         actions: ['iam:PassRole'],

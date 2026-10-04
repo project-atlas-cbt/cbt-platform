@@ -1,0 +1,135 @@
+name: Deploy release (reusable)
+
+# B23 DoD 3: one deployment procedure for staging, production and rollback.
+#
+#   build → migrate (new ops image, inside the VPC) → cdk deploy (services
+#   roll with the ECS circuit breaker) → read-only smoke → golden path
+#   (staging only)
+#
+# Migrations are expand-only (scripts/lint-migrations.mjs), so the release
+# still running during the roll, and any release a rollback returns to,
+# works on the migrated schema. Rollback therefore never migrates down: it
+# redeploys an earlier image tag (images are immutable) on the current
+# schema. docs/operations/deploy-and-rollback.md.
+#
+# Per-environment configuration lives in the GitHub environment of the same
+# name (variables, no secrets: AWS access is OIDC):
+#   AWS_ACCOUNT_ID, AWS_DEPLOY_ROLE_ARN, ROOT_DOMAIN, PRODUCT_NAME,
+#   ALARM_EMAILS, and optionally API_CERTIFICATE_ARN, SENTRY_DSN,
+#   SMOKE_SCHOOL, SMOKE_WEB.
+# `production` has a required reviewer, so nothing reaches it unapproved.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      image_tag:
+        description: Immutable image tag to run (commit SHA for staging, version tag for production)
+        type: string
+        required: true
+      migrate:
+        description: Run the release's migrations before the services roll (false for rollback)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  NODE_VERSION: '24.x'
+  PNPM_VERSION: '11.27.1'
+  AWS_REGION: af-south-1
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.image_tag }} to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.af-south-1.amazonaws.com
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Assume the environment's deploy role (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: atlas-${{ inputs.environment }}-${{ github.run_id }}
+
+      - name: Sign in to the registry
+        run: aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
+
+      # Immutable tags: an image that already exists (a re-run, a rollback)
+      # is reused as is, never rebuilt under the same tag.
+      - name: Build and push images
+        run: |
+          for target in server ops; do
+            repo="atlas-${ENVIRONMENT}-${target}"
+            if aws ecr describe-images --repository-name "$repo" --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1; then
+              echo "$repo:$IMAGE_TAG exists; reusing it"
+              continue
+            fi
+            if [ "${{ inputs.migrate }}" != true ]; then
+              echo "::error::$repo:$IMAGE_TAG does not exist; a rollback can only return to a deployed image"
+              exit 1
+            fi
+            docker build -f infra/docker/Dockerfile.prod --target "$target" \
+              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+              -t "$REGISTRY/$repo:$IMAGE_TAG" .
+            docker push "$REGISTRY/$repo:$IMAGE_TAG"
+          done
+
+      - name: Migrate (this release's ops image, inside the VPC)
+        if: inputs.migrate
+        run: scripts/ci/ecs-ops-task.sh "$ENVIRONMENT" "$REGISTRY/atlas-${ENVIRONMENT}-ops:$IMAGE_TAG"
+
+      - name: Deploy infrastructure and roll the services
+        working-directory: infra/cdk
+        run: |
+          pnpm exec cdk deploy --all --require-approval never --ci \
+            -c environment="$ENVIRONMENT" \
+            -c account="${{ vars.AWS_ACCOUNT_ID }}" \
+            -c imageTag="$IMAGE_TAG" \
+            -c rootDomain="${{ vars.ROOT_DOMAIN }}" \
+            -c productName="${{ vars.PRODUCT_NAME }}" \
+            -c alarmEmails="${{ vars.ALARM_EMAILS }}" \
+            ${{ vars.API_CERTIFICATE_ARN && format('-c apiCertificateArn={0}', vars.API_CERTIFICATE_ARN) || '' }} \
+            ${{ vars.SENTRY_DSN && format('-c sentryDsn={0}', vars.SENTRY_DSN) || '' }}
+
+      - name: Smoke (read-only)
+        env:
+          SMOKE_ROOT: ${{ vars.ROOT_DOMAIN }}
+          SMOKE_SCHOOL: ${{ vars.SMOKE_SCHOOL }}
+          SMOKE_WEB: ${{ vars.SMOKE_WEB }}
+        run: pnpm --filter @atlas/load smoke
+
+      # 09 §39 against the deployed stack, from inside the VPC: it writes
+      # test data through the schema owner, so never on production (the
+      # script also refuses unless the task declares itself staging).
+      - name: Golden path (staging only)
+        if: inputs.environment == 'staging'
+        run: |
+          scripts/ci/ecs-ops-task.sh staging "$REGISTRY/atlas-staging-ops:$IMAGE_TAG" \
+            sh -c 'GOLDEN_API="https://{host}/v1" GOLDEN_SCHOOL_HOST="{school}.api.{root}" GOLDEN_PLATFORM_HOST="admin.api.{root}" pnpm --filter @atlas/load golden-path'

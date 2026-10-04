@@ -210,10 +210,12 @@ export class AppStack extends Stack {
       });
     });
 
+    // Bootstrap: no task may start before the first migration has run.
+    const floor = (count: number) => (inputs.bootstrap ? 0 : count);
     this.apiService = new ecs.FargateService(this, 'ApiService', {
       cluster: this.cluster,
       taskDefinition: apiTask,
-      desiredCount: env.api.desiredCount,
+      desiredCount: floor(env.api.desiredCount),
       securityGroups: [network.appSecurityGroup],
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       minHealthyPercent: 100,
@@ -268,8 +270,8 @@ export class AppStack extends Stack {
     });
 
     const scaling = this.apiService.autoScaleTaskCount({
-      minCapacity: env.api.desiredCount,
-      maxCapacity: env.api.maxCount,
+      minCapacity: floor(env.api.desiredCount),
+      maxCapacity: inputs.bootstrap ? 1 : env.api.maxCount,
     });
     // Capacity plan: scale out at ≤ 70 % of one vCPU per task.
     scaling.scaleOnCpuUtilization('Cpu', {
@@ -323,7 +325,7 @@ export class AppStack extends Stack {
     this.workerService = new ecs.FargateService(this, 'WorkerService', {
       cluster: this.cluster,
       taskDefinition: workerTask,
-      desiredCount: env.worker.desiredCount,
+      desiredCount: floor(env.worker.desiredCount),
       securityGroups: [network.appSecurityGroup],
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       minHealthyPercent: 100,

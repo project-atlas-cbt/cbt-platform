@@ -279,3 +279,25 @@ describe('production only', () => {
     t.data.hasResource('AWS::S3::Bucket', { DeletionPolicy: 'Retain' });
   });
 });
+
+describe('first deployment (bootstrap)', () => {
+  it('starts no task before the first migration', () => {
+    const app = new App({ context: { '@aws-cdk/core:defaultCrossStackReferences': 'strong' } });
+    const stacks = buildEnvironment(app, {
+      environment: 'staging',
+      account: '111111111111',
+      inputs: {
+        rootDomain: 'example.ng',
+        imageTag: 'abc123',
+        productName: 'Example',
+        alarmEmails: [],
+        bootstrap: true,
+      },
+    });
+    const services = Object.values(
+      Template.fromStack(stacks.application).findResources('AWS::ECS::Service'),
+    ) as { Properties: { DesiredCount: number } }[];
+    expect(services).toHaveLength(2);
+    for (const s of services) expect(s.Properties.DesiredCount).toBe(0);
+  });
+});

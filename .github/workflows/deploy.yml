@@ -1,0 +1,30 @@
+name: Deploy
+
+# B23 (owner decision 2026-10-04): every merge to dev deploys to staging;
+# a version tag deploys to production after the `production` environment's
+# required reviewer approves. Both run the same procedure
+# (deploy-release.yml). Rollback: rollback.yml.
+
+on:
+  push:
+    branches: [dev]
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  staging:
+    if: github.ref_type == 'branch'
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      environment: staging
+      image_tag: ${{ github.sha }}
+
+  production:
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      environment: production
+      image_tag: ${{ github.ref_name }}
