@@ -41,6 +41,30 @@ const SEGMENT = 1460;
 const MIN_RTO_MS = 200;
 /** Pause a source socket while this much of its data is in flight. */
 const HIGH_WATER = 256 * 1024;
+/**
+ * netem's default queue is 1,000 packets (`limit 1000`): ~5.8 s of backlog
+ * at 2 Mbit. Segments wait per connection and join the shared link only
+ * while its backlog is below that, taking turns across connections — so a
+ * small API response queues behind at most that much bulk data, as behind
+ * a real router's drop-tail queue, not behind every byte 40 clients have
+ * asked for.
+ */
+const MAX_BACKLOG_MS = profile.rateBps ? (1000 * SEGMENT * 8 * 1000) / profile.rateBps : Infinity;
+/** Directions with segments waiting to join the link, served round-robin. */
+/** @type {Set<{ admitOne: () => boolean }>} */
+const waitingDirections = new Set();
+function admit() {
+  while (waitingDirections.size > 0 && linkFreeAt - performance.now() < MAX_BACKLOG_MS) {
+    for (const direction of [...waitingDirections]) {
+      // Served: to the back of the line (a Set iterates in insertion order),
+      // so no connection is starved by those ahead of it.
+      waitingDirections.delete(direction);
+      if (direction.admitOne()) waitingDirections.add(direction);
+      if (linkFreeAt - performance.now() >= MAX_BACKLOG_MS) break;
+    }
+  }
+}
+setInterval(admit, 10).unref();
 
 /** @param {number} mean @param {number} sd @returns {number} */
 function normal(mean, sd) {
@@ -61,19 +85,21 @@ function transmit(bytes, now) {
 
 /**
  * One direction of one connection: ordered, delayed, rate-shared. Segments
- * wait in a FIFO drained by a single timer — one timer per segment could
- * fire out of order when delivery times tie (Node groups timers by
- * duration), which reordered bytes inside a TCP stream.
- */
-/**
+ * wait in `waiting` until the shared link admits them, then in a FIFO
+ * drained by a single timer — one timer per segment could fire out of
+ * order when delivery times tie (Node groups timers by duration), which
+ * reordered bytes inside a TCP stream.
+ *
  * @param {import('node:net').Socket} from
  * @param {import('node:net').Socket} to
  */
 function pipeShaped(from, to) {
+  /** @type {Buffer[]} */
+  const waiting = [];
+  let waitingBytes = 0;
   /** @type {{ at: number, segment: Buffer }[]} */
   const queue = [];
   let lastDelivery = 0;
-  let inFlight = 0;
   let paused = false;
   /** @type {NodeJS.Timeout | null} */
   let timer = null;
@@ -82,26 +108,24 @@ function pipeShaped(from, to) {
   const drain = () => {
     timer = null;
     const now = performance.now();
-    while (queue.length > 0 && queue[0].at <= now) {
+    while (queue.length > 0 && (queue[0]?.at ?? Infinity) <= now) {
       const { segment } = /** @type {{ at: number, segment: Buffer }} */ (queue.shift());
-      inFlight -= segment.length;
       if (!to.destroyed) to.write(segment);
     }
-    if (paused && inFlight < HIGH_WATER / 2) {
-      paused = false;
-      from.resume();
-    }
     if (queue.length > 0) schedule();
-    else if (ended && !to.destroyed) to.end();
+    else if (ended && waiting.length === 0 && !to.destroyed) to.end();
   };
   const schedule = () => {
     if (timer || queue.length === 0) return;
     timer = setTimeout(drain, Math.max(0, (queue[0]?.at ?? 0) - performance.now()));
   };
 
-  from.on('data', (/** @type {Buffer} */ chunk) => {
-    for (let offset = 0; offset < chunk.length; offset += SEGMENT) {
-      const segment = chunk.subarray(offset, offset + SEGMENT);
+  const direction = {
+    /** Moves one waiting segment onto the link; false when none is left. */
+    admitOne: () => {
+      const segment = waiting.shift();
+      if (!segment) return false;
+      waitingBytes -= segment.length;
       const now = performance.now();
       let departed = transmit(segment.length, now);
       if (Math.random() < profile.loss) {
@@ -114,11 +138,25 @@ function pipeShaped(from, to) {
       const delay = Math.max(1, normal(profile.delayMs, profile.jitterMs));
       const at = Math.max(departed + delay, lastDelivery);
       lastDelivery = at;
-      inFlight += segment.length;
       queue.push({ at, segment });
+      schedule();
+      if (paused && waitingBytes < HIGH_WATER / 2) {
+        paused = false;
+        from.resume();
+      }
+      return waiting.length > 0;
+    },
+  };
+
+  from.on('data', (/** @type {Buffer} */ chunk) => {
+    for (let offset = 0; offset < chunk.length; offset += SEGMENT) {
+      const segment = chunk.subarray(offset, offset + SEGMENT);
+      waiting.push(segment);
+      waitingBytes += segment.length;
     }
-    schedule();
-    if (inFlight > HIGH_WATER && !paused) {
+    waitingDirections.add(direction);
+    admit();
+    if (waitingBytes > HIGH_WATER && !paused) {
       paused = true;
       from.pause();
     }
@@ -126,7 +164,11 @@ function pipeShaped(from, to) {
   // Close only after the last delayed segment has been written.
   from.on('end', () => {
     ended = true;
-    if (queue.length === 0 && !to.destroyed) to.end();
+    const finish = () => {
+      if (waiting.length > 0 || queue.length > 0) setTimeout(finish, 20);
+      else if (!to.destroyed) to.end();
+    };
+    finish();
   });
 }
 
