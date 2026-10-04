@@ -29,8 +29,10 @@ describe('loadEnv', () => {
     expect(() => loadEnv(rest)).toThrow(EnvValidationError);
   });
 
-  it('fails fast when DATABASE_URL is missing', () => {
-    const { DATABASE_URL: _omit, ...rest } = validEnv;
+  // B23: the app's own connection is the required one; the schema owner's
+  // DATABASE_URL is optional (only migrations and ops commands use it).
+  it('fails fast when DATABASE_APP_URL is missing', () => {
+    const { DATABASE_APP_URL: _omit, ...rest } = validEnv;
     expect(() => loadEnv(rest)).toThrow(EnvValidationError);
   });
 
@@ -92,6 +94,11 @@ describe('loadEnv — B20 production hardening', () => {
     MEDIA_PRECACHE_SECRET: strong('Wn5r'),
     COOKIE_DOMAIN: 'school.example.ng',
   };
+
+  it('accepts a production API/worker task that is never given the schema owner URL (B23)', () => {
+    const { DATABASE_URL: _owner, ...taskEnv } = productionEnv;
+    expect(loadEnv(taskEnv).DATABASE_URL).toBeUndefined();
+  });
 
   it('accepts a hardened production environment, with Software Admin MFA required by default (F20)', () => {
     expect(loadEnv(productionEnv).PLATFORM_MFA_REQUIRED).toBe(true);

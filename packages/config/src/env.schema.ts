@@ -19,7 +19,10 @@ const envObject = z.object({
   // application connects as DATABASE_APP_URL instead — a non-superuser
   // role, so ADR-0023's Row-Level Security actually applies to it. See
   // infra/postgres/init.sql for why this split exists.
-  DATABASE_URL: z.url({ protocol: /^postgresql?$/ }),
+  // B23: optional — only migrations and operator commands use the schema
+  // owner's URL. The API and worker tasks are never given it on AWS (least
+  // privilege); they connect as atlas_app / atlas_audit_reader only.
+  DATABASE_URL: z.url({ protocol: /^postgresql?$/ }).optional(),
   DATABASE_APP_URL: z.url({ protocol: /^postgresql?$/ }),
   DATABASE_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
   DATABASE_APP_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
@@ -418,7 +421,9 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     fail('MEDIA_PRECACHE_SECRET', 'must not reuse another secret');
   }
   for (const key of ['DATABASE_URL', 'DATABASE_APP_URL', 'DATABASE_AUDIT_READER_URL'] as const) {
-    const mode = new URL(env[key]).searchParams.get('sslmode');
+    const value = env[key];
+    if (!value) continue; // DATABASE_URL is absent from the API/worker tasks
+    const mode = new URL(value).searchParams.get('sslmode');
     if (mode !== 'require' && mode !== 'verify-ca' && mode !== 'verify-full') {
       fail(key, 'must set sslmode=require (or verify-ca/verify-full) in production');
     }

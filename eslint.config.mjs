@@ -13,6 +13,7 @@ export default tseslint.config(
       '**/.next/**',
       '**/.turbo/**',
       '**/coverage/**',
+      '**/cdk.out/**',
       '**/generated/**',
       '**/*.generated.ts',
     ],
