@@ -190,6 +190,10 @@ export {
   type AttemptMarkingJobPayload,
 } from './execution/attempt-marking-queue.js';
 export {
+  EXAM_MEDIA_PRECACHE_QUEUE_NAME,
+  type ExamMediaPrecacheJobPayload,
+} from './execution/media-precache-queue.js';
+export {
   rollUpExamParticipation,
   rollUpParticipation,
   type ParticipationRollupInput,

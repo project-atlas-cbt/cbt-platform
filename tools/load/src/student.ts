@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import { performance } from 'node:perf_hooks';
-import { Client, NetworkFailure, fetchAbsolute, type Target } from './http.js';
+import { Client, HttpStatusError, NetworkFailure, fetchAbsolute, type Target } from './http.js';
 import type { Recorder } from './metrics.js';
 
 /**
@@ -21,7 +21,11 @@ import type { Recorder } from './metrics.js';
 export interface PackageQuestion {
   examQuestionId: string;
   options: { optionId: string }[];
-  media: { url: string }[];
+  media: { url: string; mediaAssetId?: string }[];
+}
+
+function mediaAssetIdOf(media: { url: string; mediaAssetId?: string }): string {
+  return media.mediaAssetId ?? media.url;
 }
 
 interface AttemptPackage {
@@ -29,6 +33,13 @@ interface AttemptPackage {
   state: string;
   expiresAt: string;
   questions: PackageQuestion[];
+  /** F20: the exam's pre-cache key — only in the student's own package. */
+  mediaKey?: string | null;
+}
+
+interface MediaManifest {
+  ready: boolean;
+  assets: { mediaAssetId: string; url: string; byteSize: number }[];
 }
 
 export interface StudentOptions {
@@ -65,6 +76,9 @@ export class VirtualStudent {
   private answerTimer: NodeJS.Timeout | undefined;
   errors: string[] = [];
   windowClosed = false;
+  /** F20: asset ids whose encrypted copy this student already holds. */
+  readonly precached = new Set<string>();
+  mediaKey: string | null | undefined;
   signedInAt?: number;
   readyAt?: number;
 
@@ -84,6 +98,84 @@ export class VirtualStudent {
     this.signedInAt = performance.now();
   }
 
+  /**
+   * F20 — the preview's encrypted pre-cache (apps/web/lib/attempt/
+   * media-precache.ts): poll the pre-start manifest until the server has
+   * encrypted the paper, then download every ciphertext, three at a time as
+   * the web client does. Returns the bytes downloaded.
+   */
+  async precache(): Promise<number> {
+    let manifest: MediaManifest | undefined;
+    for (let poll = 0; poll < 60; poll += 1) {
+      const res = await this.client.request<MediaManifest>(
+        'GET',
+        `/student/assessment/${this.o.examId}/media-manifest`,
+        { label: 'precache.manifest' },
+      );
+      if (res.status !== 200) throw new Error(`manifest ${res.status}: ${res.raw.slice(0, 200)}`);
+      if (res.body.ready) {
+        manifest = res.body;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 2_000));
+    }
+    if (!manifest) throw new Error('pre-cache manifest never became ready');
+    // Signed URLs live 15 minutes; like the web client, re-sign from the
+    // manifest on a 403 (one shared refresh) without spending a retry.
+    const urls = new Map(manifest.assets.map((a) => [a.mediaAssetId, a.url]));
+    let refreshing: Promise<void> | null = null;
+    const refresh = () =>
+      (refreshing ??= this.client
+        .request<MediaManifest>('GET', `/student/assessment/${this.o.examId}/media-manifest`, {
+          label: 'precache.manifest',
+        })
+        .then((res) => {
+          if (res.status === 200) for (const a of res.body.assets) urls.set(a.mediaAssetId, a.url);
+        })
+        .finally(() => {
+          refreshing = null;
+        }));
+    const agent = new http.Agent({ keepAlive: true, maxSockets: 3 });
+    let bytes = 0;
+    try {
+      const queue = [...manifest.assets];
+      await Promise.all(
+        Array.from({ length: 3 }, async () => {
+          for (let asset = queue.shift(); asset; asset = queue.shift()) {
+            // Up to two retries per asset, as the web client
+            // (MAX_RETRIES_PER_ASSET in media-precache.ts).
+            for (let attempt = 0, resigned = 0; ; attempt += 1) {
+              try {
+                const got = await fetchAbsolute(
+                  urls.get(asset.mediaAssetId) ?? asset.url,
+                  agent,
+                  this.o.recorder,
+                  'media.precache',
+                  this.o.mediaHost,
+                  true,
+                );
+                bytes += got;
+                break;
+              } catch (error) {
+                if (error instanceof HttpStatusError && error.status === 403 && resigned < 5) {
+                  resigned += 1;
+                  attempt -= 1;
+                  await refresh();
+                  continue;
+                }
+                if (attempt >= 2) throw error;
+              }
+            }
+            this.precached.add(asset.mediaAssetId);
+          }
+        }),
+      );
+    } finally {
+      agent.destroy();
+    }
+    return bytes;
+  }
+
   /** `POST /exams/:id/attempts` — returns the package; F13 then caches every media file (ADR-0021). */
   async start(opts: { fetchMedia: boolean } = { fetchMedia: true }): Promise<number> {
     const res = await this.client.request<AttemptPackage>(
@@ -97,8 +189,18 @@ export class VirtualStudent {
     if (res.status !== 200) throw new Error(`start ${res.status}: ${res.raw.slice(0, 200)}`);
     this.attemptId = res.body.attemptId;
     this.questions = res.body.questions;
+    this.mediaKey = res.body.mediaKey;
     if (opts.fetchMedia) {
-      const urls = [...new Set(this.questions.flatMap((q) => q.media.map((m) => m.url)))];
+      // With the pre-cache key, pre-cached assets are decrypted locally (no
+      // network); anything not pre-cached is fetched as F13 always did.
+      const local = this.mediaKey ? this.precached : new Set<string>();
+      const urls = [
+        ...new Set(
+          this.questions.flatMap((q) =>
+            q.media.filter((m) => !local.has(mediaAssetIdOf(m))).map((m) => m.url),
+          ),
+        ),
+      ];
       const agent = new http.Agent({ keepAlive: true, maxSockets: 4 });
       try {
         await Promise.all(

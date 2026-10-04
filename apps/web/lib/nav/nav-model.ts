@@ -17,6 +17,7 @@ import {
   Monitor,
   PieChart,
   UserCircle,
+  KeyRound,
 } from 'lucide-react';
 import type { Role } from '@atlas/domain';
 
@@ -93,6 +94,15 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
         href: 'audit',
         icon: ShieldCheck,
         match: ['audit.'],
+      },
+      // F20 (carried from B20): the admin's own two-step sign-in and peer
+      // MFA reset. Every Software Admin holds identity.mfa.manage.
+      {
+        id: 'security',
+        label: 'Sign-in Security',
+        href: 'security',
+        icon: KeyRound,
+        match: ['identity.mfa.'],
       },
       // No PERMISSION_TABLE row backs platform system configuration yet
       // (no phase has scoped it) — always-visible like Dashboard rather

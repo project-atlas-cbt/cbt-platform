@@ -203,6 +203,7 @@ Measured through a `tc netem` relay (workstation runs, valid — `results/README
 | `ng-typical` (150 ms RTT, 1 % loss)              | 150 KB image per question | 56.1 s                    | pass     |
 | `ng-congested` (300 ms, 3 % loss, 2 Mbit shared) | text only                 | 23.2 s                    | pass     |
 | `ng-congested`                                   | 150 KB image per question | 3 of 40 ready after 224 s | **fail** |
+| `ng-congested`, **pre-cached (F20)**¹            | 150 KB image per question | **21.2 s** at the bell    | pass     |
 
 The last row is arithmetic, not a server limit: 40 students × 40 questions × 150 KB = 240 MB, and a
 2 Mbit/s uplink moves ~15 MB per minute (**≈ 375 KB per student per minute** across 40). Because
@@ -211,6 +212,14 @@ link. Consequences: **media must be pre-cached before the exam window** (the F20
 operational guidance: open the paper's pre-cache step at the start of the lab session, not at the
 bell), and authoring guidance should keep question images small. Answer saves themselves are tiny
 and unaffected by the link once the attempt has started.
+
+¹ **F20 (2026-10-04)** built that pre-cache (ADR-0021 amendment): media downloads encrypted on the
+preview and is decrypted locally at Start. Re-run as `load lab --precache` through a user-space relay
+(no `sch_netem` in the cloud sandbox; `results/README.md`): the whole lab pre-cached 246 MB in
+**~17 minutes** — the same bandwidth arithmetic, now spent before the bell — then all 40 students
+were ready **21.2 s** after the first pressed Start. Operationally: open a media-heavy paper's
+session at least ~20 minutes before the bell on a 2 Mbit lab link (B23 guidance); a text-only
+paper needs no lead time.
 
 **Region (ADR-0032):** TCP RTT from the project owner's Nigerian connection (60 samples per region,
 idle machine): `af-south-1` p50 115 ms, `eu-west-2` 159 ms, `eu-west-1` 186 ms, `eu-central-1`
@@ -283,10 +292,11 @@ capacity signals, not noise, at these thresholds.
   success, no drift (`…15-10-45-levels-1000-cloud-endurance-jitter`). The cause of the first run's
   stalls is not proven; the B23 staging endurance hour (off-host generator) is the confirmation.
   **F20:** jitter the web client's heartbeat (`setInterval(30 s)` today) — a lab released together
-  otherwise heartbeats in phase for the whole exam.
+  otherwise heartbeats in phase for the whole exam. **Done in F20 (2026-10-04).**
 - **RDS Proxy pinning** check at B23 (§7).
 - **F20:** honour `503 Retry-After` with backoff in the web client (it has no handling today);
   pre-cache paper media ahead of the exam window; keep the F13 batching/debounce the harness models.
+  **Done in F20 (2026-10-04)** — §9 footnote; ADR-0021 amendment.
 - **ADR-0032** region decision with the owner at B23 (§9).
 - **Candidate / Deferred:** per-request API CPU reduction on the exam path (§4).
 
@@ -312,8 +322,10 @@ records how each was settled.
 6. **The roadmap says F20's client behaviour is part of what B21 measures**, but F20 is not built.
    The harness models the F13 client (batching, one flush in flight, sequence numbers, 30 s
    heartbeat). Two client requirements B21 found are carried to F20: back off on `503 Retry-After`
-   (the web client has no handling today) and pre-cache paper media before the exam window.
+   (the web client has no handling today) and pre-cache paper media before the exam window. Both
+   built in F20 (2026-10-04).
 7. **ADR-0021 (Start blocked until media cached) vs the 60 s lab-burst target** on a congested 2 Mbit
    link with a media-heavy paper — physically incompatible (§9). Settled operationally: pre-cache
-   ahead of the window (F20, B23 guidance); not a server change.
+   ahead of the window (F20, B23 guidance); not a server change. **Resolved in F20:** encrypted
+   pre-cache before the window (ADR-0021 amendment); measured 21.2 s at the bell (§9).
 8. **ADR-0032's region** met its own revisit condition — left to the owner at B23 (§9).

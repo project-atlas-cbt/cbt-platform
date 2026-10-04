@@ -86,7 +86,14 @@ const dynamicOriginMiddleware: Middleware = {
     // property value — the key must be entirely absent (not present with
     // an undefined value) for a bodyless request, matching this codebase's
     // established `primaryColor`-omission pattern (tenant-context.tsx).
-    const bodyInit = request.body ? { body: await request.clone().arrayBuffer() } : {};
+    // Read the body by method, never by `request.body`: Firefox does not
+    // implement `Request.body` (request streams), so that check was always
+    // false there and every POST/PUT/PATCH left with no body — Firefox could
+    // not even sign in (F20 browser matrix, PR #34).
+    const method = request.method.toUpperCase();
+    const buffered =
+      method === 'GET' || method === 'HEAD' ? null : await request.clone().arrayBuffer();
+    const bodyInit = buffered && buffered.byteLength > 0 ? { body: buffered } : {};
     return new Request(rewritten, {
       method: request.method,
       headers: request.headers,
@@ -97,6 +104,9 @@ const dynamicOriginMiddleware: Middleware = {
       referrer: request.referrer,
       referrerPolicy: request.referrerPolicy,
       integrity: request.integrity,
+      // F20: carry the caller's AbortSignal through the rewrite — without
+      // it a per-request timeout (the exam sync engine's) never reaches fetch.
+      signal: request.signal,
       ...bodyInit,
     });
   },
@@ -210,7 +220,12 @@ export async function unwrap<T>(
   }
 
   if (result.error !== undefined) {
-    throw toApiError(result.error, result.response.status, 'The request failed.');
+    throw toApiError(
+      result.error,
+      result.response.status,
+      'The request failed.',
+      result.response.headers,
+    );
   }
   if (result.data === undefined) {
     // openapi-fetch guarantees one of data/error is set for a resolved

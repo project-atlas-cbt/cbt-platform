@@ -10,6 +10,30 @@ describe('useAttemptTimer', () => {
     vi.useRealTimers();
   });
 
+  it('F20 (DoD 5) — renders at most once per displayed second, not every frame', () => {
+    const now = Date.parse('2026-01-01T10:00:00.000Z');
+    vi.setSystemTime(now);
+    const expiresAt = new Date(now + 10 * 60_000).toISOString();
+    // jsdom reports every document as hidden; this test is about the visible tab.
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    let renders = 0;
+    renderHook(() => {
+      renders += 1;
+      return useAttemptTimer('attempt-r', expiresAt, 0, vi.fn());
+    });
+    const afterMount = renders;
+    // One act() per 250 ms tick — act batches every update inside it.
+    for (let i = 0; i < 40; i += 1) {
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+    }
+    // 10 s of ticking at 4 Hz → ~10 renders (one per second), never ~40 or ~600.
+    expect(renders - afterMount).toBeLessThanOrEqual(11);
+    expect(renders - afterMount).toBeGreaterThanOrEqual(9);
+    hidden.mockRestore();
+  });
+
   it('DoD 12 — remainingMs is derived from expiresAt/skew, immune to the local clock moving backward', () => {
     const now = Date.parse('2026-01-01T10:00:00.000Z');
     vi.setSystemTime(now);

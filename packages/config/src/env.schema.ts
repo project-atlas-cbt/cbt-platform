@@ -255,14 +255,24 @@ const envObject = z.object({
     .default(30 * 60),
 
   // Software Admin TOTP MFA. MFA_ENCRYPTION_KEY seals TOTP secrets at rest
-  // (AES-256-GCM); required in production. PLATFORM_MFA_REQUIRED turns on
-  // enforcement for unenrolled admins — left false until F20 ships the
-  // enrolment UI, so turning it on can't lock every admin out of the web app.
+  // (AES-256-GCM); required in production. PLATFORM_MFA_REQUIRED confines an
+  // unenrolled admin to the enrolment routes. F20 shipped the enrolment UI
+  // (the web shell routes such an admin straight into it), so it is now on
+  // by default; test suites that sign admins in without MFA set it false.
   MFA_ENCRYPTION_KEY: z.string().min(32, 'MFA_ENCRYPTION_KEY must be at least 32 chars').optional(),
   PLATFORM_MFA_REQUIRED: z
     .enum(['true', 'false'])
-    .default('false')
+    .default('true')
     .transform((v) => v === 'true'),
+
+  // F20 — encrypted media pre-cache (ADR-0021 amendment). The per-exam media
+  // key is derived from this secret (HKDF), never stored; a student receives
+  // it only in their attempt package at Start. Required in production;
+  // rotating it re-encrypts on the next pre-cache request.
+  MEDIA_PRECACHE_SECRET: z
+    .string()
+    .min(32, 'MEDIA_PRECACHE_SECRET must be at least 32 chars')
+    .optional(),
 
   // Observability (08 §18, 09 §35). All optional: unset means no export
   // (logs still go to stdout as JSON).
@@ -358,6 +368,14 @@ export const envSchema = envObject.superRefine((env, ctx) => {
   }
   if (weak(env.MFA_ENCRYPTION_KEY)) {
     fail('MFA_ENCRYPTION_KEY', 'is required in production (≥32 random chars)');
+  }
+  if (weak(env.MEDIA_PRECACHE_SECRET)) {
+    fail('MEDIA_PRECACHE_SECRET', 'is required in production (≥32 random chars)');
+  } else if (
+    env.MEDIA_PRECACHE_SECRET === env.MFA_ENCRYPTION_KEY ||
+    env.MEDIA_PRECACHE_SECRET === env.SESSION_COOKIE_SECRET
+  ) {
+    fail('MEDIA_PRECACHE_SECRET', 'must not reuse another secret');
   }
   for (const key of ['DATABASE_URL', 'DATABASE_APP_URL', 'DATABASE_AUDIT_READER_URL'] as const) {
     const mode = new URL(env[key]).searchParams.get('sslmode');

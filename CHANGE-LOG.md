@@ -2,6 +2,114 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-04 — F20 Accessibility, Performance & Hardening
+
+F20 is implemented; its automated suites pass. **Manual checks remain** (recorded below and in the
+roadmap): an NVDA screen-reader pass, the oldest supported browsers, a real low-end lab PC. Built
+across two sessions (a Windows workstation, then a Claude Code cloud session). Owner decisions at
+planning (2026-10-03): browser floor Chrome/Edge 111, Firefox 115 ESR, Safari 16.4 and a 1366 × 768
+lab baseline; larger text as a staff-granted accommodation; CSP nonce + `'strict-dynamic'` with
+`style-src-attr 'unsafe-inline'`; paper media pre-cached **encrypted** before the exam window. Per-DoD
+evidence: `frontend-roadmap.md` F20 Implementation notes.
+
+**Shipped**
+
+- **Web CSP and security headers** (`apps/web/proxy.ts`, `lib/security/csp.ts`): per-request nonce,
+  no inline script, media/API/Sentry origins named, HSTS and `upgrade-insecure-requests` only over
+  https, `CSP_REPORT_ONLY` for staging. sonner's runtime style injection patched out; zod set to
+  `jitless` so it never probes `new Function`. Amendments: `docs/security/web-csp-policy.md`.
+- **Software Admin MFA UI** (carried from B20): QR enrolment, recovery codes shown once, two-step
+  sign-in with TOTP or recovery code, status/disable, peer reset (new `GET /v1/platform/admins`), an
+  enrolment gate in front of the platform shell. **`PLATFORM_MFA_REQUIRED` now defaults to `true`.**
+- **Encrypted media pre-cache** (ADR-0021 amendment): the API encrypts a paper's media per exam when
+  a session opens (AES-256-GCM, HKDF key from `MEDIA_PRECACHE_SECRET`, never stored); the preview
+  downloads the ciphertext (`GET /v1/student/assessment/:examId/media-manifest`); the key arrives only
+  in the student's own `IN_PROGRESS` attempt package; the client decrypts into the F13 media cache at
+  Start. Finished exams' ciphertext is purged hourly.
+- **Accommodations** (DoD 3): audited larger-text grant beside extra time, a Control Center dialog;
+  the preview and runtime show and apply both.
+- **Exam runtime accessibility/performance**: `h1`, skip link, focus management, `Alt+N`/`Alt+P`,
+  threshold-only timer announcements, persistent live region, 44 px targets, 1 Hz timer renders,
+  memoised sanitising.
+- **B21 client requirements**: `503 Retry-After` honoured (calm "temporarily unavailable" state,
+  jittered retries, retry held until Retry-After), SSE reconnect back-off, jittered heartbeat, sync
+  request timeout and back-off.
+- **Client Sentry** (lazy `@sentry/browser`, errors only, scrubbed), error boundaries; browser
+  matrix declared (`docs/operations/browser-and-hardware-baseline.md`, `browserslist`, ES5
+  `compat-probe.js`); the preview's computer check; web manifest.
+- **Browser suites** — the repository's first browser harness (`apps/web/e2e`, Playwright + axe,
+  against production builds; README there): accessibility, keyboard-only exam, MFA, network,
+  pre-cache, low-end CPU, CSP/headers, `@matrix` for Firefox/WebKit. **Bundle budgets**
+  (`scripts/check-bundle-budget.mjs`). Both run in a new CI job, `web-e2e`.
+
+**Defects the browser suites found, fixed with regression tests**
+
+- **Service worker served cached API responses across users** (High): Serwist's default runtime
+  caching cached every cross-origin GET — the API — network-first with a 10 s timeout for an hour.
+  On a slow lab network, one student's `/auth/me` or results could be shown to the next student on
+  the same computer. API requests now bypass the service worker; the old cache is deleted.
+- **Every reconnect reloaded the page** (Serwist's `reloadOnOnline` default), throwing a student back
+  to question 1 mid-exam; on a flapping network, repeatedly. Disabled.
+- **MFA recovery codes vanished** on confirming enrolment (the gate lifted on the status refetch).
+- **Answer sync**: a heartbeat flush ignored the server's Retry-After; a refused flush never re-armed
+  (the last answers waited up to 30 s for the heartbeat); the Retry-After floor is now jittered.
+- **Keyboard**: focus fell to `<body>` when any state-opened dialog closed (fixed once in the shared
+  `DialogContent`); focus started nowhere predictable on entering the exam; the answer group carried
+  Radix roving-focus state across questions, so the first arrow key could select the wrong option.
+- **axe**: unlabeled controls in the question media uploader; low-contrast analytics figures.
+- **Firefox could not sign in** (found by the first CI run of the browser matrix, PR #34): the API
+  client's origin-rewriting middleware copied a request body only when `request.body` was truthy,
+  and Firefox does not implement `Request.body` — every POST/PUT/PATCH left with an empty body.
+  The body is now read by method. Firefox 115 ESR is the declared route for Windows 7 lab PCs.
+- **CI**: the browser-suite job hung at teardown (`pnpm exec next start` puts the server in its own
+  process group, out of Playwright's reach); the web server now runs Next's binary directly, and the
+  run and job have time caps.
+- **Answer save ignored a 503 `Retry-After`** (found while chasing a CI-only congested-network
+  failure): a save queued behind an in-flight one that was then refused ran ~70 ms later, because
+  the back-off was checked only when the flush was queued. `flush()` now re-checks it when it runs.
+  The congested-network test also counts acknowledgements from what was sent (not a re-parse of
+  the response body) and reports an answer-save timeline when it fails.
+- Earlier in the phase: a **CSRF first-visit race** — concurrent cookie-less GETs minted competing
+  secrets; only token-issuing routes now persist a new secret (`csrf.guard.ts`, `IssuesCsrfToken`).
+
+**Measured**
+
+- Bundle (gzip, first load): exam route **273 KB**, smallest signed-in route (from 299 KB: zod left
+  the shared auth barrel; `@atlas/domain`, `contracts`, `validation` marked side-effect free).
+- Low-end (4× CPU, 1366 × 768): answer selection 38–85 ms, question change 38–107 ms, longest task
+  ≤ 108 ms.
+- Pre-cached lab burst, 40 clients, 40 × 150 KB paper, `ng-congested` (user-space relay): pre-cache of the whole lab **1,019 s (~17 min) for 246 MB**, all 1,600 downloads verified (37 expired URLs re-signed); at the bell **all 40 ready in 21.2 s** (20 s arrival window; per-student ≤ 1.9 s, start p95 1.5 s), no media fetched live, answer saves 100 %. B21's same link without pre-cache: 3 of 40 ready after 224 s. The link was emulated by a new user-space relay (`tools/load/netem/shaper.mjs`; this kernel has no `sch_netem`). The run also found that signed ciphertext URLs (15 min) expire during a congested pre-cache; the client now re-signs them instead of failing.
+
+**Tested (final run, 2026-10-04):** `pnpm lint`, `typecheck`, `format:check` clean; unit tests all
+green (web 980/980, API 32 files, every package); web browser suites **27/27** on Chromium against
+production builds; bundle budgets pass; API security suites **42/42**; integration: API 386/387,
+worker 50/50, the other packages green, cross-cutting 157/161 (2 skipped). The three integration
+failures are this cloud sandbox, not F20: s3rver (the sandbox's object store) serves unsigned GETs,
+so "an object is retrievable only via a signed URL" cannot pass against it (CI uses MinIO, which
+enforces signatures); and `migrate reset` drops the sandbox's Postgres 16 `uuidv7()` shim, so the
+reset/re-apply test fails (CI's Postgres 18 has `uuidv7()` built in). **Not yet executed:** the
+Firefox/WebKit `@matrix` smoke and the new `web-e2e` CI job as a whole — this sandbox has no
+Firefox/WebKit builds, and CI runs on pull requests only, so both first run when F20's PR is opened.
+
+**Environment variables:** `MEDIA_PRECACHE_SECRET` (new production secret — B23),
+`NEXT_PUBLIC_MEDIA_ORIGIN` (build-time; the CSP's media host), `NEXT_PUBLIC_SENTRY_DSN` (optional),
+`CSP_REPORT_ONLY` (staging). Object storage needs a bucket CORS rule allowing `GET` from school
+origins (MinIO allows it by default) — B23 infrastructure.
+
+**Status corrections:** backend roadmap rows for B19 (now IN PROGRESS — implemented and consumed by
+F19, but its own section never closed) and B20 (COMPLETE, 2026-10-02) were still "NOT STARTED".
+
+**Remaining / carried forward**
+
+- Manual before launch (B23 lab preparation): NVDA pass; Chrome/Edge 111 and Firefox 115 ESR on
+  Windows 7; a real low-end lab PC; a real Sentry project.
+- To **B23**: `MEDIA_PRECACHE_SECRET` provisioning; S3 bucket CORS; operational guidance to open a
+  media-heavy paper's session early enough for its pre-cache.
+- **Candidate / Deferred:** reloading the exam page _while_ offline (answers, timer and media survive
+  an outage, but a manual reload during it shows the browser's offline page until the network
+  returns — serving a cached exam shell is an F13 architecture change); lazy-loading `culori`.
+- F16, F18 and F19 remain "E2E pending": the harness now exists, but their flows are not yet covered.
+
 ### 2026-10-03 — B21 Performance & Load
 
 B21 is done, with DoD 1 and 4 at 1,000 attempts **partial and gated to the B23 staging re-run**

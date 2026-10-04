@@ -187,12 +187,20 @@ export class Client {
 }
 
 /** Plain GET of an absolute URL (signed media URLs point at object storage, not the API). */
+export class HttpStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`HTTP ${status}`);
+  }
+}
+
 export function fetchAbsolute(
   url: string,
   agent: http.Agent,
   recorder: Recorder,
   label: string,
   rewriteHost?: { address: string; port: number },
+  /** Reject on a non-2xx status (an `HttpStatusError`) instead of resolving. */
+  expectOk = false,
 ): Promise<number> {
   const parsed = new URL(url);
   const started = performance.now();
@@ -213,7 +221,9 @@ export function fetchAbsolute(
         res.on('data', (c: Buffer) => (bytes += c.length));
         res.on('end', () => {
           recorder.record(label, performance.now() - started, res.statusCode ?? 0, bytes);
-          resolve(bytes);
+          const status = res.statusCode ?? 0;
+          if (expectOk && (status < 200 || status >= 300)) reject(new HttpStatusError(status));
+          else resolve(bytes);
         });
       },
     );

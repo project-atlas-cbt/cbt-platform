@@ -12,7 +12,18 @@ import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist';
 // operates on the real global `self` internally at runtime).
 declare const self: SerwistGlobalConfig & {
   __SW_MANIFEST: (PrecacheEntry | string)[] | undefined;
+  location: Location;
+  addEventListener(type: 'fetch', listener: (event: FetchEvent) => void): void;
+  addEventListener(type: 'activate', listener: (event: ExtendableEvent) => void): void;
 };
+// Minimal shapes of the service-worker events used below (the `webworker`
+// lib that defines them conflicts with this project's `dom` lib — see above).
+interface ExtendableEvent extends Event {
+  waitUntil(promise: Promise<unknown>): void;
+}
+interface FetchEvent extends ExtendableEvent {
+  readonly request: Request;
+}
 
 // Read exactly once: Serwist's build-time injector textually replaces a
 // single `self.__SW_MANIFEST` occurrence in the compiled SW bundle with
@@ -40,6 +51,31 @@ const manifest = self.__SW_MANIFEST;
  */
 const isPresignedMediaRequest = ({ url }: { url: URL }): boolean =>
   url.searchParams.has('X-Amz-Signature');
+
+/**
+ * F20 — cross-origin requests other than presigned media (in practice: the
+ * API on its sibling subdomain, ADR-0022) never touch the service worker.
+ *
+ * `defaultCache` ends with a `NetworkFirst` "cross-origin" rule (1 h,
+ * 10 s network timeout). Applied to the API it was a cross-user leak on a
+ * shared lab computer: with the network slower than 10 s, student B's
+ * `GET /v1/auth/me` or `/v1/student/results` could be answered from student
+ * A's cached response — the cache is keyed by URL, not by session. API data
+ * must come from the server or not at all; the exam's offline state lives
+ * in IndexedDB, scoped per attempt (lib/attempt). Registered before
+ * Serwist's listener so that listener never sees these requests (and adds
+ * no per-request overhead to them).
+ */
+const LEAKY_CACHES = ['cross-origin'];
+self.addEventListener('fetch', (event: FetchEvent) => {
+  const url = new URL(event.request.url);
+  if (url.origin === self.location.origin || isPresignedMediaRequest({ url })) return;
+  event.stopImmediatePropagation();
+});
+self.addEventListener('activate', (event: ExtendableEvent) => {
+  // Purge what earlier builds cached under the rule above.
+  event.waitUntil(Promise.all(LEAKY_CACHES.map((name) => caches.delete(name))));
+});
 
 const serwist = new Serwist({
   // exactOptionalPropertyTypes: the manifest global can genuinely be

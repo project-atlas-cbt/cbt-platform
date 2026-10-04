@@ -123,7 +123,7 @@ async function seedStaffUser(
   });
 }
 
-async function activateStaffCredential(
+export async function activateStaffCredential(
   schoolId: string,
   membershipId: string,
   passwordHash: string,

@@ -210,4 +210,47 @@ describe('ExamRuntime (integration)', () => {
     );
     expect(screen.queryByText('What is 2+2?')).not.toBeInTheDocument();
   });
+
+  it('F20 (DoD 2) — focus starts on the first question heading once the paper renders', async () => {
+    renderRuntime();
+    await screen.findByText('What is 2+2?');
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /question 1 of 2/i })).toHaveFocus(),
+    );
+  });
+
+  it('F20 (DoD 2) — Alt+N / Alt+P move between questions and focus the new question heading', async () => {
+    renderRuntime();
+    await screen.findByText('What is 2+2?');
+    const user = userEvent.setup();
+
+    await user.keyboard('{Alt>}n{/Alt}');
+    expect(await screen.findByText('What is 3+3?')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /question 2 of 2/i })).toHaveFocus();
+
+    await user.keyboard('{Alt>}p{/Alt}');
+    expect(await screen.findByText('What is 2+2?')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /question 1 of 2/i })).toHaveFocus();
+
+    // Past the ends: nothing happens.
+    await user.keyboard('{Alt>}p{/Alt}');
+    expect(screen.getByText('What is 2+2?')).toBeInTheDocument();
+  });
+
+  it('F20 (DoD 2) — a page heading, a skip link and an answer group named by its question', async () => {
+    renderRuntime();
+    await screen.findByText('What is 2+2?');
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /skip to question/i })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: /question 1 of 2/i })).toBeInTheDocument();
+  });
+
+  it('F20 (DoD 3) — the larger-text accommodation scales the runtime and is undone on leave', async () => {
+    mockGet.mockResolvedValue(ok({ ...PACKAGE, largerText: true }));
+    const view = renderRuntime();
+    await screen.findByText('What is 2+2?');
+    await waitFor(() => expect(document.documentElement.style.fontSize).toBe('125%'));
+    view.unmount();
+    expect(document.documentElement.style.fontSize).toBe('');
+  });
 });

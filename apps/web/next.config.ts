@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
     // deliberately re-exposed under the client-safe name.
     NEXT_PUBLIC_PRODUCT_NAME: process.env.PRODUCT_NAME,
     NEXT_PUBLIC_API_ORIGIN: process.env.NEXT_PUBLIC_API_ORIGIN,
+    // F20 — CSP inputs (proxy.ts) and client error tracking. Both optional:
+    // unset media origin = no external media host allowed; unset DSN =
+    // Sentry never loads.
+    NEXT_PUBLIC_MEDIA_ORIGIN: process.env.NEXT_PUBLIC_MEDIA_ORIGIN,
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
   // @atlas/contracts and @atlas/validation (workspace packages this app
   // imports) build to real dist/*.js — Turbopack cannot remap a
@@ -70,6 +75,14 @@ const withSerwist = withSerwistInit({
   swSrc: 'app/sw.ts',
   swDest: 'public/sw.js',
   disable: process.env.NODE_ENV === 'development',
+  // F20 (e2e/network.spec.ts finding): Serwist's default reloads the whole
+  // page on every `online` event. Mid-exam that threw the student back to
+  // question 1 on each reconnect (answers survived in IndexedDB; their place
+  // did not), and on a flapping lab network it reloaded repeatedly. The
+  // attempt runtime already resyncs on reconnect itself
+  // (use-attempt-sync-engine.ts), and server-state queries refetch on
+  // reconnect (TanStack Query), so nothing needs a reload.
+  reloadOnOnline: false,
 });
 
 export default withSerwist(nextConfig);

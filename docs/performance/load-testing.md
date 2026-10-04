@@ -68,6 +68,7 @@ All take `--name <manifest>` and `--target <url[,url…]>` (round-robin across A
 | `load levels --levels 500 --flood 20`                               | DoD 9: 20 staff sessions hammer analytics/exports/search during an exam                |
 | `load levels --levels 500 --sse 60`                                 | DoD 7: 60 Control Center streams held open during an exam                              |
 | `load lab --clients 40 --window 20` (under a network profile)       | DoD 8: the 40-client lab burst on a constrained link                                   |
+| `load lab --clients 40 --window 20 --precache` (under a profile)    | F20 DoD 9: the lab burst with media pre-cached before the bell                         |
 | `dataset --name analytics --exams 47`, then `load analytics --n 10` | DoD 10: analytics budgets on a realistic school-term dataset                           |
 | `rtt-probe --samples 30 --label "…"`                                | ADR-0032: RTT from this network to `eu-west-1`/`eu-west-2`/`af-south-1`/`eu-central-1` |
 
@@ -91,6 +92,25 @@ netem shapes the relay's egress, i.e. both directions, so the per-direction dela
 
 `run.sh stop` removes it. (The harness itself stays on the host: pnpm's Windows junctions do not
 resolve inside a Linux container, and a relay shapes the real TCP path either way.)
+
+**Without `sch_netem`** (some sandboxes and CI kernels: `tc` reports "Specified qdisc kind is
+unknown"), `tools/load/netem/shaper.mjs` is a user-space stand-in with the same ports and profiles:
+
+```sh
+PROFILE=ng-congested ROUTES=13001:127.0.0.1:3001,19000:127.0.0.1:9000 node tools/load/netem/shaper.mjs
+```
+
+It serialises every relayed byte through one shared link at the profile's rate, delays each
+direction by the profile's normal distribution without reordering, and models a lost segment as a
+retransmission an RTO later that also crosses the link twice. It does not model TCP congestion
+control, so on a saturated link it is somewhat optimistic; set `LOAD_NETWORK_PROFILE` to say which
+relay a report used.
+
+**Pre-cached lab (F20).** `load lab --precache` models the F20 client (ADR-0021 amendment): when
+the session opens, every student signs in and pre-caches the paper's encrypted media from the
+preview (timed and reported, not the burst); the burst is then the bell — every student presses
+Start inside the arrival window and is ready when the attempt package (with its media key) arrives,
+because the media is decrypted locally. A check fails if any media is fetched live at Start.
 
 ## 6. CPU profiles
 

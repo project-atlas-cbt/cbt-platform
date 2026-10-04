@@ -86,7 +86,7 @@ export function MediaUploader({
           disabled={disabled || uploading}
           onValueChange={(value) => setType(value as typeof type)}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-40" aria-label="Media type">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -109,6 +109,10 @@ export function MediaUploader({
           type="file"
           accept="image/png,image/jpeg,image/webp"
           className="sr-only"
+          // Opened by "Attach media"; kept out of the tab order so keyboard
+          // users meet one control, not two (F20 axe finding).
+          tabIndex={-1}
+          aria-label="Media file"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void handleFile(file);

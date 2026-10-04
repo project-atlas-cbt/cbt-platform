@@ -23,3 +23,9 @@ packages/db/generated/
 apps/web/public/sw.js
 apps/web/public/sw.js.map
 tools/load/.state/
+
+# F20 browser suites (apps/web/e2e)
+apps/web/e2e/.fixture.json
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/

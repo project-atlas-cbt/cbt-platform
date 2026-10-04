@@ -19,3 +19,5 @@ apps/web/next-env.d.ts
 # generated artifact, packages/contracts/src/generated, is already covered by
 # the bare `generated` entry above.
 apps/api/openapi.json
+# F20: must stay ES5 (no trailing commas in calls) — see the file's header.
+apps/web/public/compat-probe.js

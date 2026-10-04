@@ -13,6 +13,10 @@ export class ApiError extends Error {
   readonly correlationId: string;
   readonly details: Record<string, unknown> | undefined;
   readonly httpStatus: number | undefined;
+  /** F20 (B21): the server's `Retry-After`, in ms — sent with a load-shed
+   * `503 SERVICE_UNAVAILABLE`. A client that retries sooner costs the server
+   * CPU per refusal (capacity plan §6), so every retry path honours it. */
+  readonly retryAfterMs: number | undefined;
 
   constructor(options: {
     code: string;
@@ -21,6 +25,7 @@ export class ApiError extends Error {
     correlationId: string;
     details?: Record<string, unknown>;
     httpStatus?: number;
+    retryAfterMs?: number;
   }) {
     super(options.message);
     this.name = 'ApiError';
@@ -29,6 +34,7 @@ export class ApiError extends Error {
     this.correlationId = options.correlationId;
     this.details = options.details;
     this.httpStatus = options.httpStatus;
+    this.retryAfterMs = options.retryAfterMs;
   }
 }
 
@@ -47,8 +53,31 @@ export class NetworkError extends Error {
   }
 }
 
+/**
+ * `Retry-After` is either delta-seconds or an HTTP-date (RFC 9110 §10.2.3).
+ * Returns ms from `now`, or undefined when absent/unparseable. The API
+ * exposes the header to cross-origin JS (`exposedHeaders`, F20).
+ */
+export function parseRetryAfter(
+  value: string | null | undefined,
+  now = Date.now(),
+): number | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
+  const at = Date.parse(trimmed);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - now);
+}
+
 /** Normalises anything openapi-fetch/fetch can throw or return into one of the two types above. */
-export function toApiError(body: unknown, httpStatus: number, fallbackMessage: string): ApiError {
+export function toApiError(
+  body: unknown,
+  httpStatus: number,
+  fallbackMessage: string,
+  headers?: Pick<Headers, 'get'>,
+): ApiError {
+  const retryAfterMs = parseRetryAfter(headers?.get('retry-after'));
+  const retryAfter = retryAfterMs !== undefined ? { retryAfterMs } : {};
   if (isErrorEnvelope(body)) {
     return new ApiError({
       code: body.error.code,
@@ -57,6 +86,7 @@ export function toApiError(body: unknown, httpStatus: number, fallbackMessage: s
       correlationId: body.error.correlationId,
       ...(body.error.details ? { details: body.error.details } : {}),
       httpStatus,
+      ...retryAfter,
     });
   }
 
@@ -69,9 +99,22 @@ export function toApiError(body: unknown, httpStatus: number, fallbackMessage: s
     retryable: httpStatus >= 500,
     correlationId: 'unknown',
     httpStatus,
+    ...retryAfter,
   });
 }
 
 export function isRetryable(error: unknown): boolean {
   return error instanceof ApiError ? error.retryable : error instanceof NetworkError;
+}
+
+/**
+ * B21 load shedding: the API refuses reporting work (analytics, reports,
+ * exports, search, imports) and new Control Center streams with
+ * `503 SERVICE_UNAVAILABLE` while examinations are under heavy load. The UI
+ * treats that as a calm, temporary state — not a failure.
+ */
+export function isTemporarilyUnavailable(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError && error.httpStatus === 503 && error.code === 'SERVICE_UNAVAILABLE'
+  );
 }

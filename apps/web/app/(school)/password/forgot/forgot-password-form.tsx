@@ -17,7 +17,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { EmptyState } from '@/components/ui/empty-state';
-import { forgotPasswordSchema, type ForgotPasswordValues } from '@/lib/auth';
+import { forgotPasswordSchema, type ForgotPasswordValues } from '@/lib/auth/schemas';
 
 /**
  * `POST /auth/password/reset/request` always resolves successfully

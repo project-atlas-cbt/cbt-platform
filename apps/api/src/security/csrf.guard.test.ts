@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ExecutionContext } from '@nestjs/common';
 import { parseCookie } from 'cookie';
 import { unsign } from 'cookie-signature';
-import { CsrfGuard } from './csrf.guard.js';
+import { Reflector } from '@nestjs/core';
+import { CsrfGuard, ISSUES_CSRF_TOKEN } from './csrf.guard.js';
 import { TenancyContextService } from '../common/tenancy-context.service.js';
 import { AppHttpException } from '../common/app-http-exception.js';
 import { createCsrfToken } from './csrf.js';
@@ -113,5 +114,49 @@ describe('CsrfGuard (ADR-0022)', () => {
       });
       expect(() => guard.canActivate(second.context)).toThrow(AppHttpException);
     });
+  });
+
+  it('F20: with route metadata, only a token-issuing route persists a newly minted secret', () => {
+    const reflector = new Reflector();
+    const issuing = () => undefined;
+    Reflect.defineMetadata(ISSUES_CSRF_TOKEN, true, issuing);
+    const plain = () => undefined;
+    const guard = new CsrfGuard(new TenancyContextService(), makeConfig(), reflector);
+
+    const resolve = makeContext({ method: 'GET' });
+    Object.assign(resolve.context, { getHandler: () => issuing, getClass: () => class {} });
+    guard.canActivate(resolve.context);
+    expect(resolve.res.header).toHaveBeenCalledWith(
+      'set-cookie',
+      expect.stringContaining('_csrf='),
+    );
+
+    // The concurrent first-visit GET (e.g. /auth/me) must not overwrite it.
+    const me = makeContext({ method: 'GET' });
+    Object.assign(me.context, { getHandler: () => plain, getClass: () => class {} });
+    expect(guard.canActivate(me.context)).toBe(true);
+    expect(me.res.header).not.toHaveBeenCalled();
+  });
+
+  it('F20: the token from /tenant/resolve still verifies after a racing cookie-less GET', () => {
+    const tenancy = new TenancyContextService();
+    const reflector = new Reflector();
+    const issuing = () => undefined;
+    Reflect.defineMetadata(ISSUES_CSRF_TOKEN, true, issuing);
+    const guard = new CsrfGuard(tenancy, makeConfig(), reflector);
+
+    const resolve = makeContext({ method: 'GET' });
+    Object.assign(resolve.context, { getHandler: () => issuing, getClass: () => class {} });
+    guard.canActivate(resolve.context);
+    const cookie = resolve.headers['set-cookie']!.split(';')[0]!;
+    const token = createCsrfToken(resolve.req.csrfSecret!, 'platform');
+
+    const racing = makeContext({ method: 'GET' });
+    Object.assign(racing.context, { getHandler: () => () => undefined, getClass: () => class {} });
+    guard.canActivate(racing.context); // sets nothing
+
+    const login = makeContext({ method: 'POST', cookie, token });
+    Object.assign(login.context, { getHandler: () => () => undefined, getClass: () => class {} });
+    expect(guard.canActivate(login.context)).toBe(true);
   });
 });

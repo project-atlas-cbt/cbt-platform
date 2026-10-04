@@ -119,6 +119,8 @@ describe('AppShell (platform variant — Software Admin)', () => {
     roles: ['SOFTWARE_ADMIN'],
   };
 
+  let mfaStatus = { enrolled: true, required: false, recoveryCodesRemaining: 10 };
+
   function renderPlatformShell(children: React.ReactNode) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
@@ -140,12 +142,32 @@ describe('AppShell (platform variant — Software Admin)', () => {
     // file's one mockGet instance), not just calls this block's own tests
     // actually made.
     mockGet.mockReset();
-    mockGet.mockReturnValue(
+    mfaStatus = { enrolled: true, required: false, recoveryCodesRemaining: 10 };
+    mockGet.mockImplementation(((path: string) =>
       Promise.resolve({
-        data: { roles: ['SOFTWARE_ADMIN'], permissions: [] },
+        data:
+          path === '/platform/auth/mfa'
+            ? mfaStatus
+            : { roles: ['SOFTWARE_ADMIN'], permissions: [] },
         response: new Response(null, { status: 200 }),
-      } as never),
-    );
+      })) as never);
+  });
+
+  it('F20 — with MFA required and not enrolled, shows only the enrolment flow; no platform data is requested', async () => {
+    mfaStatus = { enrolled: false, required: true, recoveryCodesRemaining: 0 };
+    mockUsePlatformAuth.mockReturnValue({
+      status: 'authenticated',
+      me: PLATFORM_ME,
+      login: vi.fn(),
+      logout: vi.fn(),
+    } as never);
+    renderPlatformShell(<div>platform content</div>);
+
+    expect(
+      await screen.findByRole('heading', { name: /set up two-step sign-in to continue/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('platform content')).not.toBeInTheDocument();
+    expect(mockGet).not.toHaveBeenCalledWith('/platform/auth/permissions', {});
   });
 
   it('redirects to /admin/login when there is no platform session', () => {
@@ -169,7 +191,7 @@ describe('AppShell (platform variant — Software Admin)', () => {
     } as never);
     renderPlatformShell(<div>platform content</div>);
 
-    expect(screen.getByText('platform content')).toBeInTheDocument();
+    expect(await screen.findByText('platform content')).toBeInTheDocument();
     expect(screen.getByText('Sam Admin')).toBeInTheDocument();
     // useAuth (the school session) is never consulted for this variant.
     expect(mockUseAuth).not.toHaveBeenCalled();

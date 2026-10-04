@@ -446,6 +446,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/admins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** F20: active Software Admins with MFA status (for peer MFA reset). */
+        get: operations["PlatformAdminsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/schools": {
         parameters: {
             query?: never;
@@ -1922,6 +1939,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exam-sessions/{id}/participants/{studentId}/larger-text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** F20: grant or withdraw the larger-text accommodation (07 §9.7, DoD 3) — staff-granted, audited, applied in the exam runtime. */
+        post: operations["ExamSessionController_grantLargerText"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attempts/{id}/invalidate": {
         parameters: {
             query?: never;
@@ -2132,6 +2166,23 @@ export interface paths {
         };
         /** Instructions and rules before starting (03 §32-36). */
         get: operations["StudentAssessmentController_getPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student/assessment/{examId}/media-manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** F20: the paper's ENCRYPTED media, to pre-cache before Start (ADR-0021 amendment). The key arrives only in the attempt package. */
+        get: operations["StudentAssessmentController_getMediaManifest"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3875,6 +3926,18 @@ export interface components {
             /** @description Active PlatformRoleAssignment.role values (02). */
             roles: ("SOFTWARE_ADMIN" | "SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT")[];
         };
+        PlatformAdminSummaryDto: {
+            userId: string;
+            displayName: string;
+            email: string | null;
+            /** @description A confirmed second factor is on file. */
+            mfaEnrolled: boolean;
+            /** @description This row is the caller. */
+            isSelf: boolean;
+        };
+        PlatformAdminListResponseDto: {
+            admins: components["schemas"]["PlatformAdminSummaryDto"][];
+        };
         SchoolListItemDto: {
             id: string;
             name: string;
@@ -4646,6 +4709,12 @@ export interface components {
             navigationInstructions?: string | null;
             questions: components["schemas"]["StudentAttemptQuestionDto"][];
             invalidationReason?: string | null;
+            /** @description F20 (ADR-0021 amendment): base64 AES-256-GCM key that decrypts the pre-cached media of this exam. Present only to the attempt owner while the attempt is IN_PROGRESS; null otherwise. */
+            mediaKey: string | null;
+            /** @description F20 (DoD 3): staff-granted extra time already included in expiresAt, in seconds. */
+            extraTimeSeconds: number;
+            /** @description F20 (DoD 3): staff-granted larger-text accommodation. */
+            largerText: boolean;
         };
         ExamQuestionResponseDto: {
             id: string;
@@ -4827,6 +4896,10 @@ export interface components {
             /** @enum {string|null} */
             participantStatus: "AUTHORIZED" | "REVOKED" | null;
             examSessionId?: string | null;
+            /** @description F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none). */
+            extraTimeSeconds: number;
+            /** @description F20 (DoD 3): larger-text accommodation on the student's latest participant row. */
+            largerText: boolean;
         };
         EligibleStudentsResponseDto: {
             students: components["schemas"]["EligibleStudentResponseDto"][];
@@ -4869,6 +4942,10 @@ export interface components {
         GrantExtraTimeDto: {
             /** @description Additional seconds granted, added to Exam.durationSeconds at attempt creation. */
             extraTimeSeconds: number;
+        };
+        GrantLargerTextDto: {
+            /** @description true grants, false withdraws. */
+            largerText: boolean;
         };
         SaveAnswerDto: {
             selectedOptionId?: string | null;
@@ -4981,6 +5058,28 @@ export interface components {
             accommodations?: string | null;
             questionCount: number;
             totalMarks: number;
+            /** @description F20 (DoD 3): the caller's own staff-granted extra time for this exam, in seconds (0 when none) — already included in the attempt's server deadline at Start; shown so the student knows. */
+            extraTimeSeconds: number;
+            /** @description F20 (DoD 3): the caller's staff-granted larger-text accommodation (07 §9.7). */
+            largerText: boolean;
+        };
+        MediaManifestAssetDto: {
+            mediaAssetId: string;
+            /** @description Short-lived signed URL of the CIPHERTEXT object. */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Ciphertext size: 12-byte IV + body + 16-byte tag. */
+            byteSize: number;
+            /** @description Hex SHA-256 of the ciphertext object. */
+            sha256: string;
+        };
+        MediaManifestResponseDto: {
+            /** @description false while the server is still encrypting — poll after retryAfterSeconds. */
+            ready: boolean;
+            totalBytes: number;
+            retryAfterSeconds: number | null;
+            assets: components["schemas"]["MediaManifestAssetDto"][];
         };
         NotificationResponseDto: {
             id: string;
@@ -6527,6 +6626,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MePermissionsResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAdminsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAdminListResponseDto"];
                 };
             };
         };
@@ -8971,6 +9089,32 @@ export interface operations {
             };
         };
     };
+    ExamSessionController_grantLargerText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantLargerTextDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
     AttemptController_invalidate: {
         parameters: {
             query?: never;
@@ -9249,6 +9393,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttemptPreviewResponseDto"];
+                };
+            };
+        };
+    };
+    StudentAssessmentController_getMediaManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                examId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaManifestResponseDto"];
                 };
             };
         };

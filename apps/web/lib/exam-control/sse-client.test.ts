@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ExamControlStreamConnection, type EventSourceLike } from './sse-client';
+import {
+  ExamControlStreamConnection,
+  STREAM_RECONNECT_BASE_MS,
+  STREAM_RECONNECT_MAX_MS,
+  streamReconnectDelay,
+  type EventSourceLike,
+} from './sse-client';
 
 /**
  * F12 — pure unit tests of the connection class, against an injected fake
@@ -116,5 +122,60 @@ describe('ExamControlStreamConnection', () => {
     connection.start();
     connection.stop();
     expect(fake.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('F20 (B21): reopens after a refused/closed stream, backing off with jitter', () => {
+    vi.useFakeTimers();
+    try {
+      const sources = [makeFakeSource(), makeFakeSource(), makeFakeSource()];
+      let opened = 0;
+      const connection = new ExamControlStreamConnection(
+        'url',
+        () => sources[opened++]!.source,
+        vi.fn(),
+      );
+      connection.start();
+      sources[0]!.setReadyState(2);
+      sources[0]!.emit('error');
+      expect(connection.getSnapshot()).toBe('closed-permanent');
+      expect(opened).toBe(1);
+      vi.advanceTimersByTime(STREAM_RECONNECT_BASE_MS - 1);
+      expect(opened).toBe(1); // never sooner than the server's hold
+      vi.advanceTimersByTime(STREAM_RECONNECT_BASE_MS * 0.3 + 1);
+      expect(opened).toBe(2);
+      expect(connection.getSnapshot()).toBe('reconnecting');
+      // A second refusal doubles the wait.
+      sources[1]!.setReadyState(2);
+      sources[1]!.emit('error');
+      vi.advanceTimersByTime(STREAM_RECONNECT_BASE_MS * 1.3 + 1);
+      expect(opened).toBe(2);
+      vi.advanceTimersByTime(STREAM_RECONNECT_BASE_MS * 1.3);
+      expect(opened).toBe(3);
+      connection.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stop() cancels a pending reconnect', () => {
+    vi.useFakeTimers();
+    try {
+      const fake = makeFakeSource();
+      const factory = vi.fn(() => fake.source);
+      const connection = new ExamControlStreamConnection('url', factory, vi.fn());
+      connection.start();
+      fake.setReadyState(2);
+      fake.emit('error');
+      connection.stop();
+      vi.advanceTimersByTime(STREAM_RECONNECT_MAX_MS * 2);
+      expect(factory).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('streamReconnectDelay caps growth', () => {
+    expect(streamReconnectDelay(0, () => 0)).toBe(STREAM_RECONNECT_BASE_MS);
+    expect(streamReconnectDelay(10, () => 0)).toBe(STREAM_RECONNECT_MAX_MS);
   });
 });

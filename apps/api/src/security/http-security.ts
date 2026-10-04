@@ -66,6 +66,11 @@ export async function registerHttpSecurity(
     // @fastify/cors's default `methods` is 'GET,HEAD,POST', which silently
     // CORS-blocked every PUT/PATCH/DELETE route for real browser callers.
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    // F20: B21's load shedding answers 503 + Retry-After and requires the
+    // web client to honour it — but Retry-After is not a CORS-safelisted
+    // response header, so cross-origin JS (ADR-0022: the web app is on a
+    // sibling subdomain) cannot read it unless it is exposed here.
+    exposedHeaders: ['Retry-After'],
     maxAge: 600,
   });
 }

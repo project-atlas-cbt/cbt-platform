@@ -1,6 +1,11 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { apiClient } from '@/lib/api';
-import { AttemptSyncEngine } from './sync-engine';
+import {
+  AttemptSyncEngine,
+  FLUSH_BACKOFF_BASE_MS,
+  FLUSH_BACKOFF_MAX_MS,
+  flushBackoffDelay,
+} from './sync-engine';
 import { getAttemptDb, clearAttemptData } from './db';
 
 vi.mock('@/lib/api', async () => {
@@ -15,7 +20,19 @@ function ok<T>(data: T) {
   return Promise.resolve({ data, response: new Response(null, { status: 200 }) } as never);
 }
 
+// Engines retry on their own after a failure; stop each test's timers so a
+// leftover retry never consumes the next test's mocked responses.
+const engines: AttemptSyncEngine[] = [];
+function track(engine: AttemptSyncEngine): AttemptSyncEngine {
+  engines.push(engine);
+  return engine;
+}
+
 describe('AttemptSyncEngine', () => {
+  afterEach(() => {
+    for (const engine of engines.splice(0)) engine.dispose();
+  });
+
   beforeEach(async () => {
     await clearAttemptData(ATTEMPT_ID);
     mockPost.mockReset();
@@ -32,7 +49,7 @@ describe('AttemptSyncEngine', () => {
       }),
     );
 
-    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
     await engine.recordAnswer('q1', 'o1');
 
     const db = getAttemptDb();
@@ -54,7 +71,7 @@ describe('AttemptSyncEngine', () => {
     mockPost.mockResolvedValue(
       ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
     );
-    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
     await engine.recordAnswer('q1', 'o1');
     await engine.flushNow();
 
@@ -93,7 +110,7 @@ describe('AttemptSyncEngine', () => {
       ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
     );
 
-    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
     await engine.recordAnswer('q1', 'o1'); // localSequence 1, sent
     // Student changes their mind before the first response lands.
     await engine.recordAnswer('q1', 'o2'); // localSequence 2, superseding
@@ -115,7 +132,7 @@ describe('AttemptSyncEngine', () => {
       ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
     );
 
-    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
     await engine.recordAnswer('q1', 'o1');
     await engine.flushNow();
 
@@ -139,7 +156,7 @@ describe('AttemptSyncEngine', () => {
         ],
       }),
     );
-    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
     await engine.recordAnswer('q1', 'o1');
     await engine.flushNow();
 
@@ -162,7 +179,7 @@ describe('AttemptSyncEngine', () => {
     // `localSequence` for two different selections, since the read and the
     // write weren't in one transaction. Firing them via `Promise.all`
     // forces the worst-case interleaving rather than relying on timing.
-    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
     await Promise.all([engine.recordAnswer('q1', 'o1'), engine.recordAnswer('q1', 'o2')]);
 
     const db = getAttemptDb();
@@ -185,7 +202,7 @@ describe('AttemptSyncEngine', () => {
       });
     });
     const onNotWritable = vi.fn();
-    const engine = new AttemptSyncEngine(ATTEMPT_ID, onNotWritable);
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID, onNotWritable));
     await engine.recordAnswer('q1', 'o1');
     await engine.flushNow();
 
@@ -194,5 +211,131 @@ describe('AttemptSyncEngine', () => {
     const row = await db.answers.get([ATTEMPT_ID, 'q1']);
     expect(row?.selectedOptionId).toBe('o1');
     expect(row?.syncStatus).toBe('pending');
+  });
+
+  it('F20 — every batch request carries a timeout signal, so a hung request releases the chain', async () => {
+    mockPost.mockResolvedValue(
+      ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
+    );
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1');
+    await engine.flushNow();
+    const init = mockPost.mock.calls[0]![1] as { signal?: AbortSignal };
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('F20 — after a failure, answer-triggered flushes back off; answers still save locally', async () => {
+    mockPost.mockRejectedValueOnce(new Error('network down'));
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1'); // its own flush fails
+    const db = getAttemptDb();
+    await vi.waitFor(async () => {
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      expect((await db.answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('pending');
+    });
+
+    // Inside the backoff window: the local write happens, the network retry waits.
+    await engine.recordAnswer('q2', 'o9');
+    expect((await db.answers.get([ATTEMPT_ID, 'q2']))?.syncStatus).toBe('pending');
+    expect(mockPost).toHaveBeenCalledTimes(1);
+
+    // A forced flush (heartbeat tick / pre-submit) always tries.
+    mockPost.mockResolvedValueOnce(
+      ok({
+        results: [
+          { examQuestionId: 'q1', accepted: true, gradeWindowFlag: false },
+          { examQuestionId: 'q2', accepted: true, gradeWindowFlag: false },
+        ],
+      }),
+    );
+    await engine.flushNow();
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    expect((await db.answers.get([ATTEMPT_ID, 'q2']))?.syncStatus).toBe('synced');
+  });
+
+  it("F20 — a heartbeat's forced flush still waits out the server's Retry-After", async () => {
+    // A load-shed refusal exactly as openapi-fetch hands it over.
+    mockPost.mockResolvedValueOnce({
+      error: {
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'busy',
+          retryable: true,
+          correlationId: 'c',
+        },
+      },
+      response: new Response(null, { status: 503, headers: { 'retry-after': '1' } }),
+    });
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1');
+    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+
+    mockPost.mockResolvedValue(
+      ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
+    );
+    // Heartbeat tick inside the Retry-After window: deferred, not sent.
+    engine.scheduleFlush({ force: true });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    // …and sent once the window has passed, without another trigger.
+    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2), { timeout: 3_000 });
+    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('synced');
+  });
+
+  it('F20 — a save queued behind an in-flight one that is refused waits out its Retry-After', async () => {
+    let release!: () => void;
+    const refused = new Promise<void>((r) => (release = r)).then(() => ({
+      error: {
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'busy',
+          retryable: true,
+          correlationId: 'c',
+        },
+      },
+      response: new Response(null, { status: 503, headers: { 'retry-after': '1' } }),
+    }));
+    mockPost.mockReturnValueOnce(refused);
+    mockPost.mockResolvedValue(
+      ok({
+        results: [
+          { examQuestionId: 'q1', accepted: true, gradeWindowFlag: false },
+          { examQuestionId: 'q2', accepted: true, gradeWindowFlag: false },
+        ],
+      }),
+    );
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1'); // first save: in flight
+    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    await engine.recordAnswer('q2', 'o2'); // queued behind it
+    release(); // the in-flight save is refused with Retry-After: 1
+    await new Promise((r) => setTimeout(r, 300));
+    expect(mockPost).toHaveBeenCalledTimes(1); // the queued save did not go out at once
+    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2), { timeout: 3_000 });
+  });
+
+  it('F20 — a failed flush retries by itself when its backoff ends, with no new answer or heartbeat', async () => {
+    mockPost.mockRejectedValueOnce(new Error('network down'));
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1');
+    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    mockPost.mockResolvedValue(
+      ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
+    );
+    // First backoff is 0.5–1 s; nothing else triggers a flush here.
+    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2), { timeout: 3_000 });
+    await vi.waitFor(async () =>
+      expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('synced'),
+    );
+  });
+});
+
+describe('flushBackoffDelay', () => {
+  it('grows exponentially with jitter, caps, and never undercuts Retry-After', () => {
+    expect(flushBackoffDelay(1, undefined, () => 0)).toBe(FLUSH_BACKOFF_BASE_MS / 2);
+    expect(flushBackoffDelay(3, undefined, () => 1)).toBe(4_000);
+    expect(flushBackoffDelay(20, undefined, () => 1)).toBe(FLUSH_BACKOFF_MAX_MS);
+    expect(flushBackoffDelay(1, 20_000, () => 0)).toBe(20_000);
+    expect(flushBackoffDelay(1, 20_000, () => 1)).toBe(26_000);
   });
 });

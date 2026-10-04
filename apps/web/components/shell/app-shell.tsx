@@ -6,6 +6,7 @@ import { GraduationCap } from 'lucide-react';
 import type { Role } from '@atlas/domain';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { PlatformRouteGuard } from '@/components/auth/platform-route-guard';
+import { MfaEnrolmentGate } from '@/components/platform/security/mfa-enrolment-gate';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useAuth, usePlatformAuth } from '@/lib/auth';
 import { useNavigation, usePlatformNavigation, type NavigationResult } from '@/lib/nav';
@@ -146,6 +147,19 @@ function SchoolAppShell({ role, schoolName, children }: AppShellProps) {
 }
 
 function PlatformAppShell({ role, children }: Omit<AppShellProps, 'schoolName'>) {
+  // F20: the MFA gate sits between the session guard and anything that
+  // loads platform data — an unenrolled admin under PLATFORM_MFA_REQUIRED
+  // sees only the enrolment flow, never a shell whose requests all 403.
+  return (
+    <PlatformRouteGuard>
+      <MfaEnrolmentGate>
+        <PlatformShellBody role={role}>{children}</PlatformShellBody>
+      </MfaEnrolmentGate>
+    </PlatformRouteGuard>
+  );
+}
+
+function PlatformShellBody({ role, children }: Omit<AppShellProps, 'schoolName'>) {
   const router = useRouter();
   const { me, logout } = usePlatformAuth();
   // Not `useNavigation` — see that hook's own doc comment for the bug this
@@ -159,20 +173,16 @@ function PlatformAppShell({ role, children }: Omit<AppShellProps, 'schoolName'>)
   }
 
   return (
-    <PlatformRouteGuard>
-      <ShellChrome
-        role={role}
-        roles={me?.roles ?? ['SOFTWARE_ADMIN']}
-        identity={
-          me ? { displayName: me.user.displayName, secondaryLabel: 'Software Admin' } : null
-        }
-        navigation={navigation}
-        onLogout={handleLogout}
-        showNotifications={false}
-      >
-        {children}
-      </ShellChrome>
-    </PlatformRouteGuard>
+    <ShellChrome
+      role={role}
+      roles={me?.roles ?? ['SOFTWARE_ADMIN']}
+      identity={me ? { displayName: me.user.displayName, secondaryLabel: 'Software Admin' } : null}
+      navigation={navigation}
+      onLogout={handleLogout}
+      showNotifications={false}
+    >
+      {children}
+    </ShellChrome>
   );
 }
 

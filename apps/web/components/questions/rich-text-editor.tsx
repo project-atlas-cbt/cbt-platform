@@ -12,6 +12,7 @@ import {
   Underline as UnderlineIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNonce } from '@/lib/security/nonce-context';
 
 /**
  * F9 — this codebase's first WYSIWYG dependency (Tiptap, confirmed with the
@@ -56,7 +57,11 @@ export function RichTextEditor({
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
 }: RichTextEditorProps) {
+  const nonce = useNonce();
   const editor = useEditor({
+    // F20 CSP: Tiptap injects its base editor CSS as a <style> element;
+    // `style-src` admits it only with the request nonce.
+    ...(nonce ? { injectNonce: nonce } : {}),
     extensions: [
       StarterKit.configure({
         heading: false,

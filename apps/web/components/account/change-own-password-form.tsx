@@ -14,7 +14,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { buildChangePasswordSchema, type ChangePasswordValues } from '@/lib/auth';
+import { buildChangePasswordSchema, type ChangePasswordValues } from '@/lib/auth/schemas';
 
 /**
  * F14 — genuine self-service password change, closing the gap F2's own

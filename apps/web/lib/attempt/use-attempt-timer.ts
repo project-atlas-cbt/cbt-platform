@@ -11,6 +11,9 @@ const ONE_MINUTE_MS = 60_000;
  * keeps checking for expiry so the proactive submit (DoD 15) still fires
  * even if the student never returns to the tab. */
 const BACKGROUND_CHECK_INTERVAL_MS = 5_000;
+/** F20: a 4 Hz recompute is exact to the displayed second (it recomputes
+ * from the deadline, never decrements) at a fraction of rAF's CPU cost. */
+const VISIBLE_TICK_MS = 250;
 
 export interface AttemptTimerState {
   remainingMs: number;
@@ -29,8 +32,9 @@ export interface AttemptTimerState {
  * move together, and the skew was captured before any manipulation could
  * occur.
  *
- * Ticks via `requestAnimationFrame` while the tab is visible (always exact,
- * since it recomputes rather than decrements); a background interval keeps
+ * Ticks at 4 Hz while the tab is visible (always exact, since it
+ * recomputes rather than decrements — F20 replaced the original
+ * `requestAnimationFrame` loop, see `recompute`); a slower interval keeps
  * checking for expiry while hidden. On `visibilitychange`/`focus`, the very
  * next tick already recomputes from the stored truth — there is no
  * accumulated counter to resync, so no special-case handling is needed
@@ -71,57 +75,53 @@ export function useAttemptTimer(
 
   useEffect(() => {
     if (!expiresAt) return;
-    let rafId: number | null = null;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let lastSecond: number | null = null;
 
     const recompute = () => {
       const remainingMs = computeRemaining();
-      setState((prev) => ({
-        remainingMs,
-        fiveMinuteWarningShown: prev.fiveMinuteWarningShown || remainingMs <= FIVE_MINUTES_MS,
-        oneMinuteWarningShown: prev.oneMinuteWarningShown || remainingMs <= ONE_MINUTE_MS,
-        expired: remainingMs <= 0,
-      }));
+      const second = Math.floor(remainingMs / 1000);
+      // F20 (DoD 5, low-end hardware): only commit state when what the
+      // student can see changes — the displayed second, a warning
+      // threshold, or expiry. Before F20 this set state on every animation
+      // frame, re-rendering the whole runtime (DOMPurify included) ~60×/s.
+      if (second !== lastSecond || remainingMs <= 0) {
+        lastSecond = second;
+        setState((prev) => {
+          const next = {
+            remainingMs,
+            fiveMinuteWarningShown: prev.fiveMinuteWarningShown || remainingMs <= FIVE_MINUTES_MS,
+            oneMinuteWarningShown: prev.oneMinuteWarningShown || remainingMs <= ONE_MINUTE_MS,
+            expired: remainingMs <= 0,
+          };
+          return prev.expired && next.expired ? prev : next;
+        });
+      }
       if (remainingMs <= 0 && !expiredFiredRef.current) {
         expiredFiredRef.current = true;
         onExpireRef.current();
       }
     };
 
-    const rafLoop = () => {
-      recompute();
-      if (!document.hidden) rafId = requestAnimationFrame(rafLoop);
-    };
-
-    const startVisible = () => {
-      if (intervalId !== null) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-      if (rafId === null) rafId = requestAnimationFrame(rafLoop);
-    };
-    const startHidden = () => {
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-      if (intervalId === null) intervalId = setInterval(recompute, BACKGROUND_CHECK_INTERVAL_MS);
+    const schedule = () => {
+      if (intervalId !== null) clearInterval(intervalId);
+      intervalId = setInterval(
+        recompute,
+        document.hidden ? BACKGROUND_CHECK_INTERVAL_MS : VISIBLE_TICK_MS,
+      );
     };
 
     const onVisibilityChange = () => {
       recompute();
-      if (document.hidden) startHidden();
-      else startVisible();
+      schedule();
     };
 
     recompute();
-    if (document.hidden) startHidden();
-    else startVisible();
+    schedule();
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('focus', onVisibilityChange);
 
     return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId);
       if (intervalId !== null) clearInterval(intervalId);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('focus', onVisibilityChange);

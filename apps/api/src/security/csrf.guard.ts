@@ -1,4 +1,11 @@
-import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  Optional,
+  SetMetadata,
+  type CanActivate,
+  type ExecutionContext,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { parseCookie, stringifySetCookie } from 'cookie';
@@ -60,11 +67,18 @@ declare module 'fastify' {
  * secret cookie (and therefore a fetchable token) already exists by the
  * time B1 needs to hand one to a login form.
  */
+/** Marks the one kind of route that hands the client a CSRF token
+ * (`GET /tenant/resolve`). Only such a route persists a newly minted secret
+ * cookie — see the race note in `canActivate`. */
+export const ISSUES_CSRF_TOKEN = 'atlas:issuesCsrfToken';
+export const IssuesCsrfToken = () => SetMetadata(ISSUES_CSRF_TOKEN, true);
+
 @Injectable()
 export class CsrfGuard implements CanActivate {
   constructor(
     private readonly tenancy: TenancyContextService,
     private readonly config: ConfigService<Env, true>,
+    @Optional() private readonly reflector?: Reflector,
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -81,8 +95,23 @@ export class CsrfGuard implements CanActivate {
     const rawCookie = cookies[CSRF_COOKIE_NAME];
     const unsigned = rawCookie ? unsign(rawCookie, signingSecret) : false;
 
+    // F20 fix — a first-visit race found by the browser suites: a page with
+    // no cookie yet sends `GET /tenant/resolve` (which returns a token) and
+    // other GETs (`/auth/me`) at the same time. When every cookie-less
+    // request minted and set its own secret, whichever response landed last
+    // won the cookie — and if that was `/auth/me`, the token the page held
+    // no longer matched, so the student's first sign-in on a fresh lab
+    // browser failed with "Missing or invalid CSRF token". Only a
+    // token-issuing route now persists a new secret. (Without a Reflector —
+    // unit tests — every route keeps the original mint-and-set behaviour.)
+    const issuesToken = this.reflector
+      ? this.reflector.getAllAndOverride<boolean>(ISSUES_CSRF_TOKEN, [
+          context.getHandler(),
+          context.getClass(),
+        ]) === true
+      : true;
     const secret = typeof unsigned === 'string' ? unsigned : generateCsrfSecret();
-    if (typeof unsigned !== 'string') {
+    if (typeof unsigned !== 'string' && issuesToken) {
       // No valid signed cookie yet (first visit, or tampered/tossed value
       // that failed the signature check) — mint one and set it now, so a
       // fresh cookie always exists before we might need to verify against

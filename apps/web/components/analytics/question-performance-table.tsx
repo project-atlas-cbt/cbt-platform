@@ -122,7 +122,7 @@ export function QuestionPerformanceTable({
         </div>
         <div className="rounded-md border border-border/60 bg-surface-raised/30 p-3">
           <span className="text-[11px] font-medium text-text-muted uppercase">Difficult Items</span>
-          <p className="text-xl font-bold tabular-nums text-amber-600 dark:text-amber-400 mt-0.5">
+          <p className="text-xl font-bold tabular-nums text-warning dark:text-amber-400 mt-0.5">
             {difficultCount}
           </p>
         </div>
@@ -253,7 +253,7 @@ export function QuestionPerformanceTable({
                       <span
                         className={cn(
                           correctPct >= 70
-                            ? 'text-emerald-600 dark:text-emerald-400'
+                            ? 'text-success dark:text-emerald-400'
                             : isDifficult
                               ? 'text-rose-600 dark:text-rose-400'
                               : 'text-text-primary',

@@ -18,7 +18,10 @@ vi.mock('@/lib/exam-control/queries', () => ({
   useExamControl: vi.fn(),
   useEligibleStudents: vi.fn(),
 }));
-vi.mock('@/lib/exam-control/mutations', () => ({ useRevokeParticipant: vi.fn() }));
+vi.mock('@/lib/exam-control/mutations', () => ({
+  useRevokeParticipant: vi.fn(),
+  useGrantAccommodations: vi.fn(() => ({ mutateAsync: vi.fn() })),
+}));
 vi.mock('./batch-authorizer', () => ({
   BatchAuthorizer: () => <div data-testid="batch-authorizer" />,
 }));

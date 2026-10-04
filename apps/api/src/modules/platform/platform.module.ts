@@ -43,6 +43,7 @@ import { PlatformAnalyticsController } from './platform-analytics.controller.js'
 import { PlatformSearchController } from './platform-search.controller.js';
 import { PlatformExportController } from './platform-export.controller.js';
 import { ReportsModule } from '../reports/reports.module.js';
+import { PlatformAdminsController } from './platform-admins.controller.js';
 
 /**
  * Bounded domain per 08 §5: "Platform — Software Admin, schools,
@@ -73,6 +74,7 @@ import { ReportsModule } from '../reports/reports.module.js';
   ],
   controllers: [
     PlatformAuthController,
+    PlatformAdminsController,
     SchoolsAdminController,
     PlatformMetricsController,
     ActivationController,

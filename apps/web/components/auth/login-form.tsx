@@ -16,7 +16,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useTenant } from '@/lib/tenant';
-import { loginSchema, resolveLoginErrorMessage, useAuth, type LoginValues } from '@/lib/auth';
+import { resolveLoginErrorMessage, useAuth } from '@/lib/auth';
+import { loginSchema, type LoginValues } from '@/lib/auth/schemas';
 
 /**
  * DoD item 3: a generic error revealing nothing about account existence —

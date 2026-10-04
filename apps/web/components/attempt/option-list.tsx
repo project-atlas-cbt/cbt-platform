@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -34,7 +35,14 @@ export function OptionList({
     () => getAttemptDb().answers.get([attemptId, examQuestionId]),
     [attemptId, examQuestionId],
   );
-  const sorted = [...options].sort((a, b) => a.displayPosition - b.displayPosition);
+  // F20: sorted and sanitised once per question, not on every render.
+  const sorted = useMemo(
+    () =>
+      [...options]
+        .sort((a, b) => a.displayPosition - b.displayPosition)
+        .map((option) => ({ ...option, html: sanitizeQuestionHtml(option.content) })),
+    [options],
+  );
   // Once the grace window has permanently closed for this specific
   // question (ADR-0003), further selection is pointless — the server
   // would only reject it again with the same code. Every other question
@@ -46,7 +54,7 @@ export function OptionList({
       value={answer?.selectedOptionId ?? ''}
       onValueChange={onSelect}
       disabled={disabled}
-      aria-label="Answer options"
+      aria-labelledby="question-heading"
       className="mt-4"
     >
       {sorted.map((option) => (
@@ -62,7 +70,7 @@ export function OptionList({
           <Label
             htmlFor={`option-${option.optionId}`}
             className="cursor-pointer text-sm text-text-primary [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
-            dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(option.content) }}
+            dangerouslySetInnerHTML={{ __html: option.html }}
           />
         </div>
       ))}

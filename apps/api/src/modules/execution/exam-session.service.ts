@@ -16,6 +16,7 @@ import {
 } from './exam-control-mappers.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
 import type { ExamSessionResponseDto, OpenExamSessionDto } from './dto/exam-session.dto.js';
+import { ExamMediaPrecacheService } from './media-precache/exam-media-precache.service.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -36,6 +37,7 @@ export class ExamSessionService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationService,
     private readonly stream: ExamControlStreamService,
+    private readonly precache: ExamMediaPrecacheService,
   ) {}
 
   /**
@@ -222,6 +224,10 @@ export class ExamSessionService {
       metadata: { examId, authorizedCount: authorizedProfileIds.length },
     });
     await this.stream.publishUpdate(schoolId, examId);
+    // F20 (ADR-0021 amendment): start encrypting the paper's media the moment
+    // a lab session opens, so students can pre-cache before the bell.
+    // Best-effort — the manifest endpoint enqueues lazily as a backstop.
+    await this.precache.requestEncryption(schoolId, examId);
 
     // Best-effort, outside the write transaction (NotificationService.record
     // is itself best-effort and must never fail the caller's primary

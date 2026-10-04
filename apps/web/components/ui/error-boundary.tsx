@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { ErrorState } from '@/components/ui/error-state';
+import { reportClientError } from '@/lib/observability/client-errors';
 
 export interface ErrorBoundaryProps {
   children: ReactNode;
@@ -26,6 +27,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
+    // F20 (DoD 11): every caught section failure is reported (scrubbed).
+    reportClientError(error, { source: 'error-boundary' });
     this.props.onError?.(error, info);
   }
 

@@ -25,10 +25,20 @@ import type { PlatformAuthStatus, PlatformMe } from './types';
  */
 const PLATFORM_ME_QUERY_KEY = ['platform-auth', 'me'] as const;
 
+/** F20 (B20 MFA): an enrolled admin's password alone never creates a
+ * session — the server answers `mfa_required` with a short-lived challenge
+ * token for the second step. */
+export type PlatformLoginResult =
+  { status: 'ok' } | { status: 'mfa_required'; challengeToken: string };
+
 interface PlatformAuthContextValue {
   status: PlatformAuthStatus;
   me: PlatformMe | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<PlatformLoginResult>;
+  /** Second step with a 6-digit authenticator code. */
+  verifyOtp: (challengeToken: string, otp: string) => Promise<void>;
+  /** Second step with a one-time recovery code. */
+  verifyRecovery: (challengeToken: string, recoveryCode: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -57,8 +67,32 @@ export function PlatformAuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      await unwrap(apiClient.POST('/platform/auth/login', { body: { email, password } }));
+    async (email: string, password: string): Promise<PlatformLoginResult> => {
+      const result = await unwrap(
+        apiClient.POST('/platform/auth/login', { body: { email, password } }),
+      );
+      if (result.status === 'mfa_required' && result.challengeToken) {
+        return { status: 'mfa_required', challengeToken: result.challengeToken };
+      }
+      await reload();
+      return { status: 'ok' };
+    },
+    [reload],
+  );
+
+  const verifyOtp = useCallback(
+    async (challengeToken: string, otp: string) => {
+      await unwrap(apiClient.POST('/platform/auth/mfa/verify', { body: { challengeToken, otp } }));
+      await reload();
+    },
+    [reload],
+  );
+
+  const verifyRecovery = useCallback(
+    async (challengeToken: string, recoveryCode: string) => {
+      await unwrap(
+        apiClient.POST('/platform/auth/mfa/recovery', { body: { challengeToken, recoveryCode } }),
+      );
       await reload();
     },
     [reload],
@@ -70,8 +104,8 @@ export function PlatformAuthProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   const value = useMemo<PlatformAuthContextValue>(
-    () => ({ status, me, login, logout }),
-    [status, me, login, logout],
+    () => ({ status, me, login, verifyOtp, verifyRecovery, logout }),
+    [status, me, login, verifyOtp, verifyRecovery, logout],
   );
 
   return <PlatformAuthContext.Provider value={value}>{children}</PlatformAuthContext.Provider>;

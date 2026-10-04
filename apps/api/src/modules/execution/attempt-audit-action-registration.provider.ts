@@ -20,6 +20,8 @@ export class AttemptAuditActionRegistrationProvider implements OnModuleInit {
       'ATTEMPT_AUTO_SUBMITTED',
       'ATTEMPT_ENDED_BY_STAFF',
       'ATTEMPT_EXTRA_TIME_GRANTED',
+      // F20 (DoD 3): the second 07 §9.7 accommodation.
+      'ATTEMPT_LARGER_TEXT_GRANTED',
       'MAKEUP_GRANTED',
       'ATTEMPT_RETRY_AUTHORIZED',
       'ATTEMPT_AUTHORIZATION_REVOKED',

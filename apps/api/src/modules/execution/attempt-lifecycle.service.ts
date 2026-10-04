@@ -33,6 +33,7 @@ import type { SnapshotSourceQuestion } from './attempt-snapshot.types.js';
 import type { AttemptPackageResponseDto, AttemptStateResponseDto } from './dto/attempt.dto.js';
 import { CRITICAL_SPANS, withSpan } from '@atlas/observability';
 import { ExamTelemetryService } from './exam-telemetry.service.js';
+import { ExamMediaPrecacheService } from './media-precache/exam-media-precache.service.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -105,6 +106,7 @@ export class AttemptLifecycleService {
     private readonly finalization: AttemptFinalizationService,
     private readonly marking: AttemptMarkingQueueService,
     private readonly telemetry: ExamTelemetryService,
+    private readonly precache: ExamMediaPrecacheService,
   ) {}
 
   // ---- B20 critical-flow instrumentation (08 §18 tracing; 09 §36) -------
@@ -688,7 +690,23 @@ export class AttemptLifecycleService {
           navigationPolicy: true,
           generalInstructions: true,
           navigationInstructions: true,
+          durationSeconds: true,
         },
+      }),
+    );
+    // F20 (DoD 3): the larger-text accommodation is read live from the
+    // participant row this attempt was started under (a display concern,
+    // not frozen); extra time is the frozen difference already in expiresAt.
+    const participant = await withTenant(prisma, schoolId, (tx) =>
+      tx.examSessionParticipant.findUnique({
+        where: {
+          schoolId_examSessionId_studentProfileId: {
+            schoolId,
+            examSessionId: attempt.examSessionId,
+            studentProfileId: attempt.studentProfileId,
+          },
+        },
+        select: { largerText: true },
       }),
     );
 
@@ -721,6 +739,15 @@ export class AttemptLifecycleService {
       navigationInstructions: examMeta.navigationInstructions,
       questions,
       invalidationReason: attempt.invalidationReason,
+      // F20 (ADR-0021 amendment): the pre-cached ciphertext's key — only
+      // while the attempt may render questions. This method serves only the
+      // owner (start/resume are owner-authorized).
+      mediaKey:
+        attempt.state === 'IN_PROGRESS'
+          ? this.precache.mediaKeyFor(schoolId, attempt.examId)
+          : null,
+      extraTimeSeconds: Math.max(0, attempt.durationGrantedSeconds - examMeta.durationSeconds),
+      largerText: participant?.largerText ?? false,
     };
   }
 }

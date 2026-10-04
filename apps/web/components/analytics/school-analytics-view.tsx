@@ -111,7 +111,7 @@ export function SchoolAnalyticsView() {
               <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 uppercase">
                 Attended
               </span>
-              <p className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300 mt-0.5">
+              <p className="text-xl font-bold tabular-nums text-success dark:text-emerald-300 mt-0.5">
                 {analyticsQuery.isPending
                   ? '—'
                   : formatCount(analytics?.participation?.attendedCount)}

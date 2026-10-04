@@ -64,9 +64,9 @@ If a future decision is reopened or superseded, the affected phases return to **
 | B16 | Participation, Absence & Makeup    | 0014, 0024                         | F16           | COMPLETE    |
 | B17 | Analytics                          | 0002, 0025                         | F17           | COMPLETE    |
 | B18 | Reporting & Export                 | 0030                               | F18           | COMPLETE    |
-| B19 | Academic Session Rollover          | 0026                               | F19           | NOT STARTED |
-| B20 | Security Hardening & Compliance    | 0028                               | F20           | NOT STARTED |
-| B21 | Performance & Load                 | 0032                               | F20           | NOT STARTED |
+| B19 | Academic Session Rollover          | 0026                               | F19           | IN PROGRESS |
+| B20 | Security Hardening & Compliance    | 0028                               | F20           | COMPLETE    |
+| B21 | Performance & Load                 | 0032                               | F20           | COMPLETE    |
 | B22 | Failure, Recovery & DR             | —                                  | —             | NOT STARTED |
 | B23 | Production Readiness & Launch      | —                                  | F21           | NOT STARTED |
 
@@ -4587,8 +4587,8 @@ Rows B0–B9 were left at their original NOT STARTED placeholder since this tabl
 | B16   | COMPLETE    | 2026-09-17 | 2026-09-17 | Decided: ADR-0014, 0024; F16 remains the separate frontend consumer.                                                                                                                                                                                                             |
 | B17   | COMPLETE    | 2026-09-17 | 2026-09-18 | Derived read model and scoped API confirmed end to end by F17 analytics dashboards.                                                                                                                                                                                              |
 | B18   | COMPLETE    | 2026-09-18 | 2026-09-19 | Async private CSV jobs, scoped search and print-data contracts; F18 confirmed browser consumption (2026-09-19).                                                                                                                                                                  |
-| B19   | NOT STARTED | —          | —          | Decided: ADR-0026                                                                                                                                                                                                                                                                |
-| B20   | NOT STARTED | —          | —          | Decided: ADR-0028                                                                                                                                                                                                                                                                |
+| B19   | IN PROGRESS | 2026-09-20 | —          | Decided: ADR-0026. Status corrected 2026-10-04 (F20): implemented (migrations 2026-09-20, F19 consumes it) but its own section is still IN PROGRESS with no completion entry — not marked complete here.                                                                         |
+| B20   | COMPLETE    | 2026-10-02 | 2026-10-02 | Decided: ADR-0028 (amended 2026-10-02). Status corrected 2026-10-04 (F20).                                                                                                                                                                                                       |
 | B21   | COMPLETE    | 2026-10-02 | 2026-10-03 | Decided: ADR-0032 (revisit condition met; region to owner at B23). DoD 1/4 at 1,000 attempts gated to the B23 staging re-run (owner decision).                                                                                                                                   |
 | B22   | NOT STARTED | —          | —          |                                                                                                                                                                                                                                                                                  |
 | B23   | NOT STARTED | —          | —          |                                                                                                                                                                                                                                                                                  |

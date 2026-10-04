@@ -46,16 +46,16 @@ Unblocks `B5` onward. One coherent scope model.
 
 Unblocks `B11`–`B14`. The highest-integrity subsystem.
 
-| ADR                                                  | Decision              | Outcome                                                                          |
-| ---------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------- |
-| [0002](./ADR-0002-question-pools.md)                 | Question pools        | **Deferred.** Fixed selection only; order and option randomisation retained      |
-| [0003](./ADR-0003-post-expiry-cutoff-policy.md)      | Post-expiry cutoff    | 60s grace against server receipt time; flagged; non-retryable beyond             |
-| [0004](./ADR-0004-auto-submission-ownership.md)      | Auto-submission       | BullMQ sweeper + opportunistic finalisation, one idempotent routine              |
-| [0006](./ADR-0006-session-authorization-mode.md)     | Session authorization | Exam-level `access_mode`; participants always written; one eligibility predicate |
-| [0007](./ADR-0007-answer-persistence-model.md)       | Answer persistence    | Mutable row + append-only event log; per-question sequence ordering              |
-| [0008](./ADR-0008-snapshot-storage-shape.md)         | Snapshot shape        | One JSONB document per attempt; orders materialised; seed stored                 |
-| [0020](./ADR-0020-integrity-signals-and-liveness.md) | Signals and liveness  | `AttemptEvent` off the critical path; `last_seen_at` heartbeat                   |
-| [0021](./ADR-0021-offline-media-delivery.md)         | Offline media         | Cached into the client at attempt start; Start blocked until cached              |
+| ADR                                                  | Decision              | Outcome                                                                                                                                   |
+| ---------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [0002](./ADR-0002-question-pools.md)                 | Question pools        | **Deferred.** Fixed selection only; order and option randomisation retained                                                               |
+| [0003](./ADR-0003-post-expiry-cutoff-policy.md)      | Post-expiry cutoff    | 60s grace against server receipt time; flagged; non-retryable beyond                                                                      |
+| [0004](./ADR-0004-auto-submission-ownership.md)      | Auto-submission       | BullMQ sweeper + opportunistic finalisation, one idempotent routine                                                                       |
+| [0006](./ADR-0006-session-authorization-mode.md)     | Session authorization | Exam-level `access_mode`; participants always written; one eligibility predicate                                                          |
+| [0007](./ADR-0007-answer-persistence-model.md)       | Answer persistence    | Mutable row + append-only event log; per-question sequence ordering                                                                       |
+| [0008](./ADR-0008-snapshot-storage-shape.md)         | Snapshot shape        | One JSONB document per attempt; orders materialised; seed stored                                                                          |
+| [0020](./ADR-0020-integrity-signals-and-liveness.md) | Signals and liveness  | `AttemptEvent` off the critical path; `last_seen_at` heartbeat                                                                            |
+| [0021](./ADR-0021-offline-media-delivery.md)         | Offline media         | Cached into the client at attempt start; Start blocked until cached; **amended F20**: encrypted pre-cache before the window, key at Start |
 
 ## Gate 4 — Results, operations, production
 

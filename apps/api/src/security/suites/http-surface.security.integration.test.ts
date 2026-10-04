@@ -106,6 +106,19 @@ describe('CORS lockdown', () => {
     expect(res.headers['access-control-allow-credentials']).toBe('true');
   });
 
+  it('exposes Retry-After to the web client, so it can honour load shedding (F20, B21)', async () => {
+    const origin = `http://${school.subdomain}.${ROOT_DOMAIN}`;
+    const res = await app.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { host: school.host, origin },
+    });
+    expect(res.headers['access-control-allow-origin']).toBe(origin);
+    expect(String(res.headers['access-control-expose-headers']).toLowerCase()).toContain(
+      'retry-after',
+    );
+  });
+
   it('refuses foreign, look-alike and nested origins', async () => {
     for (const origin of [
       'https://evil.example.com',

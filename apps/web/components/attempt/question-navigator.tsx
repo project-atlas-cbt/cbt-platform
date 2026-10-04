@@ -62,7 +62,8 @@ export function QuestionNavigator({
             aria-label={`Question ${index + 1}${isAnswered ? ', answered' : ', unanswered'}${isCurrent ? ', current' : ''}`}
             onClick={() => onNavigate(index)}
             className={cn(
-              'flex size-9 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors',
+              // F20: 44 px targets (WCAG 2.5.5) — mouse precision on old lab hardware.
+              'flex size-11 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors',
               'disabled:cursor-not-allowed disabled:opacity-40',
               isCurrent
                 ? 'border-brand-primary bg-brand-primary text-brand-primary-foreground'

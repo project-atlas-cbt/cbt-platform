@@ -39,6 +39,8 @@ export function buildThemeCss(palette: DerivedPalette): string {
 export interface ThemeProviderProps {
   /** A school's primary colour (hex). Omit to use the platform default. */
   primaryColor?: string;
+  /** F20: the request's CSP nonce — `style-src` admits only nonce'd `<style>` elements. */
+  nonce?: string;
   children: ReactNode;
 }
 
@@ -52,14 +54,20 @@ export interface ThemeProviderProps {
  * flash-of-default-branding on first paint (doctrine's "before
  * authentication" requirement for the login screen, F1).
  */
-export function ThemeProvider({ primaryColor, children }: ThemeProviderProps) {
+export function ThemeProvider({ primaryColor, nonce, children }: ThemeProviderProps) {
   const palette = derivePalette(primaryColor ?? PLATFORM_DEFAULT_PRIMARY_COLOR);
 
   return (
     <>
       {/* Static CSS built from our own derived hex values, never from
           unsanitised user input — safe to inject directly. */}
-      <style id="atlas-theme-tokens" dangerouslySetInnerHTML={{ __html: buildThemeCss(palette) }} />
+      <style
+        id="atlas-theme-tokens"
+        nonce={nonce}
+        // Browsers blank a rendered nonce attribute; hydration must not flag it.
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: buildThemeCss(palette) }}
+      />
       {children}
     </>
   );

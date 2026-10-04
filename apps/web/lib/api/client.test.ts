@@ -68,3 +68,38 @@ describe('apiClient unauthenticated-response debounce', () => {
     expect(handler).toHaveBeenCalledTimes(2);
   });
 });
+
+/**
+ * F20 (browser matrix): Firefox does not implement `Request.body`, and the
+ * origin-rewriting middleware used to copy a body only when that getter was
+ * truthy — so in Firefox every POST left with an empty body (sign-in got
+ * `400 VALIDATION_ERROR`). Simulated by hiding the getter, as Firefox does.
+ */
+describe('apiClient keeps request bodies where Request.body is not implemented (Firefox)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends the JSON body of a POST', async () => {
+    vi.resetModules();
+    const NativeRequest = globalThis.Request;
+    class FirefoxLikeRequest extends NativeRequest {
+      override get body(): null {
+        return undefined as unknown as null;
+      }
+    }
+    vi.stubGlobal('Request', FirefoxLikeRequest);
+    const sent: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: Request) => {
+        sent.push(await input.text());
+        return new Response(JSON.stringify({}), { status: 200 });
+      }),
+    );
+    const { apiClient } = await import('./client');
+    await apiClient.POST('/auth/login', { body: { identifier: 'ada', password: 'pw' } });
+    expect(sent).toHaveLength(1);
+    expect(JSON.parse(sent[0]!)).toEqual({ identifier: 'ada', password: 'pw' });
+  });
+});
