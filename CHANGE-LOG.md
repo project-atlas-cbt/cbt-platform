@@ -57,6 +57,13 @@ evidence: `frontend-roadmap.md` F20 Implementation notes.
   `DialogContent`); focus started nowhere predictable on entering the exam; the answer group carried
   Radix roving-focus state across questions, so the first arrow key could select the wrong option.
 - **axe**: unlabeled controls in the question media uploader; low-contrast analytics figures.
+- **Firefox could not sign in** (found by the first CI run of the browser matrix, PR #34): the API
+  client's origin-rewriting middleware copied a request body only when `request.body` was truthy,
+  and Firefox does not implement `Request.body` — every POST/PUT/PATCH left with an empty body.
+  The body is now read by method. Firefox 115 ESR is the declared route for Windows 7 lab PCs.
+- **CI**: the browser-suite job hung at teardown (`pnpm exec next start` puts the server in its own
+  process group, out of Playwright's reach); the web server now runs Next's binary directly, and the
+  run and job have time caps.
 - Earlier in the phase: a **CSRF first-visit race** — concurrent cookie-less GETs minted competing
   secrets; only token-issuing routes now persist a new secret (`csrf.guard.ts`, `IssuesCsrfToken`).
 
