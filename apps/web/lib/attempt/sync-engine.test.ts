@@ -67,6 +67,28 @@ describe('AttemptSyncEngine', () => {
     expect(synced?.syncStatus).toBe('synced');
   });
 
+  it('B22 — answers left in-flight by a page that reloaded mid-request are sent again', async () => {
+    // The previous page marked the row in-flight, then went away (reload,
+    // crash) before the request settled, so nothing reverted it.
+    const neverSettles = new Promise<never>(() => undefined);
+    mockPost.mockReturnValueOnce(neverSettles);
+    const before = new AttemptSyncEngine(ATTEMPT_ID);
+    await before.recordAnswer('q1', 'o1');
+    await vi.waitFor(async () => {
+      expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('in-flight');
+    });
+    before.dispose();
+
+    mockPost.mockResolvedValueOnce(
+      ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
+    );
+    const after = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await after.flushNow();
+
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('synced');
+  });
+
   it('uses the batch endpoint uniformly, even for a single pending answer', async () => {
     mockPost.mockResolvedValue(
       ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
