@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import { performance } from 'node:perf_hooks';
-import { Client, NetworkFailure, fetchAbsolute, type Target } from './http.js';
+import { Client, HttpStatusError, NetworkFailure, fetchAbsolute, type Target } from './http.js';
 import type { Recorder } from './metrics.js';
 
 /**
@@ -120,6 +120,21 @@ export class VirtualStudent {
       await new Promise((r) => setTimeout(r, 2_000));
     }
     if (!manifest) throw new Error('pre-cache manifest never became ready');
+    // Signed URLs live 15 minutes; like the web client, re-sign from the
+    // manifest on a 403 (one shared refresh) without spending a retry.
+    const urls = new Map(manifest.assets.map((a) => [a.mediaAssetId, a.url]));
+    let refreshing: Promise<void> | null = null;
+    const refresh = () =>
+      (refreshing ??= this.client
+        .request<MediaManifest>('GET', `/student/assessment/${this.o.examId}/media-manifest`, {
+          label: 'precache.manifest',
+        })
+        .then((res) => {
+          if (res.status === 200) for (const a of res.body.assets) urls.set(a.mediaAssetId, a.url);
+        })
+        .finally(() => {
+          refreshing = null;
+        }));
     const agent = new http.Agent({ keepAlive: true, maxSockets: 3 });
     let bytes = 0;
     try {
@@ -129,17 +144,25 @@ export class VirtualStudent {
           for (let asset = queue.shift(); asset; asset = queue.shift()) {
             // Up to two retries per asset, as the web client
             // (MAX_RETRIES_PER_ASSET in media-precache.ts).
-            for (let attempt = 0; ; attempt += 1) {
+            for (let attempt = 0, resigned = 0; ; attempt += 1) {
               try {
-                bytes += await fetchAbsolute(
-                  asset.url,
+                const got = await fetchAbsolute(
+                  urls.get(asset.mediaAssetId) ?? asset.url,
                   agent,
                   this.o.recorder,
                   'media.precache',
                   this.o.mediaHost,
+                  true,
                 );
+                bytes += got;
                 break;
               } catch (error) {
+                if (error instanceof HttpStatusError && error.status === 403 && resigned < 5) {
+                  resigned += 1;
+                  attempt -= 1;
+                  await refresh();
+                  continue;
+                }
                 if (attempt >= 2) throw error;
               }
             }

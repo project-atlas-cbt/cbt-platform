@@ -67,12 +67,19 @@ function ok<T>(data: T) {
   return Promise.resolve({ data, response: new Response(null, { status: 200 }) } as never);
 }
 
-function manifest(assets: { mediaAssetId: string; byteSize: number; sha256: string }[]) {
+function manifest(
+  assets: { mediaAssetId: string; byteSize: number; sha256: string }[],
+  signature = 'v1',
+) {
   return {
     ready: true,
     totalBytes: assets.reduce((n, a) => n + a.byteSize, 0),
     retryAfterSeconds: null,
-    assets: assets.map((a) => ({ ...a, url: `https://media/${a.mediaAssetId}` })),
+    assets: assets.map((a) => ({
+      ...a,
+      url: `https://media/${a.mediaAssetId}?sig=${signature}`,
+      expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+    })),
   };
 }
 
@@ -141,6 +148,32 @@ describe('precacheExamMedia (F20, ADR-0021 amendment)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('an expired signed URL (403) is re-signed from the manifest and the download carries on', async () => {
+    const blob = webcrypto.getRandomValues(new Uint8Array(32));
+    const entry = { mediaAssetId: 'm1', byteSize: blob.length, sha256: await sha256(blob) };
+    mockGet
+      .mockReturnValueOnce(ok(manifest([entry], 'expired')))
+      .mockReturnValueOnce(ok(manifest([entry], 'fresh')));
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string) =>
+        Promise.resolve(
+          url.endsWith('sig=fresh') ? new Response(blob) : new Response(null, { status: 403 }),
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await precacheExamMedia(EXAM, () => undefined)).toEqual({
+      kind: 'ready',
+      assetCount: 1,
+      totalBytes: blob.length,
+    });
+    expect(fetchMock.mock.calls.map((c) => String(c[0]))).toEqual([
+      'https://media/m1?sig=expired',
+      'https://media/m1?sig=fresh',
+    ]);
   });
 
   it('rejects a download whose hash does not match (corrupted in transit)', async () => {

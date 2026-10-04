@@ -67,8 +67,19 @@ type Manifest = {
   ready: boolean;
   totalBytes: number;
   retryAfterSeconds: number | null;
-  assets: { mediaAssetId: string; url: string; byteSize: number; sha256: string }[];
+  assets: {
+    mediaAssetId: string;
+    url: string;
+    expiresAt: string;
+    byteSize: number;
+    sha256: string;
+  }[];
 };
+
+/** Re-sign this long before a URL's expiry rather than race it. */
+const URL_REFRESH_MARGIN_MS = 30_000;
+/** Bound on manifest re-fetches for fresh URLs within one pre-cache pass. */
+const MAX_URL_REFRESHES = 20;
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -133,6 +144,34 @@ export async function precacheExamMedia(
   }
 
   const cache = await caches.open(ENCRYPTED_CACHE_NAME);
+  // Signed ciphertext URLs live 15 minutes, and a lab on a congested 2 Mbit
+  // link needs about that long for a media-heavy paper (F20 lab burst: 52
+  // of 1,600 downloads hit an expired URL). Near expiry, or on a 403, every
+  // worker shares one manifest re-fetch for fresh URLs and carries on;
+  // assets already cached are not downloaded again.
+  const signed = new Map(manifest.assets.map((a) => [a.mediaAssetId, a]));
+  let refreshes = 0;
+  let refreshing: Promise<void> | null = null;
+  const refreshUrls = (): Promise<void> => {
+    if (refreshes >= MAX_URL_REFRESHES) return Promise.resolve();
+    refreshing ??= fetchManifest(examId)
+      .then((fresh) => {
+        refreshes += 1;
+        for (const a of fresh.assets) signed.set(a.mediaAssetId, a);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        refreshing = null;
+      });
+    return refreshing;
+  };
+  const urlFor = async (mediaAssetId: string): Promise<string | undefined> => {
+    const current = signed.get(mediaAssetId);
+    if (current && Date.parse(current.expiresAt) - Date.now() < URL_REFRESH_MARGIN_MS) {
+      await refreshUrls();
+    }
+    return signed.get(mediaAssetId)?.url;
+  };
   const queue = [...manifest.assets];
   const total = queue.length;
   let completed = 0;
@@ -153,7 +192,15 @@ export async function precacheExamMedia(
       let stored = false;
       for (let attempt = 0; attempt <= MAX_RETRIES_PER_ASSET && !stored; attempt += 1) {
         try {
-          const response = await fetch(asset.url, signal ? { signal } : {});
+          const url = await urlFor(asset.mediaAssetId);
+          if (!url) break;
+          const response = await fetch(url, signal ? { signal } : {});
+          if (response.status === 403 && refreshes < MAX_URL_REFRESHES) {
+            // Expired signature: re-sign and try again without spending a retry.
+            await refreshUrls();
+            attempt -= 1;
+            continue;
+          }
           if (!response.ok) continue;
           const body = await response.arrayBuffer();
           if ((await sha256Hex(body)) !== asset.sha256) continue; // corrupted in transit
