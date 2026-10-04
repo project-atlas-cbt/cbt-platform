@@ -743,6 +743,26 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
 
+      # B23: the production image (api + worker, production dependencies
+      # only) inherits the same gate. The dev image's tarball is removed
+      # first so both never sit on the runner's disk at once.
+      - name: Build production server image
+        run: |
+          rm -f "$RUNNER_TEMP/atlas-node.tar"
+          docker image rm atlas-node:ci >/dev/null
+          docker build -f infra/docker/Dockerfile.prod --target server -t atlas-server:ci .
+          docker save atlas-server:ci -o "$RUNNER_TEMP/atlas-server.tar"
+
+      - name: Trivy production image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          input: ${{ runner.temp }}/atlas-server.tar
+          timeout: 15m
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
   secret-scan:
     name: Secret scanning
     runs-on: ubuntu-latest

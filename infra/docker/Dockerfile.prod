@@ -1,0 +1,79 @@
+# syntax=docker/dockerfile:1
+# B23 production images. Two targets from one build:
+#
+#   server — apps/api and apps/worker (one image; the ECS task definition
+#            picks the process with its command: `node apps/api/dist/main.js`
+#            or `node apps/worker/dist/main.js`). Production dependencies
+#            only, no pnpm, no npm, no sources, non-root.
+#   ops    — the full built workspace (dev dependencies included): runs
+#            `pnpm db:migrate:deploy` as the pre-deploy one-off task, and the
+#            ops CLIs (ops:restore-verify, ops:redact-subject, …) which run
+#            through tsx. Never serves traffic.
+#
+# The local/CI development image stays infra/docker/Dockerfile.node.
+# CI Trivy-scans both targets here (HIGH/CRITICAL blocks the merge), as B20
+# required of the production image.
+
+ARG NODE_IMAGE=node:24-alpine
+
+FROM ${NODE_IMAGE} AS base
+ENV COREPACK_HOME=/opt/corepack
+RUN corepack enable && corepack prepare pnpm@11.27.1 --activate \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+ && mkdir /repo && chown node:node /repo && chown -R node:node /opt/corepack
+WORKDIR /repo
+USER node
+
+# --- Full build (also the `ops` target) -------------------------------------
+FROM base AS build
+COPY --chown=node:node . .
+RUN --mount=type=cache,target=/home/node/.local/share/pnpm/store,uid=1000,gid=1000 \
+    pnpm install --frozen-lockfile
+# Same ordering as Dockerfile.node: config before prisma generate, generate
+# before the db package's tsc build.
+RUN pnpm --filter @atlas/config run build \
+ && pnpm db:generate \
+ && pnpm turbo run build --filter=@atlas/api --filter=@atlas/worker --filter=@atlas/db
+
+FROM build AS ops
+ENV NODE_ENV=production
+CMD ["pnpm", "db:migrate:deploy"]
+
+# --- Production dependencies only -------------------------------------------
+FROM base AS prod-deps
+COPY --chown=node:node . .
+RUN --mount=type=cache,target=/home/node/.local/share/pnpm/store,uid=1000,gid=1000 \
+    pnpm install --frozen-lockfile --prod \
+      --filter "@atlas/api..." --filter "@atlas/worker..."
+# Bring in build output (dist/) and the generated Prisma client, then keep
+# only what runs: package.json, node_modules, dist (and db's generated/).
+COPY --from=build --chown=node:node /repo /tmp/build
+RUN set -eu; \
+    for pkg in apps/api apps/worker packages/*; do \
+      if [ -d "/tmp/build/$pkg/dist" ]; then cp -R "/tmp/build/$pkg/dist" "$pkg/dist"; fi; \
+    done; \
+    cp -R /tmp/build/packages/db/generated packages/db/generated; \
+    rm -rf /tmp/build apps/web tools tests docs infra scripts patches .github; \
+    mkdir /home/node/out; \
+    cp -R package.json node_modules /home/node/out/; \
+    for pkg in apps/api apps/worker packages/*; do \
+      [ -f "$pkg/package.json" ] || continue; \
+      mkdir -p "/home/node/out/$pkg"; \
+      cp "$pkg/package.json" "/home/node/out/$pkg/"; \
+      for d in dist node_modules generated; do \
+        if [ -e "$pkg/$d" ]; then cp -R "$pkg/$d" "/home/node/out/$pkg/"; fi; \
+      done; \
+    done
+
+# --- Runtime ----------------------------------------------------------------
+FROM ${NODE_IMAGE} AS server
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+           /opt/yarn* /usr/local/bin/yarn /usr/local/bin/yarnpkg
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=prod-deps --chown=root:root /home/node/out /app
+# The process can read its code but never rewrite it.
+USER node
+EXPOSE 3001
+HEALTHCHECK NONE
+CMD ["node", "apps/api/dist/main.js"]
