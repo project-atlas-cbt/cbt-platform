@@ -42,6 +42,9 @@ const apiEnv: Record<string, string> = {
 export default defineConfig({
   testDir: './e2e',
   timeout: 90_000,
+  // A hard ceiling for the whole run, so a hang fails with a report instead
+  // of holding a CI runner for hours.
+  globalTimeout: process.env.CI ? 40 * 60_000 : 0,
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
@@ -84,7 +87,11 @@ export default defineConfig({
       stderr: 'pipe',
     },
     {
-      command: `pnpm exec next start -p ${WEB_PORT}`,
+      // Next's binary directly, not `pnpm exec next`: pnpm starts the server
+      // in a new process group, so Playwright's teardown (which kills the
+      // command's group) left it running, holding the output pipe Playwright
+      // waits on — the run never exited (first CI run, PR #34).
+      command: `node node_modules/next/dist/bin/next start -p ${WEB_PORT}`,
       url: `http://127.0.0.1:${WEB_PORT}/manifest.webmanifest`,
       env: { NEXT_PUBLIC_MEDIA_ORIGIN: MINIO, NODE_ENV: 'production' },
       reuseExistingServer: !process.env.CI,
