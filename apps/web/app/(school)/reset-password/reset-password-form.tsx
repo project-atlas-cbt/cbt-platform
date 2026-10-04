@@ -17,7 +17,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { EmptyState } from '@/components/ui/empty-state';
-import { resetPasswordSchema, type ResetPasswordValues } from '@/lib/auth';
+import { resetPasswordSchema, type ResetPasswordValues } from '@/lib/auth/schemas';
 
 export interface ResetPasswordFormProps {
   /** From the `?token=` query param — `IdentityService.requestPasswordReset`'s

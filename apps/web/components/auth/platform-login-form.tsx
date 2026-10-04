@@ -15,12 +15,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useTenantResolution } from '@/lib/tenant';
-import {
-  platformLoginSchema,
-  resolveLoginErrorMessage,
-  usePlatformAuth,
-  type PlatformLoginValues,
-} from '@/lib/auth';
+import { resolveLoginErrorMessage, usePlatformAuth } from '@/lib/auth';
+import { platformLoginSchema, type PlatformLoginValues } from '@/lib/auth/schemas';
 import { PlatformMfaStep } from './platform-mfa-step';
 
 /**

@@ -14,14 +14,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { resolveLoginErrorMessage, usePlatformAuth } from '@/lib/auth';
 import {
   otpSchema,
   recoveryCodeSchema,
-  resolveLoginErrorMessage,
-  usePlatformAuth,
   type OtpValues,
   type RecoveryCodeValues,
-} from '@/lib/auth';
+} from '@/lib/auth/schemas';
 
 /** One message for every second-step failure — the server itself answers
  * wrong, replayed and expired codes identically (B20). After five wrong

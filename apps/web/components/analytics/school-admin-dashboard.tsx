@@ -272,7 +272,7 @@ export function SchoolAdminDashboard() {
                 <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 uppercase">
                   Active Now
                 </p>
-                <p className="mt-1 text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300">
+                <p className="mt-1 text-xl font-bold tabular-nums text-success dark:text-emerald-300">
                   {formatCount(examCounts.active)}
                 </p>
               </div>

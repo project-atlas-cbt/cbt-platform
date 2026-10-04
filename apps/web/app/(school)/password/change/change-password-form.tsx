@@ -15,7 +15,8 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { resetPasswordSchema, useAuth, type ResetPasswordValues } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
+import { resetPasswordSchema, type ResetPasswordValues } from '@/lib/auth/schemas';
 
 /**
  * This screen is only ever reached while `credentialState !== 'OK'`

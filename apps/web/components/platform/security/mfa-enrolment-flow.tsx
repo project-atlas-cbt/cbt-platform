@@ -18,7 +18,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ErrorState } from '@/components/ui/error-state';
-import { otpSchema, type OtpValues } from '@/lib/auth';
+import { otpSchema, type OtpValues } from '@/lib/auth/schemas';
 import { ApiError } from '@/lib/api/error';
 import { useConfirmMfaEnrolment, useStartMfaEnrolment } from '@/lib/platform/mfa';
 import { QrCode } from './qr-code';

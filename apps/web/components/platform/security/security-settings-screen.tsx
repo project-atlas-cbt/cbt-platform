@@ -19,7 +19,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ReasonDialog } from '@/components/platform/reason-dialog';
-import { otpSchema, type OtpValues } from '@/lib/auth';
+import { otpSchema, type OtpValues } from '@/lib/auth/schemas';
 import { ApiError } from '@/lib/api/error';
 import {
   useDisableMfa,

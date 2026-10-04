@@ -73,7 +73,7 @@ export function PlatformAnalyticsView() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="rounded-md border border-border/60 bg-surface-raised/40 p-3">
                 <span className="text-[11px] font-medium text-text-muted uppercase">Active</span>
-                <p className="mt-1 text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                <p className="mt-1 text-lg font-bold tabular-nums text-success dark:text-emerald-400">
                   {formatCount(data?.activeSchools)}
                 </p>
               </div>
@@ -81,7 +81,7 @@ export function PlatformAnalyticsView() {
                 <span className="text-[11px] font-medium text-text-muted uppercase">
                   Provisional
                 </span>
-                <p className="mt-1 text-lg font-bold tabular-nums text-amber-600 dark:text-amber-400">
+                <p className="mt-1 text-lg font-bold tabular-nums text-warning dark:text-amber-400">
                   {formatCount(data?.provisionalSchools)}
                 </p>
               </div>
@@ -126,7 +126,7 @@ export function PlatformAnalyticsView() {
                 <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 uppercase">
                   Active Subscriptions
                 </span>
-                <p className="mt-1 text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-300">
+                <p className="mt-1 text-xl font-bold tabular-nums text-success dark:text-emerald-300">
                   {formatCount(data?.activeSubscriptions)}
                 </p>
               </div>
@@ -134,7 +134,7 @@ export function PlatformAnalyticsView() {
                 <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400 uppercase">
                   Expiring Soon (14d)
                 </span>
-                <p className="mt-1 text-xl font-bold tabular-nums text-amber-600 dark:text-amber-300">
+                <p className="mt-1 text-xl font-bold tabular-nums text-warning dark:text-amber-300">
                   {formatCount(data?.expiringSubscriptions)}
                 </p>
               </div>

@@ -564,6 +564,116 @@ jobs:
             /tmp/worker.log
           if-no-files-found: ignore
 
+  # F20: the web app's browser suites (apps/web/e2e) against production
+  # builds of the API and web app — axe accessibility scans of every
+  # workspace, a keyboard-only exam, CSP/headers, Software Admin MFA,
+  # constrained network and 503 Retry-After, media pre-cache, the low-end
+  # CPU profile, and the @matrix smoke in Firefox and WebKit — plus the
+  # first-load bundle budgets (exam route the smallest).
+  web-e2e:
+    name: Web browser suites and bundle budgets
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: atlas
+          POSTGRES_PASSWORD: atlas_ci_password
+          POSTGRES_DB: atlas_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U atlas -d atlas_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8.10.1-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: 'postgresql://atlas:atlas_ci_password@localhost:5432/atlas_ci?schema=public'
+      DATABASE_APP_URL: 'postgresql://atlas_app:atlas_app_ci_password@localhost:5432/atlas_ci?schema=public'
+      DATABASE_AUDIT_READER_URL: 'postgresql://atlas_audit_reader:atlas_audit_reader_ci_password@localhost:5432/atlas_ci?schema=public'
+      REDIS_URL: 'redis://localhost:6379'
+      PRODUCT_NAME: 'Project Atlas'
+      SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
+      S3_ENDPOINT: 'http://localhost:9000'
+      S3_BUCKET: 'atlas-media-ci'
+      S3_ACCESS_KEY_ID: 'atlas_minio_root'
+      S3_SECRET_ACCESS_KEY: 'atlas_minio_dev_password'
+      S3_REGION: 'us-east-1'
+      # playwright.config.ts starts the API with these (MinIO defaults to
+      # allowing any origin, which the media pre-cache's fetch needs).
+      E2E_S3_ENDPOINT: 'http://localhost:9000'
+      E2E_S3_BUCKET: 'atlas-media-ci'
+      # Inlined into the client bundle at build time: the CSP's media host.
+      NEXT_PUBLIC_MEDIA_ORIGIN: 'http://localhost:9000'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 --user 0 \
+            -e MINIO_ROOT_USER=atlas_minio_root \
+            -e MINIO_ROOT_PASSWORD=atlas_minio_dev_password \
+            cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b server /data
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
+          done
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bootstrap atlas_app role
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends postgresql-client
+          PGPASSWORD=atlas_ci_password sh scripts/ci/bootstrap-db-roles.sh
+
+      - name: Build @atlas/config
+        run: pnpm --filter @atlas/config run build
+
+      - name: Generate Prisma client and apply migrations
+        run: |
+          pnpm db:generate
+          pnpm db:migrate:deploy
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @atlas/web exec playwright install --with-deps chromium firefox webkit
+
+      - name: Bundle budgets
+        run: |
+          (cd apps/web && nohup pnpm exec next start -p 3000 > /tmp/web-budget.log 2>&1 &)
+          for _ in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:3000/manifest.webmanifest >/dev/null 2>&1 && break || sleep 1
+          done
+          pnpm --filter @atlas/web bundle:budget --base http://localhost:3000
+          pkill -f "[n]ext-server|[n]ext start" || true
+
+      - name: Browser suites
+        run: pnpm --filter @atlas/web test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
+
   supply-chain:
     name: Dependency and container scanning
     runs-on: ubuntu-latest

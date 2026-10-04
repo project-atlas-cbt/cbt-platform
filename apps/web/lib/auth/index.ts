@@ -6,23 +6,9 @@ export {
 } from './platform-auth-context';
 export { resolveLandingRoute } from './role-priority';
 export { resolveLoginErrorMessage } from './resolve-login-error';
-export {
-  buildChangePasswordSchema,
-  forgotPasswordSchema,
-  loginSchema,
-  newPasswordField,
-  otpSchema,
-  platformLoginSchema,
-  recoveryCodeSchema,
-  resetPasswordSchema,
-  type ChangePasswordValues,
-  type ForgotPasswordValues,
-  type LoginValues,
-  type OtpValues,
-  type RecoveryCodeValues,
-  type PlatformLoginValues,
-  type ResetPasswordValues,
-} from './schemas';
+// Form schemas (zod) are imported from './schemas' directly, never through
+// this barrel: every route guard imports the barrel, and re-exporting them
+// here put zod in every route's first load, the exam's included (F20).
 export type {
   AuthMe,
   AuthStatus,
