@@ -131,6 +131,37 @@ describe('loadEnv — B20 production hardening', () => {
     },
   );
 
+  const smtpEnv = {
+    ...productionEnv,
+    NOTIFICATION_TRANSPORT: 'smtp',
+    SES_FROM_ADDRESS: '',
+    SMTP_HOST: 'smtp-relay.example.com',
+    SMTP_USER: 'relay-user',
+    SMTP_PASSWORD: 'relay-password',
+    SMTP_FROM_ADDRESS: 'Atlas <no-reply@example.ng>',
+  };
+
+  it('accepts production email over SMTP (VPS pilot, ADR-0019 amendment)', () => {
+    const env = loadEnv(smtpEnv);
+    expect(env.NOTIFICATION_TRANSPORT).toBe('smtp');
+    expect(env.SMTP_PORT).toBe(587);
+  });
+
+  it.each([
+    ['SMTP_HOST', undefined],
+    ['SMTP_USER', undefined],
+    ['SMTP_PASSWORD', undefined],
+    ['SMTP_FROM_ADDRESS', undefined],
+    ['SMTP_FROM_ADDRESS', 'no-reply'],
+  ] as Array<[string, string | undefined]>)(
+    'rejects production SMTP with an unsafe %s',
+    (key, value) => {
+      const env: Record<string, string | undefined> = { ...smtpEnv, [key]: value };
+      if (value === undefined) delete env[key];
+      expect(() => loadEnv(env)).toThrow(EnvValidationError);
+    },
+  );
+
   it('rejects a CSRF secret equal to the session secret in production', () => {
     expect(() =>
       loadEnv({ ...productionEnv, CSRF_SECRET: productionEnv.SESSION_COOKIE_SECRET }),

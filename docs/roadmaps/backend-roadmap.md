@@ -4642,6 +4642,16 @@ smoke (`tools/load/src/smoke.ts`); `ops:create-software-admin`; per-school API h
 **Feature flags (`08 §23`):** typed environment toggles in `packages/config`, changed by
 deployment; no runtime flag service (reasoning in `docs/operations/deploy-and-rollback.md`).
 
+**Pilot on a single VPS (2026-10-04, owner decision, ADR-0032 and ADR-0019 amendments):** the
+AWS design is out of budget before the first paying school, so the pilot runs on one VPS
+(`infra/vps`, `docs/operations/vps-pilot.md`) with SMTP email. For the pilot, DoD 1 is met by
+`infra/vps` (Compose, rendered Caddyfile, deploy script); DoD 2–3 have no staging environment
+(rollback is redeploying the previous ref); DoD 6 is the Exam Health Monitor over SMTP plus an
+external uptime check; DoD 7 is nightly off-site `pg_dump` with a restore rehearsal (checklist 0.7).
+The AWS rows above return when the platform moves to AWS. Also fixed while driving that PR: the
+answer sync engine now resends answers a page left `in-flight` when it reloaded mid-request (B22
+recovery; `apps/web/lib/attempt/sync-engine.ts`).
+
 **Not done, carried:** Actions SHA pinning beyond Trivy (pinning needs reading other repositories,
 outside this session's scope); platform-account password change does not exist (rotation is
 recreate); `actionlint` not run locally.

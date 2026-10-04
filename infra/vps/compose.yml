@@ -1,0 +1,233 @@
+# Single-server deployment for the pilot (docs/operations/vps-pilot.md,
+# ADR-0032 amendment 2026-10-04). Everything runs on one VPS: Caddy (TLS),
+# web, API, worker, PostgreSQL, Redis and MinIO. Only Caddy publishes ports.
+#
+# Run through infra/vps/bin/deploy.sh, never by hand: it renders the
+# Caddyfile, builds the images, migrates, then starts the services.
+name: atlas
+
+# Two settings files, both created by bin/init-env.sh and never committed:
+#   .env     — read by Compose itself for ${…} below (domain, infrastructure
+#              passwords). Never handed to a container whole, so the schema
+#              owner password reaches only the ops service.
+#   app.env  — the application's own settings and secrets (sessions, CSRF,
+#              MFA, SMTP), given to api, worker and ops.
+x-app: &app
+  restart: unless-stopped
+  env_file: app.env
+  environment: &app-env
+    NODE_ENV: production
+    API_HOST: 0.0.0.0
+    TRUST_PROXY_HOPS: '1'
+    # Composed into the three role URLs by @atlas/config (connection-urls.ts).
+    DATABASE_HOST: postgres
+    DATABASE_NAME: atlas
+    # `require`: Prisma's migration engine rejects verify-full; node-postgres
+    # (api, worker, grants) still verifies the certificate and host name
+    # against NODE_EXTRA_CA_CERTS with `require`.
+    DATABASE_SSLMODE: require
+    REDIS_HOST: redis
+    REDIS_AUTH_TOKEN: ${REDIS_PASSWORD}
+    # The internal CA that signed the postgres and redis certificates
+    # (bin/internal-tls.sh), so TLS on the private network is verified.
+    NODE_EXTRA_CA_CERTS: /certs/ca.crt
+    S3_ENDPOINT: https://media.${ROOT_DOMAIN}
+    S3_FORCE_PATH_STYLE: 'true'
+    S3_REGION: us-east-1
+    S3_BUCKET: atlas-media
+    S3_ACCESS_KEY_ID: atlas-app
+    S3_SECRET_ACCESS_KEY: ${MINIO_APP_PASSWORD}
+    S3_ENSURE_BUCKET: 'false'
+    PLATFORM_ROOT_DOMAIN: ${ROOT_DOMAIN}
+    COOKIE_DOMAIN: ${ROOT_DOMAIN}
+    WEB_ORIGIN: https://admin.${ROOT_DOMAIN}
+  volumes:
+    - ./certs/ca.crt:/certs/ca.crt:ro
+  depends_on: &app-deps
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    caddy:
+      condition: service_started
+  networks: [internal]
+
+services:
+  caddy:
+    image: caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d # 2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      internal:
+        # The API presigns media URLs for https://media.<root> and also calls
+        # that host itself; inside the network it resolves straight to Caddy.
+        aliases:
+          - media.${ROOT_DOMAIN}
+
+  web:
+    image: atlas-web:${RELEASE:-unset}
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.prod
+      target: web
+      args:
+        PRODUCT_NAME: ${PRODUCT_NAME}
+        NEXT_PUBLIC_API_ORIGIN: https://api.${ROOT_DOMAIN}
+        NEXT_PUBLIC_MEDIA_ORIGIN: https://media.${ROOT_DOMAIN}
+        NEXT_PUBLIC_SENTRY_DSN: ${SENTRY_DSN:-}
+        NEXT_PUBLIC_RELEASE_VERSION: ${RELEASE:-unset}
+    restart: unless-stopped
+    environment:
+      PRODUCT_NAME: ${PRODUCT_NAME}
+    networks: [internal]
+
+  api:
+    <<: *app
+    image: atlas-server:${RELEASE:-unset}
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.prod
+      target: server
+    command: ['node', 'apps/api/dist/main.js']
+    environment:
+      <<: *app-env
+      DATABASE_APP_PASSWORD: ${DATABASE_APP_PASSWORD}
+      DATABASE_AUDIT_READER_PASSWORD: ${DATABASE_AUDIT_READER_PASSWORD}
+      RELEASE_VERSION: ${RELEASE:-unset}
+
+  worker:
+    <<: *app
+    image: atlas-server:${RELEASE:-unset}
+    command: ['node', 'apps/worker/dist/main.js']
+    environment:
+      <<: *app-env
+      DATABASE_APP_PASSWORD: ${DATABASE_APP_PASSWORD}
+      DATABASE_AUDIT_READER_PASSWORD: ${DATABASE_AUDIT_READER_PASSWORD}
+      RELEASE_VERSION: ${RELEASE:-unset}
+
+  # Migrations and operator CLIs. The only service given the schema owner
+  # password. Started on demand: `docker compose run --rm ops …`.
+  ops:
+    <<: *app
+    image: atlas-ops:${RELEASE:-unset}
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.prod
+      target: ops
+    restart: 'no'
+    profiles: [ops]
+    environment:
+      <<: *app-env
+      DATABASE_OWNER_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_APP_PASSWORD: ${DATABASE_APP_PASSWORD}
+      DATABASE_AUDIT_READER_PASSWORD: ${DATABASE_AUDIT_READER_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: atlas
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/certs/server.crt
+      - -c
+      - ssl_key_file=/certs/server.key
+      - -c
+      - max_connections=200
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./certs/postgres:/certs:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U atlas -d atlas']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  redis:
+    image: redis:8.10.1-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --port
+      - '0'
+      - --tls-port
+      - '6379'
+      - --tls-cert-file
+      - /certs/server.crt
+      - --tls-key-file
+      - /certs/server.key
+      - --tls-ca-cert-file
+      - /certs/ca.crt
+      - --tls-auth-clients
+      - 'no'
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      # Redis is never authoritative (CLAUDE.md), but BullMQ needs noeviction.
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - 'yes'
+    volumes:
+      - redis_data:/data
+      - ./certs/redis:/certs:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - redis-cli --tls --cacert /certs/ca.crt -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks: [internal]
+
+  # MinIO withdrew its public images; this is Chainguard's build of upstream
+  # MinIO pinned by digest, the same image as local dev and CI.
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b
+    user: '0'
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: atlas-root
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BROWSER: 'off'
+      # Browsers upload and read media directly with presigned URLs.
+      MINIO_API_CORS_ALLOW_ORIGIN: https://*.${ROOT_DOMAIN}
+    volumes:
+      - minio_data:/data
+      - ./backups:/backups
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+networks:
+  internal: {}
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  redis_data:
+  minio_data:

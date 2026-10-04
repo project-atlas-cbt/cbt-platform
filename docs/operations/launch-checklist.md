@@ -4,6 +4,24 @@
 "Claude" items are done on staging from a Claude session; "Haneef" items need the owner, an
 account, a person or a contract. Tick an item only with its evidence linked.
 
+**Pilot on a single VPS (2026-10-04, ADR-0032 amendment).** The pilot replaces the AWS items
+(1.2, 1.3, 1.5, 1.7, 1.8 and section 2's staging run) with section 0 below. Those AWS items return
+when the platform moves to the AWS design.
+
+## 0. Pilot server ([vps-pilot.md](vps-pilot.md))
+
+| #   | Item                                                                                  | Owner  | Evidence |
+| --- | ------------------------------------------------------------------------------------- | ------ | -------- |
+| 0.1 | VPS rented (4 vCPU, 8–12 GB) and prepared with `setup-server.sh`                      | Haneef |          |
+| 0.2 | Root domain chosen; A records for `<root>`, `*.<root>`, `*.api.<root>`                | Haneef |          |
+| 0.3 | SMTP provider account; sender domain verified (SPF, DKIM), DMARC published            | Haneef |          |
+| 0.4 | Off-site backup bucket with a 30-day lifecycle rule; `BACKUP_S3_*` set                | Haneef |          |
+| 0.5 | `.env` and `app.env` copied into a password manager (restores depend on them)         | Haneef |          |
+| 0.6 | First deploy green (`bin/deploy.sh` readiness all ok); first Software Admin signed in | Claude |          |
+| 0.7 | Manual backup reaches off-site storage; restore rehearsed onto a scratch database     | Claude |          |
+| 0.8 | Golden path on a non-production copy of the stack (never the pilot's live database)   | Claude |          |
+| 0.9 | External uptime check on `https://api.<root>/v1/health`                               | Haneef |          |
+
 ## 1. Accounts, domain and decisions
 
 | #   | Item                                                                                            | Owner  | Evidence                                                    |

@@ -29,6 +29,13 @@ new host, a new credential type). A third-party penetration test is a deferred l
 
 ① client ↔ edge · ② web ↔ API (same-site, CORS) · ③ services ↔ data stores · ④ operator access.
 
+**Pilot topology (2026-10-04, [vps-pilot.md](../operations/vps-pilot.md)):** every box above runs
+on one VPS behind Caddy, which terminates ① with Let's Encrypt certificates. ③ crosses a private
+Docker network, still over TLS verified against a private CA; only Caddy publishes ports. ④ is SSH
+(key only) as the `atlas` user, which can run Docker and therefore reach every store: protect that
+key as the AWS design protects its administrator role. A compromise of the one host exposes all
+stores at once, and there is no failover; both are accepted for the pilot.
+
 ## STRIDE by boundary
 
 | Boundary | Threat (STRIDE)                                                           | Mitigation                                                                                                                                                                                                                                                           | Evidence                                                                                                                                                           |
