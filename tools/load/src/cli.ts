@@ -15,7 +15,9 @@ import { runAnalyticsBench } from './analytics-bench.js';
  *   provision  build schools/students/questions and write .state/<name>.json
  *   levels     sustained exam load at each level (20,100,500,1000 …)
  *   burst      --kind start|submit: N simultaneous starts or submissions
- *   lab        the 40-client lab burst (run under a netem network profile)
+ *   lab        the 40-client lab burst (run under a netem network profile);
+ *              --precache: F20's pre-cached lab (media cached on the preview,
+ *              the burst is the bell)
  *   analytics  analytics endpoints cold/cached on the dataset school (--n samples)
  */
 
@@ -47,6 +49,7 @@ const { positionals, values } = parseArgs({
     n: { type: 'string', default: '500' },
     clients: { type: 'string', default: '40' },
     window: { type: 'string', default: '20' },
+    precache: { type: 'boolean', default: false },
     tag: { type: 'string' },
     scenario: { type: 'string' },
     'no-fail': { type: 'boolean', default: false },
@@ -132,6 +135,7 @@ async function main(): Promise<number> {
       ...common,
       clients: int('clients'),
       arrivalWindowSeconds: int('window'),
+      precache: values.precache,
     });
     reports.push(report);
     console.log(

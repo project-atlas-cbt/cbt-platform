@@ -536,6 +536,14 @@ export async function runBurst(o: BurstOptions): Promise<RunReport> {
 export interface LabOptions extends CommonOptions {
   clients: number;
   arrivalWindowSeconds: number;
+  /**
+   * F20: the pre-cached lab. The session opens and every student signs in
+   * and pre-caches the paper's encrypted media on the preview (timed, but
+   * not the burst); the burst is then the bell — every student presses
+   * Start inside the arrival window and is ready once the package arrives,
+   * since the media is decrypted locally.
+   */
+  precache?: boolean;
 }
 
 export async function runLabBurst(o: LabOptions): Promise<RunReport> {
@@ -554,13 +562,40 @@ export async function runLabBurst(o: LabOptions): Promise<RunReport> {
   await sampler.start();
   const students = seats.map((s, i) => student(o, s, i, recorder));
   const failures: string[] = [];
+  const arrive = (i: number) => sleep((i / students.length) * o.arrivalWindowSeconds * 1000);
+
+  // F20 pre-cached mode, phase 1 — the lab session opens: sign in and
+  // pre-cache on the preview. Timed for the report; not the burst.
+  let precacheSeconds: number | undefined;
+  let precacheBytes = 0;
+  const precached = new Set<number>();
+  if (o.precache) {
+    const opened = performance.now();
+    await Promise.all(
+      students.map(async (st, i) => {
+        await arrive(i);
+        try {
+          await st.signIn();
+          const bytes = await st.precache();
+          precacheBytes += bytes;
+          precached.add(i);
+        } catch (err) {
+          failures.push(`precache: ${(err as Error).message}`);
+        }
+      }),
+    );
+    precacheSeconds = (performance.now() - opened) / 1000;
+  }
+
+  // The burst: arrivals (or, pre-cached, the bell) inside the window.
   const first = performance.now();
   const perClient = await Promise.all(
     students.map(async (st, i) => {
-      await sleep((i / students.length) * o.arrivalWindowSeconds * 1000);
+      await arrive(i);
       const arrived = performance.now();
       try {
-        await st.signIn();
+        if (!o.precache) await st.signIn();
+        else if (!precached.has(i)) throw new Error('not pre-cached');
         await st.start({ fetchMedia: true });
         return {
           arrivedMs: arrived - first,
@@ -589,7 +624,9 @@ export async function runLabBurst(o: LabOptions): Promise<RunReport> {
   const media = recorder.stats('media.get');
   return {
     scenario: 'lab-burst',
-    title: `B21 lab burst: ${o.clients} clients behind one link`,
+    title: o.precache
+      ? `F20 lab burst (pre-cached): ${o.clients} clients press Start behind one link`
+      : `B21 lab burst: ${o.clients} clients behind one link`,
     startedAt,
     durationSeconds: Math.round((performance.now() - t0) / 1000),
     environment: environment(),
@@ -598,9 +635,26 @@ export async function runLabBurst(o: LabOptions): Promise<RunReport> {
       arrivalWindowSeconds: o.arrivalWindowSeconds,
       questions: o.manifest.questionCount,
       mediaKbPerQuestion: o.manifest.mediaKb,
+      precache: o.precache === true,
     },
     latency: recorder.all(),
     checks: [
+      ...(o.precache
+        ? [
+            {
+              name: 'clients pre-cached before the bell',
+              actual: `${precached.size}/${o.clients}`,
+              budget: `${o.clients}`,
+              pass: precached.size === o.clients,
+            },
+            {
+              name: 'media at Start served from the pre-cache (no live media fetch)',
+              actual: `${recorder.stats('media.get')?.count ?? 0} live fetches`,
+              budget: '0',
+              pass: (recorder.stats('media.get')?.count ?? 0) === 0,
+            },
+          ]
+        : []),
       {
         name: 'clients ready (signed in, started, media cached)',
         actual: `${done.length}/${o.clients}`,
@@ -622,6 +676,13 @@ export async function runLabBurst(o: LabOptions): Promise<RunReport> {
       perClientReadyMaxSeconds: Math.round((readyTimes.at(-1) ?? 0) / 100) / 10,
       mediaBytesTransferred: media?.bytes ?? 0,
       mediaFiles: media?.count ?? 0,
+      ...(o.precache
+        ? {
+            precacheSeconds: Math.round((precacheSeconds ?? 0) * 10) / 10,
+            precacheBytes,
+            studentsWithMediaKey: students.filter((st) => Boolean(st.mediaKey)).length,
+          }
+        : {}),
     },
   };
 }

@@ -14,8 +14,8 @@ Agent working rules (imported so they load every session): @AGENTS.md
 ## Project Status
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
-architecture decisions were completed first (see below); backend phases `B0`–`B19` and every
-frontend phase through `F19` are now implemented. `CHANGE-LOG.md` holds the dated record of what
+architecture decisions were completed first (see below); backend phases `B0`–`B21` and every
+frontend phase through `F20` are now implemented. `CHANGE-LOG.md` holds the dated record of what
 shipped; "Current Phase" below is a short summary that points to it.
 
 The planning phase completed:
@@ -219,25 +219,22 @@ screens against them). Why these two, and which skills were considered and rejec
 
 ### Current Phase
 
-Backend `B0`–`B21` and frontend `F0`–`F19` are implemented, plus the 2026-09-23..25 gap
-closures (teacher bulk submit-for-review, School Admin Questions oversight, F12 live attempt table,
-F3 School Detail Usage/Users/Exams tabs, web test-suite repair — 906/906 green). B21 (performance &
-load, 2026-10-03) is done with DoD 1/4 at 1,000 attempts gated to the B23 staging re-run (owner
-decision). **F20** is next (pairs with B20 and B21). Each phase's DoD
-outcome, honestly-partial items and design reasoning are in its dated `CHANGE-LOG.md` entry and its
-roadmap section; read those before resuming related work.
+Backend `B0`–`B21` and frontend `F0`–`F20` are implemented (B19's own roadmap section is still
+open). **F20** (2026-10-04) is implemented with its automated suites green and manual checks pending
+(NVDA, oldest browsers, a real low-end PC). Next on the critical path: **B22** (failure, recovery &
+DR), then **B23**, which **F21** pairs with. Each phase's DoD outcome, honestly-partial items and
+design reasoning are in its dated `CHANGE-LOG.md` entry and its roadmap section; read those before
+resuming related work.
 
 Open items carried forward:
 
-- Browser E2E / manual visual validation is pending for `F16`, `F18` and `F19` — this repository
-  has no configured browser harness.
+- Browser suites exist now (`apps/web/e2e`, CI job `web-e2e`), but `F16`, `F18` and `F19` flows are
+  not yet covered by them. The `web-e2e` job first runs on F20's pull request.
 - `F12` operational alerts (DoD item 10) are deferred: no per-student liveness signal exists.
 - Excused absence is intentionally deferred (`F16`).
-- From B20 → F20: web CSP (`docs/security/web-csp-policy.md`), Software Admin MFA UI, then
-  `PLATFORM_MFA_REQUIRED=true`. From B20 → B23: legal review of retention/DPA (ADR-0028 amendment),
-  encryption-at-rest verification, production secrets (`CSRF_SECRET`, `MFA_ENCRYPTION_KEY`).
-- From B21 → F20: back off on `503 Retry-After`, jitter the 30 s heartbeat, pre-cache paper media
-  (`frontend-roadmap.md` F20). From B21 → B23: staging re-run of level 1,000 / bursts / endurance
+- To B23: legal review of retention/DPA (ADR-0028 amendment), encryption-at-rest verification,
+  production secrets (`CSRF_SECRET`, `MFA_ENCRYPTION_KEY`, `MEDIA_PRECACHE_SECRET`), S3 bucket CORS
+  for school origins, a real Sentry project; staging re-run of level 1,000 / bursts / endurance
   (gate), RDS Proxy pinning check, ADR-0032 region decision (RTT favoured `af-south-1`). Capacity
   plan: `docs/performance/capacity-plan.md`.
 - Local and CI object storage is Chainguard's MinIO build pinned by digest (MinIO withdrew its
@@ -263,6 +260,10 @@ Engineering facts every session needs:
   run (`apps/api/src/load/`); the web client must honour `Retry-After`.
 - Logging goes through `@atlas/observability` (redacting pino); never log request bodies, answers,
   tokens or PII. Route params named `id`/`…Id` must be UUIDs (global pipe).
+- F20 web: every page carries a per-request nonce CSP (`apps/web/proxy.ts`) — no inline script, and
+  new external origins must be added in `lib/security/csp.ts`. API requests must never be cached by
+  the service worker (`app/sw.ts` bypasses them). Build the web app with `NEXT_PUBLIC_MEDIA_ORIGIN`
+  set; browser suites need production builds (`apps/web/e2e/README.md`).
 
 ---
 
