@@ -13,5 +13,9 @@ export default defineConfig({
     testTimeout: 30_000,
     hookTimeout: 30_000,
     fileParallelism: false,
+    // F20 flipped PLATFORM_MFA_REQUIRED's default to true. These suites sign
+    // Software Admins in with a password only; MFA enforcement itself is
+    // proven by mfa.security.integration.test.ts, which forces it on.
+    env: { PLATFORM_MFA_REQUIRED: 'false' },
   },
 });

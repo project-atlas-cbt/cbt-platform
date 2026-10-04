@@ -218,6 +218,19 @@ export class EligibleStudentResponseDto {
 
   @ApiPropertyOptional({ type: String, nullable: true })
   examSessionId?: string | null;
+
+  @ApiProperty({
+    type: Number,
+    description:
+      "F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none).",
+  })
+  extraTimeSeconds!: number;
+
+  @ApiProperty({
+    type: Boolean,
+    description: "F20 (DoD 3): larger-text accommodation on the student's latest participant row.",
+  })
+  largerText!: boolean;
 }
 
 export class EligibleStudentsResponseDto {

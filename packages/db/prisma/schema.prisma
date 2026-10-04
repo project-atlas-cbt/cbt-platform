@@ -875,6 +875,8 @@ model MediaAsset {
   // Composite-FK target, matching every other school-owned table's
   // (schoolId, id) convention, for a future composite reference (e.g. B8's
   // QuestionMedia) — not consumed by anything in B4 itself.
+  examCiphertexts ExamMediaCiphertext[]
+
   @@unique([schoolId, id])
   @@index([schoolId])
   @@index([schoolId, type])
@@ -985,16 +987,16 @@ model AcademicSession {
   createdAt DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  terms              AcademicTerm[]
-  classGroups        ClassGroup[]
-  classSubjects      ClassSubject[]
-  hodAssignments     HODAssignment[]
-  studentEnrollments StudentEnrollment[]
-  rolloverSourceSessionDecisions RolloverDecision[] @relation("RolloverDecisionSourceSession")
-  teacherAssignments TeacherAssignment[]
+  school                         School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  terms                          AcademicTerm[]
+  classGroups                    ClassGroup[]
+  classSubjects                  ClassSubject[]
+  hodAssignments                 HODAssignment[]
+  studentEnrollments             StudentEnrollment[]
+  rolloverSourceSessionDecisions RolloverDecision[]  @relation("RolloverDecisionSourceSession")
+  teacherAssignments             TeacherAssignment[]
   // B11: exams held in this session.
-  exams              Exam[]
+  exams                          Exam[]
 
   // Composite-FK target for AcademicTerm/ClassGroup/ClassSubject/
   // HODAssignment, matching the established (schoolId, id) convention.
@@ -1082,19 +1084,19 @@ model ClassGroup {
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  session            AcademicSession     @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  session                 AcademicSession     @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
   /// Restrict, not SetNull: a composite FK can't null just one of its two
   /// columns (schoolId is required), and our own archival rule already
   /// blocks hard-deleting a Department while any ClassGroup references it —
   /// Restrict is a correct database-level backstop under that rule, not a
   /// contradiction of "departmentId is nullable" (nullable only means a
   /// class *may be created* with no department).
-  department         Department?         @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
-  classSubjects      ClassSubject[]
+  department              Department?         @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  classSubjects           ClassSubject[]
   // B6: StudentEnrollment FKs against the (schoolId, id, academicSessionId)
   // unique below (the same D-10-style guarantee ClassSubject already uses).
-  studentEnrollments StudentEnrollment[]
-  rolloverSourceDecisions RolloverDecision[] @relation("RolloverDecisionSourceClass")
+  studentEnrollments      StudentEnrollment[]
+  rolloverSourceDecisions RolloverDecision[]  @relation("RolloverDecisionSourceClass")
 
   // Composite-FK target for ClassSubject's session-agreement check (D-10) —
   // a three-column unique, not just (schoolId, id), so ClassSubject can FK
@@ -1243,17 +1245,17 @@ model StudentEnrollment {
   createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  studentProfile    StudentProfile               @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Cascade)
-  session           AcademicSession              @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  studentProfile          StudentProfile               @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Cascade)
+  session                 AcademicSession              @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
   /// D-10-style composite FK against ClassGroup's three-column unique —
   /// structurally guarantees the enrollment's session agrees with the
   /// class's own session, same pattern as ClassSubject.classGroupSession.
   /// Restrict (not Cascade): a class must not be hard-deletable while a
   /// live or historical enrollment still references it — backstops
   /// ClassGroupService.delete()'s own dependent-count check.
-  classGroupSession ClassGroup                   @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Restrict)
-  registrations     StudentSubjectRegistration[]
-  rolloverSourceDecisions RolloverDecision[] @relation("RolloverDecisionSourceEnrollment")
+  classGroupSession       ClassGroup                   @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Restrict)
+  registrations           StudentSubjectRegistration[]
+  rolloverSourceDecisions RolloverDecision[]           @relation("RolloverDecisionSourceEnrollment")
   // DoD item 9 ("a student cannot be enrolled twice concurrently in one
   // session") is enforced by a partial unique index on
   // (school_id, student_profile_id, academic_session_id) WHERE
@@ -1385,21 +1387,21 @@ model RolloverPlan {
 }
 
 model RolloverDecision {
-  id                       String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId                 String          @map("school_id") @db.Uuid
-  rolloverPlanId           String          @map("rollover_plan_id") @db.Uuid
-  sourceEnrollmentId       String          @map("source_enrollment_id") @db.Uuid
-  sourceAcademicSessionId  String          @map("source_academic_session_id") @db.Uuid
-  sourceClassId            String          @map("source_class_id") @db.Uuid
-  proposedOutcome          RolloverOutcome @map("proposed_outcome")
-  outcome                  RolloverOutcome
-  targetDraftClassId       String?         @map("target_draft_class_id") @db.Uuid
-  reason                   String          @db.VarChar(500)
-  overriddenByUserId       String?         @map("overridden_by_user_id") @db.Uuid
-  overriddenAt             DateTime?       @map("overridden_at") @db.Timestamptz(6)
-  committedAt              DateTime?       @map("committed_at") @db.Timestamptz(6)
-  createdAt                DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                      String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId                String          @map("school_id") @db.Uuid
+  rolloverPlanId          String          @map("rollover_plan_id") @db.Uuid
+  sourceEnrollmentId      String          @map("source_enrollment_id") @db.Uuid
+  sourceAcademicSessionId String          @map("source_academic_session_id") @db.Uuid
+  sourceClassId           String          @map("source_class_id") @db.Uuid
+  proposedOutcome         RolloverOutcome @map("proposed_outcome")
+  outcome                 RolloverOutcome
+  targetDraftClassId      String?         @map("target_draft_class_id") @db.Uuid
+  reason                  String          @db.VarChar(500)
+  overriddenByUserId      String?         @map("overridden_by_user_id") @db.Uuid
+  overriddenAt            DateTime?       @map("overridden_at") @db.Timestamptz(6)
+  committedAt             DateTime?       @map("committed_at") @db.Timestamptz(6)
+  createdAt               DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   sourceEnrollment StudentEnrollment @relation("RolloverDecisionSourceEnrollment", fields: [schoolId, sourceEnrollmentId], references: [schoolId, id], onDelete: Restrict)
   sourceClass      ClassGroup        @relation("RolloverDecisionSourceClass", fields: [schoolId, sourceClassId], references: [schoolId, id], onDelete: Restrict)
@@ -1412,17 +1414,17 @@ model RolloverDecision {
 }
 
 model RolloverClassDraft {
-  id                 String @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId           String @map("school_id") @db.Uuid
-  rolloverPlanId     String @map("rollover_plan_id") @db.Uuid
-  sourceClassId      String @map("source_class_id") @db.Uuid
-  departmentId       String? @map("department_id") @db.Uuid
-  name               String @db.VarChar(32)
-  level              ClassLevel
-  arm                String @db.VarChar(16)
-  included           Boolean @default(true)
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id             String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId       String     @map("school_id") @db.Uuid
+  rolloverPlanId String     @map("rollover_plan_id") @db.Uuid
+  sourceClassId  String     @map("source_class_id") @db.Uuid
+  departmentId   String?    @map("department_id") @db.Uuid
+  name           String     @db.VarChar(32)
+  level          ClassLevel
+  arm            String     @db.VarChar(16)
+  included       Boolean    @default(true)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([schoolId, rolloverPlanId, sourceClassId])
   @@unique([schoolId, rolloverPlanId, id])
@@ -1432,15 +1434,15 @@ model RolloverClassDraft {
 }
 
 model RolloverOfferingDraft {
-  id                    String @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId              String @map("school_id") @db.Uuid
-  rolloverPlanId        String @map("rollover_plan_id") @db.Uuid
-  sourceClassSubjectId  String @map("source_class_subject_id") @db.Uuid
-  targetDraftClassId    String @map("target_draft_class_id") @db.Uuid
-  subjectId             String @map("subject_id") @db.Uuid
-  included              Boolean @default(true)
-  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                   String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId             String   @map("school_id") @db.Uuid
+  rolloverPlanId       String   @map("rollover_plan_id") @db.Uuid
+  sourceClassSubjectId String   @map("source_class_subject_id") @db.Uuid
+  targetDraftClassId   String   @map("target_draft_class_id") @db.Uuid
+  subjectId            String   @map("subject_id") @db.Uuid
+  included             Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([schoolId, rolloverPlanId, sourceClassSubjectId])
   @@unique([schoolId, rolloverPlanId, id])
@@ -1449,18 +1451,18 @@ model RolloverOfferingDraft {
 }
 
 model RolloverStaffAssignmentDraft {
-  id                         String @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId                   String @map("school_id") @db.Uuid
-  rolloverPlanId             String @map("rollover_plan_id") @db.Uuid
-  assignmentKind             String @map("assignment_kind") @db.VarChar(16)
-  sourceAssignmentId         String @map("source_assignment_id") @db.Uuid
-  membershipId               String @map("membership_id") @db.Uuid
-  targetDraftClassId         String? @map("target_draft_class_id") @db.Uuid
-  subjectId                  String? @map("subject_id") @db.Uuid
-  departmentId               String? @map("department_id") @db.Uuid
-  confirmed                  Boolean @default(false)
-  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                 String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId           String   @map("school_id") @db.Uuid
+  rolloverPlanId     String   @map("rollover_plan_id") @db.Uuid
+  assignmentKind     String   @map("assignment_kind") @db.VarChar(16)
+  sourceAssignmentId String   @map("source_assignment_id") @db.Uuid
+  membershipId       String   @map("membership_id") @db.Uuid
+  targetDraftClassId String?  @map("target_draft_class_id") @db.Uuid
+  subjectId          String?  @map("subject_id") @db.Uuid
+  departmentId       String?  @map("department_id") @db.Uuid
+  confirmed          Boolean  @default(false)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([schoolId, rolloverPlanId, assignmentKind, sourceAssignmentId])
   @@index([schoolId, rolloverPlanId])
@@ -2110,22 +2112,23 @@ model Exam {
   department      Department?      @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
   createdByMember SchoolMembership @relation("ExamCreatedBy", fields: [schoolId, createdByMembershipId], references: [schoolId, id], onDelete: Restrict)
 
-  classes        ExamClass[]
-  sections       ExamSection[]
-  questions      ExamQuestion[]
+  classes               ExamClass[]
+  sections              ExamSection[]
+  questions             ExamQuestion[]
   // B12: activation & control — sessions, delegated administrators, and
   // final per-student participation outcomes (written at End Examination).
-  examSessions   ExamSession[]
-  administrators ExamAdministrator[]
-  participations ExamParticipation[]
+  examSessions          ExamSession[]
+  administrators        ExamAdministrator[]
+  participations        ExamParticipation[]
   attemptAuthorizations AttemptAuthorization[]
   // B13: the actual student attempts taken against this exam.
-  attempts       ExamAttempt[]
+  attempts              ExamAttempt[]
+  mediaCiphertexts      ExamMediaCiphertext[]
   // B15: results derived from those attempts, this exam's single
   // publication row (ADR-0010), and any adjustment operations run over it.
-  results              Result[]
-  resultPublication    ResultPublication?
-  adjustmentOperations ResultAdjustmentOperation[]
+  results               Result[]
+  resultPublication     ResultPublication?
+  adjustmentOperations  ResultAdjustmentOperation[]
 
   @@unique([schoolId, id])
   @@index([schoolId])
@@ -2341,11 +2344,11 @@ model ExamSession {
   // Restrict, not Cascade: an exam past READY must never be hard-deletable
   // while it has sessions — ExamService.deleteDraft() already only permits
   // DRAFT exams, which structurally can never have one.
-  exam         Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
-  participants ExamSessionParticipant[]
-  participations ExamParticipation[]
+  exam                  Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  participants          ExamSessionParticipant[]
+  participations        ExamParticipation[]
   // B13: attempts started under this specific session.
-  attempts     ExamAttempt[]
+  attempts              ExamAttempt[]
   attemptAuthorizations AttemptAuthorization[]
 
   // Composite-FK target for ExamSessionParticipant.
@@ -2390,6 +2393,15 @@ model ExamSessionParticipant {
   extraTimeSeconds               Int?      @map("extra_time_seconds")
   extraTimeGrantedByMembershipId String?   @map("extra_time_granted_by_membership_id") @db.Uuid
   extraTimeGrantedAt             DateTime? @map("extra_time_granted_at") @db.Timestamptz(6)
+
+  /// F20 (owner decision 2026-10-03, DoD 3): the second 07 §9.7
+  /// accommodation, LARGER_TEXT — staff-granted, never self-selected,
+  /// audited like extra time. A display accommodation only (the assessment
+  /// itself is unchanged, 03 §77), so it is read live into the attempt
+  /// package rather than frozen into the attempt.
+  largerText                      Boolean   @default(false) @map("larger_text")
+  largerTextGrantedByMembershipId String?   @map("larger_text_granted_by_membership_id") @db.Uuid
+  largerTextGrantedAt             DateTime? @map("larger_text_granted_at") @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -2436,23 +2448,23 @@ model ExamParticipation {
 /// The target session is created with the authorization so a completed parent
 /// exam never needs to be reopened for a makeup or retry.
 model AttemptAuthorization {
-  id               String                     @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId         String                     @map("school_id") @db.Uuid
-  examId           String                     @map("exam_id") @db.Uuid
-  examSessionId    String                     @map("exam_session_id") @db.Uuid
-  studentProfileId String                     @map("student_profile_id") @db.Uuid
-  type             AttemptAuthorizationType
-  status           AttemptAuthorizationStatus @default(AUTHORIZED)
-  reason           String
-  authorizedByMembershipId String              @map("authorized_by_membership_id") @db.Uuid
-  authorizedAt     DateTime                    @default(now()) @map("authorized_at") @db.Timestamptz(6)
-  expiresAt        DateTime?                   @map("expires_at") @db.Timestamptz(6)
-  usedAt           DateTime?                   @map("used_at") @db.Timestamptz(6)
-  revokedAt        DateTime?                   @map("revoked_at") @db.Timestamptz(6)
-  revokedByMembershipId String?                @map("revoked_by_membership_id") @db.Uuid
-  revokedReason    String?                     @map("revoked_reason")
-  createdAt        DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                       String                     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId                 String                     @map("school_id") @db.Uuid
+  examId                   String                     @map("exam_id") @db.Uuid
+  examSessionId            String                     @map("exam_session_id") @db.Uuid
+  studentProfileId         String                     @map("student_profile_id") @db.Uuid
+  type                     AttemptAuthorizationType
+  status                   AttemptAuthorizationStatus @default(AUTHORIZED)
+  reason                   String
+  authorizedByMembershipId String                     @map("authorized_by_membership_id") @db.Uuid
+  authorizedAt             DateTime                   @default(now()) @map("authorized_at") @db.Timestamptz(6)
+  expiresAt                DateTime?                  @map("expires_at") @db.Timestamptz(6)
+  usedAt                   DateTime?                  @map("used_at") @db.Timestamptz(6)
+  revokedAt                DateTime?                  @map("revoked_at") @db.Timestamptz(6)
+  revokedByMembershipId    String?                    @map("revoked_by_membership_id") @db.Uuid
+  revokedReason            String?                    @map("revoked_reason")
+  createdAt                DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   exam           Exam           @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
   examSession    ExamSession    @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
@@ -2602,10 +2614,10 @@ model ExamAttempt {
   examSessionId    String @map("exam_session_id") @db.Uuid
   studentProfileId String @map("student_profile_id") @db.Uuid
 
-  attemptNumber       Int         @map("attempt_number")
-  attemptType         AttemptType @default(STANDARD) @map("attempt_type")
-  state               AttemptState @default(IN_PROGRESS)
-  attemptAuthorizationId String?  @map("attempt_authorization_id") @db.Uuid
+  attemptNumber          Int          @map("attempt_number")
+  attemptType            AttemptType  @default(STANDARD) @map("attempt_type")
+  state                  AttemptState @default(IN_PROGRESS)
+  attemptAuthorizationId String?      @map("attempt_authorization_id") @db.Uuid
 
   startedAt              DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
   /// Frozen at creation from Exam.durationSeconds +
@@ -2646,18 +2658,18 @@ model ExamAttempt {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  exam            Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
-  examSession     ExamSession              @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
-  studentProfile  StudentProfile           @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Restrict)
-  attemptAuthorization AttemptAuthorization? @relation(fields: [schoolId, attemptAuthorizationId], references: [schoolId, id], onDelete: Restrict)
-  snapshot        AttemptQuestionSnapshot?
-  answers         AttemptAnswer[]
-  answerEvents    AttemptAnswerEvent[]
-  events          AttemptEvent[]
-  questionResults AttemptQuestionResult[]
+  exam                 Exam                     @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Restrict)
+  examSession          ExamSession              @relation(fields: [schoolId, examSessionId], references: [schoolId, id], onDelete: Restrict)
+  studentProfile       StudentProfile           @relation(fields: [schoolId, studentProfileId], references: [schoolId, id], onDelete: Restrict)
+  attemptAuthorization AttemptAuthorization?    @relation(fields: [schoolId, attemptAuthorizationId], references: [schoolId, id], onDelete: Restrict)
+  snapshot             AttemptQuestionSnapshot?
+  answers              AttemptAnswer[]
+  answerEvents         AttemptAnswerEvent[]
+  events               AttemptEvent[]
+  questionResults      AttemptQuestionResult[]
   /// B15: the finalised academic record derived from this attempt. Strictly
   /// 1:1 (07 §13) — a result cannot exist without an attempt.
-  result          Result?
+  result               Result?
 
   // Composite-FK target for every child table below.
   @@unique([schoolId, id])
@@ -2952,17 +2964,17 @@ model Result {
 
   state ResultState @default(PROCESSING)
 
-  totalMarks       Int     @map("total_marks")
-  earnedMarks      Int     @map("earned_marks")
+  totalMarks      Int     @map("total_marks")
+  earnedMarks     Int     @map("earned_marks")
   /// Percentage to two decimal places, computed by @atlas/domain's
   /// computeResultTotals — the same function AttemptStatusService uses, so
   /// the persisted result and the live attempt-status aggregate can never
   /// disagree.
-  percentage       Decimal @map("percentage") @db.Decimal(5, 2)
-  correctCount     Int     @map("correct_count")
-  incorrectCount   Int     @map("incorrect_count")
-  unansweredCount  Int     @map("unanswered_count")
-  partialCount     Int     @map("partial_count")
+  percentage      Decimal @map("percentage") @db.Decimal(5, 2)
+  correctCount    Int     @map("correct_count")
+  incorrectCount  Int     @map("incorrect_count")
+  unansweredCount Int     @map("unanswered_count")
+  partialCount    Int     @map("partial_count")
 
   grade                 String? @db.VarChar(16)
   gradingScaleVersionId String? @map("grading_scale_version_id") @db.Uuid
@@ -2972,10 +2984,10 @@ model Result {
   /// ADR-0010's individual-withholding axis: a disputed result among 40 is
   /// held back by this flag through an audited action with a reason, rather
   /// than by fragmenting per-exam publication.
-  withheld              Boolean   @default(false)
-  withheldReason        String?   @map("withheld_reason")
-  withheldByMembershipId String?  @map("withheld_by_membership_id") @db.Uuid
-  withheldAt            DateTime? @map("withheld_at") @db.Timestamptz(6)
+  withheld               Boolean   @default(false)
+  withheldReason         String?   @map("withheld_reason")
+  withheldByMembershipId String?   @map("withheld_by_membership_id") @db.Uuid
+  withheldAt             DateTime? @map("withheld_at") @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -3119,7 +3131,7 @@ model ResultAdjustment {
   oldValue Json @map("old_value")
   newValue Json @map("new_value")
 
-  reason                String
+  reason                   String
   authorizedByMembershipId String @map("authorized_by_membership_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -3245,42 +3257,72 @@ enum ExportJobStatus {
 /// B18 — Reporting & Export (05 §54, 08 §14, §15, ADR-0030). Tracks asynchronous
 /// export jobs generating scoped CSV deliverables stored in object storage.
 model ExportJob {
-  id                    String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId              String          @map("school_id") @db.Uuid
-  type                  ExportJobType
-  status                ExportJobStatus @default(PENDING)
+  id       String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId String          @map("school_id") @db.Uuid
+  type     ExportJobType
+  status   ExportJobStatus @default(PENDING)
 
-  requesterUserId       String          @map("requester_user_id") @db.Uuid
-  requesterRole         Role            @map("requester_role")
-  requesterMembershipId String?         @map("requester_membership_id") @db.Uuid
+  requesterUserId       String  @map("requester_user_id") @db.Uuid
+  requesterRole         Role    @map("requester_role")
+  requesterMembershipId String? @map("requester_membership_id") @db.Uuid
 
   /// Immutable, validated request parameters (exam, class, department and/or
   /// academic context).  Kept with the job so a retry cannot silently widen it.
-  scope                 Json
+  scope Json
 
   /// Stored S3 key: schools/SCHOOL_ID/reports/exports/JOB_ID/FILENAME
-  storageKey            String?         @map("storage_key") @db.VarChar(512)
-  originalFilename      String?         @map("original_filename") @db.VarChar(255)
-  contentType           String?         @map("content_type") @db.VarChar(127)
-  sizeBytes             Int?            @map("size_bytes")
-  rowCount              Int             @default(0) @map("row_count")
-  failureReason         String?         @map("failure_reason")
+  storageKey       String? @map("storage_key") @db.VarChar(512)
+  originalFilename String? @map("original_filename") @db.VarChar(255)
+  contentType      String? @map("content_type") @db.VarChar(127)
+  sizeBytes        Int?    @map("size_bytes")
+  rowCount         Int     @default(0) @map("row_count")
+  failureReason    String? @map("failure_reason")
 
   /// Rotated, hashed capability for a short-lived authenticated download.
   /// The requester identity is still checked before the object is read.
-  downloadTokenHash     String?         @map("download_token_hash") @db.VarChar(64)
-  downloadTokenExpiresAt DateTime?      @map("download_token_expires_at") @db.Timestamptz(6)
+  downloadTokenHash      String?   @map("download_token_hash") @db.VarChar(64)
+  downloadTokenExpiresAt DateTime? @map("download_token_expires_at") @db.Timestamptz(6)
 
   /// Expiry for download link and artefact cleanup (default 24h)
-  expiresAt             DateTime        @map("expires_at") @db.Timestamptz(6)
-  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  school                School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@unique([schoolId, id])
   @@index([schoolId])
   @@index([schoolId, status])
   @@index([schoolId, requesterUserId])
   @@map("export_jobs")
+}
+
+/// F20 — encrypted media pre-cache (owner decision 2026-10-03; ADR-0021
+/// amendment). One row per (exam, media asset): an AES-256-GCM copy of the
+/// asset under a key derived per exam (HKDF of MEDIA_PRECACHE_SECRET, never
+/// stored), written to object storage so a lab can download a paper's media
+/// before the exam window while no student can view it before their own
+/// Start — the key arrives only in the attempt package. Operational data:
+/// purgeable by the retention sweep once the exam is over (the plaintext
+/// MediaAsset is the record of what was shown).
+model ExamMediaCiphertext {
+  id           String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  examId       String   @map("exam_id") @db.Uuid
+  mediaAssetId String   @map("media_asset_id") @db.Uuid
+  storageKey   String   @unique @map("storage_key") @db.VarChar(512)
+  /// Ciphertext size (12-byte IV + body + 16-byte tag) — the client's
+  /// storage pre-flight sums these.
+  byteSize     Int      @map("byte_size")
+  /// Hex SHA-256 of the ciphertext object — the client verifies its download.
+  sha256       String   @db.VarChar(64)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  exam       Exam       @relation(fields: [schoolId, examId], references: [schoolId, id], onDelete: Cascade)
+  mediaAsset MediaAsset @relation(fields: [schoolId, mediaAssetId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, examId, mediaAssetId])
+  @@index([schoolId])
+  @@index([schoolId, examId])
+  @@map("exam_media_ciphertexts")
 }

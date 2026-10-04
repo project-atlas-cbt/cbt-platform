@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, setCsrfToken, unwrap } from '@/lib/api';
 import { ThemeProvider } from '@/lib/theme/theme-provider';
+import { useNonce } from '@/lib/security/nonce-context';
 
 export interface TenantSchool {
   name: string;
@@ -90,11 +91,15 @@ const TenantContext = createContext<TenantResolution | null>(null);
  */
 export function TenantProvider({ children }: { children: ReactNode }) {
   const resolution = useTenantResolution();
+  const nonce = useNonce();
   // exactOptionalPropertyTypes forbids `primaryColor={undefined}` as an
   // explicit prop value — the key must be entirely absent, not present
   // with an undefined value, to mean "use the platform default".
   const primaryColor = resolution.school?.primaryColor;
-  const themeProps = primaryColor ? { primaryColor } : {};
+  const themeProps = {
+    ...(primaryColor ? { primaryColor } : {}),
+    ...(nonce ? { nonce } : {}),
+  };
 
   return (
     <TenantContext.Provider value={resolution}>

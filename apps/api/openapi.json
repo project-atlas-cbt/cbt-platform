@@ -754,6 +754,28 @@
         ]
       }
     },
+    "/platform/admins": {
+      "get": {
+        "operationId": "PlatformAdminsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformAdminListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "F20: active Software Admins with MFA status (for peer MFA reset).",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/platform/schools": {
       "get": {
         "operationId": "SchoolsAdminController_list",
@@ -4659,6 +4681,55 @@
         ]
       }
     },
+    "/exam-sessions/{id}/participants/{studentId}/larger-text": {
+      "post": {
+        "operationId": "ExamSessionController_grantLargerText",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantLargerTextDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "F20: grant or withdraw the larger-text accommodation (07 §9.7, DoD 3) — staff-granted, audited, applied in the exam runtime.",
+        "tags": [
+          "exam-control"
+        ]
+      }
+    },
     "/attempts/{id}/invalidate": {
       "post": {
         "operationId": "AttemptController_invalidate",
@@ -5072,6 +5143,37 @@
           }
         },
         "summary": "Instructions and rules before starting (03 §32-36).",
+        "tags": [
+          "attempts"
+        ]
+      }
+    },
+    "/student/assessment/{examId}/media-manifest": {
+      "get": {
+        "operationId": "StudentAssessmentController_getMediaManifest",
+        "parameters": [
+          {
+            "name": "examId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaManifestResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "F20: the paper's ENCRYPTED media, to pre-cache before Start (ADR-0021 amendment). The key arrives only in the attempt package.",
         "tags": [
           "attempts"
         ]
@@ -9980,6 +10082,50 @@
           "roles"
         ]
       },
+      "PlatformAdminSummaryDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "mfaEnrolled": {
+            "type": "boolean",
+            "description": "A confirmed second factor is on file."
+          },
+          "isSelf": {
+            "type": "boolean",
+            "description": "This row is the caller."
+          }
+        },
+        "required": [
+          "userId",
+          "displayName",
+          "email",
+          "mfaEnrolled",
+          "isSelf"
+        ]
+      },
+      "PlatformAdminListResponseDto": {
+        "type": "object",
+        "properties": {
+          "admins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformAdminSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "admins"
+        ]
+      },
       "SchoolListItemDto": {
         "type": "object",
         "properties": {
@@ -12808,6 +12954,19 @@
           "invalidationReason": {
             "type": "string",
             "nullable": true
+          },
+          "mediaKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "F20 (ADR-0021 amendment): base64 AES-256-GCM key that decrypts the pre-cached media of this exam. Present only to the attempt owner while the attempt is IN_PROGRESS; null otherwise."
+          },
+          "extraTimeSeconds": {
+            "type": "number",
+            "description": "F20 (DoD 3): staff-granted extra time already included in expiresAt, in seconds."
+          },
+          "largerText": {
+            "type": "boolean",
+            "description": "F20 (DoD 3): staff-granted larger-text accommodation."
           }
         },
         "required": [
@@ -12819,7 +12978,10 @@
           "expiresAt",
           "serverTime",
           "navigationPolicy",
-          "questions"
+          "questions",
+          "mediaKey",
+          "extraTimeSeconds",
+          "largerText"
         ]
       },
       "ExamQuestionResponseDto": {
@@ -13496,6 +13658,14 @@
           "examSessionId": {
             "type": "string",
             "nullable": true
+          },
+          "extraTimeSeconds": {
+            "type": "number",
+            "description": "F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none)."
+          },
+          "largerText": {
+            "type": "boolean",
+            "description": "F20 (DoD 3): larger-text accommodation on the student's latest participant row."
           }
         },
         "required": [
@@ -13504,7 +13674,9 @@
           "studentName",
           "eligible",
           "failedChecks",
-          "participantStatus"
+          "participantStatus",
+          "extraTimeSeconds",
+          "largerText"
         ]
       },
       "EligibleStudentsResponseDto": {
@@ -13665,6 +13837,18 @@
         },
         "required": [
           "extraTimeSeconds"
+        ]
+      },
+      "GrantLargerTextDto": {
+        "type": "object",
+        "properties": {
+          "largerText": {
+            "type": "boolean",
+            "description": "true grants, false withdraws."
+          }
+        },
+        "required": [
+          "largerText"
         ]
       },
       "SaveAnswerDto": {
@@ -14054,6 +14238,14 @@
           },
           "totalMarks": {
             "type": "number"
+          },
+          "extraTimeSeconds": {
+            "type": "number",
+            "description": "F20 (DoD 3): the caller's own staff-granted extra time for this exam, in seconds (0 when none) — already included in the attempt's server deadline at Start; shown so the student knows."
+          },
+          "largerText": {
+            "type": "boolean",
+            "description": "F20 (DoD 3): the caller's staff-granted larger-text accommodation (07 §9.7)."
           }
         },
         "required": [
@@ -14064,7 +14256,68 @@
           "attemptLimit",
           "navigationPolicy",
           "questionCount",
-          "totalMarks"
+          "totalMarks",
+          "extraTimeSeconds",
+          "largerText"
+        ]
+      },
+      "MediaManifestAssetDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Short-lived signed URL of the CIPHERTEXT object."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "byteSize": {
+            "type": "number",
+            "description": "Ciphertext size: 12-byte IV + body + 16-byte tag."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Hex SHA-256 of the ciphertext object."
+          }
+        },
+        "required": [
+          "mediaAssetId",
+          "url",
+          "expiresAt",
+          "byteSize",
+          "sha256"
+        ]
+      },
+      "MediaManifestResponseDto": {
+        "type": "object",
+        "properties": {
+          "ready": {
+            "type": "boolean",
+            "description": "false while the server is still encrypting — poll after retryAfterSeconds."
+          },
+          "totalBytes": {
+            "type": "number"
+          },
+          "retryAfterSeconds": {
+            "type": "number",
+            "nullable": true
+          },
+          "assets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaManifestAssetDto"
+            }
+          }
+        },
+        "required": [
+          "ready",
+          "totalBytes",
+          "retryAfterSeconds",
+          "assets"
         ]
       },
       "NotificationResponseDto": {

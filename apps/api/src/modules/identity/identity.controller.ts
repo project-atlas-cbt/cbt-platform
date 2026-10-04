@@ -5,6 +5,7 @@ import { prisma } from '@atlas/db';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
 import { createCsrfToken, PLATFORM_CSRF_USER_INFO } from '../../security/csrf.js';
+import { IssuesCsrfToken } from '../../security/csrf.guard.js';
 import { Authorized, PublicRoute } from '../authorization/decorators.js';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import { resolveLogoSignedUrl } from '../../storage/logo-resolver.js';
@@ -51,6 +52,8 @@ export class IdentityController {
   }
 
   @Get('tenant/resolve')
+  // F20: the only route that persists a newly minted CSRF secret (csrf.guard.ts).
+  @IssuesCsrfToken()
   @PublicRoute('Pre-authentication — resolves branding for the login screen itself (ADR-0005).')
   @ApiOperation({
     summary:

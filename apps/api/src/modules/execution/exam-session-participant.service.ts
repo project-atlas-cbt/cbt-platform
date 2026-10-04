@@ -17,7 +17,7 @@ import type {
   EligibleStudentsResponseDto,
   RevokeParticipantDto,
 } from './dto/exam-session.dto.js';
-import type { GrantExtraTimeDto } from './dto/attempt.dto.js';
+import type { GrantExtraTimeDto, GrantLargerTextDto } from './dto/attempt.dto.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -319,6 +319,64 @@ export class ExamSessionParticipantService {
     });
   }
 
+  /** `POST /v1/exam-sessions/:id/participants/:studentId/larger-text` — F20
+   * (DoD 3; owner decision 2026-10-03): the LARGER_TEXT accommodation of
+   * 07 §9.7, staff-granted and audited exactly like extra time (same
+   * permission — both are accommodations an exam administrator grants). A
+   * display accommodation: read live into the attempt package, so a grant
+   * during a running attempt applies on the student's next resume. */
+  async grantLargerText(
+    schoolId: string,
+    actor: AuthorizedActor,
+    examSessionId: string,
+    studentProfileId: string,
+    dto: GrantLargerTextDto,
+    auditCtx: ActorContext,
+  ): Promise<void> {
+    const session = await loadExamSessionOrThrow(schoolId, examSessionId);
+    const decision = await this.authz.evaluate(actor, 'examAdmin.grantExtraTime', {
+      schoolId,
+      ownerMembershipId: session.exam.createdByMembershipId,
+      examId: session.exam.id,
+      ...(session.exam.departmentId !== null && { departmentId: session.exam.departmentId }),
+    });
+    if (!decision.allowed) {
+      throw new AppHttpException({
+        code: 'FORBIDDEN',
+        message: 'You do not have permission to grant accommodations for this session.',
+      });
+    }
+
+    const schoolActor = requireSchoolActor(actor);
+    const { count } = await withTenant(prisma, schoolId, (tx) =>
+      tx.examSessionParticipant.updateMany({
+        where: { schoolId, examSessionId, studentProfileId },
+        data: {
+          largerText: dto.largerText,
+          largerTextGrantedByMembershipId: schoolActor.membershipId,
+          largerTextGrantedAt: new Date(),
+        },
+      }),
+    );
+    if (count === 0) {
+      throw new AppHttpException({
+        code: 'EXAM_SESSION_PARTICIPANT_NOT_FOUND',
+        message: 'This student has no participant row for this session.',
+      });
+    }
+
+    await this.audit.record({
+      schoolId,
+      actorUserId: auditCtx.actorUserId,
+      actorRole: auditCtx.actorRole,
+      action: 'ATTEMPT_LARGER_TEXT_GRANTED',
+      entityType: 'ExamSessionParticipant',
+      entityId: examSessionId,
+      metadata: { studentProfileId, largerText: dto.largerText },
+    });
+    await this.stream.publishUpdate(schoolId, session.examId);
+  }
+
   /** `GET /v1/exams/:id/eligible-students` — the exam's full targeted-class
    * roster, each row's eligibility computed live and joined against its
    * most-recently-touched participant row (if any) across every one of the
@@ -417,17 +475,25 @@ export class ExamSessionParticipantService {
           : await tx.examSessionParticipant.findMany({
               where: { schoolId, examSessionId: { in: sessionIds } },
               orderBy: { authorizedAt: 'desc' },
-              select: { studentProfileId: true, status: true, examSessionId: true },
+              select: {
+                studentProfileId: true,
+                status: true,
+                examSessionId: true,
+                extraTimeSeconds: true,
+                largerText: true,
+              },
             });
       const latestParticipantByStudent = new Map<
         string,
-        { status: string; examSessionId: string }
+        { status: string; examSessionId: string; extraTimeSeconds: number; largerText: boolean }
       >();
       for (const p of participants) {
         if (!latestParticipantByStudent.has(p.studentProfileId)) {
           latestParticipantByStudent.set(p.studentProfileId, {
             status: p.status,
             examSessionId: p.examSessionId,
+            extraTimeSeconds: p.extraTimeSeconds ?? 0,
+            largerText: p.largerText,
           });
         }
       }
@@ -450,6 +516,9 @@ export class ExamSessionParticipantService {
             (participant?.status as EligibleStudentsResponseDto['students'][number]['participantStatus']) ??
             null,
           examSessionId: participant?.examSessionId ?? null,
+          // F20 (DoD 3): the accommodations staff grant from this roster.
+          extraTimeSeconds: participant?.extraTimeSeconds ?? 0,
+          largerText: participant?.largerText ?? false,
         });
       }
       return rows;

@@ -20,13 +20,20 @@ import type { ErrorEnvelope } from '@atlas/validation';
 import { AppConfigModule } from '../config/app-config.module.js';
 import { HttpExceptionFilter } from '../common/http-exception.filter.js';
 import { TenancyContextService } from '../common/tenancy-context.service.js';
-import { CsrfGuard } from './csrf.guard.js';
+import { CsrfGuard, IssuesCsrfToken } from './csrf.guard.js';
 import { createCsrfToken } from './csrf.js';
 
 @Controller()
 class CsrfProbeController {
+  // Stands in for `GET /tenant/resolve`, the token-issuing route (F20).
   @Get('csrf-probe')
+  @IssuesCsrfToken()
   get() {
+    return { ok: true };
+  }
+
+  @Get('csrf-plain')
+  plain() {
     return { ok: true };
   }
 
@@ -70,6 +77,12 @@ describe('CSRF protection end-to-end (ADR-0022)', () => {
     const res = await app.inject({ method: 'GET', url: '/csrf-probe' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['set-cookie']).toBeDefined();
+  });
+
+  it('F20: an ordinary cookie-less GET does not mint a competing secret (first-visit race)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/csrf-plain' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('a POST with no CSRF token is rejected as a proper ADR-0033 envelope, not a raw crash', async () => {

@@ -1,4 +1,7 @@
+'use client';
+
 import { useId, type ReactNode } from 'react';
+import { useNonce } from '@/lib/security/nonce-context';
 import { derivePalette } from '@/lib/theme/derive-palette';
 import { PLATFORM_DEFAULT_PRIMARY_COLOR } from '@/lib/theme/theme-provider';
 import { BRAND_TOKEN_VARS, NEUTRAL_TOKEN_VARS } from '@/lib/theme/tokens';
@@ -26,6 +29,7 @@ export function BrandingPreview({
 }) {
   const scopeId = useId().replace(/[^a-zA-Z0-9]/g, '');
   const scopeClass = `onb-preview-${scopeId}`;
+  const nonce = useNonce();
   let palette;
   try {
     palette = derivePalette(primaryColor || PLATFORM_DEFAULT_PRIMARY_COLOR);
@@ -51,7 +55,7 @@ export function BrandingPreview({
 
   return (
     <div className={scopeClass}>
-      <style dangerouslySetInnerHTML={{ __html: css }} />
+      <style nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: css }} />
       <div className="grid grid-cols-2 gap-3 rounded-md border border-border bg-background p-4">
         <PreviewCard label="Login">
           <div className="space-y-2 rounded-md border border-border bg-surface p-3">

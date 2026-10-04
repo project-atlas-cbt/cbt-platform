@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
     // deliberately re-exposed under the client-safe name.
     NEXT_PUBLIC_PRODUCT_NAME: process.env.PRODUCT_NAME,
     NEXT_PUBLIC_API_ORIGIN: process.env.NEXT_PUBLIC_API_ORIGIN,
+    // F20 — CSP inputs (proxy.ts) and client error tracking. Both optional:
+    // unset media origin = no external media host allowed; unset DSN =
+    // Sentry never loads.
+    NEXT_PUBLIC_MEDIA_ORIGIN: process.env.NEXT_PUBLIC_MEDIA_ORIGIN,
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
   },
   // @atlas/contracts and @atlas/validation (workspace packages this app
   // imports) build to real dist/*.js — Turbopack cannot remap a

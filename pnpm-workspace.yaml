@@ -60,3 +60,5 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/utils@8.68.0'
   - '@typescript-eslint/visitor-keys@8.68.0'
   - typescript-eslint@8.68.0
+patchedDependencies:
+  sonner@2.0.8: patches/sonner@2.0.8.patch

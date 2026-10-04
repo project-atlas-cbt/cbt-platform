@@ -14,7 +14,7 @@ import {
   ExamSessionResponseDto,
   RevokeParticipantDto,
 } from './dto/exam-session.dto.js';
-import { GrantExtraTimeDto } from './dto/attempt.dto.js';
+import { GrantExtraTimeDto, GrantLargerTextDto } from './dto/attempt.dto.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
@@ -128,6 +128,35 @@ export class ExamSessionController {
   ): Promise<StatusResponseDto> {
     const user = currentUser(req);
     await this.participants.grantExtraTime(
+      user.schoolId,
+      actorFromAuthenticatedUser(user),
+      id,
+      studentId,
+      body,
+      {
+        actorUserId: user.userId,
+        actorRole: resolveExamActorRole(user),
+      },
+    );
+    return { status: 'ok' };
+  }
+
+  @Post(':id/participants/:studentId/larger-text')
+  @HttpCode(HttpStatus.OK)
+  @Authorized('examAdmin.grantExtraTime')
+  @ApiOperation({
+    summary:
+      'F20: grant or withdraw the larger-text accommodation (07 §9.7, DoD 3) — staff-granted, audited, applied in the exam runtime.',
+  })
+  @ApiOkResponse({ type: StatusResponseDto })
+  async grantLargerText(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Param('studentId') studentId: string,
+    @Body() body: GrantLargerTextDto,
+  ): Promise<StatusResponseDto> {
+    const user = currentUser(req);
+    await this.participants.grantLargerText(
       user.schoolId,
       actorFromAuthenticatedUser(user),
       id,

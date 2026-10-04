@@ -5,6 +5,47 @@ import { connectivityStore } from './connectivity-store';
 import { isNotWritableError, isQuestionNotInSnapshotError } from './error-utils';
 
 /**
+ * F20 (DoD 8 — high latency and packet loss). A batch request that hangs on
+ * a lossy link would otherwise hold the single-flight chain until the
+ * browser gives up (minutes); abort it so the rows return to `pending` and
+ * the next trigger retries. Generous against B21's measured budget (answer
+ * save p99 ≤ 750 ms) and a 300 ms-RTT congested lab link.
+ */
+export const FLUSH_TIMEOUT_MS = 15_000;
+
+/** `AbortSignal.timeout` where available (every declared-matrix browser);
+ * a manual controller otherwise — a missing API must never break syncing. */
+export function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+/**
+ * After consecutive failed flushes, answer-triggered flushes wait out a
+ * jittered exponential backoff (honouring a `Retry-After`, if the server sent
+ * one). Answers are still written locally at once — only the network retry
+ * is spaced. The heartbeat tick and a pre-submit `flushNow()` are `force`d
+ * and always try.
+ */
+export const FLUSH_BACKOFF_BASE_MS = 1_000;
+export const FLUSH_BACKOFF_MAX_MS = 30_000;
+
+export function flushBackoffDelay(
+  consecutiveFailures: number,
+  retryAfterMs: number | undefined,
+  random: () => number = Math.random,
+): number {
+  const ceiling = Math.min(
+    FLUSH_BACKOFF_MAX_MS,
+    FLUSH_BACKOFF_BASE_MS * 2 ** Math.max(0, consecutiveFailures - 1),
+  );
+  const backoff = Math.round(ceiling / 2 + (ceiling / 2) * random());
+  return Math.max(backoff, retryAfterMs ?? 0);
+}
+
+/**
  * F13 — the offline answer sync engine (ADR-0003/ADR-0007). Owns the
  * write-then-flush lifecycle for one attempt's answers.
  *
@@ -26,6 +67,11 @@ import { isNotWritableError, isQuestionNotInSnapshotError } from './error-utils'
  */
 export class AttemptSyncEngine {
   private flushChain: Promise<void> = Promise.resolve();
+
+  /** F20: backoff state — see `flushBackoffDelay`. */
+  private consecutiveFailures = 0;
+  private nextFlushAt = 0;
+  private deferredFlush: ReturnType<typeof setTimeout> | null = null;
 
   /** Bug fix (see `recordAnswer`'s own doc comment): serializes the read-
    * modify-write itself, exactly like `flushChain` already serializes
@@ -111,8 +157,27 @@ export class AttemptSyncEngine {
 
   /** Chains `flush()` onto the engine's single serialized queue — safe to
    * call any number of times; only one network request is ever in flight. */
-  scheduleFlush(): void {
+  scheduleFlush(options: { force?: boolean } = {}): void {
+    const wait = this.nextFlushAt - Date.now();
+    if (!options.force && wait > 0) {
+      // Inside a backoff window: coalesce into one flush when it ends.
+      this.deferredFlush ??= setTimeout(() => {
+        this.deferredFlush = null;
+        this.scheduleFlush({ force: true });
+      }, wait);
+      return;
+    }
     this.flushChain = this.flushChain.then(() => this.flush()).catch(() => undefined);
+  }
+
+  private recordFlushSuccess(): void {
+    this.consecutiveFailures = 0;
+    this.nextFlushAt = 0;
+  }
+
+  private recordFlushFailure(retryAfterMs?: number): void {
+    this.consecutiveFailures += 1;
+    this.nextFlushAt = Date.now() + flushBackoffDelay(this.consecutiveFailures, retryAfterMs);
   }
 
   /** Awaits the current flush chain to settle — used before a final submit
@@ -121,7 +186,7 @@ export class AttemptSyncEngine {
    * answers are still `pending` locally; this is a best-effort courtesy,
    * not a correctness dependency). */
   async flushNow(): Promise<void> {
-    this.scheduleFlush();
+    this.scheduleFlush({ force: true });
     await this.flushChain;
   }
 
@@ -156,13 +221,18 @@ export class AttemptSyncEngine {
               source,
             })),
           },
+          signal: timeoutSignal(FLUSH_TIMEOUT_MS),
         }),
       );
       connectivityStore.reportSuccess();
+      this.recordFlushSuccess();
       await this.applyBatchResults(response.results, sentSequenceByQuestion);
     } catch (error) {
       if (error instanceof NetworkError) {
+        // Includes the FLUSH_TIMEOUT_MS abort — `unwrap` maps any thrown
+        // fetch failure to NetworkError.
         connectivityStore.reportFailure();
+        this.recordFlushFailure();
         await this.revertInFlightToPending();
         return;
       }
@@ -181,6 +251,7 @@ export class AttemptSyncEngine {
       }
       // Any other unexpected error: treat conservatively like a network
       // failure — never drop data on an error this engine doesn't recognise.
+      this.recordFlushFailure(error instanceof ApiError ? error.retryAfterMs : undefined);
       await this.revertInFlightToPending();
     }
   }

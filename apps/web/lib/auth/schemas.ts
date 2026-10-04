@@ -16,6 +16,28 @@ export const platformLoginSchema = z.object({
 });
 export type PlatformLoginValues = z.infer<typeof platformLoginSchema>;
 
+/** F20 (B20 MFA) — the second sign-in step and enrolment confirmation:
+ * a 6-digit TOTP code (`MfaVerifyDto.otp`, `/^\d{6}$/`). Spaces are
+ * tolerated in input (authenticator apps show "123 456"). */
+export const otpSchema = z.object({
+  otp: z
+    .string()
+    .transform((v) => v.replace(/\s+/g, ''))
+    .pipe(z.string().regex(/^\d{6}$/, 'Enter the 6-digit code from your authenticator app.')),
+});
+export type OtpValues = z.input<typeof otpSchema>;
+
+/** A one-time recovery code (`xxxx-xxxx-xxxx-xxxx`; the server normalises
+ * case and whitespace). */
+export const recoveryCodeSchema = z.object({
+  recoveryCode: z
+    .string()
+    .trim()
+    .min(16, 'Enter one of your recovery codes.')
+    .max(32, 'Enter one of your recovery codes.'),
+});
+export type RecoveryCodeValues = z.infer<typeof recoveryCodeSchema>;
+
 export const forgotPasswordSchema = z.object({
   identifier: z.string().min(1, 'Enter your username or staff ID.'),
 });

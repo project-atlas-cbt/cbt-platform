@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -162,6 +163,57 @@ export class AttemptPreviewResponseDto {
 
   @ApiProperty({ type: Number })
   totalMarks!: number;
+
+  @ApiProperty({
+    type: Number,
+    description:
+      "F20 (DoD 3): the caller's own staff-granted extra time for this exam, in seconds (0 when none) — already included in the attempt's server deadline at Start; shown so the student knows.",
+  })
+  extraTimeSeconds!: number;
+
+  @ApiProperty({
+    type: Boolean,
+    description: "F20 (DoD 3): the caller's staff-granted larger-text accommodation (07 §9.7).",
+  })
+  largerText!: boolean;
+}
+
+/** F20 — one encrypted media object a lab pre-caches before Start. */
+export class MediaManifestAssetDto {
+  @ApiProperty({ type: String })
+  mediaAssetId!: string;
+
+  @ApiProperty({ type: String, description: 'Short-lived signed URL of the CIPHERTEXT object.' })
+  url!: string;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  expiresAt!: string;
+
+  @ApiProperty({ type: Number, description: 'Ciphertext size: 12-byte IV + body + 16-byte tag.' })
+  byteSize!: number;
+
+  @ApiProperty({ type: String, description: 'Hex SHA-256 of the ciphertext object.' })
+  sha256!: string;
+}
+
+/** `GET /v1/student/assessment/:examId/media-manifest` (F20, ADR-0021
+ * amendment). Never carries the decryption key — that arrives only in the
+ * attempt package at Start. */
+export class MediaManifestResponseDto {
+  @ApiProperty({
+    type: Boolean,
+    description: 'false while the server is still encrypting — poll after retryAfterSeconds.',
+  })
+  ready!: boolean;
+
+  @ApiProperty({ type: Number })
+  totalBytes!: number;
+
+  @ApiProperty({ type: Number, nullable: true })
+  retryAfterSeconds!: number | null;
+
+  @ApiProperty({ type: MediaManifestAssetDto, isArray: true })
+  assets!: MediaManifestAssetDto[];
 }
 
 /** State/timing only — `POST .../submit` and `POST .../end`'s own response
@@ -242,6 +294,26 @@ export class AttemptPackageResponseDto {
    * to show anything but a hardcoded generic message). */
   @ApiPropertyOptional({ type: String, nullable: true })
   invalidationReason?: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'F20 (ADR-0021 amendment): base64 AES-256-GCM key that decrypts the pre-cached media of this exam. Present only to the attempt owner while the attempt is IN_PROGRESS; null otherwise.',
+  })
+  mediaKey!: string | null;
+
+  @ApiProperty({
+    type: Number,
+    description: 'F20 (DoD 3): staff-granted extra time already included in expiresAt, in seconds.',
+  })
+  extraTimeSeconds!: number;
+
+  @ApiProperty({
+    type: Boolean,
+    description: 'F20 (DoD 3): staff-granted larger-text accommodation.',
+  })
+  largerText!: boolean;
 }
 
 /** `PUT /v1/attempts/:id/answers/:questionId` — one answer save. */
@@ -442,4 +514,12 @@ export class GrantExtraTimeDto {
   @IsInt()
   @Min(0)
   extraTimeSeconds!: number;
+}
+
+/** `POST /v1/exam-sessions/:id/participants/:studentId/larger-text` — F20
+ * (DoD 3): the LARGER_TEXT accommodation (07 §9.7), staff-granted. */
+export class GrantLargerTextDto {
+  @ApiProperty({ type: Boolean, description: 'true grants, false withdraws.' })
+  @IsBoolean()
+  largerText!: boolean;
 }

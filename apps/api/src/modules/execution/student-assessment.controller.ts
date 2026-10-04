@@ -5,7 +5,12 @@ import { Authorized } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { StudentAssessmentService } from './student-assessment.service.js';
-import { ActiveAssessmentResponseDto, AttemptPreviewResponseDto } from './dto/attempt.dto.js';
+import {
+  ActiveAssessmentResponseDto,
+  AttemptPreviewResponseDto,
+  MediaManifestResponseDto,
+} from './dto/attempt.dto.js';
+import { ExamMediaPrecacheService } from './media-precache/exam-media-precache.service.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
   return req.user as AuthenticatedUser;
@@ -16,7 +21,10 @@ function currentUser(req: FastifyRequest): AuthenticatedUser {
 @ApiTags('attempts')
 @Controller('student/assessment')
 export class StudentAssessmentController {
-  constructor(private readonly assessment: StudentAssessmentService) {}
+  constructor(
+    private readonly assessment: StudentAssessmentService,
+    private readonly precache: ExamMediaPrecacheService,
+  ) {}
 
   @Get()
   @Authorized('studentCbt.viewActiveAssessment')
@@ -37,5 +45,20 @@ export class StudentAssessmentController {
   ): Promise<AttemptPreviewResponseDto> {
     const user = currentUser(req);
     return this.assessment.getPreview(user.schoolId, actorFromAuthenticatedUser(user), examId);
+  }
+
+  @Get(':examId/media-manifest')
+  @Authorized('studentCbt.viewActiveAssessment')
+  @ApiOperation({
+    summary:
+      "F20: the paper's ENCRYPTED media, to pre-cache before Start (ADR-0021 amendment). The key arrives only in the attempt package.",
+  })
+  @ApiOkResponse({ type: MediaManifestResponseDto })
+  async getMediaManifest(
+    @Req() req: FastifyRequest,
+    @Param('examId') examId: string,
+  ): Promise<MediaManifestResponseDto> {
+    const user = currentUser(req);
+    return this.precache.getManifest(user.schoolId, actorFromAuthenticatedUser(user), examId);
   }
 }

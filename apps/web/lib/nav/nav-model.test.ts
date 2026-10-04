@@ -10,13 +10,14 @@ import { ROLE_WORKSPACES } from './nav-model';
  * only being caught by eyeballing a sidebar.
  */
 describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
-  it('Software Admin: Dashboard, Schools, Subscriptions, Platform Analytics, Audit & Security, System Configuration (04 §5)', () => {
+  it('Software Admin: Dashboard, Schools, Subscriptions, Platform Analytics, Audit & Security, Sign-in Security (F20), System Configuration (04 §5)', () => {
     expect(ROLE_WORKSPACES.SOFTWARE_ADMIN.items.map((i) => i.label)).toEqual([
       'Dashboard',
       'Schools',
       'Subscriptions',
       'Platform Analytics',
       'Audit & Security',
+      'Sign-in Security',
       'System Configuration',
     ]);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ErrorState } from './error-state';
 import { ApiError, NetworkError } from '@/lib/api/error';
@@ -63,5 +63,37 @@ describe('ErrorState', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('shows load shedding as a calm status, with retry held until Retry-After passes (F20/B21)', () => {
+    vi.useFakeTimers();
+    try {
+      const onRetry = vi.fn();
+      render(
+        <ErrorState
+          error={
+            new ApiError({
+              code: 'SERVICE_UNAVAILABLE',
+              message: 'This is temporarily unavailable while examinations are under heavy load.',
+              retryable: true,
+              correlationId: 'c1',
+              httpStatus: 503,
+              retryAfterMs: 3000,
+            })
+          }
+          onRetry={onRetry}
+        />,
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Temporarily unavailable');
+      const button = screen.getByRole('button', { name: /Try again in 3 s/ });
+      expect(button).toBeDisabled();
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

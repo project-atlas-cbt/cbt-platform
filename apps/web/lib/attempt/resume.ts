@@ -3,6 +3,7 @@ import type { ApiComponents } from '@atlas/contracts';
 import { getAttemptDb, type AnswerRow, type QuestionRow } from './db';
 import { getDeviceId } from './device-id';
 import { buildMediaManifestFromPackage, downloadAllMedia } from './media-cache';
+import { decryptPrecachedMedia } from './media-precache';
 
 type AttemptPackage = ApiComponents['schemas']['AttemptPackageResponseDto'];
 
@@ -46,6 +47,7 @@ export async function reconcileAttemptOnLoad(attemptId: string): Promise<Reconci
       startedAt: response.startedAt,
       expiresAt: response.expiresAt,
       navigationPolicy: response.navigationPolicy,
+      largerText: response.largerText,
       generalInstructions: response.generalInstructions ?? null,
       navigationInstructions: response.navigationInstructions ?? null,
       clockSkewMs,
@@ -115,6 +117,10 @@ export async function reconcileAttemptOnLoad(attemptId: string): Promise<Reconci
       media: question.media,
     })),
   );
+  // F20: anything still pre-cached as ciphertext (a reload during Start)
+  // is decrypted locally first, so the download below skips it. The key is
+  // used in memory only — never written to IndexedDB.
+  await decryptPrecachedMedia(response.examId, attemptId, response.mediaKey).catch(() => 0);
   // Best-effort background re-fetch of anything not already validly cached
   // — this is also the only re-sign mechanism for expiring signed URLs (see
   // media-cache.ts's own documented limitation). Never blocks the runtime:

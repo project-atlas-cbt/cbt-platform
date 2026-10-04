@@ -1,3 +1,9 @@
+import {
+  ENCRYPTED_CACHE_NAME,
+  MEDIA_CACHE_NAME,
+  encryptedCacheKey,
+  mediaCacheKey,
+} from './cache-keys';
 import Dexie, { type Table } from 'dexie';
 
 /**
@@ -50,6 +56,9 @@ export interface AttemptPackageRow {
   startedAt: string;
   expiresAt: string;
   navigationPolicy: 'FREE' | 'SEQUENTIAL_NO_REVISIT' | 'SEQUENTIAL_WITH_REVISIT';
+  /** F20 (DoD 3): staff-granted larger-text accommodation. Optional so rows
+   * written before F20 still read. Not indexed — no schema version bump. */
+  largerText?: boolean;
   generalInstructions: string | null;
   navigationInstructions: string | null;
   /** `Date.parse(serverTime) - Date.now()` at the moment this row was
@@ -171,6 +180,15 @@ export function getAttemptDb(): AtlasAttemptDB {
  * anything could be inspected. Not a DoD requirement; low-cost to do. */
 export async function clearAttemptData(attemptId: string): Promise<void> {
   const db = getAttemptDb();
+  // F20 (Security row: "no sensitive data in browser storage beyond the
+  // sanctioned exam cache"; ADR-0021 "cleared on finalisation"): the
+  // attempt's decrypted media and any leftover ciphertext go too — until
+  // F20 only the Dexie rows were removed and the images stayed in Cache
+  // Storage indefinitely.
+  const mediaAssetIds = (await db.mediaManifest.where('attemptId').equals(attemptId).toArray()).map(
+    (row) => row.mediaAssetId,
+  );
+  const examId = (await db.attemptPackages.get(attemptId))?.examId;
   await db.transaction(
     'rw',
     [db.attemptPackages, db.questions, db.answers, db.eventOutbox, db.mediaManifest],
@@ -182,4 +200,12 @@ export async function clearAttemptData(attemptId: string): Promise<void> {
       await db.mediaManifest.where('attemptId').equals(attemptId).delete();
     },
   );
+  if (typeof caches !== 'undefined') {
+    const plain = await caches.open(MEDIA_CACHE_NAME);
+    const encrypted = await caches.open(ENCRYPTED_CACHE_NAME);
+    for (const id of mediaAssetIds) {
+      await plain.delete(mediaCacheKey(id));
+      if (examId) await encrypted.delete(encryptedCacheKey(examId, id));
+    }
+  }
 }

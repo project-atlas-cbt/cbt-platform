@@ -172,6 +172,44 @@ export function useRevokeParticipant(examId: string) {
   });
 }
 
+/** F20 (DoD 3) — the two 07 §9.7 accommodations for one participant:
+ * extra time (B13's audited endpoint, frozen into the attempt at Start) and
+ * larger text (F20's). Never optimistic; both are audited server-side. */
+export function useGrantAccommodations(examId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      studentId,
+      extraTimeSeconds,
+      largerText,
+    }: {
+      sessionId: string;
+      studentId: string;
+      extraTimeSeconds?: number;
+      largerText?: boolean;
+    }) => {
+      if (extraTimeSeconds !== undefined) {
+        await unwrap(
+          apiClient.POST('/exam-sessions/{id}/participants/{studentId}/extra-time', {
+            params: { path: { id: sessionId, studentId } },
+            body: { extraTimeSeconds },
+          }),
+        );
+      }
+      if (largerText !== undefined) {
+        await unwrap(
+          apiClient.POST('/exam-sessions/{id}/participants/{studentId}/larger-text', {
+            params: { path: { id: sessionId, studentId } },
+            body: { largerText },
+          }),
+        );
+      }
+    },
+    onSuccess: () => void invalidateExamControl(client, examId),
+  });
+}
+
 /** `POST /exams/:id/administrators` — ADR-0012/M-15 delegation. */
 export function useAssignExamAdministrator(examId: string) {
   const client = useQueryClient();

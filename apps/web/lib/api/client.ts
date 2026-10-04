@@ -97,6 +97,9 @@ const dynamicOriginMiddleware: Middleware = {
       referrer: request.referrer,
       referrerPolicy: request.referrerPolicy,
       integrity: request.integrity,
+      // F20: carry the caller's AbortSignal through the rewrite — without
+      // it a per-request timeout (the exam sync engine's) never reaches fetch.
+      signal: request.signal,
       ...bodyInit,
     });
   },
@@ -210,7 +213,12 @@ export async function unwrap<T>(
   }
 
   if (result.error !== undefined) {
-    throw toApiError(result.error, result.response.status, 'The request failed.');
+    throw toApiError(
+      result.error,
+      result.response.status,
+      'The request failed.',
+      result.response.headers,
+    );
   }
   if (result.data === undefined) {
     // openapi-fetch guarantees one of data/error is set for a resolved

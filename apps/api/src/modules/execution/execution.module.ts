@@ -27,6 +27,9 @@ import { AttemptStatusService } from './attempt-status.service.js';
 import { StudentAssessmentController } from './student-assessment.controller.js';
 import { StudentAssessmentService } from './student-assessment.service.js';
 import { ExamTelemetryService } from './exam-telemetry.service.js';
+import { ExamMediaPrecacheService } from './media-precache/exam-media-precache.service.js';
+import { ExamMediaPrecacheQueueService } from './media-precache/exam-media-precache-queue.service.js';
+import { ExamMediaPrecacheWorkerService } from './media-precache/exam-media-precache-worker.service.js';
 
 /**
  * `exam-control.v1` (B12 — Exam Activation & Control; ADR-0006, ADR-0009,
@@ -100,6 +103,10 @@ import { ExamTelemetryService } from './exam-telemetry.service.js';
     AttemptFinalizationService,
     AttemptMarkingQueueService,
     AttemptStatusService,
+    // F20 — encrypted media pre-cache (ADR-0021 amendment).
+    ExamMediaPrecacheService,
+    ExamMediaPrecacheQueueService,
+    ExamMediaPrecacheWorkerService,
   ],
 })
 export class ExecutionModule {}

@@ -56,6 +56,23 @@ export function nativeEventSourceFactory(url: string): EventSourceLike {
 export type ExamControlStreamStatus = 'connecting' | 'live' | 'reconnecting' | 'closed-permanent';
 
 /**
+ * F20 (B21): under load the API refuses *new* Control Center streams with
+ * `503` + `Retry-After` (the 5 s polling fallback carries the screen
+ * meanwhile). `EventSource` treats any non-200 as fatal and never retries,
+ * and it cannot read response headers — so after a permanent close we
+ * reopen on our own schedule: starting at the server's default hold (30 s)
+ * so a refused lab of screens doesn't hammer the API, jittered so they
+ * don't return together, doubling to a cap.
+ */
+export const STREAM_RECONNECT_BASE_MS = 30_000;
+export const STREAM_RECONNECT_MAX_MS = 120_000;
+
+export function streamReconnectDelay(failures: number, random: () => number = Math.random): number {
+  const base = Math.min(STREAM_RECONNECT_MAX_MS, STREAM_RECONNECT_BASE_MS * 2 ** failures);
+  return Math.round(base * (1 + 0.3 * random()));
+}
+
+/**
  * Owns one `EventSourceLike` instance for one exam id. Exposes `subscribe`/
  * `getSnapshot` for `useSyncExternalStore` (mirrors `OfflineIndicator`'s own
  * F2 precedent exactly — chosen specifically to avoid the
@@ -72,9 +89,13 @@ export type ExamControlStreamStatus = 'connecting' | 'live' | 'reconnecting' | '
 export class ExamControlStreamConnection {
   private status: ExamControlStreamStatus = 'connecting';
   private source: EventSourceLike | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private consecutiveFailures = 0;
+  private stopped = false;
   private readonly listeners = new Set<() => void>();
   private readonly onMessage = (event: Event) => {
     this.status = 'live';
+    this.consecutiveFailures = 0;
     const raw: unknown = (event as MessageEvent).data;
     try {
       if (typeof raw !== 'string') throw new Error('non-string SSE payload');
@@ -89,6 +110,7 @@ export class ExamControlStreamConnection {
   private readonly onError = () => {
     const readyState = this.source?.readyState ?? 2;
     this.status = readyState === 2 ? 'closed-permanent' : 'reconnecting';
+    if (readyState === 2) this.scheduleReconnect();
     this.notify();
   };
 
@@ -99,16 +121,42 @@ export class ExamControlStreamConnection {
   ) {}
 
   start(): void {
+    this.stopped = false;
+    this.open();
+  }
+
+  stop(): void {
+    this.stopped = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.detach();
+  }
+
+  private open(): void {
     this.source = this.factory(this.url);
     this.source.addEventListener('message', this.onMessage);
     this.source.addEventListener('error', this.onError);
   }
 
-  stop(): void {
+  private detach(): void {
     this.source?.removeEventListener('message', this.onMessage);
     this.source?.removeEventListener('error', this.onError);
     this.source?.close();
     this.source = null;
+  }
+
+  private scheduleReconnect(): void {
+    if (this.stopped || this.reconnectTimer) return;
+    const delay = streamReconnectDelay(this.consecutiveFailures);
+    this.consecutiveFailures += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.stopped) return;
+      this.detach();
+      this.status = 'reconnecting';
+      this.notify();
+      this.open();
+    }, delay);
   }
 
   subscribe = (callback: () => void): (() => void) => {

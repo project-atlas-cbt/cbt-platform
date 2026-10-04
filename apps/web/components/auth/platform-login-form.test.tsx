@@ -8,9 +8,11 @@ const replace = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace }) }));
 
 const login = vi.fn();
+const verifyOtp = vi.fn();
+const verifyRecovery = vi.fn();
 vi.mock('@/lib/auth', async () => {
   const actual = await vi.importActual<typeof import('@/lib/auth')>('@/lib/auth');
-  return { ...actual, usePlatformAuth: () => ({ login }) };
+  return { ...actual, usePlatformAuth: () => ({ login, verifyOtp, verifyRecovery }) };
 });
 
 // Defaults to 'resolved' — the CSRF bootstrap (normally run by
@@ -26,6 +28,8 @@ vi.mock('@/lib/tenant', () => ({
 describe('PlatformLoginForm', () => {
   beforeEach(() => {
     login.mockReset();
+    verifyOtp.mockReset();
+    verifyRecovery.mockReset();
     replace.mockReset();
     tenantStatus = 'resolved';
   });
@@ -57,12 +61,48 @@ describe('PlatformLoginForm', () => {
   });
 
   it('redirects straight to /admin on success — no role-priority hand-off, unlike LoginForm', async () => {
-    login.mockResolvedValueOnce(undefined);
+    login.mockResolvedValueOnce({ status: 'ok' });
     render(<PlatformLoginForm />);
     await userEvent.type(screen.getByLabelText(/email/i), 'admin@example.com');
     await userEvent.type(screen.getByLabelText(/^password$/i), 'right');
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/admin'));
+  });
+
+  it('F20 (B20 MFA) — an enrolled admin is asked for a code after the password, then signed in', async () => {
+    login.mockResolvedValueOnce({ status: 'mfa_required', challengeToken: 'challenge-1' });
+    verifyOtp.mockResolvedValueOnce(undefined);
+    render(<PlatformLoginForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), 'admin@example.com');
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'right');
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    const code = await screen.findByLabelText(/authentication code/i);
+    expect(replace).not.toHaveBeenCalled();
+    await userEvent.type(code, '123 456');
+    await userEvent.click(screen.getByRole('button', { name: /verify/i }));
+    await waitFor(() => expect(verifyOtp).toHaveBeenCalledWith('challenge-1', '123456'));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/admin'));
+  });
+
+  it('F20 — a wrong code shows one generic message; a recovery code can be used instead', async () => {
+    login.mockResolvedValueOnce({ status: 'mfa_required', challengeToken: 'challenge-2' });
+    verifyOtp.mockRejectedValueOnce(new Error('nope'));
+    verifyRecovery.mockResolvedValueOnce(undefined);
+    render(<PlatformLoginForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), 'admin@example.com');
+    await userEvent.type(screen.getByLabelText(/^password$/i), 'right');
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+    await userEvent.type(await screen.findByLabelText(/authentication code/i), '000000');
+    await userEvent.click(screen.getByRole('button', { name: /verify/i }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /use a recovery code/i }));
+    await userEvent.type(screen.getByLabelText(/recovery code/i), 'abcd-efgh-ijkl-mnop');
+    await userEvent.click(screen.getByRole('button', { name: /verify/i }));
+    await waitFor(() =>
+      expect(verifyRecovery).toHaveBeenCalledWith('challenge-2', 'abcd-efgh-ijkl-mnop'),
+    );
   });
 
   it('has no forgot-password link — no email-backed reset flow exists for a platform account', () => {

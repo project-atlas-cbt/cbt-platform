@@ -3,19 +3,15 @@
 import { useEffect, useState } from 'react';
 import { apiClient, unwrap } from '@/lib/api';
 import { getAttemptDb, type MediaManifestRow } from './db';
+import { MEDIA_CACHE_NAME, mediaCacheKey } from './cache-keys';
 
-const CACHE_NAME = 'atlas-exam-media-v1';
+const CACHE_NAME = MEDIA_CACHE_NAME;
 /** Small, bandwidth-gentle concurrency for school-network conditions
  * (doctrine's own low-end-hardware/constrained-network posture). */
 const DOWNLOAD_CONCURRENCY = 3;
 const MAX_RETRIES_PER_ASSET = 2;
 
-function mediaCacheKey(mediaAssetId: string): string {
-  // A synthetic same-origin URL, not the real signed URL — this is what
-  // makes the cache entry's identity survive the signed URL's rotating
-  // query-string signature (ADR-0021).
-  return `https://atlas-exam-media.invalid/${mediaAssetId}`;
-}
+export { MEDIA_CACHE_NAME, mediaCacheKey };
 
 interface ServerQuestionMedia {
   mediaAssetId: string;
@@ -210,13 +206,18 @@ export function useMediaAssetUrl(
 
       const online = typeof navigator === 'undefined' || navigator.onLine;
       const urlStillValid = Date.now() < Date.parse(row.urlExpiresAt);
-      if (online && urlStillValid) {
+
+      // F20: the local cache first. Media is cached before the runtime
+      // opens (ADR-0021, and since F20 pre-cached before Start); reading the
+      // signed URL first made every student in a lab re-download each image
+      // over the shared link at the bell — exactly the bandwidth B21 showed
+      // a lab does not have. The signed URL stays the fallback.
+      const cache = typeof caches !== 'undefined' ? await caches.open(CACHE_NAME) : null;
+      const cached = cache ? await cache.match(mediaCacheKey(mediaAssetId)) : undefined;
+      if (!cached && online && urlStillValid && row.cacheStatus !== 'cached') {
         if (!cancelled) setResolution({ status: 'ready', src: row.url });
         return;
       }
-
-      const cache = typeof caches !== 'undefined' ? await caches.open(CACHE_NAME) : null;
-      const cached = cache ? await cache.match(mediaCacheKey(mediaAssetId)) : undefined;
 
       if (!cached) {
         // Manifest believed this was cached, but it's gone — eviction.

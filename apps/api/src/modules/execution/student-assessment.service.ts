@@ -115,6 +115,23 @@ export class StudentAssessmentService {
       });
     }
 
+    // F20 (DoD 3): the caller's own accommodations for this exam, from the
+    // participant row that would admit them (the same predicate as
+    // getActiveAssessment) — 0/false for anyone without one.
+    const schoolActor = requireSchoolActor(actor);
+    const participant = await withTenant(prisma, schoolId, (tx) =>
+      tx.examSessionParticipant.findFirst({
+        where: {
+          schoolId,
+          status: 'AUTHORIZED',
+          studentProfile: { schoolId, membershipId: schoolActor.membershipId },
+          session: { schoolId, status: 'OPEN', examId },
+        },
+        orderBy: { authorizedAt: 'desc' },
+        select: { extraTimeSeconds: true, largerText: true },
+      }),
+    );
+
     const questionCount = exam.sections.reduce((sum, s) => sum + s.questions.length, 0);
     const totalMarks = exam.sections.reduce(
       (sum, s) => sum + s.questions.reduce((qSum, q) => qSum + q.marks, 0),
@@ -134,6 +151,8 @@ export class StudentAssessmentService {
       accommodations: exam.accommodations,
       questionCount,
       totalMarks,
+      extraTimeSeconds: participant?.extraTimeSeconds ?? 0,
+      largerText: participant?.largerText ?? false,
     };
   }
 }

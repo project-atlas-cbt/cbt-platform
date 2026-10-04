@@ -21,6 +21,7 @@ import {
   usePlatformAuth,
   type PlatformLoginValues,
 } from '@/lib/auth';
+import { PlatformMfaStep } from './platform-mfa-step';
 
 /**
  * `/admin/login`'s real form — F3 closes the gap `/admin/(shell)/layout.tsx`
@@ -51,6 +52,8 @@ export function PlatformLoginForm() {
   const { status: tenantStatus } = useTenantResolution();
   const csrfReady = tenantStatus !== 'loading';
   const [formError, setFormError] = useState<string | null>(null);
+  // F20 (B20 MFA): set when the password was right and a second factor is due.
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const form = useForm<PlatformLoginValues>({
     resolver: zodResolver(platformLoginSchema),
     defaultValues: { email: '', password: '' },
@@ -59,13 +62,30 @@ export function PlatformLoginForm() {
   async function onSubmit(values: PlatformLoginValues) {
     setFormError(null);
     try {
-      await login(values.email, values.password);
+      const result = await login(values.email, values.password);
+      if (result.status === 'mfa_required') {
+        setChallengeToken(result.challengeToken);
+        return;
+      }
       // Software Admin has exactly one landing route — no role-priority
       // redirect logic to hand off to (unlike LoginForm's "/").
       router.replace('/admin');
     } catch (err) {
       setFormError(resolveLoginErrorMessage(err, GENERIC_LOGIN_ERROR));
     }
+  }
+
+  if (challengeToken) {
+    return (
+      <PlatformMfaStep
+        challengeToken={challengeToken}
+        onSignedIn={() => router.replace('/admin')}
+        onStartOver={() => {
+          setChallengeToken(null);
+          form.reset({ email: form.getValues('email'), password: '' });
+        }}
+      />
+    );
   }
 
   return (

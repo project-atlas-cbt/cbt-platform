@@ -89,17 +89,23 @@ describe('loadEnv — B20 production hardening', () => {
     SESSION_COOKIE_SECRET: strong('a8Fq'),
     CSRF_SECRET: strong('Zp3x'),
     MFA_ENCRYPTION_KEY: strong('Kq7m'),
+    MEDIA_PRECACHE_SECRET: strong('Wn5r'),
     COOKIE_DOMAIN: 'school.example.ng',
   };
 
-  it('accepts a hardened production environment', () => {
-    expect(loadEnv(productionEnv).PLATFORM_MFA_REQUIRED).toBe(false);
+  it('accepts a hardened production environment, with Software Admin MFA required by default (F20)', () => {
+    expect(loadEnv(productionEnv).PLATFORM_MFA_REQUIRED).toBe(true);
+    expect(
+      loadEnv({ ...productionEnv, PLATFORM_MFA_REQUIRED: 'false' }).PLATFORM_MFA_REQUIRED,
+    ).toBe(false);
   });
 
   it.each([
     ['SESSION_COOKIE_SECRET', 'dev-only-change-me-dev-only-change-me'],
     ['CSRF_SECRET', undefined],
     ['MFA_ENCRYPTION_KEY', undefined],
+    ['MEDIA_PRECACHE_SECRET', undefined],
+    ['MEDIA_PRECACHE_SECRET', 'dev-only-change-me-dev-only-change-me'],
     ['DATABASE_APP_URL', 'postgresql://app_user:pass@db:5432/db'],
     ['REDIS_URL', 'redis://cache:6379'],
     ['COOKIE_DOMAIN', undefined],
@@ -115,6 +121,12 @@ describe('loadEnv — B20 production hardening', () => {
   it('rejects a CSRF secret equal to the session secret in production', () => {
     expect(() =>
       loadEnv({ ...productionEnv, CSRF_SECRET: productionEnv.SESSION_COOKIE_SECRET }),
+    ).toThrow(EnvValidationError);
+  });
+
+  it('rejects a media pre-cache secret that reuses another secret (F20)', () => {
+    expect(() =>
+      loadEnv({ ...productionEnv, MEDIA_PRECACHE_SECRET: productionEnv.MFA_ENCRYPTION_KEY }),
     ).toThrow(EnvValidationError);
   });
 

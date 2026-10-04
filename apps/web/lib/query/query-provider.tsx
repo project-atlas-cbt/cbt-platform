@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { retryDelayFor, shouldRetryQuery } from '@/lib/api/retry';
 
 /**
  * TanStack Query is the server-state layer for administrative screens only
@@ -20,7 +21,10 @@ function createQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         staleTime: 30_000,
-        retry: 2,
+        // F20 (B21): retry only what the server says is retryable, never
+        // sooner than its Retry-After, always jittered — lib/api/retry.ts.
+        retry: shouldRetryQuery,
+        retryDelay: retryDelayFor,
         refetchOnWindowFocus: false,
       },
     },

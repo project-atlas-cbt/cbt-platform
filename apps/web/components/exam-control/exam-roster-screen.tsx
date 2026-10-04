@@ -12,12 +12,13 @@ import { Button } from '@/components/ui/button';
 import { useHasPermission } from '@/lib/nav';
 import { useExam } from '@/lib/exams/queries';
 import { useExamControl, useEligibleStudents } from '@/lib/exam-control/queries';
-import { useRevokeParticipant } from '@/lib/exam-control/mutations';
+import { useGrantAccommodations, useRevokeParticipant } from '@/lib/exam-control/mutations';
 import { examControlPath, defaultOpenSession } from '@/lib/exam-control/navigation';
 import { ParticipantStatusBadge } from './participant-status-badge';
 import { SessionPicker } from './session-picker';
 import { BatchAuthorizer } from './batch-authorizer';
 import { RevokeParticipantDialog } from './dialogs/revoke-participant-dialog';
+import { AccommodationsDialog } from './dialogs/accommodations-dialog';
 
 interface EligibleRow {
   studentProfileId: string;
@@ -26,6 +27,8 @@ interface EligibleRow {
   eligible: boolean;
   failedChecks: string[];
   participantStatus: string | null;
+  extraTimeSeconds: number;
+  largerText: boolean;
 }
 
 /** F12 — `/[examId]/students`. A drill-down route rather than a Control
@@ -41,6 +44,10 @@ export function ExamRosterScreen({ basePath, examId }: { basePath: string; examI
   const canRevoke = useHasPermission('examAdmin.allowStudent');
   const revokeParticipant = useRevokeParticipant(examId);
   const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
+  // F20 (DoD 3): accommodations, under the same permission as extra time.
+  const canGrantAccommodations = useHasPermission('examAdmin.grantExtraTime');
+  const grantAccommodations = useGrantAccommodations(examId);
+  const [accommodationTarget, setAccommodationTarget] = useState<EligibleRow | null>(null);
 
   const sessionIdParam = searchParams.get('sessionId') ?? undefined;
   const sessions = control.data?.sessions ?? [];
@@ -92,6 +99,41 @@ export function ExamRosterScreen({ basePath, examId }: { basePath: string; examI
       header: 'Status',
       cell: (row) => <ParticipantStatusBadge value={row.participantStatus} />,
     },
+    {
+      id: 'accommodations',
+      header: 'Accommodations',
+      cell: (row) => {
+        const parts = [
+          ...(row.extraTimeSeconds > 0 ? [`+${Math.round(row.extraTimeSeconds / 60)} min`] : []),
+          ...(row.largerText ? ['Larger text'] : []),
+        ];
+        return parts.length > 0 ? (
+          <span className="text-sm text-text-secondary">{parts.join(' · ')}</span>
+        ) : (
+          <span className="text-sm text-text-muted">None</span>
+        );
+      },
+    },
+    ...(canGrantAccommodations
+      ? [
+          {
+            id: 'accommodation-action',
+            header: '',
+            align: 'right' as const,
+            cell: (row: EligibleRow) =>
+              row.participantStatus === 'AUTHORIZED' ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setAccommodationTarget(row)}
+                  aria-label={`Accommodations for ${row.studentName}`}
+                >
+                  Accommodations
+                </Button>
+              ) : null,
+          },
+        ]
+      : []),
     ...(canRevoke
       ? [
           {
@@ -171,6 +213,32 @@ export function ExamRosterScreen({ basePath, examId }: { basePath: string; examI
           />
         </>
       )}
+
+      {accommodationTarget && selectedSession ? (
+        <AccommodationsDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setAccommodationTarget(null);
+          }}
+          studentName={accommodationTarget.studentName}
+          initial={{
+            extraTimeSeconds: accommodationTarget.extraTimeSeconds,
+            largerText: accommodationTarget.largerText,
+          }}
+          onConfirm={(values) =>
+            grantAccommodations.mutateAsync({
+              sessionId: selectedSession.id,
+              studentId: accommodationTarget.studentProfileId,
+              ...(values.extraTimeSeconds !== accommodationTarget.extraTimeSeconds
+                ? { extraTimeSeconds: values.extraTimeSeconds }
+                : {}),
+              ...(values.largerText !== accommodationTarget.largerText
+                ? { largerText: values.largerText }
+                : {}),
+            })
+          }
+        />
+      ) : null}
 
       <RevokeParticipantDialog
         open={revokeTarget !== null}

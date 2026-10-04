@@ -14,6 +14,7 @@ import { useAttemptSyncEngine } from '@/lib/attempt/use-attempt-sync-engine';
 import { useAttemptTimer, useExpirySubmitRetry } from '@/lib/attempt/use-attempt-timer';
 import { useAttemptLock } from '@/lib/attempt/use-attempt-lock';
 import { recordAttemptEvent } from '@/lib/attempt/events';
+import { setErrorContext } from '@/lib/observability/client-errors';
 import { connectivityStore } from '@/lib/attempt/connectivity-store';
 import { isNavigationAllowed, nextFurthestIndex } from '@/lib/attempt/navigation-policy';
 import { QuestionDisplay } from './question-display';
@@ -39,6 +40,11 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
   const [submitError, setSubmitError] = useState<unknown>(null);
 
   const reconciled = useReconciledAttempt(attemptId);
+  // F20 (DoD 11): ids only — an error report from the runtime can be traced
+  // to its attempt without carrying any question or answer content.
+  useEffect(() => {
+    setErrorContext({ attemptId });
+  }, [attemptId]);
   const onAttemptNotWritable = useCallback(() => {
     void reconciled.refetch();
   }, [reconciled]);
@@ -165,6 +171,66 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
     }
   }, [reconciled.data, attemptId, router]);
 
+  const questionCount = questions.length;
+  const navigationPolicy = attemptPackageRow?.navigationPolicy;
+  const navigateTo = useCallback(
+    (index: number) => {
+      if (!navigationPolicy || index < 0 || index >= questionCount) return;
+      if (!isNavigationAllowed(navigationPolicy, index, furthestIndex, questionCount)) return;
+      setCurrentIndex(index);
+      setFurthestIndex((prev) => nextFurthestIndex(prev, index));
+    },
+    [navigationPolicy, furthestIndex, questionCount],
+  );
+
+  // F20 (DoD 2): Alt+N / Alt+P move between questions (documented on the
+  // preview). On the window, so they work wherever focus is — including
+  // nowhere in particular after a mouse click. Not while the submit dialog
+  // is open; arrow keys inside the answer group stay Radix's own.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || submitDialogOpen) return;
+      const key = event.key.toLowerCase();
+      if (key === 'n') {
+        event.preventDefault();
+        navigateTo(currentIndex + 1);
+      } else if (key === 'p') {
+        event.preventDefault();
+        navigateTo(currentIndex - 1);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigateTo, currentIndex, submitDialogOpen]);
+
+  // F20 (DoD 3): the larger-text accommodation scales the whole runtime,
+  // as browser zoom would — every size in the design system is rem-based,
+  // so raising the root font size scales text, controls and spacing
+  // together without a second layout. Restored when the runtime unmounts.
+  const largerText = attemptPackageRow?.largerText === true;
+  useEffect(() => {
+    if (!largerText) return;
+    const root = document.documentElement;
+    const previous = root.style.fontSize;
+    root.style.fontSize = '125%';
+    return () => {
+      root.style.fontSize = previous;
+    };
+  }, [largerText]);
+
+  // F20 (DoD 2): after moving between questions, focus goes to the new
+  // question's heading, so a screen reader announces "Question N of M" and
+  // keyboard users continue from the top of the question — never from a
+  // Next button that may now be a Submit button. Not on first render.
+  const isFirstQuestionRender = useRef(true);
+  useEffect(() => {
+    if (isFirstQuestionRender.current) {
+      isFirstQuestionRender.current = false;
+      return;
+    }
+    document.getElementById('question-heading')?.focus();
+  }, [currentIndex]);
+
   if (reconciled.isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -224,27 +290,25 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
   const currentQuestion = questions[currentIndex];
   const questionIds = questions.map((q) => q.examQuestionId);
 
-  const handleNavigate = (index: number) => {
-    if (
-      !isNavigationAllowed(
-        attemptPackageRow.navigationPolicy,
-        index,
-        furthestIndex,
-        questions.length,
-      )
-    )
-      return;
-    setCurrentIndex(index);
-    setFurthestIndex((prev) => nextFurthestIndex(prev, index));
-  };
+  const handleNavigate = navigateTo;
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">
+      <a
+        href="#question-heading"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:shadow-md"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('question-heading')?.focus();
+        }}
+      >
+        Skip to question
+      </a>
       <ConnectionBanner />
       <GraceWindowBanner attemptId={attemptId} />
 
       <header className="flex items-center justify-between border-b border-border px-6 py-3">
-        <p className="text-sm font-medium text-text-primary">Assessment in progress</p>
+        <h1 className="text-sm font-medium text-text-primary">Assessment in progress</h1>
         <TimerDisplay
           remainingMs={timer.remainingMs}
           fiveMinuteWarning={timer.fiveMinuteWarningShown}
@@ -252,7 +316,7 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
         />
       </header>
 
-      <main className="flex flex-1 flex-col gap-6 px-6 py-6 md:flex-row">
+      <main id="exam-main" className="flex flex-1 flex-col gap-6 px-6 py-6 md:flex-row">
         <div className="flex-1">
           {currentQuestion ? (
             <QuestionDisplay

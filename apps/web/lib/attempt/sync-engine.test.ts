@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { apiClient } from '@/lib/api';
-import { AttemptSyncEngine } from './sync-engine';
+import {
+  AttemptSyncEngine,
+  FLUSH_BACKOFF_BASE_MS,
+  FLUSH_BACKOFF_MAX_MS,
+  flushBackoffDelay,
+} from './sync-engine';
 import { getAttemptDb, clearAttemptData } from './db';
 
 vi.mock('@/lib/api', async () => {
@@ -194,5 +199,54 @@ describe('AttemptSyncEngine', () => {
     const row = await db.answers.get([ATTEMPT_ID, 'q1']);
     expect(row?.selectedOptionId).toBe('o1');
     expect(row?.syncStatus).toBe('pending');
+  });
+
+  it('F20 — every batch request carries a timeout signal, so a hung request releases the chain', async () => {
+    mockPost.mockResolvedValue(
+      ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
+    );
+    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    await engine.recordAnswer('q1', 'o1');
+    await engine.flushNow();
+    const init = mockPost.mock.calls[0]![1] as { signal?: AbortSignal };
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('F20 — after a failure, answer-triggered flushes back off; answers still save locally', async () => {
+    mockPost.mockRejectedValueOnce(new Error('network down'));
+    const engine = new AttemptSyncEngine(ATTEMPT_ID);
+    await engine.recordAnswer('q1', 'o1'); // its own flush fails
+    const db = getAttemptDb();
+    await vi.waitFor(async () => {
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      expect((await db.answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('pending');
+    });
+
+    // Inside the backoff window: the local write happens, the network retry waits.
+    await engine.recordAnswer('q2', 'o9');
+    expect((await db.answers.get([ATTEMPT_ID, 'q2']))?.syncStatus).toBe('pending');
+    expect(mockPost).toHaveBeenCalledTimes(1);
+
+    // A forced flush (heartbeat tick / pre-submit) always tries.
+    mockPost.mockResolvedValueOnce(
+      ok({
+        results: [
+          { examQuestionId: 'q1', accepted: true, gradeWindowFlag: false },
+          { examQuestionId: 'q2', accepted: true, gradeWindowFlag: false },
+        ],
+      }),
+    );
+    await engine.flushNow();
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    expect((await db.answers.get([ATTEMPT_ID, 'q2']))?.syncStatus).toBe('synced');
+  });
+});
+
+describe('flushBackoffDelay', () => {
+  it('grows exponentially with jitter, caps, and never undercuts Retry-After', () => {
+    expect(flushBackoffDelay(1, undefined, () => 0)).toBe(FLUSH_BACKOFF_BASE_MS / 2);
+    expect(flushBackoffDelay(3, undefined, () => 1)).toBe(4_000);
+    expect(flushBackoffDelay(20, undefined, () => 1)).toBe(FLUSH_BACKOFF_MAX_MS);
+    expect(flushBackoffDelay(1, 20_000, () => 0)).toBe(20_000);
   });
 });
