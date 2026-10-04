@@ -25,6 +25,8 @@ import { GraceWindowBanner } from './grace-window-banner';
 import { SubmitDialog } from './submit-dialog';
 import { ExamLockedElsewhereScreen } from './exam-locked-elsewhere-screen';
 import { InvalidatedScreen } from './invalidated-screen';
+import { AttemptMissingScreen } from './attempt-missing-screen';
+import { isAttemptMissingError } from '@/lib/attempt/error-utils';
 
 /**
  * F13 — the exam runtime orchestrator (`04 §55`). All hooks are called
@@ -72,7 +74,15 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
     if (isLeader) setTakeoverRequested(false);
   }
 
-  const syncEngine = useAttemptSyncEngine(isLeader ? attemptId : undefined, onAttemptNotWritable);
+  // B22 (decision 2c): the server lost this attempt (a database restore to
+  // before it started). Local answers are kept; see AttemptMissingScreen.
+  const [attemptMissing, setAttemptMissing] = useState(false);
+  const onAttemptMissing = useCallback(() => setAttemptMissing(true), []);
+  const syncEngine = useAttemptSyncEngine(
+    isLeader ? attemptId : undefined,
+    onAttemptNotWritable,
+    onAttemptMissing,
+  );
   useEffect(() => {
     flushNowRef.current = syncEngine.flushNow;
   }, [syncEngine.flushNow]);
@@ -234,6 +244,10 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
     if (!paperRendered) return;
     document.getElementById('question-heading')?.focus();
   }, [currentIndex, paperRendered]);
+
+  if (attemptMissing || (reconciled.isError && isAttemptMissingError(reconciled.error))) {
+    return <AttemptMissingScreen />;
+  }
 
   if (reconciled.isPending) {
     return (

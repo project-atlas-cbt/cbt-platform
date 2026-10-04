@@ -1,8 +1,14 @@
 import { apiClient, unwrap } from '@/lib/api';
 import { ApiError, NetworkError } from '@/lib/api/error';
+import type { ApiComponents } from '@atlas/contracts';
 import { getAttemptDb, type AnswerRow } from './db';
+import { getDeviceId } from './device-id';
 import { connectivityStore } from './connectivity-store';
-import { isNotWritableError, isQuestionNotInSnapshotError } from './error-utils';
+import {
+  isAttemptMissingError,
+  isNotWritableError,
+  isQuestionNotInSnapshotError,
+} from './error-utils';
 
 /**
  * F20 (DoD 8 — high latency and packet loss). A batch request that hangs on
@@ -12,6 +18,8 @@ import { isNotWritableError, isQuestionNotInSnapshotError } from './error-utils'
  * save p99 ≤ 750 ms) and a 300 ms-RTT congested lab link.
  */
 export const FLUSH_TIMEOUT_MS = 15_000;
+
+type AttemptPackage = ApiComponents['schemas']['AttemptPackageResponseDto'];
 
 /** `AbortSignal.timeout` where available (every declared-matrix browser);
  * a manual controller otherwise — a missing API must never break syncing. */
@@ -79,6 +87,11 @@ export class AttemptSyncEngine {
    * (heartbeat, reconnect) wait out — only `flushNow()` does not. */
   private retryAfterUntil = 0;
   private deferredFlush: ReturnType<typeof setTimeout> | null = null;
+  /** B22: retry of a reconnect check that could not reach the server. */
+  private reconcileRetry: ReturnType<typeof setTimeout> | null = null;
+  private reconcileFailures = 0;
+  /** B22: the server no longer has this attempt (see `onReconnect`). */
+  private onAttemptMissing: (() => void) | undefined;
 
   /** Bug fix (see `recordAnswer`'s own doc comment): serializes the read-
    * modify-write itself, exactly like `flushChain` already serializes
@@ -117,6 +130,10 @@ export class AttemptSyncEngine {
 
   setOnNotWritable(callback: () => void): void {
     this.onNotWritable = callback;
+  }
+
+  setOnAttemptMissing(callback: () => void): void {
+    this.onAttemptMissing = callback;
   }
 
   /** Writes the new answer to Dexie and schedules a flush. Does not await
@@ -198,10 +215,80 @@ export class AttemptSyncEngine {
     this.scheduleFlush();
   }
 
+  /**
+   * B22 (decision 2c): connectivity came back after an outage. Before
+   * flushing, compare the server's answers with this device's: if the
+   * server's database was restored to an earlier point while the page was
+   * open, answers it acknowledged after that point are gone from the server
+   * but marked `synced` here, and a plain flush (pending rows only) would
+   * never send them again. A reload already handles this
+   * (`reconcileAttemptOnLoad`); this is the same rule without the reload.
+   * Runs on the flush chain, so no flush is in flight meanwhile.
+   */
+  onReconnect(): void {
+    if (this.reconcileRetry) clearTimeout(this.reconcileRetry);
+    this.reconcileRetry = null;
+    this.flushChain = this.flushChain.then(() => this.reconcileWithServer()).catch(() => undefined);
+    this.scheduleFlush({ force: true });
+  }
+
+  private async reconcileWithServer(): Promise<void> {
+    let pkg: AttemptPackage;
+    try {
+      pkg = await unwrap(
+        apiClient.GET('/attempts/{id}', {
+          params: { path: { id: this.attemptId } },
+          headers: { 'X-Device-Id': getDeviceId() },
+          signal: timeoutSignal(FLUSH_TIMEOUT_MS),
+        }),
+      );
+    } catch (error) {
+      if (isAttemptMissingError(error)) {
+        this.onAttemptMissing?.();
+        return;
+      }
+      if (isNotWritableError(error)) {
+        this.onNotWritable?.();
+        return;
+      }
+      // The server is still unreachable or refusing: try again after a
+      // backoff — the rollback check must not be skipped just because the
+      // first try after reconnecting failed.
+      this.reconcileFailures += 1;
+      this.reconcileRetry = setTimeout(
+        () => this.onReconnect(),
+        flushBackoffDelay(
+          this.reconcileFailures,
+          error instanceof ApiError ? error.retryAfterMs : undefined,
+        ),
+      );
+      return;
+    }
+    this.reconcileFailures = 0;
+    if (pkg.state !== 'IN_PROGRESS') {
+      this.onNotWritable?.();
+      return;
+    }
+    const db = getAttemptDb();
+    for (const question of pkg.questions) {
+      const row = await db.answers.get([this.attemptId, question.examQuestionId]);
+      if (row?.syncStatus !== 'synced') continue;
+      if (row.localSequence <= (question.answerSequenceNumber ?? 0)) continue;
+      // The server has an older answer (or none) than one it once
+      // acknowledged: send it again. A partial update — a newer local write
+      // that lands meanwhile is already `pending` and is left intact.
+      await db.answers.update([this.attemptId, question.examQuestionId], {
+        syncStatus: 'pending',
+      });
+    }
+  }
+
   /** Stops the backoff retry timer (the runtime unmounted). */
   dispose(): void {
     if (this.deferredFlush) clearTimeout(this.deferredFlush);
     this.deferredFlush = null;
+    if (this.reconcileRetry) clearTimeout(this.reconcileRetry);
+    this.reconcileRetry = null;
   }
 
   /** Awaits the current flush chain to settle — used before a final submit
@@ -264,7 +351,11 @@ export class AttemptSyncEngine {
       );
       connectivityStore.reportSuccess();
       this.recordFlushSuccess();
-      await this.applyBatchResults(response.results, sentSequenceByQuestion);
+      const retryable = await this.applyBatchResults(response.results, sentSequenceByQuestion);
+      // B22: items the server could not save (`INTERNAL` — its database
+      // failed mid-request) are pending again; retry them after a backoff
+      // rather than leaving them until the next heartbeat.
+      if (retryable > 0) this.recordFlushFailure();
     } catch (error) {
       if (error instanceof NetworkError) {
         // Includes the FLUSH_TIMEOUT_MS abort — `unwrap` maps any thrown
@@ -287,6 +378,12 @@ export class AttemptSyncEngine {
         this.onNotWritable?.();
         return;
       }
+      if (isAttemptMissingError(error)) {
+        // B22: kept `pending` on this device — the only copy left.
+        await this.revertInFlightToPending();
+        this.onAttemptMissing?.();
+        return;
+      }
       // Any other unexpected error: treat conservatively like a network
       // failure — never drop data on an error this engine doesn't recognise.
       this.recordFlushFailure(error instanceof ApiError ? error.retryAfterMs : undefined);
@@ -297,8 +394,9 @@ export class AttemptSyncEngine {
   private async applyBatchResults(
     results: readonly { examQuestionId: string; accepted: boolean; rejectionCode?: string }[],
     sentSequenceByQuestion: Map<string, number>,
-  ): Promise<void> {
+  ): Promise<number> {
     const db = getAttemptDb();
+    let retryable = 0;
     for (const result of results) {
       const sentSequence = sentSequenceByQuestion.get(result.examQuestionId);
       if (sentSequence === undefined) continue;
@@ -352,7 +450,9 @@ export class AttemptSyncEngine {
         syncStatus: 'pending',
         lastAttemptedAt: new Date().toISOString(),
       });
+      retryable += 1;
     }
+    return retryable;
   }
 
   private async revertInFlightToPending(): Promise<void> {

@@ -253,34 +253,42 @@ describe('AttemptSyncEngine', () => {
     expect((await db.answers.get([ATTEMPT_ID, 'q2']))?.syncStatus).toBe('synced');
   });
 
-  it("F20 — a heartbeat's forced flush still waits out the server's Retry-After", async () => {
-    // A load-shed refusal exactly as openapi-fetch hands it over.
-    mockPost.mockResolvedValueOnce({
-      error: {
+  it(
+    "F20 — a heartbeat's forced flush still waits out the server's Retry-After",
+    { timeout: 10_000 },
+    async () => {
+      // A load-shed refusal exactly as openapi-fetch hands it over.
+      mockPost.mockResolvedValueOnce({
         error: {
-          code: 'SERVICE_UNAVAILABLE',
-          message: 'busy',
-          retryable: true,
-          correlationId: 'c',
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'busy',
+            retryable: true,
+            correlationId: 'c',
+          },
         },
-      },
-      response: new Response(null, { status: 503, headers: { 'retry-after': '1' } }),
-    });
-    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
-    await engine.recordAnswer('q1', 'o1');
-    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+        // 3 s, not 1: under a loaded full-suite run the 300 ms check below
+        // could otherwise land after a 1 s window had already ended (B22).
+        response: new Response(null, { status: 503, headers: { 'retry-after': '3' } }),
+      });
+      const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+      await engine.recordAnswer('q1', 'o1');
+      await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
 
-    mockPost.mockResolvedValue(
-      ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
-    );
-    // Heartbeat tick inside the Retry-After window: deferred, not sent.
-    engine.scheduleFlush({ force: true });
-    await new Promise((r) => setTimeout(r, 300));
-    expect(mockPost).toHaveBeenCalledTimes(1);
-    // …and sent once the window has passed, without another trigger.
-    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2), { timeout: 3_000 });
-    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('synced');
-  });
+      mockPost.mockResolvedValue(
+        ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
+      );
+      // Heartbeat tick inside the Retry-After window: deferred, not sent.
+      engine.scheduleFlush({ force: true });
+      await new Promise((r) => setTimeout(r, 300));
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      // …and sent once the window has passed, without another trigger.
+      await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2), { timeout: 6_000 });
+      await vi.waitFor(async () =>
+        expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('synced'),
+      );
+    },
+  );
 
   it('F20 — a save queued behind an in-flight one that is refused waits out its Retry-After', async () => {
     let release!: () => void;

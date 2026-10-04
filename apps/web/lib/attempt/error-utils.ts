@@ -28,6 +28,13 @@ export function isSequenceStaleError(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'ATTEMPT_ANSWER_SEQUENCE_STALE';
 }
 
+/** B22: the server no longer has this attempt at all — after a database
+ * restore to a point before it started. The device's answers are then the
+ * only copy and must be kept. */
+export function isAttemptMissingError(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'NOT_FOUND';
+}
+
 export function isQuestionNotInSnapshotError(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'ATTEMPT_QUESTION_NOT_IN_SNAPSHOT';
 }
