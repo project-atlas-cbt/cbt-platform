@@ -67,7 +67,7 @@ If a future decision is reopened or superseded, the affected phases return to **
 | B19 | Academic Session Rollover          | 0026                               | F19           | IN PROGRESS |
 | B20 | Security Hardening & Compliance    | 0028                               | F20           | COMPLETE    |
 | B21 | Performance & Load                 | 0032                               | F20           | COMPLETE    |
-| B22 | Failure, Recovery & DR             | —                                  | —             | NOT STARTED |
+| B22 | Failure, Recovery & DR             | —                                  | —             | IMPLEMENTED |
 | B23 | Production Readiness & Launch      | —                                  | F21           | NOT STARTED |
 
 ---
@@ -4353,7 +4353,7 @@ bursts) and a Claude Code cloud session (4 vCPU / 15.7 GB, everything co-located
 
 # B22 — Failure, Recovery & Disaster Recovery
 
-**Status:** NOT STARTED · **Gating ADRs:** none
+**Status:** ◐ IMPLEMENTED (2026-10-04) — DoD 6–9 are explicitly partial by project-owner decision (1A, 2, 4A): restore, PITR and RPO/RTO are verified locally with a real base-backup + WAL drill and are measured on RDS/S3 staging in B23; the runbooks are followed by someone who did not write them on staging in B23 · **Gating ADRs:** none
 
 ## Objective
 
@@ -4419,27 +4419,92 @@ Depends on B21's load profile so failures are induced under realistic conditions
 
 ## Definition of Done
 
-1. Every failure mode in `08 §25` is induced and the documented behaviour observed.
-2. Killing an API node mid-exam loses no answers; clients reconnect and reconcile.
-3. Killing a marking worker leaves attempts finalised; marking resumes without duplication.
-4. A Redis outage degrades caching and realtime without corrupting the database.
-5. An object-storage outage does not mark file-dependent content as permanently successful (`08 §25`).
-6. **A full restore from backup produces a working system**, verified by running the golden-path test against it.
-7. PITR to an arbitrary timestamp within the retention window works.
-8. RPO and RTO targets are defined, measured, and met.
-9. Runbooks exist for every failure mode and have been followed at least once by someone who did not write them.
-10. Post-restore data-integrity checks pass.
+1. ✅ Every failure mode in `08 §25` is induced and the documented behaviour observed — ten chaos
+   rows against real processes (`docs/operations/chaos-testing.md`), plus the browser half
+   (`recovery.spec.ts`, `sync-engine.rollback.test.ts`) and network loss (F20 `network.spec.ts`).
+2. ✅ Killing an API node mid-exam loses no answers: `api-kill9` 0 of 2,996 acknowledged answers
+   lost, 82 failed batches retried on the other node; `api-term` drains; `api-hang`. Clients
+   reconcile on reconnect, including answers a restore rolled back (decision 2c).
+3. ✅ Killing a marking worker leaves attempts finalised and marking resumes without duplication
+   (`worker-kill9`, `worker-kill-expiry`; the sweeper's transition now commits with its result and
+   audit row; marking is a no-op once a result is no longer `PROCESSING`).
+4. ✅ A Redis outage degrades without corrupting the database and without hanging (`redis-hang`,
+   `redis-data-loss` after the schedule-guard fix, `redis-outage.integration.test.ts`: sign-in
+   works and brute force is still blocked).
+5. ✅ An object-storage outage marks nothing file-dependent successful (`storage-hang`; media
+   completion checks the object; pre-cache, import and export keep retry state).
+6. ◐ A full restore from backup produces a working system — **locally**: the drill restores an
+   encrypted base backup + WAL archive into a clean cluster and runs the golden path (provision →
+   start → answer → submit → mark) through a fresh API and worker against it. RDS restore on
+   staging: B23.
+7. ◐ PITR to a chosen timestamp — **locally**: work before the target present, after it absent,
+   attempts-affected report exact. RDS PITR within the 35-day window: B23.
+8. ◐ RPO/RTO targets **defined** per failure class (`docs/operations/recovery-objectives.md`) and
+   verified locally where possible; **not measured** on RDS/ElastiCache/S3, nor the 60-minute RTO
+   against a production-sized dataset, until B23 staging.
+9. ◐ Runbooks exist for every failure mode (`failure-runbooks.md`, `backup-and-restore.md`); not
+   yet followed by someone who did not write them — B23 staging.
+10. ✅ Post-restore integrity checks pass (`ops:restore-verify`, after every drill restore and after
+    the golden path and anonymisation on the restored copy).
 
 ## Exit criteria
 
-- A restore drill completed successfully end to end.
-- RPO/RTO documented and accepted.
-- Chaos scenarios pass without data loss or duplication.
+- ◐ A restore drill completed end to end — locally and weekly in CI (`infra/dr/pitr-drill.sh`,
+  `.github/workflows/dr-drill.yml`); on staging RDS in B23.
+- ◐ RPO/RTO documented; acceptance after the B23 staging measurement.
+- ✅ Chaos scenarios pass without data loss or duplication (10 of 10).
 
 ## Deferred items
 
-- Multi-region failover (single-region initially).
-- Automated continuous restore verification (recommend as a post-launch improvement).
+- Multi-region failover (single-region initially). The region-loss protection — cross-region
+  snapshot copies — is a **proposal for B23** (`recovery-objectives.md`), with ADR-0032's region.
+- Automated continuous restore verification of **production** backups (recommend as a post-launch
+  improvement). The weekly CI drill verifies the procedure and tooling, not RDS's backups.
+- **Carried to B23:** RDS Multi-AZ failover time, RDS PITR and restore time on a production-sized
+  dataset, ElastiCache failover, the S3 bucket versioning + 35-day noncurrent lifecycle rule,
+  restore IAM (operations role only, audited), the long-term academic records snapshot policy and
+  its legal review (added to the ADR-0028 review), a human walkthrough of every runbook on staging.
+- **Candidate / Deferred:** a staff-facing "retry export" route — not added: requesting the export
+  again produces the same file, so a dedicated route adds nothing yet (planned in W4, dropped).
+
+## Implementation notes (2026-10-04)
+
+Project-owner decisions at planning (2026-10-04): 1A real base-backup + WAL PITR drill; 2 targets per
+failure class (Multi-AZ RPO ≈ 0; PITR RPO ≤ 5 min, RTO ≤ 60 min against a production-sized dataset)
+and a long-term records proposal for legal review; 2b redaction register by UUID only, re-applied
+after any restore; 2c an open page re-sends answers a rollback removed; 3A Redis outage fails fast,
+sign-in keeps working, lockout never looser; 4A/5B runbooks with an invigilator script ("do not let
+students reload"); 6A import files deleted at 90 days and whole on redaction, noncurrent versions
+expire at 35 days.
+
+- **Redis outage (W1):** bounded ioredis and enqueue timeouts; `DependencyHealth` (degraded log,
+  `atlas.dependency.fallback`, half-open circuit breaker); per-process rate-limit/lockout fallback at
+  `floor(limit / RATE_LIMIT_FALLBACK_PROCESSES)`; readiness fails only on the database or draining;
+  one ordered, bounded shutdown; transitions write their audit in the same transaction.
+- **Lost work (W2):** reconciliation in the sweeper re-queues owed marking and adjustments (three
+  automatic retries); marking idempotent against newer grading scales; `ops:replay-jobs` (audited);
+  `atlas.work.reconciled`.
+- **Rollback reconcile (2c/W3):** the sync engine checks the attempt on reconnect and re-sends
+  answers the server lost; a vanished attempt shows a clear screen and keeps local answers.
+- **Storage (W4):** media completion checks the object; pre-cache retries failed jobs; MinIO
+  versioning test; import file purge (`ImportSourcePurgeService`, `import_jobs.source_purged_at`);
+  redaction register (`ops/redaction-register/`, `ops:redact-subject --replay`).
+- **Chaos (W5):** `pnpm --filter @atlas/load load chaos` — real signals to real processes, SQL
+  oracle. **Defect found:** Redis data loss also deletes BullMQ's job schedulers, so the sweep and
+  reconciliation stopped for good; fixed by the worker's schedule guard (re-registers within 30 s).
+- **Restore tooling (W6):** `ops:restore-verify` (migrations, forced RLS, app role, answer/event,
+  attempt/result, totals; per school under `withTenant`), `ops:attempts-affected` (old vs restored
+  instance), `ops:anonymise-copy` (refuses its own database; replaces PII, including audit
+  `reason` in the copy only), `infra/dr/pitr-drill.sh` (encrypted `pg_basebackup` + `pg_receivewal
+--synchronous` with `age`, PITR to T, golden path, anonymisation, crash recovery to end of archive).
+  Latest local drills: PITR restore + verification in 6 s (340 MB) and 23 s (3.0 GB); 0 acknowledged
+  commits lost after an immediate-mode crash (`docs/performance/results/*-dr-drill.md`).
+- **Docs (W7):** `docs/operations/` `recovery-objectives.md`, `backup-and-restore.md`,
+  `failure-runbooks.md`, `chaos-testing.md`; retention schedule and data inventory amended.
+
+**Tests:** worker integration 56/56; subject redaction 6; restore verification 2; attempts-affected
+3; schedule guard; Redis outage; sync-engine rollback; e2e `recovery.spec.ts`; full gates in the
+CHANGE-LOG entry.
 
 ---
 

@@ -14,7 +14,7 @@ Agent working rules (imported so they load every session): @AGENTS.md
 ## Project Status
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
-architecture decisions were completed first (see below); backend phases `B0`–`B21` and every
+architecture decisions were completed first (see below); backend phases `B0`–`B22` and every
 frontend phase through `F20` are now implemented. `CHANGE-LOG.md` holds the dated record of what
 shipped; "Current Phase" below is a short summary that points to it.
 
@@ -219,10 +219,10 @@ screens against them). Why these two, and which skills were considered and rejec
 
 ### Current Phase
 
-Backend `B0`–`B21` and frontend `F0`–`F20` are implemented (B19's own roadmap section is still
-open). **F20** (2026-10-04) is implemented with its automated suites green and manual checks pending
-(NVDA, oldest browsers, a real low-end PC). Next on the critical path: **B22** (failure, recovery &
-DR), then **B23**, which **F21** pairs with. Each phase's DoD outcome, honestly-partial items and
+Backend `B0`–`B22` and frontend `F0`–`F20` are implemented (B19's own roadmap section is still
+open). **B22** (2026-10-04, failure/recovery/DR) is implemented with DoD 6–9 explicitly partial until
+B23 staging; **F20** has manual checks pending (NVDA, oldest browsers, a real low-end PC). Next on
+the critical path: **B23** (production readiness & launch), which **F21** pairs with. Each phase's DoD outcome, honestly-partial items and
 design reasoning are in its dated `CHANGE-LOG.md` entry and its roadmap section; read those before
 resuming related work.
 
@@ -232,6 +232,10 @@ Open items carried forward:
   not yet covered by them. The `web-e2e` job first runs on F20's pull request.
 - `F12` operational alerts (DoD item 10) are deferred: no per-student liveness signal exists.
 - Excused absence is intentionally deferred (`F16`).
+- To B23 from B22: measure RDS Multi-AZ failover, RDS PITR/restore time on a production-sized
+  dataset (RTO ≤ 60 min target), ElastiCache failover; S3 versioning + 35-day noncurrent lifecycle
+  rule; restore IAM; the cross-region copy decision; a human walkthrough of every runbook
+  (`docs/operations/`). The long-term academic records snapshot proposal joins the legal review.
 - To B23: legal review of retention/DPA (ADR-0028 amendment), encryption-at-rest verification,
   production secrets (`CSRF_SECRET`, `MFA_ENCRYPTION_KEY`, `MEDIA_PRECACHE_SECRET`), S3 bucket CORS
   for school origins, a real Sentry project; staging re-run of level 1,000 / bursts / endurance
@@ -250,6 +254,12 @@ Engineering facts every session needs:
   RLS-protected tables stay reachable only through their tenant policy.
 - `login_identifier` lives on `SchoolMembership`, not `User` (ADR-0005 per-school uniqueness).
 - Long-running worker sweeps use an explicit 120-second renewable BullMQ lock.
+- Redis is never authoritative and is not backed up: the worker's schedule guard re-registers job
+  schedulers a Redis wipe deletes, and its reconciliation re-queues owed marking/adjustments. A
+  Redis outage must degrade, never hang or block sign-in (B22).
+- Restores: `ops:restore-verify`, `ops:attempts-affected`, `ops:redact-subject --replay`,
+  `ops:anonymise-copy` (any non-production copy); drill `infra/dr/pitr-drill.sh`. The redaction
+  register stores UUIDs only, never the redacted PII.
 - B20 least privilege: `atlas_app` cannot DELETE academic evidence, audit or schools, nor write
   `platform_role_assignments` (`packages/db/src/privileges.ts`). Tests needing those use the owner
   connection (`test-support/owner-prisma.ts`); never widen the grants to make a test pass.
