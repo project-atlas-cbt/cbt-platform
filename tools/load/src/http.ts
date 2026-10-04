@@ -54,9 +54,14 @@ export class Client {
   private readonly cookies = new Map<string, string>();
   private csrfToken: string | undefined;
   readonly agent: http.Agent;
+  /** B22 chaos: every API process. A connection refused, reset or timed
+   * out moves this browser to the next one — what a load balancer does
+   * once its health check drops a dead node. The failed request still
+   * fails; the browser's retry lands on a live node. */
+  failover: Target[] | undefined;
 
   constructor(
-    readonly target: Target,
+    public target: Target,
     readonly host: string,
     readonly sourceIp: string,
     private readonly recorder: Recorder,
@@ -120,12 +125,13 @@ export class Client {
     }
 
     const started = performance.now();
+    const target = this.target;
     return new Promise<Response<T>>((resolve, reject) => {
       const req = http.request(
         {
-          host: this.target.address,
-          port: this.target.port,
-          path: `${this.target.prefix}${path}`,
+          host: target.address,
+          port: target.port,
+          path: `${target.prefix}${path}`,
           method,
           headers,
           agent: this.agent,
@@ -166,11 +172,24 @@ export class Client {
       req.on('error', (err) => {
         const ms = performance.now() - started;
         this.recorder.recordNetworkFailure(opts.label, ms);
+        this.failOver(target);
         reject(new NetworkFailure(err.message, ms));
       });
       if (payload !== undefined) req.write(payload);
       req.end();
     });
+  }
+
+  private failOver(failed: Target): void {
+    // Only the first failure against the current node moves the browser on;
+    // late failures from requests already in flight to it do not.
+    if (!this.failover || this.failover.length < 2 || failed !== this.target) return;
+    const i = this.failover.findIndex(
+      (t) => t.address === failed.address && t.port === failed.port,
+    );
+    this.target = this.failover[(i + 1) % this.failover.length]!;
+    // Sockets to the dead node are useless; new ones go to the new target.
+    this.agent.destroy();
   }
 
   private absorbCookies(setCookie: string[] | undefined): void {

@@ -4,15 +4,11 @@ import path from 'node:path';
 import type { BudgetCheck, LabelStats } from './metrics.js';
 import type { SamplerSummary, StatementRow, TableSize, VerifyResult } from './observe.js';
 
-export const RESULTS_DIR = path.resolve(
-  import.meta.dirname,
-  '..',
-  '..',
-  '..',
-  'docs',
-  'performance',
-  'results',
-);
+// B22: LOAD_RESULTS_DIR keeps a drill's own load runs (infra/dr/pitr-drill.sh)
+// out of the committed results.
+export const RESULTS_DIR =
+  process.env.LOAD_RESULTS_DIR ??
+  path.resolve(import.meta.dirname, '..', '..', '..', 'docs', 'performance', 'results');
 
 export interface RunReport {
   scenario: string;

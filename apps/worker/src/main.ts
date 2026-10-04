@@ -36,9 +36,11 @@ import {
   ATTEMPT_AUTO_SUBMIT_QUEUE_NAME,
   createAttemptAutoSubmitWorker,
   scheduleAttemptAutoSubmitSweep,
+  AUTO_SUBMIT_SWEEP_JOB_ID,
 } from './queues/attempt-auto-submit.queue.js';
 import { createAttemptMarkingWorker } from './queues/attempt-marking.queue.js';
 import { startLoadShedGate } from './load-shed-gate.js';
+import { startScheduleGuard } from './schedule-guard.js';
 import { reconcileJob } from './job-reconcile.js';
 import { createResultAdjustmentWorker } from './queues/result-adjustment.queue.js';
 import {
@@ -82,6 +84,9 @@ import {
   createRetentionWorker,
   scheduleRetentionSweep,
 } from './queues/retention.queue.js';
+
+/** B22: how often the worker checks that its job schedulers still exist. */
+const SCHEDULE_GUARD_MS = 30_000;
 
 async function main() {
   loadRootEnv();
@@ -335,6 +340,39 @@ async function main() {
   const retentionQueue = new Queue(RETENTION_QUEUE_NAME, { connection });
   await scheduleRetentionSweep(retentionQueue, env.RETENTION_SWEEP_INTERVAL_MS);
 
+  // B22: re-registers the job schedulers if Redis lost them (schedule-guard.ts).
+  const reassertSchedules = async (): Promise<void> => {
+    await scheduleSubscriptionExpirySweep(
+      subscriptionExpiryQueue,
+      env.SUBSCRIPTION_SWEEP_INTERVAL_MS,
+    );
+    await scheduleUnassignedStudentsDigest(
+      unassignedStudentsDigestQueue,
+      env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS,
+    );
+    await scheduleOrphanMediaReport(orphanMediaReportQueue, env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS);
+    await scheduleImportExpirySweep(importExpiryQueue, env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS);
+    await scheduleExamControlRefreshSweep(
+      examControlRefreshQueue,
+      env.EXAM_CONTROL_REFRESH_INTERVAL_MS,
+    );
+    await scheduleAnalyticsRefresh(analyticsRefreshQueue, env.ANALYTICS_REFRESH_INTERVAL_MS);
+    await scheduleAttemptAutoSubmitSweep(
+      attemptAutoSubmitQueue,
+      env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS,
+    );
+    await scheduleExamHealthMonitor(examHealthMonitorQueue, env.EXAM_HEALTH_INTERVAL_MS);
+    await scheduleRetentionSweep(retentionQueue, env.RETENTION_SWEEP_INTERVAL_MS);
+  };
+  const scheduleGuard = startScheduleGuard({
+    sentinel: attemptAutoSubmitQueue,
+    sentinelId: AUTO_SUBMIT_SWEEP_JOB_ID,
+    reassert: reassertSchedules,
+    onRestored: () =>
+      logger.warn('Job schedulers were missing (Redis lost its data) — registered them again'),
+    everyMs: SCHEDULE_GUARD_MS,
+  });
+
   // Same 'error'-event risk as the Workers below, for the Queue (enqueue)
   // side of each connection.
   for (const queue of [
@@ -442,6 +480,7 @@ async function main() {
     }
   };
   const shutdown = async () => {
+    scheduleGuard.stop();
     logger.info('Worker shutting down');
     setTimeout(() => {
       logger.error({ timeoutMs: env.SHUTDOWN_TIMEOUT_MS }, 'Shutdown timed out; exiting');

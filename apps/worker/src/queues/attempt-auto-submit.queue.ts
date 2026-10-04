@@ -13,7 +13,9 @@ import type { JobReconcileOutcome } from '../job-reconcile.js';
 export const ATTEMPT_AUTO_SUBMIT_QUEUE_NAME = 'atlas-attempt-auto-submit-sweep';
 // A stable jobId so re-scheduling on every process restart doesn't pile up
 // duplicate repeatable jobs — same idiom as every other sweep in this file.
-const SWEEP_JOB_ID = 'sweep';
+/** Exported for the worker's schedule guard (B22, main.ts). */
+export const AUTO_SUBMIT_SWEEP_JOB_ID = 'sweep';
+const SWEEP_JOB_ID = AUTO_SUBMIT_SWEEP_JOB_ID;
 
 export interface AttemptAutoSubmitSweepDeps {
   /** Enqueues onto the shared `ATTEMPT_MARKING_QUEUE_NAME` queue — the
@@ -170,6 +172,24 @@ export async function runAttemptAutoSubmitSweep(deps: AttemptAutoSubmitSweepDeps
  * `(school_id, state, finalized_at)` index: PROCESSING results are only
  * ever the handful not yet marked.
  */
+/** Exhausted work stays exhausted until an operator replays it, so it is
+ * seen on every pass; it is logged once per EXHAUSTED_LOG_EVERY_MS per
+ * school, not every 15 s. Recovered work is always logged. */
+const EXHAUSTED_LOG_EVERY_MS = 10 * 60 * 1000;
+const lastExhaustedLog = new Map<string, number>();
+function shouldLogReconciliation(
+  key: string,
+  counts: Record<JobReconcileOutcome, number>,
+  now: Date,
+): boolean {
+  if (counts.enqueued + counts.retried > 0) return true;
+  if (counts.exhausted === 0) return false;
+  const last = lastExhaustedLog.get(key) ?? 0;
+  if (now.getTime() - last < EXHAUSTED_LOG_EVERY_MS) return false;
+  lastExhaustedLog.set(key, now.getTime());
+  return true;
+}
+
 export async function reconcileOwedMarking(
   schoolId: string,
   now: Date,
@@ -190,6 +210,9 @@ export async function reconcileOwedMarking(
         attempt: { state: { in: ['SUBMITTED', 'AUTO_SUBMITTED'] } },
       },
       select: { attemptId: true },
+      // Newest first: results left exhausted (an operator's job) must never
+      // crowd newly owed marking out of the batch.
+      orderBy: { createdAt: 'desc' },
       take: 500,
     }),
   );
@@ -207,7 +230,7 @@ export async function reconcileOwedMarking(
   for (const outcome of ['enqueued', 'retried', 'exhausted'] as const) {
     recordWorkReconciled('marking', outcome, counts[outcome]);
   }
-  if (counts.enqueued + counts.retried + counts.exhausted > 0) {
+  if (shouldLogReconciliation(`marking:${schoolId}`, counts, now)) {
     // Structured enough to alert on (B22 runbook): any non-zero
     // `enqueued`/`retried` means marking was lost and recovered;
     // `exhausted` needs an operator.
@@ -277,6 +300,7 @@ export async function reconcileOwedAdjustments(
         OR: [{ processingClaimedAt: null }, { processingClaimedAt: { lt: staleBefore } }],
       },
       select: { id: true },
+      orderBy: { createdAt: 'desc' },
       take: 100,
     }),
   );
@@ -292,7 +316,7 @@ export async function reconcileOwedAdjustments(
   for (const outcome of ['enqueued', 'retried', 'exhausted'] as const) {
     recordWorkReconciled('result-adjustment', outcome, counts[outcome]);
   }
-  if (counts.enqueued + counts.retried + counts.exhausted > 0) {
+  if (shouldLogReconciliation(`adjustment:${schoolId}`, counts, now)) {
     console.warn(JSON.stringify({ msg: 'adjustment reconciliation', schoolId, ...counts }));
   }
   return counts;

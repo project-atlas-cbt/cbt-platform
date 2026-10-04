@@ -7,6 +7,7 @@ import { loadManifest, provision } from './provision.js';
 import { writeReport, type RunReport } from './report.js';
 import { runBurst, runLabBurst, runLevel, type CommonOptions } from './scenarios.js';
 import { runAnalyticsBench } from './analytics-bench.js';
+import { ROWS, Supervisor, runChaosRow } from './chaos.js';
 
 /**
  * `pnpm --filter @atlas/load load <command> [options]` — see
@@ -19,6 +20,10 @@ import { runAnalyticsBench } from './analytics-bench.js';
  *              --precache: F20's pre-cached lab (media cached on the preview,
  *              the burst is the bell)
  *   analytics  analytics endpoints cold/cached on the dataset school (--n samples)
+ *   chaos      B22: starts 2 API processes (--ports) and the worker itself,
+ *              then runs each fault row (--rows id,id… or all) with --n
+ *              students answering for --answer-seconds; see
+ *              docs/operations/chaos-testing.md
  */
 
 loadRootEnv();
@@ -53,6 +58,9 @@ const { positionals, values } = parseArgs({
     tag: { type: 'string' },
     scenario: { type: 'string' },
     'no-fail': { type: 'boolean', default: false },
+    rows: { type: 'string', default: 'all' },
+    ports: { type: 'string', default: '3101,3102' },
+    'answer-seconds': { type: 'string', default: '60' },
   },
 });
 
@@ -86,6 +94,7 @@ async function main(): Promise<number> {
   }
 
   const manifest = await loadManifest(values.name);
+  if (command === 'chaos') return runChaos(manifest);
   const common: CommonOptions = {
     manifest,
     target,
@@ -157,6 +166,43 @@ async function main(): Promise<number> {
       console.log(`  FAIL ${r.scenario}: ${c.name} — ${c.actual} (budget ${c.budget})`);
   }
   const failed = reports.some((r) => r.checks.some((c) => !c.pass));
+  return failed && !values['no-fail'] ? 1 : 0;
+}
+
+async function runChaos(manifest: Awaited<ReturnType<typeof loadManifest>>): Promise<number> {
+  const wanted =
+    values.rows === 'all' ? ROWS : ROWS.filter((r) => values.rows.split(',').includes(r.id));
+  const sup = new Supervisor(values.ports.split(',').map(Number));
+  await sup.startAll();
+  let failed = false;
+  try {
+    for (const row of wanted) {
+      console.log(`[chaos] ${row.id}: ${row.title}`);
+      const report = await runChaosRow(
+        {
+          manifest,
+          sup,
+          heartbeatMs: int('heartbeat'),
+          answerIntervalMs: int('answer-interval'),
+          mediaHost: undefined,
+          n: int('n'),
+          answerSeconds: int('answer-seconds'),
+        },
+        row,
+      );
+      const pass = report.checks.every((c) => c.pass);
+      failed ||= !pass;
+      console.log(
+        `[chaos] ${row.id}: ${pass ? 'PASS' : 'FAIL'} → ${await writeReport(report, values.tag)}`,
+      );
+      for (const c of report.checks.filter((x) => !x.pass))
+        console.log(`  FAIL ${c.name} — ${c.actual} (budget ${c.budget})`);
+      // Let sweeps settle and every process be healthy before the next row.
+      await new Promise((r) => setTimeout(r, 10_000));
+    }
+  } finally {
+    await sup.stopAll();
+  }
   return failed && !values['no-fail'] ? 1 : 0;
 }
 
