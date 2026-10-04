@@ -68,11 +68,16 @@ evidence: `frontend-roadmap.md` F20 Implementation notes.
   ≤ 108 ms.
 - Pre-cached lab burst, 40 clients, 40 × 150 KB paper, `ng-congested` (user-space relay): pre-cache of the whole lab **1,019 s (~17 min) for 246 MB**, all 1,600 downloads verified (37 expired URLs re-signed); at the bell **all 40 ready in 21.2 s** (20 s arrival window; per-student ≤ 1.9 s, start p95 1.5 s), no media fetched live, answer saves 100 %. B21's same link without pre-cache: 3 of 40 ready after 224 s. The link was emulated by a new user-space relay (`tools/load/netem/shaper.mjs`; this kernel has no `sch_netem`). The run also found that signed ciphertext URLs (15 min) expire during a congested pre-cache; the client now re-signs them instead of failing.
 
-**Tested:** web unit 979/979 (plus new tests for every fix jsdom can reproduce); Chromium browser
-suites 27/27 locally. **Not yet executed:** the Firefox/WebKit `@matrix` smoke and the new `web-e2e`
-CI job as a whole — this sandbox has no Firefox/WebKit builds, and CI runs on pull requests only, so
-both first run when F20's PR is opened; bundle budgets pass; API security suites and integration suites — see the
-verification note at the end of this entry.
+**Tested (final run, 2026-10-04):** `pnpm lint`, `typecheck`, `format:check` clean; unit tests all
+green (web 980/980, API 32 files, every package); web browser suites **27/27** on Chromium against
+production builds; bundle budgets pass; API security suites **42/42**; integration: API 386/387,
+worker 50/50, the other packages green, cross-cutting 157/161 (2 skipped). The three integration
+failures are this cloud sandbox, not F20: s3rver (the sandbox's object store) serves unsigned GETs,
+so "an object is retrievable only via a signed URL" cannot pass against it (CI uses MinIO, which
+enforces signatures); and `migrate reset` drops the sandbox's Postgres 16 `uuidv7()` shim, so the
+reset/re-apply test fails (CI's Postgres 18 has `uuidv7()` built in). **Not yet executed:** the
+Firefox/WebKit `@matrix` smoke and the new `web-e2e` CI job as a whole — this sandbox has no
+Firefox/WebKit builds, and CI runs on pull requests only, so both first run when F20's PR is opened.
 
 **Environment variables:** `MEDIA_PRECACHE_SECRET` (new production secret — B23),
 `NEXT_PUBLIC_MEDIA_ORIGIN` (build-time; the CSP's media host), `NEXT_PUBLIC_SENTRY_DSN` (optional),
