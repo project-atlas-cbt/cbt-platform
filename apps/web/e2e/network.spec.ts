@@ -1,5 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
-import { STUDENT, fixture, openPreview, schoolUrl, signIn, startExam } from './support';
+import {
+  STUDENT,
+  answerEveryQuestion,
+  fixture,
+  openPreview,
+  schoolUrl,
+  signIn,
+  startExam,
+  submit,
+  watchAnswerAcks,
+} from './support';
 
 /**
  * F20 DoD 8 (and the B21 → F20 client requirements) — behaviour on a poor
@@ -64,36 +74,6 @@ test('a shed read waits out Retry-After, shows a calm state, and recovers', asyn
 });
 
 /**
- * Records answers the server accepted. A 200 counts the answers its request
- * carried (from the request payload, always available); when the response
- * body can also be read, answers it explicitly rejected are left out. Reading
- * bodies alone was not enough: under CDP network throttling on a slow CI
- * runner Chromium does not always hand the body over, and an unreadable
- * body then looked exactly like an unacknowledged answer.
- */
-function watchAnswerAcks(page: Page): Set<string> {
-  const acked = new Set<string>();
-  page.on('response', (response) => {
-    if (!response.url().includes('/answers/batch') || response.status() !== 200) return;
-    const sent =
-      (response.request().postDataJSON() as { answers?: { examQuestionId: string }[] } | null)
-        ?.answers ?? [];
-    void response
-      .json()
-      .then((body: { results?: { examQuestionId: string; accepted: boolean }[] }) => {
-        const rejected = new Set(
-          (body.results ?? []).filter((r) => !r.accepted).map((r) => r.examQuestionId),
-        );
-        for (const a of sent) if (!rejected.has(a.examQuestionId)) acked.add(a.examQuestionId);
-      })
-      .catch(() => {
-        for (const a of sent) acked.add(a.examQuestionId);
-      });
-  });
-  return acked;
-}
-
-/**
  * A timeline of every answer-save request (sent ids, then 200 / status /
  * network failure), attached to a failure so a CI-only failure explains
  * itself — the report artifact is not always reachable.
@@ -118,26 +98,6 @@ function watchAnswerTimeline(page: Page): string[] {
     if (response.url().includes('/answers/batch')) log.push(`${at()} HTTP ${response.status()}`);
   });
   return log;
-}
-
-async function answerEveryQuestion(page: Page): Promise<void> {
-  const { questionCount } = fixture();
-  for (let n = 1; n <= questionCount; n += 1) {
-    await expect(
-      page.getByRole('heading', { name: new RegExp(`question ${n} of`, 'i') }),
-    ).toBeVisible();
-    const radio = page.getByRole('radio').first();
-    await radio.click();
-    await expect(radio).toBeChecked();
-    if (n < questionCount) await page.getByRole('button', { name: 'Next' }).click();
-  }
-}
-
-async function submit(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Submit', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await dialog.getByRole('button', { name: 'Submit', exact: true }).click();
-  await page.waitForURL(/\/submitted/, { timeout: 60_000 });
 }
 
 test('answer saves back off on 503 Retry-After instead of retrying at once', async ({ page }) => {
