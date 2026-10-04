@@ -278,7 +278,8 @@ Engineering facts every session needs:
   tokens or PII. Route params named `id`/`…Id` must be UUIDs (global pipe).
 - B23 deploys: the pilot deploys with `infra/vps/bin/deploy.sh` on the VPS (`vps-pilot.md`). The
   AWS design is `infra/cdk` (asserted by `infra/cdk/test`): staging on merge to `dev`, production on
-  a `v*` tag after Haneef approves. Never run the golden path (which writes test data) against
+  a `v*` tag after Haneef approves — those triggers are paused until AWS is provisioned, so
+  `deploy.yml` runs only by hand. Never run the golden path (which writes test data) against
   production. Migrations must be expand-only (`pnpm lint:migrations`,
   `docs/operations/migrations.md`). Schools reach the API at `<school>.api.<root>`.
 - F20 web: every page carries a per-request nonce CSP (`apps/web/proxy.ts`) — no inline script, and

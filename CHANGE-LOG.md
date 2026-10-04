@@ -46,6 +46,10 @@ cross-border transfer added to the legal review), threat model (single-host topo
 status, the F21 section (Vercel replaced for the pilot; previews and staging open for F21's plan),
 roadmap index, and `CLAUDE.md`.
 
+**AWS deploy paused** (owner decision, same day): `deploy.yml` no longer runs on merges to `dev` or
+`v*` tags, only by hand, because with no AWS accounts every run failed (after #36 and #37). Restore
+the push triggers when the AWS design is provisioned.
+
 **Accepted for the pilot:** no failover, nightly backups only (recovery point up to 24 hours),
 one machine's capacity. B23 stays IN PROGRESS.
 
