@@ -799,6 +799,65 @@ describe('B12 Exam Activation & Control', () => {
     expect(row.timeRemainingSeconds as number).toBeGreaterThanOrEqual(0);
   });
 
+  it('B23 (audit M-08/M-09): a live row carries integrity-signal counts and a derived disconnected flag', async () => {
+    const examId = await buildReadyExam('OPEN_TO_ELIGIBLE');
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const startRes = await post(studentCtx, `/exams/${examId}/attempts`, {});
+    expect(startRes.statusCode).toBe(200);
+    const attemptId = startRes.json<{ attemptId: string }>().attemptId;
+
+    for (const type of ['TAB_HIDDEN', 'TAB_HIDDEN', 'WINDOW_BLUR']) {
+      const res = await post(studentCtx, `/attempts/${attemptId}/events`, {
+        type,
+        occurredAt: new Date().toISOString(),
+      });
+      expect(res.statusCode).toBe(200);
+    }
+
+    type Row = {
+      studentProfileId: string;
+      lastSeenAt: string;
+      disconnected: boolean;
+      signals: Record<string, number>;
+    };
+    const liveRow = async (): Promise<Row> => {
+      const res = await get(teacher, `/exams/${examId}/control`);
+      expect(res.statusCode).toBe(200);
+      const row = res
+        .json<{ liveAttempts: Row[] }>()
+        .liveAttempts.find((x) => x.studentProfileId === studentProfileId);
+      if (!row) throw new Error('live row missing');
+      return row;
+    };
+
+    let row = await liveRow();
+    expect(row.disconnected).toBe(false);
+    expect(row.signals).toEqual({
+      WINDOW_BLUR: 1,
+      FULLSCREEN_EXIT: 0,
+      TAB_HIDDEN: 2,
+      RECONNECTED: 0,
+      RESUMED: 0,
+      BINDING_MISMATCH: 0,
+    });
+
+    // Nothing heard for two minutes: shown as disconnected, still IN_PROGRESS.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.update({
+        where: { id: attemptId },
+        data: { lastSeenAt: new Date(Date.now() - 120_000) },
+      }),
+    );
+    row = await liveRow();
+    expect(row.disconnected).toBe(true);
+
+    // A heartbeat brings it back.
+    expect((await post(studentCtx, `/attempts/${attemptId}/heartbeat`, {})).statusCode).toBe(200);
+    row = await liveRow();
+    expect(row.disconnected).toBe(false);
+    expect(Date.now() - Date.parse(row.lastSeenAt)).toBeLessThan(30_000);
+  });
+
   it('DoD 12/A-14: End Examination requires every session CLOSED and an exact absentee-list match, marks absences, audited', async () => {
     const examId = await buildReadyExam('OPEN_TO_ELIGIBLE');
     const session = (await post(teacher, `/exams/${examId}/sessions`, {})).json<{ id: string }>();

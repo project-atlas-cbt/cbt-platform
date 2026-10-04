@@ -58,3 +58,21 @@ admin.atlas.app            → platform web
 - B1: session issuance, rotation, revocation on the shared parent domain.
 - F1: refresh-persistence test as an explicit Definition-of-Done item.
 - B23: production DNS reflecting this topology.
+
+## Amendment — 2026-10-04 (B23): per-school API hosts
+
+**Conflict found in B23:** ADR-0005 resolves the school from the request's `Host`, but this ADR
+put the API on a single `api.<root>`, so every API request arrived with the same host and no
+school in it.
+
+**Decision (project owner, B23):** each school reaches the API at **`<school>.api.<root>`**
+(the platform at `admin.api.<root>`). The API strips the `.api` label before resolving the school
+(`apps/api/src/common/subdomain.ts`), so tenant resolution stays host-based exactly as ADR-0005
+decided, and the session cookie on `Domain=<root>` still reaches every API host.
+
+- One wildcard certificate `*.api.<root>` (plus `api.<root>`) on the load balancer, DNS-validated;
+  DNS records at the domain's host (Vercel) per `docs/operations/infrastructure.md`.
+- CORS is unchanged: the browser's origin is still the school's web host `<school>.<root>`.
+- The web client's production API origin for a school becomes `https://<school>.api.<root>`
+  (F21's `resolveApiOrigin`).
+- `api.<root>` with no school label remains for health checks and tools.

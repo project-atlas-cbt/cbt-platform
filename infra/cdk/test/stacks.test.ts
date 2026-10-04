@@ -193,6 +193,12 @@ describe.each(['staging', 'production'] as const)('%s', (environment) => {
     expect(sesPolicies).toHaveLength(1);
     expect(JSON.stringify(sesPolicies[0])).toContain('ApiTaskTaskRole');
     expect(JSON.stringify(sesPolicies[0])).toContain(':identity/example.ng');
+    for (const metric of ['Reputation.BounceRate', 'Reputation.ComplaintRate']) {
+      t.app.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        Namespace: 'AWS/SES',
+        MetricName: metric,
+      });
+    }
   });
 
   it('serves HTTPS only with a modern TLS policy, and redirects port 80', () => {

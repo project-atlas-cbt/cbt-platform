@@ -15,13 +15,65 @@ type ParticipationStudent = ApiComponents['schemas']['ParticipationStudentDto'];
 
 type AttemptStatus = 'IN_PROGRESS' | 'NOT_STARTED' | 'SUBMITTED';
 
+type SignalCounts = LiveAttempt['signals'];
+
 type LiveAttemptTableRow = {
   studentProfileId: string;
   studentName: string;
   status: AttemptStatus;
   startedAt: string | null;
   timeRemainingSeconds: number | null;
+  /** B23 (M-09): server-derived; only meaningful while IN_PROGRESS. */
+  disconnected: boolean;
+  lastSeenAt: string | null;
+  /** B23 (M-08): integrity-signal counts; null when not in progress. */
+  signals: SignalCounts | null;
 };
+
+/** ADR-0020: counts, not judgements — plain words for what the browser
+ * reported, in a fixed order, never coloured as a warning. */
+const SIGNAL_LABELS: [keyof SignalCounts, string][] = [
+  ['WINDOW_BLUR', 'Left window'],
+  ['TAB_HIDDEN', 'Tab hidden'],
+  ['FULLSCREEN_EXIT', 'Left full screen'],
+  ['RECONNECTED', 'Reconnected'],
+  ['RESUMED', 'Resumed'],
+  ['BINDING_MISMATCH', 'Device changed'],
+];
+
+export function describeSignals(signals: SignalCounts | null): string | null {
+  if (!signals) return null;
+  const parts = SIGNAL_LABELS.filter(([type]) => signals[type] > 0).map(
+    ([type, label]) => `${label} ${signals[type]}`,
+  );
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function fromLive(live: LiveAttempt): LiveAttemptTableRow {
+  return {
+    studentProfileId: live.studentProfileId,
+    studentName: live.studentName,
+    status: 'IN_PROGRESS',
+    startedAt: live.startedAt,
+    timeRemainingSeconds: live.timeRemainingSeconds,
+    disconnected: live.disconnected,
+    lastSeenAt: live.lastSeenAt,
+    signals: live.signals,
+  };
+}
+
+function idle(student: ParticipationStudent, status: AttemptStatus): LiveAttemptTableRow {
+  return {
+    studentProfileId: student.studentProfileId,
+    studentName: student.studentName,
+    status,
+    startedAt: null,
+    timeRemainingSeconds: null,
+    disconnected: false,
+    lastSeenAt: null,
+    signals: null,
+  };
+}
 
 const STATUS_RANK: Record<AttemptStatus, number> = {
   IN_PROGRESS: 0,
@@ -56,29 +108,11 @@ function buildRows(
     seen.add(student.studentProfileId);
     const live = liveByProfile.get(student.studentProfileId);
     if (live) {
-      rows.push({
-        studentProfileId: student.studentProfileId,
-        studentName: live.studentName,
-        status: 'IN_PROGRESS',
-        startedAt: live.startedAt,
-        timeRemainingSeconds: live.timeRemainingSeconds,
-      });
+      rows.push({ ...fromLive(live), studentProfileId: student.studentProfileId });
     } else if (student.rollupStatus === 'ATTENDED') {
-      rows.push({
-        studentProfileId: student.studentProfileId,
-        studentName: student.studentName,
-        status: 'SUBMITTED',
-        startedAt: null,
-        timeRemainingSeconds: null,
-      });
+      rows.push(idle(student, 'SUBMITTED'));
     } else {
-      rows.push({
-        studentProfileId: student.studentProfileId,
-        studentName: student.studentName,
-        status: 'NOT_STARTED',
-        startedAt: null,
-        timeRemainingSeconds: null,
-      });
+      rows.push(idle(student, 'NOT_STARTED'));
     }
   }
 
@@ -87,18 +121,17 @@ function buildRows(
   // participant mid-attempt) — the attempt still exists and is still live.
   for (const live of liveAttempts) {
     if (seen.has(live.studentProfileId)) continue;
-    rows.push({
-      studentProfileId: live.studentProfileId,
-      studentName: live.studentName,
-      status: 'IN_PROGRESS',
-      startedAt: live.startedAt,
-      timeRemainingSeconds: live.timeRemainingSeconds,
-    });
+    rows.push(fromLive(live));
   }
 
+  // B23: disconnected students lead the in-progress group — "who's
+  // disconnected" is one of the questions the screen must answer at a
+  // glance (doctrine §6).
   return rows.sort(
     (a, b) =>
-      STATUS_RANK[a.status] - STATUS_RANK[b.status] || a.studentName.localeCompare(b.studentName),
+      STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+      Number(b.disconnected) - Number(a.disconnected) ||
+      a.studentName.localeCompare(b.studentName),
   );
 }
 
@@ -180,6 +213,37 @@ export function LiveAttemptsTable({
               : 'Not started'}
         </Badge>
       ),
+    },
+    {
+      id: 'connection',
+      header: 'Connection',
+      cell: (row) => {
+        if (row.status !== 'IN_PROGRESS') return <span className="text-text-muted">—</span>;
+        if (!row.disconnected) return <span className="text-text-secondary">Connected</span>;
+        const minutes = row.lastSeenAt
+          ? Math.max(1, Math.floor((now - Date.parse(row.lastSeenAt)) / 60_000))
+          : null;
+        return (
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <Badge status="warning">Disconnected</Badge>
+            {minutes !== null && (
+              <span className="tabular-nums text-text-secondary">no contact for {minutes} min</span>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      id: 'signals',
+      header: 'Signals',
+      cell: (row) => {
+        const text = describeSignals(row.signals);
+        return text ? (
+          <span className="tabular-nums text-text-secondary">{text}</span>
+        ) : (
+          <span className="text-text-muted">—</span>
+        );
+      },
     },
     {
       id: 'started-at',

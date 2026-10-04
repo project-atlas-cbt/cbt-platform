@@ -51,3 +51,17 @@ The student case is different: the CSV import template (`03 §15`) has no email 
 - B3: activation-key delivery, expiry warnings.
 - B10: notification dispatch with retry.
 - B23: deliverability monitoring; revisit SMS after the pilot.
+
+## Amendment — 2026-10-04 (B23): Amazon SES
+
+**Decision (project owner, B23):** the production email provider is **Amazon SES** in the
+deployment region. `apps/api` `SesNotificationChannel` implements the same `NotificationChannel`
+interface, selected by `NOTIFICATION_TRANSPORT=ses`; production refuses to boot with any other
+transport or without `SES_FROM_ADDRESS`. Call sites and templates are unchanged.
+
+- Sender: `no-reply@<root>` on a domain identity created by `infra/cdk` (Easy DKIM, MAIL FROM
+  `mail.<root>`); only the API task may send, and only from that identity.
+- Launch items: leave the SES sandbox; publish DKIM, SPF and DMARC records.
+- Deliverability monitoring (this ADR's B23 item): CloudWatch alarms on the account's SES bounce
+  and complaint rates route to on-call, and each message is tagged with its template so delivery
+  problems can be traced to a message type. The SMS question is revisited after the pilot.

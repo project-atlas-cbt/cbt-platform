@@ -13,9 +13,18 @@ Final commercial domain is **TBD** (`PROJECT.md`). Everywhere below, `<root>` st
 
 ```text
 <school-subdomain>.<root>     → web (Vercel), per ADR-0005
-api.<root>                    → API (AWS), per ADR-0022
+<school-subdomain>.api.<root> → API (AWS) for that school, per the ADR-0022 amendment (B23)
 admin.<root>                  → platform web (Software Admin), per 04 §2 / ADR-0005
+admin.api.<root>              → API (AWS) for the platform host
+api.<root>                    → API (AWS) with no tenant: health checks and tools
 ```
+
+**B23:** the API resolves the school from its own host, `<school>.api.<root>`, stripping the
+`.api` label (`apps/api/src/common/subdomain.ts`), so host-based tenant resolution (ADR-0005)
+works with the API on its own hosts (ADR-0022). The domain's nameservers are Vercel's (its
+wildcard domains require it); the API records (`api.<root>` and `*.api.<root>` as CNAMEs to the
+load balancer, ACM validation, SES DKIM and MAIL FROM) are added there —
+[infrastructure.md](infrastructure.md).
 
 - **Tenant resolution** (ADR-0005): the API resolves the school from the inbound `Host` header's
   subdomain label against `School.subdomain` — see `apps/api/src/common/subdomain.ts` and
@@ -30,8 +39,8 @@ admin.<root>                  → platform web (Software Admin), per 04 §2 / AD
 - **CORS**: an `https://` origin of exactly one well-formed DNS label under `<root>` is allowed
   (B20 tightened this from "any subdomain"; nested names are refused) (see `apps/api/src/security/cors.ts`)
   — a single static origin can't express "every school's subdomain."
-- **Wildcard DNS/TLS provisioning** for `*.<root>` is deferred to `B23` (ADR-0005's own "Required
-  changes" table) — B0 only delivers the resolution _mechanism_, not the production certificate.
+- **Wildcard DNS/TLS**: `*.api.<root>` and `api.<root>` share one DNS-validated ACM certificate on
+  the load balancer (`infra/cdk`, B23); `*.<root>` for the web tier is Vercel's (F21).
 
 ## Local development
 
@@ -63,7 +72,7 @@ localhost:3001                 → the API, addressed with no tenant at all (mos
 | Variable               | Meaning                                                               | Local default           | Production                                                                                     |
 | ---------------------- | --------------------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------- |
 | `PLATFORM_ROOT_DOMAIN` | Registrable parent domain (ADR-0005)                                  | `localtest.me`          | the chosen commercial domain                                                                   |
-| `COOKIE_DOMAIN`        | Session cookie `Domain` attribute (ADR-0022)                          | unset (host-only)       | `<root>`, set at deploy time (B23)                                                             |
+| `COOKIE_DOMAIN`        | Session cookie `Domain` attribute (ADR-0022)                          | unset (host-only)       | `<root>`, set by `infra/cdk` (B23)                                                             |
 | `WEB_ORIGIN`           | Exact web origin CORS always allows, regardless of the subdomain rule | `http://localhost:3000` | not required once wildcard CORS covers every school — kept as the http exception for local dev |
 
 See `packages/config/src/env.schema.ts` for validation and `.env.example` for the full variable

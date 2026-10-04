@@ -371,6 +371,31 @@ export class AppStack extends Stack {
       return a;
     };
     const minute = Duration.minutes(1);
+    // ADR-0019 B23 item: deliverability. SES pauses an account whose
+    // bounce rate passes 10 % or complaint rate 0.5 %; alarm well before.
+    const sesReputation = (name: string) =>
+      new cloudwatch.Metric({
+        namespace: 'AWS/SES',
+        metricName: name,
+        period: Duration.hours(1),
+        statistic: 'Maximum',
+      });
+    alarm(
+      'SesBounceRate',
+      sesReputation('Reputation.BounceRate'),
+      0.05,
+      'SES bounce rate above 5 % (sending is paused at 10 %).',
+      undefined,
+      1,
+    );
+    alarm(
+      'SesComplaintRate',
+      sesReputation('Reputation.ComplaintRate'),
+      0.001,
+      'SES complaint rate above 0.1 % (sending is paused at 0.5 %).',
+      undefined,
+      1,
+    );
     alarm(
       'Api5xx',
       alb.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, { period: minute }),

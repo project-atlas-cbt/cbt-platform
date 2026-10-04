@@ -115,5 +115,5 @@ the proxy multiplexes (`maxConnectionsPercent` 50). Re-check after the staging l
 All go to the SNS topic `atlas-<env>-oncall` (email until a paging tool is chosen —
 [on-call-and-incident-response.md](on-call-and-incident-response.md)): API 5xx, unhealthy targets,
 p95 latency above 2 s, fewer running API or worker tasks than the floor, database CPU, free
-storage, RDS Proxy pinning, and cache memory. The Exam Health Monitor (B20) emails
+storage, RDS Proxy pinning, cache memory, and SES bounce and complaint rates. The Exam Health Monitor (B20) emails
 `OPS_ALERT_EMAILS` (the same addresses) through SES.

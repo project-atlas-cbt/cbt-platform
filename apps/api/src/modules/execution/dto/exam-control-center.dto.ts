@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ArrayUnique, IsArray, IsOptional, IsUUID, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { EXAM_STATUSES, type ExamStatus } from '@atlas/domain';
+import { EXAM_STATUSES, type AttemptSignalCounts, type ExamStatus } from '@atlas/domain';
 import { ExamSessionResponseDto } from './exam-session.dto.js';
 
 /**
@@ -80,6 +80,26 @@ export class ExamControlCenterAggregateDto {
 /** B13 — one row per currently-`IN_PROGRESS` `ExamAttempt` for this exam.
  * `studentName`/`startedAt` were added after B13 shipped (2026-09) so the
  * Control Center's live attempt table can name rows and show a start time. */
+export class AttemptSignalCountsDto implements AttemptSignalCounts {
+  @ApiProperty({ type: Number })
+  WINDOW_BLUR!: number;
+
+  @ApiProperty({ type: Number })
+  FULLSCREEN_EXIT!: number;
+
+  @ApiProperty({ type: Number })
+  TAB_HIDDEN!: number;
+
+  @ApiProperty({ type: Number })
+  RECONNECTED!: number;
+
+  @ApiProperty({ type: Number })
+  RESUMED!: number;
+
+  @ApiProperty({ type: Number })
+  BINDING_MISMATCH!: number;
+}
+
 export class ExamLiveAttemptRowDto {
   @ApiProperty({ type: String })
   studentProfileId!: string;
@@ -95,6 +115,26 @@ export class ExamLiveAttemptRowDto {
 
   @ApiProperty({ type: Number, nullable: true })
   timeRemainingSeconds!: number | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    description: 'When the server last heard from this attempt (heartbeat or answer save).',
+  })
+  lastSeenAt!: string;
+
+  @ApiProperty({
+    type: Boolean,
+    description:
+      'B23 (M-09, ADR-0020): nothing heard for longer than DISCONNECTED_AFTER_MS (90 s) when the snapshot was computed. A signal for the invigilator, not an attempt state.',
+  })
+  disconnected!: boolean;
+
+  @ApiProperty({
+    type: AttemptSignalCountsDto,
+    description: 'B23 (M-08, ADR-0020): integrity-signal counts by type — counts, not judgements.',
+  })
+  signals!: AttemptSignalCountsDto;
 }
 
 export class ExamControlCenterStalenessDto {

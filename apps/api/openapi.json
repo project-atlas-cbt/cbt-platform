@@ -13384,6 +13384,37 @@
           "attemptDataAvailable"
         ]
       },
+      "AttemptSignalCountsDto": {
+        "type": "object",
+        "properties": {
+          "WINDOW_BLUR": {
+            "type": "number"
+          },
+          "FULLSCREEN_EXIT": {
+            "type": "number"
+          },
+          "TAB_HIDDEN": {
+            "type": "number"
+          },
+          "RECONNECTED": {
+            "type": "number"
+          },
+          "RESUMED": {
+            "type": "number"
+          },
+          "BINDING_MISMATCH": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "WINDOW_BLUR",
+          "FULLSCREEN_EXIT",
+          "TAB_HIDDEN",
+          "RECONNECTED",
+          "RESUMED",
+          "BINDING_MISMATCH"
+        ]
+      },
       "ExamLiveAttemptRowDto": {
         "type": "object",
         "properties": {
@@ -13403,6 +13434,23 @@
           "timeRemainingSeconds": {
             "type": "number",
             "nullable": true
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the server last heard from this attempt (heartbeat or answer save)."
+          },
+          "disconnected": {
+            "type": "boolean",
+            "description": "B23 (M-09, ADR-0020): nothing heard for longer than DISCONNECTED_AFTER_MS (90 s) when the snapshot was computed. A signal for the invigilator, not an attempt state."
+          },
+          "signals": {
+            "description": "B23 (M-08, ADR-0020): integrity-signal counts by type — counts, not judgements.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttemptSignalCountsDto"
+              }
+            ]
           }
         },
         "required": [
@@ -13410,7 +13458,10 @@
           "studentName",
           "status",
           "startedAt",
-          "timeRemainingSeconds"
+          "timeRemainingSeconds",
+          "lastSeenAt",
+          "disconnected",
+          "signals"
         ]
       },
       "ExamControlCenterStalenessDto": {

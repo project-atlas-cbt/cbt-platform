@@ -220,27 +220,26 @@ screens against them). Why these two, and which skills were considered and rejec
 ### Current Phase
 
 Backend `B0`–`B22` and frontend `F0`–`F20` are implemented (B19's own roadmap section is still
-open). **B22** (2026-10-04, failure/recovery/DR) is implemented with DoD 6–9 explicitly partial until
-B23 staging; **F20** has manual checks pending (NVDA, oldest browsers, a real low-end PC). Next on
-the critical path: **B23** (production readiness & launch), which **F21** pairs with. Each phase's DoD outcome, honestly-partial items and
-design reasoning are in its dated `CHANGE-LOG.md` entry and its roadmap section; read those before
-resuming related work.
+open). **B23** (production readiness) is **IN PROGRESS** (2026-10-04). Its repository work is done:
+CDK infrastructure in `af-south-1`, the deploy and rollback pipeline, migration safety, the golden
+path and smoke checks, SES email, invigilator signals, and the operations docs. Provisioning,
+staging measurements, the legal review and the pilot remain, all tracked in
+`docs/operations/launch-checklist.md`. **F21** pairs with it next. Each phase's DoD outcome,
+partial items and design reasoning are in its dated `CHANGE-LOG.md` entry and its roadmap section;
+read those before resuming related work.
 
 Open items carried forward:
 
 - Browser suites exist now (`apps/web/e2e`, CI job `web-e2e`), but `F16`, `F18` and `F19` flows are
   not yet covered by them. The `web-e2e` job first runs on F20's pull request.
-- `F12` operational alerts (DoD item 10) are deferred: no per-student liveness signal exists.
+- `F12` operational alerts (DoD item 10) stay deferred; the disconnected flag and signal counts now
+  show in the live table (B23).
 - Excused absence is intentionally deferred (`F16`).
-- To B23 from B22: measure RDS Multi-AZ failover, RDS PITR/restore time on a production-sized
-  dataset (RTO ≤ 60 min target), ElastiCache failover; S3 versioning + 35-day noncurrent lifecycle
-  rule; restore IAM; the cross-region copy decision; a human walkthrough of every runbook
-  (`docs/operations/`). The long-term academic records snapshot proposal joins the legal review.
-- To B23: legal review of retention/DPA (ADR-0028 amendment), encryption-at-rest verification,
-  production secrets (`CSRF_SECRET`, `MFA_ENCRYPTION_KEY`, `MEDIA_PRECACHE_SECRET`), S3 bucket CORS
-  for school origins, a real Sentry project; staging re-run of level 1,000 / bursts / endurance
-  (gate), RDS Proxy pinning check, ADR-0032 region decision (RTT favoured `af-south-1`). Capacity
-  plan: `docs/performance/capacity-plan.md`.
+- B23 launch items (from B20–B22 and B23): accounts, domain and DNS at Vercel; SES out of the
+  sandbox; staging run of level 1,000, proxy pinning, failover and PITR timing, and rollback
+  rehearsal; legal review of retention and the DPA; the pilot. Full list:
+  `docs/operations/launch-checklist.md`. Audit BLOCKER/HIGH: 57/58 closed, R-03 waits on staging
+  (`docs/audit/blocker-high-closure.md`).
 - Local and CI object storage is Chainguard's MinIO build pinned by digest (MinIO withdrew its
   public images, 2026-10-02 CI repair entry).
 
@@ -270,6 +269,10 @@ Engineering facts every session needs:
   run (`apps/api/src/load/`); the web client must honour `Retry-After`.
 - Logging goes through `@atlas/observability` (redacting pino); never log request bodies, answers,
   tokens or PII. Route params named `id`/`…Id` must be UUIDs (global pipe).
+- B23 deploys: infrastructure is `infra/cdk` (asserted by `infra/cdk/test`); staging deploys on
+  merge to `dev`, production on a `v*` tag after Haneef approves; never run the golden path (which
+  writes test data) against production. Migrations must be expand-only (`pnpm lint:migrations`,
+  `docs/operations/migrations.md`). Schools reach the API at `<school>.api.<root>`.
 - F20 web: every page carries a per-request nonce CSP (`apps/web/proxy.ts`) — no inline script, and
   new external origins must be added in `lib/security/csp.ts`. API requests must never be cached by
   the service worker (`app/sw.ts` bypasses them). Build the web app with `NEXT_PUBLIC_MEDIA_ORIGIN`

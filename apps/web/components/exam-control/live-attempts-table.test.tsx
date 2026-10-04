@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { useExamParticipation } from '@/lib/exam-control/queries';
 import { NetworkError } from '@/lib/api/error';
+import type { ApiComponents } from '@atlas/contracts';
 import { LiveAttemptsTable } from './live-attempts-table';
+
+type LiveAttempt = ApiComponents['schemas']['ExamLiveAttemptRowDto'];
 
 vi.mock('@/lib/exam-control/queries', () => ({
   useExamParticipation: vi.fn(),
@@ -51,6 +54,15 @@ function freezeClockAtStart() {
   vi.setSystemTime(START);
 }
 
+const NO_SIGNALS = {
+  WINDOW_BLUR: 0,
+  FULLSCREEN_EXIT: 0,
+  TAB_HIDDEN: 0,
+  RECONNECTED: 0,
+  RESUMED: 0,
+  BINDING_MISMATCH: 0,
+};
+
 const inProgressAttempts = {
   'p-mary': {
     studentProfileId: 'p-mary',
@@ -58,6 +70,9 @@ const inProgressAttempts = {
     status: 'IN_PROGRESS',
     startedAt: START_ISO,
     timeRemainingSeconds: 2538,
+    lastSeenAt: START_ISO,
+    disconnected: false,
+    signals: NO_SIGNALS,
   },
   'p-ahmed': {
     studentProfileId: 'p-ahmed',
@@ -65,8 +80,11 @@ const inProgressAttempts = {
     status: 'IN_PROGRESS',
     startedAt: START_ISO,
     timeRemainingSeconds: 3192,
+    lastSeenAt: START_ISO,
+    disconnected: false,
+    signals: NO_SIGNALS,
   },
-} as never;
+} satisfies Record<string, LiveAttempt>;
 
 function rowText(studentName: string) {
   const row = screen
@@ -190,6 +208,56 @@ describe('LiveAttemptsTable', () => {
     } as never);
     render(<LiveAttemptsTable examId="e1" liveAttempts={[]} computedAt={START_ISO} />);
     expect(screen.getByText(/no students to track/i)).toBeInTheDocument();
+  });
+
+  it('B23 (M-09): shows a disconnected student first among those in progress, with how long since contact', () => {
+    freezeClockAtStart();
+    render(
+      <LiveAttemptsTable
+        examId="e1"
+        liveAttempts={
+          [
+            inProgressAttempts['p-mary'],
+            {
+              ...inProgressAttempts['p-ahmed'],
+              disconnected: true,
+              lastSeenAt: new Date(START.getTime() - 3 * 60_000).toISOString(),
+            },
+          ] as never
+        }
+        computedAt={START_ISO}
+      />,
+    );
+    const ahmed = rowText('Ahmed Bello');
+    expect(ahmed).toContain('Disconnected');
+    expect(ahmed).toContain('no contact for 3 min');
+    expect(rowText('Mary James')).toContain('Connected');
+    expect(rowText('Mary James')).not.toContain('Disconnected');
+    const rows = screen.getAllByRole('row').map((row) => row.textContent ?? '');
+    expect(rows.findIndex((t) => t.includes('Ahmed Bello'))).toBeLessThan(
+      rows.findIndex((t) => t.includes('Mary James')),
+    );
+  });
+
+  it('B23 (M-08): lists non-zero signal counts in plain words, and a dash when there are none', () => {
+    render(
+      <LiveAttemptsTable
+        examId="e1"
+        liveAttempts={
+          [
+            {
+              ...inProgressAttempts['p-mary'],
+              signals: { ...NO_SIGNALS, TAB_HIDDEN: 2, WINDOW_BLUR: 1, BINDING_MISMATCH: 1 },
+            },
+            inProgressAttempts['p-ahmed'],
+          ] as never
+        }
+        computedAt={START_ISO}
+      />,
+    );
+    expect(rowText('Mary James')).toContain('Left window 1 · Tab hidden 2 · Device changed 1');
+    expect(rowText('Ahmed Bello')).not.toMatch(/Left window|Tab hidden/);
+    expect(screen.getByRole('columnheader', { name: 'Signals' })).toBeInTheDocument();
   });
 
   afterEach(() => {
