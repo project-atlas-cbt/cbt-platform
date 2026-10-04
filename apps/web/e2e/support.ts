@@ -66,8 +66,42 @@ export async function signIn(page: Page, identifier: string): Promise<void> {
   await page.getByLabel('Password').fill(fixture().password);
   const signIn = page.getByRole('button', { name: 'Sign in' });
   await expect(signIn).toBeEnabled();
-  await signIn.click();
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'));
+  // What the browser saw, reported if sign-in does not land: on CI the
+  // report artifact may be unreachable, so the failure message must say why.
+  const seen: string[] = [];
+  const onConsole = (m: { type(): string; text(): string }) => {
+    if (m.type() === 'error' || m.type() === 'warning')
+      seen.push(`console.${m.type()}: ${m.text()}`);
+  };
+  const onPageError = (e: Error) => seen.push(`pageerror: ${e.message}`);
+  const onFailed = (r: { url(): string; failure(): { errorText: string } | null }) =>
+    seen.push(`requestfailed: ${r.url()} ${r.failure()?.errorText ?? ''}`);
+  const onResponse = (r: { url(): string; status(): number }) => {
+    if (r.status() >= 400) seen.push(`HTTP ${r.status()}: ${r.url()}`);
+  };
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+  page.on('requestfailed', onFailed);
+  page.on('response', onResponse);
+  try {
+    await signIn.click();
+    // Land on the role's home, not just "off /login": sign-in passes through
+    // `/` and then redirects, and a navigation started before that redirect
+    // is interrupted by it (seen on WebKit in CI).
+    await page.waitForURL((url) => !url.pathname.startsWith('/login') && url.pathname !== '/', {
+      timeout: 30_000,
+    });
+  } catch (error) {
+    throw new Error(
+      `sign-in did not land (${page.url()}):\n  ${seen.slice(-20).join('\n  ') || '(no browser errors)'}`,
+      { cause: error },
+    );
+  } finally {
+    page.off('console', onConsole);
+    page.off('pageerror', onPageError);
+    page.off('requestfailed', onFailed);
+    page.off('response', onResponse);
+  }
 }
 
 /** Student → preview of the fixture exam (via the real home screen link). */
