@@ -176,6 +176,24 @@ describe.each(['staging', 'production'] as const)('%s', (environment) => {
     }
   });
 
+  it('sends email through SES from the domain identity, and only the API may send (ADR-0019)', () => {
+    const api = containers(t.app).find((c) => c.Name === 'Api')!;
+    expect(envOf(api)).toMatchObject({
+      NOTIFICATION_TRANSPORT: 'ses',
+      SES_FROM_ADDRESS: '"Example" <no-reply@example.ng>',
+    });
+    t.app.hasResourceProperties('AWS::SES::EmailIdentity', {
+      EmailIdentity: 'example.ng',
+      MailFromAttributes: { MailFromDomain: 'mail.example.ng' },
+    });
+    const sesPolicies = Object.values(t.app.findResources('AWS::IAM::Policy')).filter((p) =>
+      JSON.stringify(p).includes('ses:SendEmail'),
+    );
+    expect(sesPolicies).toHaveLength(1);
+    expect(JSON.stringify(sesPolicies[0])).toContain('ApiTaskTaskRole');
+    expect(JSON.stringify(sesPolicies[0])).toContain(':identity/example.ng');
+  });
+
   it('serves HTTPS only with a modern TLS policy, and redirects port 80', () => {
     t.app.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
       Port: 443,

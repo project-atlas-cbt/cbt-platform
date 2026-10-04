@@ -291,8 +291,16 @@ const envObject = z.object({
 
   // Exam Health Monitor (09 §37) and operational/security alert dispatch.
   // OPS_ALERT_EMAILS: comma-separated operator addresses, delivered through
-  // the NotificationChannel (console until B23's real provider).
+  // the NotificationChannel (SES in production, console in dev/CI).
   OPS_ALERT_EMAILS: z.string().optional().default(''),
+  /** B23 (ADR-0019 provider decision): `ses` sends real email through
+   * Amazon SES; `console` is the dev/CI transport. Production requires `ses`. */
+  NOTIFICATION_TRANSPORT: z.enum(['console', 'ses']).default('console'),
+  /** Sender address for SES, on the domain's verified SES identity
+   * (e.g. `"Atlas" <no-reply@example.ng>`). */
+  SES_FROM_ADDRESS: z.string().optional().default(''),
+  /** Region of the SES identity; defaults to the deployment's own region. */
+  SES_REGION: z.string().optional().default(''),
   EXAM_HEALTH_INTERVAL_MS: z.coerce
     .number()
     .int()
@@ -433,6 +441,13 @@ export const envSchema = envObject.superRefine((env, ctx) => {
   }
   if (!env.COOKIE_DOMAIN) {
     fail('COOKIE_DOMAIN', 'must be set in production (ADR-0022)');
+  }
+  // B23: the console transport withholds content in production, so a
+  // reset or activation email would silently never arrive.
+  if (env.NOTIFICATION_TRANSPORT !== 'ses') {
+    fail('NOTIFICATION_TRANSPORT', 'must be ses in production (ADR-0019)');
+  } else if (!/@[^@\s]+\.[^@\s]+>?$/.test(env.SES_FROM_ADDRESS)) {
+    fail('SES_FROM_ADDRESS', 'must be a sender address on the verified SES identity');
   }
 });
 

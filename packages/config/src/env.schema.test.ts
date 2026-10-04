@@ -93,6 +93,8 @@ describe('loadEnv — B20 production hardening', () => {
     MFA_ENCRYPTION_KEY: strong('Kq7m'),
     MEDIA_PRECACHE_SECRET: strong('Wn5r'),
     COOKIE_DOMAIN: 'school.example.ng',
+    NOTIFICATION_TRANSPORT: 'ses',
+    SES_FROM_ADDRESS: 'Atlas <no-reply@example.ng>',
   };
 
   it('accepts a production API/worker task that is never given the schema owner URL (B23)', () => {
@@ -116,6 +118,10 @@ describe('loadEnv — B20 production hardening', () => {
     ['DATABASE_APP_URL', 'postgresql://app_user:pass@db:5432/db'],
     ['REDIS_URL', 'redis://cache:6379'],
     ['COOKIE_DOMAIN', undefined],
+    ['NOTIFICATION_TRANSPORT', 'console'],
+    ['NOTIFICATION_TRANSPORT', undefined],
+    ['SES_FROM_ADDRESS', undefined],
+    ['SES_FROM_ADDRESS', 'no-reply'],
   ] as Array<[string, string | undefined]>)(
     'rejects production with an unsafe %s',
     (key, value) => {

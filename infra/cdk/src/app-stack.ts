@@ -9,6 +9,7 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
@@ -86,6 +87,11 @@ export class AppStack extends Stack {
       RELEASE_VERSION: inputs.imageTag,
       LOG_LEVEL: 'info',
       OPS_ALERT_EMAILS: inputs.alarmEmails.join(','),
+      // ADR-0019 provider (B23 owner decision): Amazon SES, sending from
+      // the root domain's identity below.
+      NOTIFICATION_TRANSPORT: 'ses',
+      SES_FROM_ADDRESS: `"${inputs.productName}" <no-reply@${inputs.rootDomain}>`,
+      SES_REGION: env.region,
       ...(inputs.sentryDsn ? { SENTRY_DSN: inputs.sentryDsn } : {}),
     };
     const json = (secret: secretsmanager.ISecret, field: string) =>
@@ -174,6 +180,33 @@ export class AppStack extends Stack {
       // right-most X-Forwarded-For entry it appends (B20 carry-over).
       environment: { TRUST_PROXY_HOPS: '1' },
     });
+    // Only the API sends email (the worker enqueues onto the dispatch queue
+    // the API consumes), and only from this domain's identity. Its DKIM
+    // and MAIL FROM records are published at the DNS host (Vercel); see
+    // docs/operations/infrastructure.md.
+    const mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', {
+      identity: ses.Identity.domain(inputs.rootDomain),
+      mailFromDomain: `mail.${inputs.rootDomain}`,
+    });
+    apiTask.addToTaskRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ses:SendEmail'],
+        resources: [
+          this.formatArn({
+            service: 'ses',
+            resource: 'identity',
+            resourceName: inputs.rootDomain,
+          }),
+        ],
+      }),
+    );
+    mailIdentity.dkimRecords.forEach((record, i) => {
+      new CfnOutput(this, `MailDkim${i + 1}`, {
+        value: `${record.name} CNAME ${record.value}`,
+        description: 'Publish at the DNS host so SES can sign mail (DKIM)',
+      });
+    });
+
     this.apiService = new ecs.FargateService(this, 'ApiService', {
       cluster: this.cluster,
       taskDefinition: apiTask,

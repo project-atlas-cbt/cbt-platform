@@ -30,6 +30,7 @@
     "@atlas/observability": "workspace:*",
     "@atlas/validation": "workspace:*",
     "@aws-sdk/client-s3": "^3.1142.0",
+    "@aws-sdk/client-sesv2": "^3.1146.0",
     "@aws-sdk/s3-request-presigner": "^3.1142.0",
     "@fastify/cors": "^11.3.0",
     "@fastify/csrf": "^8.1.0",
