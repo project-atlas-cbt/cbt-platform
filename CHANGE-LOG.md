@@ -64,6 +64,11 @@ evidence: `frontend-roadmap.md` F20 Implementation notes.
 - **CI**: the browser-suite job hung at teardown (`pnpm exec next start` puts the server in its own
   process group, out of Playwright's reach); the web server now runs Next's binary directly, and the
   run and job have time caps.
+- **Answer save ignored a 503 `Retry-After`** (found while chasing a CI-only congested-network
+  failure): a save queued behind an in-flight one that was then refused ran ~70 ms later, because
+  the back-off was checked only when the flush was queued. `flush()` now re-checks it when it runs.
+  The congested-network test also counts acknowledgements from what was sent (not a re-parse of
+  the response body) and reports an answer-save timeline when it fails.
 - Earlier in the phase: a **CSRF first-visit race** — concurrent cookie-less GETs minted competing
   secrets; only token-issuing routes now persist a new secret (`csrf.guard.ts`, `IssuesCsrfToken`).
 

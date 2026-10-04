@@ -63,19 +63,61 @@ test('a shed read waits out Retry-After, shows a calm state, and recovers', asyn
   expect(hits).toHaveLength(3);
 });
 
-/** Records answers the server accepted (`results[].accepted` of each batch). */
+/**
+ * Records answers the server accepted. A 200 counts the answers its request
+ * carried (from the request payload, always available); when the response
+ * body can also be read, answers it explicitly rejected are left out. Reading
+ * bodies alone was not enough: under CDP network throttling on a slow CI
+ * runner Chromium does not always hand the body over, and an unreadable
+ * body then looked exactly like an unacknowledged answer.
+ */
 function watchAnswerAcks(page: Page): Set<string> {
   const acked = new Set<string>();
   page.on('response', (response) => {
     if (!response.url().includes('/answers/batch') || response.status() !== 200) return;
+    const sent =
+      (response.request().postDataJSON() as { answers?: { examQuestionId: string }[] } | null)
+        ?.answers ?? [];
     void response
       .json()
       .then((body: { results?: { examQuestionId: string; accepted: boolean }[] }) => {
-        for (const r of body.results ?? []) if (r.accepted) acked.add(r.examQuestionId);
+        const rejected = new Set(
+          (body.results ?? []).filter((r) => !r.accepted).map((r) => r.examQuestionId),
+        );
+        for (const a of sent) if (!rejected.has(a.examQuestionId)) acked.add(a.examQuestionId);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        for (const a of sent) acked.add(a.examQuestionId);
+      });
   });
   return acked;
+}
+
+/**
+ * A timeline of every answer-save request (sent ids, then 200 / status /
+ * network failure), attached to a failure so a CI-only failure explains
+ * itself — the report artifact is not always reachable.
+ */
+function watchAnswerTimeline(page: Page): string[] {
+  const t0 = Date.now();
+  const at = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+  const log: string[] = [];
+  page.on('request', (request) => {
+    if (!request.url().includes('/answers/batch')) return;
+    const ids =
+      (request.postDataJSON() as { answers?: { examQuestionId: string }[] } | null)?.answers?.map(
+        (a) => a.examQuestionId.slice(-4),
+      ) ?? [];
+    log.push(`${at()} sent [${ids.join(',')}]`);
+  });
+  page.on('requestfailed', (request) => {
+    if (request.url().includes('/answers/batch'))
+      log.push(`${at()} failed ${request.failure()?.errorText ?? ''}`);
+  });
+  page.on('response', (response) => {
+    if (response.url().includes('/answers/batch')) log.push(`${at()} HTTP ${response.status()}`);
+  });
+  return log;
 }
 
 async function answerEveryQuestion(page: Page): Promise<void> {
@@ -145,8 +187,17 @@ test('a congested, lossy network (Nigerian 3G profile) loses no answers', async 
       ++n % 5 === 0 ? route.abort('connectionreset') : route.continue(),
     );
   const acked = watchAnswerAcks(page);
+  const timeline = watchAnswerTimeline(page);
   await answerEveryQuestion(page);
-  await expect.poll(() => acked.size, { timeout: 60_000 }).toBe(fixture().questionCount);
+  try {
+    await expect.poll(() => acked.size, { timeout: 60_000 }).toBe(fixture().questionCount);
+  } catch (error) {
+    // Built at failure time, so the whole timeline is in the message.
+    throw new Error(
+      `${acked.size}/${fixture().questionCount} answers acknowledged; answer-save timeline:\n  ${timeline.join('\n  ')}`,
+      { cause: error },
+    );
+  }
   await submit(page);
   await cdp.detach();
 });

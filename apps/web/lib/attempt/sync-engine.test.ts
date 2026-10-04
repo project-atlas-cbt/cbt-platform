@@ -282,6 +282,38 @@ describe('AttemptSyncEngine', () => {
     expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('synced');
   });
 
+  it('F20 — a save queued behind an in-flight one that is refused waits out its Retry-After', async () => {
+    let release!: () => void;
+    const refused = new Promise<void>((r) => (release = r)).then(() => ({
+      error: {
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'busy',
+          retryable: true,
+          correlationId: 'c',
+        },
+      },
+      response: new Response(null, { status: 503, headers: { 'retry-after': '1' } }),
+    }));
+    mockPost.mockReturnValueOnce(refused);
+    mockPost.mockResolvedValue(
+      ok({
+        results: [
+          { examQuestionId: 'q1', accepted: true, gradeWindowFlag: false },
+          { examQuestionId: 'q2', accepted: true, gradeWindowFlag: false },
+        ],
+      }),
+    );
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1'); // first save: in flight
+    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    await engine.recordAnswer('q2', 'o2'); // queued behind it
+    release(); // the in-flight save is refused with Retry-After: 1
+    await new Promise((r) => setTimeout(r, 300));
+    expect(mockPost).toHaveBeenCalledTimes(1); // the queued save did not go out at once
+    await vi.waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2), { timeout: 3_000 });
+  });
+
   it('F20 — a failed flush retries by itself when its backoff ends, with no new answer or heartbeat', async () => {
     mockPost.mockRejectedValueOnce(new Error('network down'));
     const engine = track(new AttemptSyncEngine(ATTEMPT_ID));

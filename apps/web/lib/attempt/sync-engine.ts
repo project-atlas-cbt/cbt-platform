@@ -179,7 +179,7 @@ export class AttemptSyncEngine {
       }, wait);
       return;
     }
-    this.flushChain = this.flushChain.then(() => this.flush()).catch(() => undefined);
+    this.flushChain = this.flushChain.then(() => this.flush(options)).catch(() => undefined);
   }
 
   private recordFlushSuccess(): void {
@@ -215,7 +215,20 @@ export class AttemptSyncEngine {
     await this.flushChain;
   }
 
-  private async flush(): Promise<void> {
+  private async flush(
+    options: { force?: boolean; ignoreRetryAfter?: boolean } = {},
+  ): Promise<void> {
+    // Re-check the backoff when the flush actually runs, not only when it was
+    // queued: a flush queued behind one still in flight would otherwise go
+    // out the moment that one failed, ignoring the Retry-After its refusal
+    // just set (F20 e2e finding: a second save 70 ms after a 503).
+    if (!options.ignoreRetryAfter) {
+      const until = options.force ? this.retryAfterUntil : this.nextFlushAt;
+      if (until > Date.now()) {
+        this.scheduleFlush(options);
+        return;
+      }
+    }
     const db = getAttemptDb();
     const pending = await db.answers
       .where('[attemptId+syncStatus]')
