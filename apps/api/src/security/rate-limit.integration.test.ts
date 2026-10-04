@@ -17,7 +17,10 @@ import type { ErrorEnvelope } from '@atlas/validation';
 import { AppConfigModule } from '../config/app-config.module.js';
 import { HttpExceptionFilter } from '../common/http-exception.filter.js';
 import { RedisModule, REDIS_CLIENT } from '../redis/redis.module.js';
-import { RedisThrottlerStorage } from './redis-throttler-storage.service.js';
+import {
+  InMemoryThrottlerFallback,
+  RedisThrottlerStorage,
+} from './redis-throttler-storage.service.js';
 
 @Controller()
 class RateLimitProbeController {
@@ -35,7 +38,7 @@ class RateLimitProbeController {
       inject: [REDIS_CLIENT],
       useFactory: (redis: Redis): ThrottlerModuleOptions => ({
         throttlers: [{ name: 'default', limit: 2, ttl: 60_000 }],
-        storage: new RedisThrottlerStorage(redis),
+        storage: new RedisThrottlerStorage(redis, new InMemoryThrottlerFallback(1)),
       }),
     }),
   ],

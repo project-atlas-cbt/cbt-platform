@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Worker, type Job } from 'bullmq';
-import type { INestApplicationContext } from '@nestjs/common';
+import { Logger, type INestApplicationContext } from '@nestjs/common';
 import type { Env } from '@atlas/config';
 import {
   IMPORT_COMMIT_QUEUE_NAME,
@@ -11,6 +11,9 @@ import {
 import { ImportValidationService } from './import-validation.service.js';
 import { ImportCommitService } from './import-commit.service.js';
 import { LoadMonitorService } from '../../load/load-monitor.service.js';
+import { closeWorkerBounded } from '../../common/bounded-close.js';
+
+const logger = new Logger('ImportWorkers');
 
 export interface ImportWorkers {
   close: () => Promise<void>;
@@ -68,7 +71,10 @@ export function startImportWorkers(app: INestApplicationContext): ImportWorkers 
 
   return {
     close: async () => {
-      await Promise.all([validationWorker.close(), commitWorker.close()]);
+      await Promise.all([
+        closeWorkerBounded(validationWorker, logger),
+        closeWorkerBounded(commitWorker, logger),
+      ]);
     },
   };
 }

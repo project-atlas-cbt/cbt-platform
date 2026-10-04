@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Redis } from 'ioredis';
 import type { Env } from '@atlas/config';
 import { recordHealthCounter } from '@atlas/observability';
+import { DependencyHealth } from '../../common/dependency-health.js';
 import { REDIS_CLIENT } from '../../redis/redis.module.js';
 
 const KEY_PREFIX = 'atlas:auth:lockout:';
@@ -14,22 +15,55 @@ const KEY_PREFIX = 'atlas:auth:lockout:';
  * same REDIS_CLIENT token RedisThrottlerStorage already uses
  * (apps/api/src/security/redis-throttler-storage.service.ts) — no new
  * connection, one Redis client for the process.
+ *
+ * B22 (decision 3, 2026-10-04): while Redis is unreachable the lockout
+ * fails OPEN to a per-process counter rather than failing every sign-in —
+ * a student whose browser crashed mid-exam must be able to sign back in.
+ * It is never looser than the shared lockout: each process locks after
+ * `floor(max / RATE_LIMIT_FALLBACK_PROCESSES)` failures (at least 1), so
+ * failures spread across every process still cannot exceed `max`.
  */
 @Injectable()
 export class AuthLockoutService {
+  private readonly memory = new Map<string, { count: number; expiresAt: number }>();
+
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly config: ConfigService<Env, true>,
+    private readonly health: DependencyHealth,
   ) {}
 
   private key(schoolId: string, loginIdentifier: string): string {
     return `${KEY_PREFIX}${schoolId}:${loginIdentifier.toLowerCase()}`;
   }
 
+  private get max(): number {
+    return this.config.get('AUTH_LOCKOUT_MAX_ATTEMPTS', { infer: true });
+  }
+
+  /** The per-process threshold used only while Redis is down. */
+  fallbackMax(): number {
+    const processes = this.config.get('RATE_LIMIT_FALLBACK_PROCESSES', { infer: true });
+    return Math.max(1, Math.floor(this.max / processes));
+  }
+
   async isLocked(schoolId: string, loginIdentifier: string): Promise<boolean> {
-    const count = await this.redis.get(this.key(schoolId, loginIdentifier));
-    const max = this.config.get('AUTH_LOCKOUT_MAX_ATTEMPTS', { infer: true });
-    return count !== null && Number(count) >= max;
+    const key = this.key(schoolId, loginIdentifier);
+    if (!this.health.shouldTry('redis')) {
+      this.health.skipped('redis', 'auth-lockout');
+      return this.memoryCount(key) >= this.fallbackMax();
+    }
+    let count: string | null;
+    try {
+      count = await this.redis.get(key);
+    } catch (err) {
+      this.health.fellBack('redis', 'auth-lockout', err);
+      return this.memoryCount(key) >= this.fallbackMax();
+    }
+    this.health.succeeded('redis');
+    return (
+      (count !== null && Number(count) >= this.max) || this.memoryCount(key) >= this.fallbackMax()
+    );
   }
 
   /** Increments the failure counter, starting its window on the first
@@ -40,16 +74,64 @@ export class AuthLockoutService {
   async recordFailure(schoolId: string, loginIdentifier: string): Promise<{ lockedNow: boolean }> {
     const key = this.key(schoolId, loginIdentifier);
     const windowSeconds = this.config.get('AUTH_LOCKOUT_WINDOW_SECONDS', { infer: true });
-    const count = await this.redis.incr(key);
-    if (count === 1) {
-      await this.redis.expire(key, windowSeconds);
+    if (!this.health.shouldTry('redis')) {
+      this.health.skipped('redis', 'auth-lockout');
+      const n = this.memoryIncrement(key, windowSeconds * 1000);
+      return { lockedNow: n === this.fallbackMax() };
     }
+    let count: number;
+    try {
+      // B22: INCR and the window's expiry in one transaction — two round
+      // trips could leave a counter with no TTL (locked forever) if the
+      // connection dropped between them.
+      const res = await this.redis.multi().incr(key).expire(key, windowSeconds, 'NX').exec();
+      const incr = res?.[0];
+      if (!incr || incr[0]) throw incr?.[0] ?? new Error('lockout MULTI returned no result');
+      count = Number(incr[1]);
+    } catch (err) {
+      this.health.fellBack('redis', 'auth-lockout', err);
+      const n = this.memoryIncrement(key, windowSeconds * 1000);
+      return { lockedNow: n === this.fallbackMax() };
+    }
+    this.health.succeeded('redis');
     await recordHealthCounter(this.redis, 'auth_failure').catch(() => undefined);
-    const max = this.config.get('AUTH_LOCKOUT_MAX_ATTEMPTS', { infer: true });
-    return { lockedNow: count === max };
+    return { lockedNow: count === this.max };
   }
 
   async recordSuccess(schoolId: string, loginIdentifier: string): Promise<void> {
-    await this.redis.del(this.key(schoolId, loginIdentifier));
+    const key = this.key(schoolId, loginIdentifier);
+    this.memory.delete(key);
+    if (!this.health.shouldTry('redis')) {
+      this.health.skipped('redis', 'auth-lockout');
+      return;
+    }
+    try {
+      await this.redis.del(key);
+    } catch (err) {
+      // The Redis counter (if any) still expires with its window.
+      this.health.fellBack('redis', 'auth-lockout', err);
+    }
+  }
+
+  private memoryCount(key: string): number {
+    const entry = this.memory.get(key);
+    if (!entry) return 0;
+    if (entry.expiresAt <= Date.now()) {
+      this.memory.delete(key);
+      return 0;
+    }
+    return entry.count;
+  }
+
+  private memoryIncrement(key: string, windowMs: number): number {
+    const now = Date.now();
+    if (this.memory.size > 50_000) {
+      for (const [k, v] of this.memory) if (v.expiresAt <= now) this.memory.delete(k);
+    }
+    const live = this.memoryCount(key) > 0 ? this.memory.get(key) : undefined;
+    const entry = live ?? { count: 0, expiresAt: now + windowMs };
+    entry.count += 1;
+    this.memory.set(key, entry);
+    return entry.count;
   }
 }

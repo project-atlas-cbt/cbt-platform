@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Worker, type Job } from 'bullmq';
-import type { INestApplicationContext } from '@nestjs/common';
+import { Logger, type INestApplicationContext } from '@nestjs/common';
 import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
@@ -8,6 +8,9 @@ import {
   type NotificationDispatchJobPayload,
 } from '@atlas/notifications';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
+import { closeWorkerBounded } from '../../common/bounded-close.js';
+
+const logger = new Logger('NotificationDispatchWorker');
 
 export interface NotificationDispatchWorker {
   close: () => Promise<void>;
@@ -55,7 +58,7 @@ export function startNotificationDispatchWorker(
 
   return {
     close: async () => {
-      await worker.close();
+      await closeWorkerBounded(worker, logger);
     },
   };
 }

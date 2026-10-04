@@ -7,6 +7,7 @@ import { of, type Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { isValidIdempotencyKey } from '@atlas/validation';
 import type { Env } from '@atlas/config';
+import { DependencyHealth } from './dependency-health.js';
 import { REDIS_CLIENT } from '../redis/redis.module.js';
 import { AppHttpException } from './app-http-exception.js';
 
@@ -33,6 +34,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly config: ConfigService<Env, true>,
+    private readonly health: DependencyHealth,
   ) {}
 
   // NestInterceptor allows `Observable<any> | Promise<Observable<any>>` —
@@ -68,7 +70,21 @@ export class IdempotencyInterceptor implements NestInterceptor {
     // original caller's response body. Guards have already run here, so
     // req.user is the authenticated principal (or absent on public routes).
     const redisKey = `idempotency:${idempotencyScope(req)}:${key}`;
-    const existingRaw = await this.redis.get(redisKey);
+    if (!this.health.shouldTry('redis')) {
+      this.health.skipped('redis', 'idempotency');
+      return next.handle();
+    }
+    let existingRaw: string | null;
+    try {
+      existingRaw = await this.redis.get(redisKey);
+    } catch (err) {
+      // B22: fail open — run the request without replay protection rather
+      // than fail it. The routes that matter are idempotent in the domain
+      // anyway (sequence numbers, conditional transitions); the web client
+      // sends no key today.
+      this.health.fellBack('redis', 'idempotency', err);
+      return next.handle();
+    }
 
     if (existingRaw) {
       const existing = JSON.parse(existingRaw) as StoredResponse;
@@ -92,7 +108,11 @@ export class IdempotencyInterceptor implements NestInterceptor {
         };
         // NX: the first completed response for a key is the one every replay
         // gets — a concurrent duplicate finishing second never overwrites it.
-        void this.redis.set(redisKey, JSON.stringify(stored), 'EX', ttl, 'NX');
+        // B22: never an unhandled rejection — a lost store only means a
+        // later replay re-executes, which the fail-open path accepts anyway.
+        this.redis
+          .set(redisKey, JSON.stringify(stored), 'EX', ttl, 'NX')
+          .catch((err: unknown) => this.health.fellBack('redis', 'idempotency', err));
       }),
     );
   }

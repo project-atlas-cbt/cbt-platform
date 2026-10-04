@@ -5,7 +5,11 @@ import { ThrottlerGuard, ThrottlerModule, type ThrottlerModuleOptions } from '@n
 import type { Redis } from 'ioredis';
 import type { Env } from '@atlas/config';
 import { REDIS_CLIENT } from '../redis/redis.module.js';
-import { RedisThrottlerStorage } from './redis-throttler-storage.service.js';
+import { DependencyHealth } from '../common/dependency-health.js';
+import {
+  InMemoryThrottlerFallback,
+  RedisThrottlerStorage,
+} from './redis-throttler-storage.service.js';
 import { CsrfGuard } from './csrf.guard.js';
 import { buildThrottlers } from './rate-limit.js';
 
@@ -32,11 +36,15 @@ import { buildThrottlers } from './rate-limit.js';
 @Module({
   imports: [
     ThrottlerModule.forRootAsync({
-      inject: [REDIS_CLIENT, ConfigService],
+      inject: [REDIS_CLIENT, ConfigService, DependencyHealth],
       // B20: per-class throttlers keyed by session (authenticated) or
       // IP + account (sign-in) — see rate-limit.ts for why per-IP keys
       // would throttle a whole school lab behind one NAT address.
-      useFactory: (redis: Redis, config: ConfigService<Env, true>): ThrottlerModuleOptions => ({
+      useFactory: (
+        redis: Redis,
+        config: ConfigService<Env, true>,
+        health: DependencyHealth,
+      ): ThrottlerModuleOptions => ({
         throttlers: buildThrottlers({
           defaultMax: config.get('RATE_LIMIT_MAX', { infer: true }),
           defaultWindowSeconds: config.get('RATE_LIMIT_WINDOW_SECONDS', { infer: true }),
@@ -46,7 +54,14 @@ import { buildThrottlers } from './rate-limit.js';
           authIpMax: config.get('RATE_LIMIT_AUTH_IP_MAX', { infer: true }),
           signingSecret: config.get('SESSION_COOKIE_SECRET', { infer: true }),
         }),
-        storage: new RedisThrottlerStorage(redis),
+        // B22: fails open to per-process limits while Redis is down.
+        storage: new RedisThrottlerStorage(
+          redis,
+          new InMemoryThrottlerFallback(
+            config.get('RATE_LIMIT_FALLBACK_PROCESSES', { infer: true }),
+          ),
+          health,
+        ),
       }),
     }),
   ],

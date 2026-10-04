@@ -2,7 +2,11 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { loadEnv, loadRootEnv, redisConnectionFromUrl } from '@atlas/config';
 import { prisma } from '@atlas/db';
-import { ATTEMPT_MARKING_QUEUE_NAME, type AttemptMarkingJobPayload } from '@atlas/domain';
+import {
+  FAILED_JOB_RETENTION,
+  ATTEMPT_MARKING_QUEUE_NAME,
+  type AttemptMarkingJobPayload,
+} from '@atlas/domain';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
   OPERATIONAL_ALERT_TEMPLATE,
@@ -102,7 +106,19 @@ async function main() {
   const connection = redisConnectionFromUrl(redisUrl.toString());
 
   const probeWorker = createProbeWorker(connection);
-  const redis = new Redis(env.REDIS_URL);
+  // B22: bounded commands (no ~73 s hang while Redis is down) and an
+  // 'error' listener, so a dropped connection is logged, rate-limited,
+  // instead of ioredis's unhandled-error noise on every reconnect attempt.
+  const redis = new Redis(env.REDIS_URL, {
+    commandTimeout: env.REDIS_COMMAND_TIMEOUT_MS,
+    maxRetriesPerRequest: 1,
+  });
+  let lastRedisErrorLogAt = 0;
+  redis.on('error', (err: Error) => {
+    if (Date.now() - lastRedisErrorLogAt < 30_000) return;
+    lastRedisErrorLogAt = Date.now();
+    logger.warn({ err: err.message }, 'Redis connection error (retrying)');
+  });
 
   // B10: this process is now a *producer only* onto the shared
   // notification-dispatch queue — apps/api's worker-hosted consumer
@@ -125,7 +141,7 @@ async function main() {
       attempts: 5,
       backoff: { type: 'exponential', delay: 30_000 },
       removeOnComplete: true,
-      removeOnFail: 10,
+      removeOnFail: FAILED_JOB_RETENTION,
     });
   };
 
@@ -199,7 +215,7 @@ async function main() {
       attempts: 5,
       backoff: { type: 'exponential', delay: 10_000 },
       removeOnComplete: true,
-      removeOnFail: 10,
+      removeOnFail: FAILED_JOB_RETENTION,
     });
   };
   const attemptMarkingWorker = createAttemptMarkingWorker(
@@ -383,23 +399,46 @@ async function main() {
     `${env.PRODUCT_NAME} worker listening`,
   );
 
+  // B22: bounded, like apps/api's. Active jobs get WORKER_CLOSE_TIMEOUT_MS
+  // to finish; a worker that cannot close (a Redis connection cut while it
+  // was blocked waiting for a job can leave BullMQ waiting forever) is
+  // abandoned — its held job is redelivered by the stalled-job check on
+  // another worker. SHUTDOWN_TIMEOUT_MS bounds the whole sequence.
+  const WORKER_CLOSE_TIMEOUT_MS = 10_000;
+  const closeBounded = async (worker: { name: string; close(): Promise<void> }) => {
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), WORKER_CLOSE_TIMEOUT_MS);
+    });
+    const outcome = await Promise.race([worker.close().then(() => 'closed' as const), timedOut]);
+    clearTimeout(timer);
+    if (outcome === 'timeout') {
+      logger.warn({ worker: worker.name }, 'Worker did not close in time; abandoning it');
+    }
+  };
   const shutdown = async () => {
     logger.info('Worker shutting down');
+    setTimeout(() => {
+      logger.error({ timeoutMs: env.SHUTDOWN_TIMEOUT_MS }, 'Shutdown timed out; exiting');
+      process.exit(1);
+    }, env.SHUTDOWN_TIMEOUT_MS).unref();
     loadShedGate.stop();
-    await Promise.all([
-      probeWorker.close(),
-      subscriptionExpiryWorker.close(),
-      orphanMediaReportWorker.close(),
-      importExpiryWorker.close(),
-      unassignedStudentsDigestWorker.close(),
-      examControlRefreshWorker.close(),
-      analyticsRefreshWorker.close(),
-      attemptMarkingWorker.close(),
-      resultAdjustmentWorker.close(),
-      attemptAutoSubmitWorker.close(),
-      examHealthMonitorWorker.close(),
-      retentionWorker.close(),
-    ]);
+    await Promise.all(
+      [
+        probeWorker,
+        subscriptionExpiryWorker,
+        orphanMediaReportWorker,
+        importExpiryWorker,
+        unassignedStudentsDigestWorker,
+        examControlRefreshWorker,
+        analyticsRefreshWorker,
+        attemptMarkingWorker,
+        resultAdjustmentWorker,
+        attemptAutoSubmitWorker,
+        examHealthMonitorWorker,
+        retentionWorker,
+      ].map((w) => closeBounded(w)),
+    );
     await subscriptionExpiryQueue.close();
     await orphanMediaReportQueue.close();
     await importExpiryQueue.close();
@@ -419,7 +458,10 @@ async function main() {
   // process.on expects a void-returning listener; wrapping avoids handing
   // it an async function directly (whose rejection would otherwise be
   // unhandled) — see @typescript-eslint/no-misused-promises.
+  let shuttingDown = false;
   const onSignal = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     void shutdown().catch((err: unknown) => {
       logger.error({ err }, 'Error during shutdown');
       process.exit(1);

@@ -568,6 +568,17 @@ export class AttemptLifecycleService {
           examId: attempt.examId,
           studentProfileId: attempt.studentProfileId,
         });
+        // B22: the audit row commits with the transition, so a failure
+        // after commit can neither lose it nor turn a successful
+        // submission into an error.
+        await this.audit.recordInTx(tx, {
+          schoolId,
+          actorUserId: auditCtx.actorUserId,
+          actorRole: auditCtx.actorRole,
+          action: 'ATTEMPT_SUBMITTED',
+          entityType: 'ExamAttempt',
+          entityId: attemptId,
+        });
       }
       return transition;
     });
@@ -586,16 +597,8 @@ export class AttemptLifecycleService {
       });
     }
 
-    await this.audit.record({
-      schoolId,
-      actorUserId: auditCtx.actorUserId,
-      actorRole: auditCtx.actorRole,
-      action: 'ATTEMPT_SUBMITTED',
-      entityType: 'ExamAttempt',
-      entityId: attemptId,
-    });
     await this.stream.publishSoon(schoolId, attempt.examId);
-    await this.marking.enqueue({ schoolId, attemptId }, `mark-${attemptId}`);
+    await this.marking.enqueueAfterCommit({ schoolId, attemptId });
 
     const updated = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     return toAttemptStateResponseDto(updated);
@@ -643,6 +646,14 @@ export class AttemptLifecycleService {
           examId: attempt.examId,
           studentProfileId: attempt.studentProfileId,
         });
+        await this.audit.recordInTx(tx, {
+          schoolId,
+          actorUserId: auditCtx.actorUserId,
+          actorRole: auditCtx.actorRole,
+          action: 'ATTEMPT_ENDED_BY_STAFF',
+          entityType: 'ExamAttempt',
+          entityId: attemptId,
+        });
       }
       return transition;
     });
@@ -653,16 +664,8 @@ export class AttemptLifecycleService {
       });
     }
 
-    await this.audit.record({
-      schoolId,
-      actorUserId: auditCtx.actorUserId,
-      actorRole: auditCtx.actorRole,
-      action: 'ATTEMPT_ENDED_BY_STAFF',
-      entityType: 'ExamAttempt',
-      entityId: attemptId,
-    });
     await this.stream.publishUpdate(schoolId, attempt.examId);
-    await this.marking.enqueue({ schoolId, attemptId }, `mark-${attemptId}`);
+    await this.marking.enqueueAfterCommit({ schoolId, attemptId });
 
     const updated = await loadAttemptHeaderOrThrow(schoolId, attemptId);
     return toAttemptStateResponseDto(updated);

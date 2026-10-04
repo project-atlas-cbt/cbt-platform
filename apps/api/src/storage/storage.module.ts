@@ -40,6 +40,16 @@ export { S3_CLIENT };
           },
           systemClockOffset: config.get('S3_SYSTEM_CLOCK_OFFSET_MS', { infer: true }),
           forcePathStyle: true,
+          // B22 (08 §25): without these a storage endpoint that stops
+          // answering held each call for the OS TCP timeout (minutes) per
+          // SDK attempt. Every call now fails within a bounded time, and the
+          // caller keeps its retry state.
+          maxAttempts: config.get('S3_MAX_ATTEMPTS', { infer: true }),
+          requestHandler: {
+            connectionTimeout: config.get('S3_CONNECT_TIMEOUT_MS', { infer: true }),
+            requestTimeout: config.get('S3_REQUEST_TIMEOUT_MS', { infer: true }),
+            throwOnRequestTimeout: true,
+          },
         });
       },
     },

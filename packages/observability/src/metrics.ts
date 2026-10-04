@@ -80,6 +80,20 @@ export function examInstruments(): ExamInstruments {
   return instruments;
 }
 
+export type DegradedDependency = 'redis' | 'storage' | 'database' | 'queue';
+
+let fallbackCounter: Counter | undefined;
+
+/** B22 (08 §25): counts every time a request or job carried on without a
+ * failed dependency — a rate limit enforced in memory, a cache bypassed, an
+ * enqueue left to the reconciliation sweep. Non-zero means degraded. */
+export function recordDependencyFallback(dependency: DegradedDependency, component: string): void {
+  fallbackCounter ??= meter().createCounter('atlas.dependency.fallback', {
+    description: 'Operations that fell back because a dependency was unavailable.',
+  });
+  fallbackCounter.add(1, { dependency, component });
+}
+
 /** Observable gauges registered by the worker's health job, which already
  * computes these each tick. */
 export function registerHealthGauges(

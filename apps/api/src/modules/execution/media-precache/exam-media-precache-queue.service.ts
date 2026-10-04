@@ -2,7 +2,12 @@ import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } fro
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import { redisConnectionFromUrl, type Env } from '@atlas/config';
-import { EXAM_MEDIA_PRECACHE_QUEUE_NAME, type ExamMediaPrecacheJobPayload } from '@atlas/domain';
+import {
+  FAILED_JOB_RETENTION,
+  EXAM_MEDIA_PRECACHE_QUEUE_NAME,
+  type ExamMediaPrecacheJobPayload,
+} from '@atlas/domain';
+import { withTimeout } from '../../../common/dependency-health.js';
 
 /** F20 — producer handle for the encrypted media pre-cache job. */
 @Injectable()
@@ -23,15 +28,19 @@ export class ExamMediaPrecacheQueueService implements OnModuleInit, OnApplicatio
 
   async enqueue(payload: ExamMediaPrecacheJobPayload): Promise<void> {
     if (!this.queue) throw new Error('Media pre-cache queue used before initialization.');
-    await this.queue.add('encrypt', payload, {
-      // One job per exam at a time — a lab of 40 manifests polling while
-      // encryption runs collapses into the single job already queued.
-      jobId: `precache-${payload.schoolId}-${payload.examId}`,
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 5_000 },
-      removeOnComplete: true,
-      removeOnFail: 20,
-    });
+    await withTimeout(
+      this.queue.add('encrypt', payload, {
+        // One job per exam at a time — a lab of 40 manifests polling while
+        // encryption runs collapses into the single job already queued.
+        jobId: `precache-${payload.schoolId}-${payload.examId}`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 5_000 },
+        removeOnComplete: true,
+        removeOnFail: FAILED_JOB_RETENTION,
+      }),
+      this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
+      'encrypt enqueue',
+    );
   }
 
   async onApplicationShutdown(): Promise<void> {

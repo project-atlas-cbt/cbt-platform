@@ -7,6 +7,7 @@ import {
   HeadObjectCommand,
   DeleteObjectCommand,
   PutObjectCommand,
+  PutBucketVersioningCommand,
   S3ServiceException,
   type S3Client,
 } from '@aws-sdk/client-s3';
@@ -63,9 +64,41 @@ export class ObjectStorageService implements OnModuleInit {
    * step the way local MinIO gets one. Against real AWS S3, the bucket is
    * provisioned by B23's infra/IaC ahead of time — HeadBucket already
    * succeeding makes this a no-op there.
+   *
+   * B22 (08 §25): never fatal. A storage outage used to stop the API from
+   * booting at all — taking the exam answer path, which needs no storage,
+   * down with it whenever a task restarted. Now it is logged and the
+   * process starts; readiness reports storage as degraded.
+   * S3_ENSURE_BUCKET=false skips it entirely (production).
    */
   async onModuleInit(): Promise<void> {
-    await this.ensureBucket();
+    if (!this.config.get('S3_ENSURE_BUCKET', { infer: true })) return;
+    try {
+      await this.ensureBucket();
+      if (this.config.get('S3_ENSURE_VERSIONING', { infer: true })) await this.ensureVersioning();
+    } catch (error) {
+      this.logger.warn({
+        msg: 'Object storage unavailable at boot — starting degraded',
+        err: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      });
+    }
+  }
+
+  /** Dev/CI only (B22, 09 §22): MinIO supports bucket versioning; in
+   * production the bucket's versioning and lifecycle are infrastructure
+   * (B23) and the runtime role has no right to change them. */
+  async ensureVersioning(): Promise<void> {
+    await this.s3.send(
+      new PutBucketVersioningCommand({
+        Bucket: this.bucket,
+        VersioningConfiguration: { Status: 'Enabled' },
+      }),
+    );
+  }
+
+  /** Readiness probe: is the bucket reachable right now? */
+  async ping(): Promise<void> {
+    await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
   }
 
   async ensureBucket(): Promise<void> {

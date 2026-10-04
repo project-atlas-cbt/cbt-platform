@@ -11,6 +11,7 @@ import { buildErrorEnvelope } from '@atlas/validation';
 import { isKnownBaseErrorCode } from '@atlas/domain';
 import { captureError } from '@atlas/observability';
 import { AppHttpException } from './app-http-exception.js';
+import { classifyUnavailable, DEPENDENCY_RETRY_AFTER_SECONDS } from './dependency-errors.js';
 
 /**
  * Global filter: every non-2xx response leaves the API in the ADR-0033
@@ -52,6 +53,32 @@ export class HttpExceptionFilter implements ExceptionFilter {
           message,
           correlationId,
           details,
+        }),
+      );
+      return;
+    }
+
+    // B22 (08 §25): a dependency that is briefly unreachable (database
+    // connection lost, Redis or object storage down) is a 503 the client
+    // retries after a short wait, not an unexpected 500. Logged at warn with
+    // the dependency named; the cause is never echoed to the client.
+    const unavailable = classifyUnavailable(exception);
+    if (unavailable) {
+      this.logger.warn({
+        msg: 'Dependency unavailable',
+        dependency: unavailable,
+        err: exception,
+        correlationId,
+        method: req.method,
+        route: req.routeOptions?.url,
+      });
+      res.header('Retry-After', String(DEPENDENCY_RETRY_AFTER_SECONDS));
+      res.status(HttpStatus.SERVICE_UNAVAILABLE).send(
+        buildErrorEnvelope({
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'The service is temporarily unavailable. Please try again shortly.',
+          correlationId,
+          retryable: true,
         }),
       );
       return;

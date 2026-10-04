@@ -24,7 +24,9 @@ export {
   shutdownMetrics,
   examInstruments,
   registerHealthGauges,
+  recordDependencyFallback,
   type AnswerSaveOutcome,
+  type DegradedDependency,
 } from './metrics.js';
 export {
   initSentry,

@@ -242,6 +242,19 @@ export class SecurityFixture {
     return identifiers;
   }
 
+  /** B22: a sign-in attempt with any password (brute-force tests). */
+  async loginWithPassword(
+    app: NestFastifyApplication,
+    school: FixtureSchool,
+    identifier: string,
+    password: string,
+    ip: string,
+  ): Promise<{ status: number }> {
+    const base = { ...(await csrfContext(app, school.host)), ip };
+    const res = await call(app, base, 'POST', '/auth/login', { identifier, password });
+    return { status: res.statusCode };
+  }
+
   /** Signs in by identifier from a caller-chosen client IP (lab NAT). */
   async loginIdentifier(
     app: NestFastifyApplication,

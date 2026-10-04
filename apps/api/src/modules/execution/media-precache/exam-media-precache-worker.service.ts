@@ -4,6 +4,7 @@ import { Worker } from 'bullmq';
 import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import { EXAM_MEDIA_PRECACHE_QUEUE_NAME, type ExamMediaPrecacheJobPayload } from '@atlas/domain';
 import { ExamMediaPrecacheService } from './exam-media-precache.service.js';
+import { closeWorkerBounded } from '../../../common/bounded-close.js';
 
 /**
  * F20 — the pre-cache consumer. Hosted in the API process (object storage
@@ -46,6 +47,6 @@ export class ExamMediaPrecacheWorkerService implements OnModuleInit, OnApplicati
 
   async onApplicationShutdown(): Promise<void> {
     if (this.purgeTimer) clearInterval(this.purgeTimer);
-    await this.worker?.close();
+    if (this.worker) await closeWorkerBounded(this.worker, this.logger);
   }
 }

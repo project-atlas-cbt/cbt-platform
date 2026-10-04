@@ -2,6 +2,8 @@ import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } fro
 import { ConfigService } from '@nestjs/config';
 import { Queue, type ConnectionOptions } from 'bullmq';
 import { redisConnectionFromUrl, type Env } from '@atlas/config';
+import { FAILED_JOB_RETENTION } from '@atlas/domain';
+import { withTimeout } from '../../common/dependency-health.js';
 
 export const IMPORT_VALIDATION_QUEUE_NAME = 'atlas-import-validation';
 export const IMPORT_COMMIT_QUEUE_NAME = 'atlas-import-commit';
@@ -82,18 +84,26 @@ export class ImportQueueService implements OnModuleInit, OnApplicationShutdown {
    * so a future lifecycle change fails loudly instead of leaving a job
    * stuck in PENDING_VALIDATION/VALIDATED forever with no error anywhere. */
   async enqueueValidation(schoolId: string, importJobId: string): Promise<void> {
-    await this.requireQueue(this.validationQueue, 'validationQueue').add(
-      'validate',
-      { schoolId, importJobId },
-      { jobId: importJobId, removeOnComplete: true, removeOnFail: 10 },
+    await withTimeout(
+      this.requireQueue(this.validationQueue, 'validationQueue').add(
+        'validate',
+        { schoolId, importJobId },
+        { jobId: importJobId, removeOnComplete: true, removeOnFail: FAILED_JOB_RETENTION },
+      ),
+      this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
+      'queue enqueue',
     );
   }
 
   async enqueueCommit(schoolId: string, importJobId: string): Promise<void> {
-    await this.requireQueue(this.commitQueue, 'commitQueue').add(
-      'commit',
-      { schoolId, importJobId },
-      { jobId: importJobId, removeOnComplete: true, removeOnFail: 10 },
+    await withTimeout(
+      this.requireQueue(this.commitQueue, 'commitQueue').add(
+        'commit',
+        { schoolId, importJobId },
+        { jobId: importJobId, removeOnComplete: true, removeOnFail: FAILED_JOB_RETENTION },
+      ),
+      this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
+      'queue enqueue',
     );
   }
 

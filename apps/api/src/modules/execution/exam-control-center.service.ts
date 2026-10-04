@@ -50,7 +50,8 @@ export class ExamControlCenterService {
       });
     }
 
-    const cached = await this.redis.get(examControlChannel(schoolId, examId));
+    // B22: a Redis outage means a live compute from the database, not a 500.
+    const cached = await this.redis.get(examControlChannel(schoolId, examId)).catch(() => null);
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as ExamControlCenterResponseDto;

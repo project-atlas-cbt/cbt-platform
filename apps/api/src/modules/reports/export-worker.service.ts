@@ -5,6 +5,7 @@ import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import { EXPORT_EXPIRY_QUEUE_NAME, EXPORT_QUEUE_NAME, type ExportJobPayload } from '@atlas/domain';
 import { ExportService } from './export.service.js';
 import { LoadMonitorService } from '../../load/load-monitor.service.js';
+import { closeWorkerBounded } from '../../common/bounded-close.js';
 
 /** A real BullMQ consumer; S3 access stays behind B4's API-owned abstraction. */
 @Injectable()
@@ -51,7 +52,7 @@ export class ExportWorkerService implements OnModuleInit, OnApplicationShutdown 
   }
   async onApplicationShutdown(): Promise<void> {
     if (this.sweepTimer) clearInterval(this.sweepTimer);
-    await this.worker?.close();
-    await this.expiryWorker?.close();
+    const workers = [this.worker, this.expiryWorker].filter((w) => w !== undefined);
+    await Promise.all(workers.map((w) => closeWorkerBounded(w, this.logger)));
   }
 }

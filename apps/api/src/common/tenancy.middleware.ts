@@ -68,14 +68,14 @@ export class TenancyMiddleware implements NestMiddleware {
         );
       })
       .catch((err: unknown) => {
-        // A lookup failure resolves no tenant rather than failing the
-        // whole request — this is a resolution primitive, not an
-        // authorization gate. GET /v1/health/ready already reports a
-        // database outage distinctly; letting every other request 500 on
-        // top of that would just be noise. B1/B2 decide what an
-        // unresolved tenant means for a route that actually needs one.
+        // A lookup failure does not fail the request here — this is a
+        // resolution primitive, and routes that never read the tenant
+        // (health probes) must keep working. B22: it is flagged, so any
+        // route that does read the tenant answers 503 + Retry-After (the
+        // client retries) rather than treating the host as naming no
+        // school, which signed mid-exam students out with a 401.
         this.logger.warn({ msg: 'School lookup failed for subdomain', err, subdomain });
-        this.tenancy.run({ schoolId: null, subdomain }, next);
+        this.tenancy.run({ schoolId: null, subdomain, lookupFailed: true }, next);
       });
   }
 }
