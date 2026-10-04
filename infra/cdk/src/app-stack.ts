@@ -447,6 +447,7 @@ export class AppStack extends Stack {
       description: `CNAME ${schoolApiHosts} and ${apiHost} to this at Vercel DNS`,
     });
     new CfnOutput(this, 'ClusterName', { value: this.cluster.clusterName });
+    new CfnOutput(this, 'MediaBucket', { value: data.mediaBucket.bucketName });
     new CfnOutput(this, 'ApiServiceName', { value: this.apiService.serviceName });
     new CfnOutput(this, 'WorkerServiceName', { value: this.workerService.serviceName });
     new CfnOutput(this, 'OpsTaskDefinition', { value: this.migrationTask.family });
