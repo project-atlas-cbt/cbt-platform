@@ -62,10 +62,18 @@ export const STUDENT = {
 
 export async function signIn(page: Page, identifier: string): Promise<void> {
   await page.goto(schoolUrl('/login'));
-  await page.getByLabel('Username or Student ID').fill(identifier);
-  await page.getByLabel('Password').fill(fixture().password);
+  // Sign in is enabled only once the form has hydrated and the school is
+  // resolved. Typing before that is lost: hydration resets the controlled
+  // inputs, and the submit then fails validation without any request (a
+  // WebKit flake in CI). So wait first, then fill, then confirm the values held.
   const signIn = page.getByRole('button', { name: 'Sign in' });
   await expect(signIn).toBeEnabled();
+  const user = page.getByLabel('Username or Student ID');
+  const password = page.getByLabel('Password');
+  await user.fill(identifier);
+  await password.fill(fixture().password);
+  await expect(user).toHaveValue(identifier);
+  await expect(password).toHaveValue(fixture().password);
   // What the browser saw, reported if sign-in does not land: on CI the
   // report artifact may be unreachable, so the failure message must say why.
   const seen: string[] = [];
@@ -92,6 +100,11 @@ export async function signIn(page: Page, identifier: string): Promise<void> {
       timeout: 30_000,
     });
   } catch (error) {
+    const messages = await page
+      .locator('[role="alert"], [id$="-form-item-message"]')
+      .allInnerTexts()
+      .catch(() => []);
+    for (const m of messages) if (m.trim()) seen.push(`on page: ${m.trim()}`);
     throw new Error(
       `sign-in did not land (${page.url()}):\n  ${seen.slice(-20).join('\n  ') || '(no browser errors)'}`,
       { cause: error },
