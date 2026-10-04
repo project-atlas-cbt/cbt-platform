@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   DeleteObjectCommand,
   PutObjectCommand,
   PutBucketVersioningCommand,
@@ -251,6 +252,24 @@ export class ObjectStorageService implements OnModuleInit {
         Body: params.body,
       }),
     );
+  }
+
+  /** B22: every key under a prefix (the redaction register — small). */
+  async listKeys(prefix: string): Promise<string[]> {
+    const keys: string[] = [];
+    let token: string | undefined;
+    do {
+      const page = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ...(token && { ContinuationToken: token }),
+        }),
+      );
+      for (const o of page.Contents ?? []) if (o.Key) keys.push(o.Key);
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
+    return keys;
   }
 
   /** B18 export cleanup; callers must first transition their authoritative job row. */

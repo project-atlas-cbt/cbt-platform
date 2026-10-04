@@ -1583,6 +1583,13 @@ model ImportJob {
   /// is the process that held it having died.
   processingClaimedAt DateTime? @map("processing_claimed_at") @db.Timestamptz(6)
 
+  /// B22 (ADR-0028 retention; project-owner decision 6A, 2026-10-04): when
+  /// the uploaded source file was deleted from object storage — 90 days
+  /// after the job finished (with the raw cells), or at once when any person
+  /// it created is redacted (the whole file: it holds other people's rows
+  /// too). The job row and its outcome counts stay as the record.
+  sourcePurgedAt DateTime? @map("source_purged_at") @db.Timestamptz(6)
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
