@@ -67,6 +67,9 @@ export class AppStack extends Stack {
 
     const environment: Record<string, string> = {
       NODE_ENV: 'production',
+      // Which deployment this is; tools that write test data refuse anything
+      // but staging (tools/load/src/golden-path.ts).
+      ATLAS_ENVIRONMENT: env.name,
       PRODUCT_NAME: inputs.productName,
       PLATFORM_ROOT_DOMAIN: inputs.rootDomain,
       COOKIE_DOMAIN: inputs.rootDomain,

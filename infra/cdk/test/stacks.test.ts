@@ -143,6 +143,7 @@ describe.each(['staging', 'production'] as const)('%s', (environment) => {
 
     expect(envOf(api)).toMatchObject({
       NODE_ENV: 'production',
+      ATLAS_ENVIRONMENT: environment,
       TRUST_PROXY_HOPS: '1',
       PLATFORM_ROOT_DOMAIN: 'example.ng',
       COOKIE_DOMAIN: 'example.ng',

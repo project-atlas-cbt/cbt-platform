@@ -2,7 +2,7 @@
   "name": "project-atlas",
   "private": true,
   "version": "0.0.0",
-  "description": "Project Atlas — multi-tenant CBT platform (monorepo root).",
+  "description": "Project Atlas \u2014 multi-tenant CBT platform (monorepo root).",
   "engines": {
     "node": ">=22.18.0 <25.0.0"
   },
@@ -10,9 +10,10 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
-    "lint": "turbo run lint && pnpm lint:schema",
+    "lint": "turbo run lint && pnpm lint:schema && pnpm lint:migrations",
     "lint:fix": "turbo run lint -- --fix",
     "lint:schema": "node scripts/lint-schema-tenancy.mjs",
+    "lint:migrations": "node --test scripts/lint-migrations.test.mjs && node scripts/lint-migrations.mjs",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration --concurrency=1 --filter=!@atlas/tests-cross-cutting && turbo run test:integration --filter=@atlas/tests-cross-cutting",

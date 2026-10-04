@@ -37,7 +37,13 @@ loadRootEnv();
 
 const ARGON2 = { memoryCost: 19456, timeCost: 2, parallelism: 1 } as const;
 
-if (process.env.ATLAS_ENVIRONMENT === 'production') {
+// Fail closed: a production-mode process (every deployed task) may run
+// this only when its deployment declares itself staging (infra/cdk sets
+// ATLAS_ENVIRONMENT on every task).
+if (
+  process.env.ATLAS_ENVIRONMENT === 'production' ||
+  (process.env.NODE_ENV === 'production' && process.env.ATLAS_ENVIRONMENT !== 'staging')
+) {
   throw new Error('The golden path writes test data; it never runs against production.');
 }
 
