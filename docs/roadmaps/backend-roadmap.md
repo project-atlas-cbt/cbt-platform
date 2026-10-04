@@ -68,7 +68,7 @@ If a future decision is reopened or superseded, the affected phases return to **
 | B20 | Security Hardening & Compliance    | 0028                               | F20           | COMPLETE    |
 | B21 | Performance & Load                 | 0032                               | F20           | COMPLETE    |
 | B22 | Failure, Recovery & DR             | —                                  | —             | IMPLEMENTED |
-| B23 | Production Readiness & Launch      | —                                  | F21           | NOT STARTED |
+| B23 | Production Readiness & Launch      | —                                  | F21           | IN PROGRESS |
 
 ---
 
@@ -4510,7 +4510,12 @@ CHANGE-LOG entry.
 
 # B23 — Production Readiness & Launch
 
-**Status:** NOT STARTED · **Gating ADRs:** none (consumes prior decisions)
+**Status:** IN PROGRESS (2026-10-04) · **Gating ADRs:** none (consumes prior decisions) ·
+**Owner decisions (2026-10-04):** region `af-south-1` (ADR-0032 amendment); AWS CDK; RDS Multi-AZ
+instance + RDS Proxy; staging on merge to `dev`, production on a version tag with a required
+approver; per-school API hosts `<school>.api.<root>` (ADR-0022 amendment); Amazon SES (ADR-0019
+amendment); audit `M-08`/`M-09` built here (ADR-0020 amendment); staging may be provisioned from a
+Claude session, production is applied by Haneef.
 
 ## Objective
 
@@ -4606,6 +4611,41 @@ Requires every prior phase complete. This is the final integration gate.
 - Multi-region deployment.
 - Formal certification and third-party penetration testing (schedule post-launch unless commercially required earlier).
 
+## Implementation status (2026-10-04)
+
+Built and tested in the repository; nothing has been provisioned yet (no AWS account or domain
+existed when this was written). Detail: `CHANGE-LOG.md` 2026-10-04 "B23".
+
+| DoD                                                              | State                    | Evidence / what remains                                                                                                                                                                                                        |
+| ---------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Infrastructure as code, reproducible                          | ✅ built                 | `infra/cdk` (5 stacks); 26 template tests in `infra/cdk/test/stacks.test.ts`; `cdk synth` for both environments. Not yet deployed.                                                                                             |
+| 2. Staging mirrors production                                    | ⏳ waiting               | Same code, sizes differ only (`infra/cdk/src/config.ts`). Needs the staging account.                                                                                                                                           |
+| 3. CI/CD staging auto, production controlled, rollback rehearsed | ⚠️ built, not rehearsed  | `.github/workflows/deploy.yml`, `deploy-release.yml`, `rollback.yml`; rehearsal on staging (launch checklist 2.3–2.4).                                                                                                         |
+| 4. Backward-aware migrations                                     | ✅ built                 | `scripts/lint-migrations.mjs` (in `pnpm lint`); CI "Golden path and mixed-version rollout" job (base API + head worker, head API + base worker, rehearsed locally against `dev`). Production-sized rehearsal is checklist 2.5. |
+| 5. Golden path on staging                                        | ⚠️ built, passes locally | `tools/load/src/golden-path.ts` (20 steps, `09 §39`), in CI and the staging deploy. Staging run waits on 2.                                                                                                                    |
+| 6. Monitoring and alerting routed to on-call                     | ⚠️ built                 | Eleven CloudWatch alarms incl. SES reputation → SNS email; Exam Health Monitor over SES. Live once deployed (checklist 2.11–2.12).                                                                                             |
+| 7. Backups in production, restore verified there                 | ⏳ waiting               | 35-day PITR configured and asserted; production restore is checklist 3.4.                                                                                                                                                      |
+| 8. Runbooks and incident response documented and rehearsed       | ⚠️ documented            | `docs/operations/` on-call, operator access, deploy, infrastructure; game day is checklist 2.13.                                                                                                                               |
+| 9. Onboarding and lab-preparation docs                           | ✅                       | `docs/operations/school-onboarding.md`, `lab-preparation.md` (R-09, R-10).                                                                                                                                                     |
+| 10. Launch checklist complete, go/no-go passed                   | ⚠️ checklist written     | `docs/operations/launch-checklist.md` with the go/no-go template.                                                                                                                                                              |
+| 11. Pilot examination                                            | ⏳ waiting               | Needs a pilot school.                                                                                                                                                                                                          |
+| 12. CLAUDE.md and roadmaps reflect the state                     | ✅                       | This section, the tracking table, `CLAUDE.md`.                                                                                                                                                                                 |
+
+**Exit criteria:** audit BLOCKER/HIGH closure in `docs/audit/blocker-high-closure.md` — 57 of 58
+closed; `R-03` waits on the staging level-1,000 run. Pilot and go/no-go not yet held.
+
+**Also delivered:** production image (`infra/docker/Dockerfile.prod`, scanned in CI); connection
+URLs composed from Secrets Manager values (`packages/config` `composeConnectionUrls`); runtime
+database roles created by the migration wrapper (`ensureRuntimeRoles`); read-only post-deploy
+smoke (`tools/load/src/smoke.ts`); `ops:create-software-admin`; per-school API host parsing.
+
+**Feature flags (`08 §23`):** typed environment toggles in `packages/config`, changed by
+deployment; no runtime flag service (reasoning in `docs/operations/deploy-and-rollback.md`).
+
+**Not done, carried:** Actions SHA pinning beyond Trivy (pinning needs reading other repositories,
+outside this session's scope); platform-account password change does not exist (rotation is
+recreate); `actionlint` not run locally.
+
 ---
 
 ## Cross-Phase Requirements
@@ -4655,5 +4695,5 @@ Rows B0–B9 were left at their original NOT STARTED placeholder since this tabl
 | B19   | IN PROGRESS | 2026-09-20 | —          | Decided: ADR-0026. Status corrected 2026-10-04 (F20): implemented (migrations 2026-09-20, F19 consumes it) but its own section is still IN PROGRESS with no completion entry — not marked complete here.                                                                         |
 | B20   | COMPLETE    | 2026-10-02 | 2026-10-02 | Decided: ADR-0028 (amended 2026-10-02). Status corrected 2026-10-04 (F20).                                                                                                                                                                                                       |
 | B21   | COMPLETE    | 2026-10-02 | 2026-10-03 | Decided: ADR-0032 (revisit condition met; region to owner at B23). DoD 1/4 at 1,000 attempts gated to the B23 staging re-run (owner decision).                                                                                                                                   |
-| B22   | NOT STARTED | —          | —          |                                                                                                                                                                                                                                                                                  |
-| B23   | NOT STARTED | —          | —          |                                                                                                                                                                                                                                                                                  |
+| B22   | IMPLEMENTED | 2026-10-04 | —          | DoD 6–9 partial until B23 staging (failover, PITR on production-sized data, runbook walkthrough). Status corrected 2026-10-04 (B23).                                                                                                                                             |
+| B23   | IN PROGRESS | 2026-10-04 | —          | Owner decisions: af-south-1, CDK, Multi-AZ + RDS Proxy, tag + approval, per-school API host, SES, signals built in B23. Code and docs delivered; DoD 2–3, 5–8, 10–11 wait on accounts, staging, legal review and the pilot.                                                      |

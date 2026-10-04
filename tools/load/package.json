@@ -12,7 +12,9 @@
     "provision": "tsx src/cli.ts provision",
     "dataset": "tsx src/dataset.ts",
     "rtt-probe": "tsx src/rtt-probe.ts",
-    "e2e-fixture": "tsx src/e2e-fixture.ts"
+    "e2e-fixture": "tsx src/e2e-fixture.ts",
+    "golden-path": "tsx src/golden-path.ts",
+    "smoke": "tsx src/smoke.ts"
   },
   "dependencies": {
     "@atlas/config": "workspace:*",

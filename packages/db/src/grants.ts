@@ -76,3 +76,40 @@ export async function grantAuditReaderRole(ownerConnectionUrl: string): Promise<
     await owner.$disconnect();
   }
 }
+
+/**
+ * B23: creates (or re-passwords) the two restricted runtime roles on a
+ * managed database, where there is no `infra/postgres/init.sql`. Passwords
+ * come from Secrets Manager via the task's environment and are rotated
+ * there; re-running this after a rotation brings the database in line.
+ * Neither role is ever a superuser — that would bypass RLS (ADR-0023).
+ * Idempotent. Run as the schema owner, before `migrate deploy`.
+ */
+export async function ensureRuntimeRoles(
+  ownerConnectionUrl: string,
+  passwords: { app: string; auditReader: string },
+): Promise<void> {
+  const owner = createPrismaClient(ownerConnectionUrl);
+  try {
+    for (const [role, password] of [
+      ['atlas_app', passwords.app],
+      ['atlas_audit_reader', passwords.auditReader],
+    ] as const) {
+      // The password is bound as a parameter and quoted by Postgres's own
+      // format(%L), never interpolated here, and never logged.
+      const [statement] = await owner.$queryRawUnsafe<{ sql: string }[]>(
+        `SELECT format(
+           CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)
+             THEN 'ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD %L'
+             ELSE 'CREATE ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD %L'
+           END, $1::text, $2::text) AS sql`,
+        role,
+        password,
+      );
+      if (!statement) throw new Error(`could not prepare role statement for ${role}`);
+      await owner.$executeRawUnsafe(statement.sql);
+    }
+  } finally {
+    await owner.$disconnect();
+  }
+}

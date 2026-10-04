@@ -2,6 +2,100 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-04 — B23 Production Readiness & Launch (in progress)
+
+B23's repository work is done and B23 stays **IN PROGRESS**. The rest needs an AWS account, the
+domain, a staging run, the legal review and a pilot school. Per-DoD state is in the roadmap's B23
+"Implementation status" table; what is still open is in `docs/operations/launch-checklist.md`.
+
+**Owner decisions:** `af-south-1` (ADR-0032 amendment); AWS CDK; RDS Multi-AZ instance + RDS
+Proxy; staging deploys on merge to `dev`, production on a `v*` tag after a required reviewer;
+per-school API hosts `<school>.api.<root>` (ADR-0022 amendment, resolving a conflict with
+ADR-0005's host-based tenancy); Amazon SES (ADR-0019 amendment); invigilator signals (`M-08`,
+`M-09`) built in B23 (ADR-0020 amendment). Staging may be provisioned from a Claude session;
+production is applied by Haneef.
+
+**Shipped**
+
+- **Infrastructure as code** (`infra/cdk`, 5 stacks per environment):
+  - 3-AZ VPC with an isolated data tier.
+  - PostgreSQL 18.3 Multi-AZ with 35-day PITR, forced TLS, behind RDS Proxy (app roles only).
+  - Valkey with TLS, AUTH and `noeviction`.
+  - KMS-encrypted, versioned S3 bucket with 35-day noncurrent expiry and school-origin CORS.
+  - Immutable ECR repositories.
+  - Fargate API and worker services with circuit-breaker rollback, and an ops task.
+  - ALB with TLS 1.3, WAF, and a wildcard `*.api.<root>` certificate.
+  - Generated secrets, an SES identity, and 11 alarms routed to SNS on-call.
+  - GitHub OIDC deploy role scoped to the GitHub environment.
+  - 26 template tests assert the properties that matter.
+- **Production image** (`infra/docker/Dockerfile.prod`): a non-root `server` target with
+  production dependencies only, scanned by Trivy in CI, plus an `ops` target for migrations and
+  tools.
+- **Configuration from secrets:**
+  - Database and Redis URLs are composed at boot from host and password variables
+    (`composeConnectionUrls`).
+  - The migration wrapper creates and re-asserts `atlas_app` and `atlas_audit_reader`
+    (`ensureRuntimeRoles`).
+  - API and worker tasks never receive the schema owner's password.
+- **Email:** `SesNotificationChannel`. Production refuses to boot without
+  `NOTIFICATION_TRANSPORT=ses` and a sender address.
+- **Deploy pipeline** (`deploy.yml`, `deploy-release.yml`, `rollback.yml`):
+  - Steps run in order: build, migrate with the new ops image inside the VPC, `cdk deploy`,
+    read-only smoke, and the golden path on staging.
+  - Rollback redeploys an earlier immutable tag and does not migrate.
+  - CI now also runs on pushes to `dev`, the default branch.
+- **Migration safety:**
+  - `pnpm lint:migrations` flags contract-shaped DDL after the launch baseline unless the file
+    marks it `-- atlas:contract <reason>`.
+  - A new CI job runs the golden path on head, then with the base commit's API, then with the
+    base commit's worker, all on head's schema.
+- **Golden path** (`tools/load/src/golden-path.ts`): the `09 §39` journey in 20 steps over HTTP.
+  - It checks that the attempt package carries no answer key (X-05) and that a stale replay is
+    refused (ADR-0007).
+  - It refuses to run in any production-mode process that is not declared staging.
+- **Smoke** (`tools/load/src/smoke.ts`): read-only and safe on production.
+- **Invigilator signals** (`M-08`, `M-09`):
+  - Each live-attempt row carries `lastSeenAt`, `disconnected` (nothing heard for more than 90 s)
+    and per-type signal counts.
+  - The Control Center table shows a Disconnected badge, and those rows sort first among students
+    in progress. Non-zero signal counts appear in plain, uncoloured words.
+- **Operators:** `ops:create-software-admin` generates a password and emails it, never printing
+  it in production, and records an audit event.
+- **Docs** (`docs/operations/`):
+  - `infrastructure.md`, `deploy-and-rollback.md`, `migrations.md`
+  - `on-call-and-incident-response.md`, `operator-access.md`
+  - `school-onboarding.md`, `lab-preparation.md`
+  - `launch-checklist.md` (with the go/no-go template)
+  - `docs/audit/blocker-high-closure.md`: 57 of 58 BLOCKER/HIGH closed; R-03 waits on staging.
+  - Updates to the domain plan and the retention schedule (a proposed logs row).
+
+**Tested:** CDK template tests 26/26; config 33; SES channel 3; migration lint 4; domain 4;
+`exam-control` integration 17/17; worker control refresh 5/5; web exam-control 83; the golden path
+passed locally on head, base-API and base-worker fleets; smoke passed locally; the runtime-roles
+integration test passed; operator command rehearsed locally (account created, audited, sign-in
+hash path shared). Full gates are listed in the PR.
+
+**Not verified here:**
+
+- The production Docker image was not built locally, because Docker Hub rate-limited this
+  environment. CI builds and scans it.
+- Nothing has been deployed.
+- `actionlint` was not run.
+
+**Carried to the launch checklist:**
+
+- Accounts, domain and DNS at Vercel.
+- Leaving the SES sandbox, plus DKIM, SPF and DMARC.
+- Sentry project.
+- Staging: provisioning, encryption-at-rest checks, rollback rehearsal, production-sized migration
+  rehearsal, the level-1,000 load run and proxy pinning check (R-03), failover and PITR
+  measurements, and a game day.
+- Production backup and restore.
+- Legal review of retention and the DPA.
+- B19 closure; F16, F18 and F19 browser coverage; F20 manual checks.
+- The pilot.
+- Platform accounts have no password change. Rotating a password means recreating the account.
+
 ### 2026-10-04 — B22 Failure, Recovery & Disaster Recovery
 
 B22 is implemented. **DoD 6–9 are partial by project-owner decision** (1A, 2, 4A): restore, PITR

@@ -9,7 +9,13 @@
  * key-value storage and pub/sub channels in separate namespaces, so no
  * collision is possible; one function serves both purposes.
  */
-import type { ExamSessionStatus, ExamSessionType, ExamStatus } from '../exams/constants.js';
+import {
+  ATTEMPT_EVENT_TYPES,
+  type AttemptEventType,
+  type ExamSessionStatus,
+  type ExamSessionType,
+  type ExamStatus,
+} from '../exams/constants.js';
 
 export function examControlChannel(schoolId: string, examId: string): string {
   return `atlas:exam-control:${schoolId}:${examId}`;
@@ -75,6 +81,45 @@ export interface ExamControlCenterStalenessSnapshot {
   thresholdMs: number;
 }
 
+/**
+ * B23 (audit M-09, ADR-0020): an attempt is shown as disconnected when the
+ * server has heard nothing from it — no heartbeat (every 30 s ± 10 %, F13)
+ * and no answer save — for this long: three missed heartbeats, and above
+ * the once-a-minute timer floor browsers apply to hidden tabs. Derived at
+ * read time from `ExamAttempt.last_seen_at`, never stored.
+ */
+export const DISCONNECTED_AFTER_MS = 90_000;
+
+export function isDisconnected(lastSeenAt: Date, nowMs: number): boolean {
+  return nowMs - lastSeenAt.getTime() > DISCONNECTED_AFTER_MS;
+}
+
+/** B23 (audit M-08, ADR-0020): per-type integrity-signal counts for one
+ * attempt — counts, never judgements; every type is present (0 if none). */
+export type AttemptSignalCounts = Record<AttemptEventType, number>;
+
+export function attemptSignalCounts(
+  rows: readonly { type: AttemptEventType; count: number }[],
+): AttemptSignalCounts {
+  const counts = Object.fromEntries(ATTEMPT_EVENT_TYPES.map((t) => [t, 0])) as AttemptSignalCounts;
+  for (const row of rows) counts[row.type] += row.count;
+  return counts;
+}
+
+export interface ExamLiveAttemptSnapshot {
+  studentProfileId: string;
+  status: string;
+  timeRemainingSeconds: number | null;
+  studentName: string;
+  startedAt: string;
+  /** B23: when the server last heard from this attempt. */
+  lastSeenAt: string;
+  /** B23: `lastSeenAt` older than DISCONNECTED_AFTER_MS at `computedAt`. */
+  disconnected: boolean;
+  /** B23: integrity-signal counts by type (ADR-0020). */
+  signals: AttemptSignalCounts;
+}
+
 /** Shared by `GET /v1/exams/:id/control`'s response and every SSE event
  * this exam's channel publishes. */
 export interface ExamControlCenterSnapshot {
@@ -86,13 +131,7 @@ export interface ExamControlCenterSnapshot {
    * `studentName`/`startedAt` added post-B13 so the Control Center's live
    * attempt table can name rows and show a start time without a second
    * per-student join on the client. */
-  liveAttempts: {
-    studentProfileId: string;
-    status: string;
-    timeRemainingSeconds: number | null;
-    studentName: string;
-    startedAt: string;
-  }[];
+  liveAttempts: ExamLiveAttemptSnapshot[];
   staleness: ExamControlCenterStalenessSnapshot;
   computedAt: string;
 }

@@ -39,6 +39,18 @@ describe('parseTenantSubdomain (ADR-0005)', () => {
     expect(parseTenantSubdomain('foo.bar.localtest.me', ROOT)).toBeNull();
   });
 
+  it('resolves the per-school API host `<school>.api.<root>` (B23, ADR-0022 amendment)', () => {
+    expect(parseTenantSubdomain('greenfield.api.localtest.me', ROOT)).toBe('greenfield');
+    expect(parseTenantSubdomain('Greenfield.API.localtest.me:443', ROOT)).toBe('greenfield');
+    // The bare API host and reserved labels under it still name no school.
+    expect(parseTenantSubdomain('api.localtest.me', ROOT)).toBeNull();
+    expect(parseTenantSubdomain('admin.api.localtest.me', ROOT)).toBeNull();
+    expect(parseTenantSubdomain('api.api.localtest.me', ROOT)).toBeNull();
+    // Only one school label, and only directly under `api`.
+    expect(parseTenantSubdomain('a.b.api.localtest.me', ROOT)).toBeNull();
+    expect(parseTenantSubdomain('greenfield.apix.localtest.me', ROOT)).toBeNull();
+  });
+
   it('returns null when the Host header is missing', () => {
     expect(parseTenantSubdomain(undefined, ROOT)).toBeNull();
   });

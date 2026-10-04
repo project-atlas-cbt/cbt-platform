@@ -83,3 +83,19 @@ What B21 established regardless of region: answer saves do not depend on RTT for
 experience (the F13 offline queue confirms asynchronously; lab bursts on a 150 ms/1 %-loss profile
 passed), while **bandwidth, not latency, is the lab constraint** for media-heavy papers
 ([capacity plan](../performance/capacity-plan.md) §9).
+
+## Amendment — 2026-10-04 (B23): `af-south-1` chosen
+
+**Decision (project owner, B23 planning):** production and staging run in **`af-south-1`
+(Cape Town)**, replacing `eu-west-1`. The B21 measurement above favoured it on median RTT (115 ms
+against 186 ms), and bandwidth, not latency, remains the lab constraint either way.
+
+Consequences:
+
+- `af-south-1` is an **opt-in region**: it must be enabled on each AWS account before the first
+  deployment (`docs/operations/infrastructure.md`).
+- Every stack is pinned to it in `infra/cdk/src/config.ts`, and `infra/cdk/test/stacks.test.ts`
+  fails if a stack is defined anywhere else.
+- SES sends from the same region; the MAIL FROM MX record uses its endpoint.
+- Cross-region backup copy (B22) remains a separate, open decision.
+- Revisit only with probes from real school connections showing a consistently better region.

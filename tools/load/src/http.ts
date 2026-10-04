@@ -1,4 +1,5 @@
 import http from 'node:http';
+import https from 'node:https';
 import { performance } from 'node:perf_hooks';
 import type { Recorder } from './metrics.js';
 
@@ -16,6 +17,8 @@ export interface Target {
   port: number;
   /** `/v1` — the API's global prefix. */
   prefix: string;
+  /** B23: `https` against staging/production (TLS at the load balancer). */
+  secure?: boolean;
 }
 
 export function parseTargets(spec: string): Target[] {
@@ -23,10 +26,12 @@ export function parseTargets(spec: string): Target[] {
   // round-robined per virtual user (horizontal scaling without an LB).
   return spec.split(',').map((raw) => {
     const url = new URL(raw.trim());
+    const secure = url.protocol === 'https:';
     return {
       address: url.hostname,
-      port: Number(url.port || 80),
+      port: Number(url.port || (secure ? 443 : 80)),
       prefix: url.pathname === '/' ? '/v1' : url.pathname.replace(/\/$/, ''),
+      secure,
     };
   });
 }
@@ -71,7 +76,9 @@ export class Client {
     maxSockets = 4,
     private readonly timeoutMs = 30_000,
   ) {
-    this.agent = new http.Agent({ keepAlive: true, maxSockets });
+    this.agent = target.secure
+      ? new https.Agent({ keepAlive: true, maxSockets })
+      : new http.Agent({ keepAlive: true, maxSockets });
   }
 
   close(): void {
@@ -127,7 +134,8 @@ export class Client {
     const started = performance.now();
     const target = this.target;
     return new Promise<Response<T>>((resolve, reject) => {
-      const req = http.request(
+      const request = target.secure ? https.request : http.request;
+      const req = request(
         {
           host: target.address,
           port: target.port,
@@ -136,6 +144,8 @@ export class Client {
           headers,
           agent: this.agent,
           timeout: this.timeoutMs,
+          // TLS: the certificate is for the tenant host, not the address.
+          ...(target.secure ? { servername: this.host.split(':')[0] } : {}),
         },
         (res) => {
           const chunks: Buffer[] = [];

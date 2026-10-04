@@ -16,10 +16,9 @@ export interface NotificationMessage {
 
 /**
  * The channel abstraction every notification call site depends on,
- * instead of a concrete provider. B0 ships one implementation
- * (ConsoleNotificationChannel — a dev/console transport). Real provider
- * selection (SES/Postmark) and SPF/DKIM/DMARC configuration are deferred
- * to B23 per ADR-0019; B1/B3/B10 are the phases that actually call
+ * instead of a concrete provider. ConsoleNotificationChannel is the
+ * dev/CI transport; B23 added Amazon SES (apps/api's SesNotificationChannel,
+ * selected by NOTIFICATION_TRANSPORT). B1/B3/B10 are the phases that call
  * `send()` for real product messages (password reset, activation keys,
  * staff invitations, expiry warnings).
  */

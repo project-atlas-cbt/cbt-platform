@@ -14,6 +14,13 @@
 // image of this file's own job of never *resolving* one to a school.
 export const RESERVED_SUBDOMAIN_LABELS = new Set(['api', 'admin', 'www']);
 
+// B23 (ADR-0022 amendment, 2026-10-04): in production the browser on
+// `<school>.<root>` (Vercel) calls the API at `<school>.api.<root>` (AWS),
+// so the tenant still comes from the Host header (ADR-0005) and cookies
+// stay same-site under `<root>` (ADR-0022). Locally the API is addressed
+// at the school's own host on another port; both shapes resolve.
+const API_LABEL = 'api';
+
 /**
  * Extracts a candidate school subdomain label from an inbound `Host`
  * header, or `null` if the request isn't addressed to a school subdomain
@@ -55,7 +62,11 @@ export function parseTenantSubdomain(
     return null;
   }
 
-  const label = host.slice(0, host.length - suffix.length);
+  let label = host.slice(0, host.length - suffix.length);
+  const apiSuffix = `.${API_LABEL}`;
+  if (label.endsWith(apiSuffix)) {
+    label = label.slice(0, label.length - apiSuffix.length);
+  }
   if (label.length === 0 || label.includes('.') || RESERVED_SUBDOMAIN_LABELS.has(label)) {
     // Empty (defensive — endsWith already rules this out), a multi-label
     // prefix (school subdomains are a single DNS label, per

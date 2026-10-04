@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
+import { composeConnectionUrls } from './connection-urls.js';
 
 /**
  * pnpm/turbo run each app's scripts with that app's own directory as
@@ -21,10 +22,12 @@ export function loadRootEnv(startDir: string = process.cwd()): void {
       if (existsSync(envPath)) {
         dotenvConfig({ path: envPath });
       }
+      composeConnectionUrls();
       return;
     }
     const parent = dirname(dir);
-    if (parent === dir) return; // reached filesystem root without finding it
+    if (parent === dir) break; // reached filesystem root without finding it
     dir = parent;
   }
+  composeConnectionUrls();
 }

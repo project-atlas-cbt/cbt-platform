@@ -29,8 +29,10 @@ describe('loadEnv', () => {
     expect(() => loadEnv(rest)).toThrow(EnvValidationError);
   });
 
-  it('fails fast when DATABASE_URL is missing', () => {
-    const { DATABASE_URL: _omit, ...rest } = validEnv;
+  // B23: the app's own connection is the required one; the schema owner's
+  // DATABASE_URL is optional (only migrations and ops commands use it).
+  it('fails fast when DATABASE_APP_URL is missing', () => {
+    const { DATABASE_APP_URL: _omit, ...rest } = validEnv;
     expect(() => loadEnv(rest)).toThrow(EnvValidationError);
   });
 
@@ -91,7 +93,14 @@ describe('loadEnv — B20 production hardening', () => {
     MFA_ENCRYPTION_KEY: strong('Kq7m'),
     MEDIA_PRECACHE_SECRET: strong('Wn5r'),
     COOKIE_DOMAIN: 'school.example.ng',
+    NOTIFICATION_TRANSPORT: 'ses',
+    SES_FROM_ADDRESS: 'Atlas <no-reply@example.ng>',
   };
+
+  it('accepts a production API/worker task that is never given the schema owner URL (B23)', () => {
+    const { DATABASE_URL: _owner, ...taskEnv } = productionEnv;
+    expect(loadEnv(taskEnv).DATABASE_URL).toBeUndefined();
+  });
 
   it('accepts a hardened production environment, with Software Admin MFA required by default (F20)', () => {
     expect(loadEnv(productionEnv).PLATFORM_MFA_REQUIRED).toBe(true);
@@ -109,6 +118,10 @@ describe('loadEnv — B20 production hardening', () => {
     ['DATABASE_APP_URL', 'postgresql://app_user:pass@db:5432/db'],
     ['REDIS_URL', 'redis://cache:6379'],
     ['COOKIE_DOMAIN', undefined],
+    ['NOTIFICATION_TRANSPORT', 'console'],
+    ['NOTIFICATION_TRANSPORT', undefined],
+    ['SES_FROM_ADDRESS', undefined],
+    ['SES_FROM_ADDRESS', 'no-reply'],
   ] as Array<[string, string | undefined]>)(
     'rejects production with an unsafe %s',
     (key, value) => {

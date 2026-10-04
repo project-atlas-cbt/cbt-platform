@@ -64,3 +64,18 @@ Heartbeat sizing from the B21 load runs ([capacity plan](../performance/capacity
   once per attempt per 15 s (`LAST_SEEN_RESOLUTION_MS`, conditional in SQL so several API processes
   coalesce too). This keeps `R-03` (answer writes never update the parent attempt row inside their
   transaction) while still letting saves count as liveness. The heartbeat always writes.
+
+## Amendment — 2026-10-04 (B23): the Control Center now shows both
+
+Audit `M-08` and `M-09` were still open at B23: the events and `last_seen_at` were recorded
+(B13, B21), but B12/F12 never displayed them. Built in B23 (owner decision):
+
+- Each live attempt row in the Control Center snapshot (`GET /v1/exams/:id/control` and the SSE
+  stream) carries `lastSeenAt`, `disconnected` and `signals` (counts per event type).
+- `disconnected` is derived at read time: nothing heard for more than **90 s**
+  (`DISCONNECTED_AFTER_MS`, three missed 30 s heartbeats, above browsers' once-a-minute timer
+  floor for hidden tabs). It is a signal for the invigilator, never an attempt state.
+- The web table shows a "Disconnected" badge with minutes since contact (those rows sort first
+  among students in progress) and the non-zero signal counts in plain words, uncoloured.
+- Operational alerts on disconnection (F12 DoD 10) remain deferred: the per-student signal now
+  exists, but no alerting rule was specified.

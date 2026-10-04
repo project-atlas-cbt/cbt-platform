@@ -1,13 +1,14 @@
 import { Worker, type ConnectionOptions, type Job, type Queue } from 'bullmq';
 import type { Redis } from 'ioredis';
 import { prisma, withTenant } from '@atlas/db';
-import { rollUpExamParticipation } from '@atlas/domain';
+import { attemptSignalCounts, isDisconnected, rollUpExamParticipation } from '@atlas/domain';
 import {
   EXAM_CONTROL_ACTIVE_SET_KEY,
   EXAM_CONTROL_CACHE_TTL_SECONDS,
   encodeExamControlEvent,
   examControlChannel,
   examControlStreamKey,
+  type AttemptEventType,
   type ExamControlCenterSnapshot,
 } from '@atlas/domain';
 
@@ -227,15 +228,33 @@ async function computeSnapshot(
     const liveAttempts = await tx.examAttempt.findMany({
       where: { schoolId, examId, state: 'IN_PROGRESS' },
       select: {
+        id: true,
         studentProfileId: true,
         state: true,
         expiresAt: true,
         startedAt: true,
+        lastSeenAt: true,
         studentProfile: {
           select: { membership: { select: { user: { select: { displayName: true } } } } },
         },
       },
     });
+    // B23 (M-08): integrity-signal counts for the live attempts, one
+    // grouped read on the (school_id, attempt_id, type) index.
+    const signalRows =
+      liveAttempts.length === 0
+        ? []
+        : await tx.attemptEvent.groupBy({
+            by: ['attemptId', 'type'],
+            where: { schoolId, attemptId: { in: liveAttempts.map((a) => a.id) } },
+            _count: { _all: true },
+          });
+    const signalsByAttempt = new Map<string, { type: AttemptEventType; count: number }[]>();
+    for (const row of signalRows) {
+      const list = signalsByAttempt.get(row.attemptId) ?? [];
+      list.push({ type: row.type, count: row._count._all });
+      signalsByAttempt.set(row.attemptId, list);
+    }
     const allAttempts = await tx.examAttempt.findMany({
       where: { schoolId, examId },
       select: { studentProfileId: true, examSessionId: true, state: true },
@@ -320,6 +339,9 @@ async function computeSnapshot(
         ),
         studentName: a.studentProfile.membership.user.displayName,
         startedAt: a.startedAt.toISOString(),
+        lastSeenAt: a.lastSeenAt.toISOString(),
+        disconnected: isDisconnected(a.lastSeenAt, now.getTime()),
+        signals: attemptSignalCounts(signalsByAttempt.get(a.id) ?? []),
       })),
       staleness: {
         isStale,

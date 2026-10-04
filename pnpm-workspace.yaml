@@ -4,6 +4,9 @@ packages:
   - 'tests'
   # B21: the load/capacity harness — drives a running API, never shipped.
   - 'tools/*'
+  # B23: production infrastructure as code (AWS CDK) — synthesised and
+  # unit-tested in CI, deployed by .github/workflows/deploy.yml.
+  - 'infra/cdk'
 overrides:
   # @nestjs/platform-fastify@11.2.1 pins an exact fastify version; without
   # forcing the whole tree to the same one, our own direct `fastify`

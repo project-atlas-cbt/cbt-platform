@@ -4823,6 +4823,14 @@ export interface components {
             /** @description Always true since B13 ships ExamAttempt — retained on the contract only so no future client can ever mistake an uncomputed count for a real zero. */
             attemptDataAvailable: boolean;
         };
+        AttemptSignalCountsDto: {
+            WINDOW_BLUR: number;
+            FULLSCREEN_EXIT: number;
+            TAB_HIDDEN: number;
+            RECONNECTED: number;
+            RESUMED: number;
+            BINDING_MISMATCH: number;
+        };
         ExamLiveAttemptRowDto: {
             studentProfileId: string;
             studentName: string;
@@ -4830,6 +4838,15 @@ export interface components {
             /** Format: date-time */
             startedAt: string;
             timeRemainingSeconds: number | null;
+            /**
+             * Format: date-time
+             * @description When the server last heard from this attempt (heartbeat or answer save).
+             */
+            lastSeenAt: string;
+            /** @description B23 (M-09, ADR-0020): nothing heard for longer than DISCONNECTED_AFTER_MS (90 s) when the snapshot was computed. A signal for the invigilator, not an attempt state. */
+            disconnected: boolean;
+            /** @description B23 (M-08, ADR-0020): integrity-signal counts by type — counts, not judgements. */
+            signals: components["schemas"]["AttemptSignalCountsDto"];
         };
         ExamControlCenterStalenessDto: {
             isStale: boolean;

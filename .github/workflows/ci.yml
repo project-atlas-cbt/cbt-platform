@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 # B20: every job gets a read-only token unless it declares more.
 permissions:
@@ -564,6 +564,132 @@ jobs:
             /tmp/worker.log
           if-no-files-found: ignore
 
+  # B23 DoD 4–5: the golden-path journey of 09 §39 over HTTP (tools/load
+  # golden-path), first on this commit, then across a mixed-version rollout:
+  # the base commit's API and worker each running beside this commit's
+  # other half, on this commit's migrated schema — what ECS serves while a
+  # deployment replaces tasks, and what a rollback leaves running. The
+  # expand-only migration rule (scripts/lint-migrations.mjs) is what keeps
+  # these legs green; a contract step that breaks the previous release
+  # fails here.
+  golden-path:
+    name: Golden path and mixed-version rollout
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: atlas
+          POSTGRES_PASSWORD: atlas_ci_password
+          POSTGRES_DB: atlas_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U atlas -d atlas_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8.10.1-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: 'postgresql://atlas:atlas_ci_password@localhost:5432/atlas_ci?schema=public'
+      DATABASE_APP_URL: 'postgresql://atlas_app:atlas_app_ci_password@localhost:5432/atlas_ci?schema=public'
+      DATABASE_AUDIT_READER_URL: 'postgresql://atlas_audit_reader:atlas_audit_reader_ci_password@localhost:5432/atlas_ci?schema=public'
+      REDIS_URL: 'redis://localhost:6379'
+      PRODUCT_NAME: 'Project Atlas'
+      SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
+      WEB_ORIGIN: 'http://localhost:3000'
+      PLATFORM_ROOT_DOMAIN: 'localtest.me'
+      S3_ENDPOINT: 'http://localhost:9000'
+      S3_BUCKET: 'atlas-media-ci'
+      S3_ACCESS_KEY_ID: 'atlas_minio_root'
+      S3_SECRET_ACCESS_KEY: 'atlas_minio_dev_password'
+      S3_REGION: 'us-east-1'
+      LOG_LEVEL: 'warn'
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 --user 0 \
+            -e MINIO_ROOT_USER=atlas_minio_root \
+            -e MINIO_ROOT_PASSWORD=atlas_minio_dev_password \
+            cgr.dev/chainguard/minio@sha256:0f95aa412a12351a95bb43c3b54b66440eb0aa022bb3f3458942678a489e915b server /data
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1 && break || sleep 1
+          done
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bootstrap atlas_app role
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends postgresql-client
+          PGPASSWORD=atlas_ci_password sh scripts/ci/bootstrap-db-roles.sh
+
+      - name: Build @atlas/config
+        run: pnpm --filter @atlas/config run build
+
+      - name: Generate Prisma client and apply this commit's migrations
+        run: |
+          pnpm db:generate
+          pnpm db:migrate:deploy
+
+      - name: Build
+        run: pnpm build
+
+      - name: Golden path (this commit)
+        run: |
+          scripts/ci/run-fleet.sh "$PWD" "$PWD" head
+          pnpm --filter @atlas/load golden-path
+
+      # The previous release, built from the base commit with its own
+      # Prisma client, never migrating: it runs on this commit's schema.
+      - name: Build the base commit
+        if: env.BASE_SHA != '' && env.BASE_SHA != '0000000000000000000000000000000000000000'
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git worktree add /tmp/base "$BASE_SHA"
+          cd /tmp/base
+          pnpm install --frozen-lockfile
+          pnpm --filter @atlas/config run build
+          pnpm db:generate
+          pnpm --filter @atlas/api... --filter @atlas/worker... run build
+
+      - name: Golden path (base API, this commit's worker)
+        if: env.BASE_SHA != '' && env.BASE_SHA != '0000000000000000000000000000000000000000'
+        run: |
+          scripts/ci/run-fleet.sh /tmp/base "$PWD" base-api
+          pnpm --filter @atlas/load golden-path
+
+      - name: Golden path (this commit's API, base worker)
+        if: env.BASE_SHA != '' && env.BASE_SHA != '0000000000000000000000000000000000000000'
+        run: |
+          scripts/ci/run-fleet.sh "$PWD" /tmp/base base-worker
+          pnpm --filter @atlas/load golden-path
+
+      - name: Upload service logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-path-logs
+          path: |
+            /tmp/*-head.log
+            /tmp/*-base-*.log
+          if-no-files-found: ignore
+
   # F20: the web app's browser suites (apps/web/e2e) against production
   # builds of the API and web app — axe accessibility scans of every
   # workspace, a keyboard-only exam, CSP/headers, Software Admin MFA,
@@ -738,6 +864,26 @@ jobs:
           input: ${{ runner.temp }}/atlas-node.tar
           # The whole-repo dev image (full node_modules) can outrun Trivy's
           # 5-minute default analysis timeout.
+          timeout: 15m
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      # B23: the production image (api + worker, production dependencies
+      # only) inherits the same gate. The dev image's tarball is removed
+      # first so both never sit on the runner's disk at once.
+      - name: Build production server image
+        run: |
+          rm -f "$RUNNER_TEMP/atlas-node.tar"
+          docker image rm atlas-node:ci >/dev/null
+          docker build -f infra/docker/Dockerfile.prod --target server -t atlas-server:ci .
+          docker save atlas-server:ci -o "$RUNNER_TEMP/atlas-server.tar"
+
+      - name: Trivy production image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          input: ${{ runner.temp }}/atlas-server.tar
           timeout: 15m
           severity: HIGH,CRITICAL
           ignore-unfixed: true

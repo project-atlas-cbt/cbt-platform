@@ -19,7 +19,10 @@ const envObject = z.object({
   // application connects as DATABASE_APP_URL instead — a non-superuser
   // role, so ADR-0023's Row-Level Security actually applies to it. See
   // infra/postgres/init.sql for why this split exists.
-  DATABASE_URL: z.url({ protocol: /^postgresql?$/ }),
+  // B23: optional — only migrations and operator commands use the schema
+  // owner's URL. The API and worker tasks are never given it on AWS (least
+  // privilege); they connect as atlas_app / atlas_audit_reader only.
+  DATABASE_URL: z.url({ protocol: /^postgresql?$/ }).optional(),
   DATABASE_APP_URL: z.url({ protocol: /^postgresql?$/ }),
   DATABASE_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
   DATABASE_APP_URL_TEST: z.url({ protocol: /^postgresql?$/ }).optional(),
@@ -111,6 +114,11 @@ const envObject = z.object({
   S3_ACCESS_KEY_ID: z.string().optional().default(''),
   S3_SECRET_ACCESS_KEY: z.string().optional().default(''),
   S3_REGION: z.string().optional().default('eu-west-1'),
+  /** B23: path-style addressing for local/CI S3 stand-ins; `false` on AWS. */
+  S3_FORCE_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   // Local Docker Desktop can retain a stale VM clock after host sleep. An
   // explicit signing offset keeps presigned URLs valid against that storage
   // clock; production should leave this at the default zero.
@@ -283,8 +291,16 @@ const envObject = z.object({
 
   // Exam Health Monitor (09 §37) and operational/security alert dispatch.
   // OPS_ALERT_EMAILS: comma-separated operator addresses, delivered through
-  // the NotificationChannel (console until B23's real provider).
+  // the NotificationChannel (SES in production, console in dev/CI).
   OPS_ALERT_EMAILS: z.string().optional().default(''),
+  /** B23 (ADR-0019 provider decision): `ses` sends real email through
+   * Amazon SES; `console` is the dev/CI transport. Production requires `ses`. */
+  NOTIFICATION_TRANSPORT: z.enum(['console', 'ses']).default('console'),
+  /** Sender address for SES, on the domain's verified SES identity
+   * (e.g. `"Atlas" <no-reply@example.ng>`). */
+  SES_FROM_ADDRESS: z.string().optional().default(''),
+  /** Region of the SES identity; defaults to the deployment's own region. */
+  SES_REGION: z.string().optional().default(''),
   EXAM_HEALTH_INTERVAL_MS: z.coerce
     .number()
     .int()
@@ -413,7 +429,9 @@ export const envSchema = envObject.superRefine((env, ctx) => {
     fail('MEDIA_PRECACHE_SECRET', 'must not reuse another secret');
   }
   for (const key of ['DATABASE_URL', 'DATABASE_APP_URL', 'DATABASE_AUDIT_READER_URL'] as const) {
-    const mode = new URL(env[key]).searchParams.get('sslmode');
+    const value = env[key];
+    if (!value) continue; // DATABASE_URL is absent from the API/worker tasks
+    const mode = new URL(value).searchParams.get('sslmode');
     if (mode !== 'require' && mode !== 'verify-ca' && mode !== 'verify-full') {
       fail(key, 'must set sslmode=require (or verify-ca/verify-full) in production');
     }
@@ -423,6 +441,13 @@ export const envSchema = envObject.superRefine((env, ctx) => {
   }
   if (!env.COOKIE_DOMAIN) {
     fail('COOKIE_DOMAIN', 'must be set in production (ADR-0022)');
+  }
+  // B23: the console transport withholds content in production, so a
+  // reset or activation email would silently never arrive.
+  if (env.NOTIFICATION_TRANSPORT !== 'ses') {
+    fail('NOTIFICATION_TRANSPORT', 'must be ses in production (ADR-0019)');
+  } else if (!/@[^@\s]+\.[^@\s]+>?$/.test(env.SES_FROM_ADDRESS)) {
+    fail('SES_FROM_ADDRESS', 'must be a sender address on the verified SES identity');
   }
 });
 

@@ -1,0 +1,30 @@
+name: Rollback
+
+# B23 DoD 3: return an environment to an earlier release by redeploying its
+# image tag (immutable, so the same bytes) on the current schema — no down
+# migration, which expand-only migrations make unnecessary. Production
+# still waits for its required reviewer. docs/operations/deploy-and-rollback.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [staging, production]
+        required: true
+      image_tag:
+        description: Previously deployed tag (staging, the commit SHA; production, the version tag)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  rollback:
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      environment: ${{ inputs.environment }}
+      image_tag: ${{ inputs.image_tag }}
+      migrate: false

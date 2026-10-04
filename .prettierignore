@@ -21,3 +21,4 @@ apps/web/next-env.d.ts
 apps/api/openapi.json
 # F20: must stay ES5 (no trailing commas in calls) — see the file's header.
 apps/web/public/compat-probe.js
+infra/cdk/cdk.out

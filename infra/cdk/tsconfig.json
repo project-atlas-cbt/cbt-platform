@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // aws-cdk-lib's declarations predate exactOptionalPropertyTypes (its
+    // own optional members are typed without `| undefined`), so a concrete
+    // construct is not assignable to its interface under it.
+    "exactOptionalPropertyTypes": false,
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": ["bin", "src", "test", "vitest.config.ts"]
+}

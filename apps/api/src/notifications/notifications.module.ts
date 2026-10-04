@@ -10,6 +10,7 @@ import type { Env } from '@atlas/config';
 
 import { NOTIFICATION_CHANNEL, NOTIFICATION_TEMPLATE_REGISTRY } from './notification-tokens.js';
 import { OperationalAlertService } from './operational-alert.service.js';
+import { SesNotificationChannel, sesSender } from './ses-channel.js';
 
 export { NOTIFICATION_CHANNEL, NOTIFICATION_TEMPLATE_REGISTRY };
 
@@ -30,9 +31,9 @@ function createRegistry(): TemplateRegistry {
  * it (see packages/notifications' README) — there's exactly one registry
  * for the process, not one per call site.
  *
- * Bound to ConsoleNotificationChannel — B0's decided provider. Swapping in
- * a real email provider (B23) is a one-line change here, not a call-site
- * change, which is the whole point of depending on the interface.
+ * NOTIFICATION_TRANSPORT picks the transport: Amazon SES (B23, required in
+ * production) or ConsoleNotificationChannel for dev and CI. Call sites
+ * never change, which is the whole point of depending on the interface.
  */
 @Global()
 @Module({
@@ -49,9 +50,15 @@ function createRegistry(): TemplateRegistry {
         registry: TemplateRegistry,
         config: ConfigService<Env, true>,
       ): NotificationChannel =>
-        new ConsoleNotificationChannel(registry, console.log, {
-          revealContent: config.get('NODE_ENV', { infer: true }) !== 'production',
-        }),
+        config.get('NOTIFICATION_TRANSPORT', { infer: true }) === 'ses'
+          ? new SesNotificationChannel(
+              registry,
+              config.get('SES_FROM_ADDRESS', { infer: true }),
+              sesSender(config.get('SES_REGION', { infer: true }) || undefined),
+            )
+          : new ConsoleNotificationChannel(registry, console.log, {
+              revealContent: config.get('NODE_ENV', { infer: true }) !== 'production',
+            }),
     },
     OperationalAlertService,
   ],

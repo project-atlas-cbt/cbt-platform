@@ -2131,7 +2131,10 @@ and aggregate contracts; the live attempt table (DoD item 2) additionally consum
    mutating control disables itself once the stream is `'closed-permanent'` (a transient
    `'reconnecting'` state does not disable controls — a REST call can still succeed mid-reconnect).
 10. ⚠️ **Deferred, not built.** Operational alerts (not-started/disconnected/low-time-remaining)
-    remain deferred. The disconnect half still has no underlying signal: no per-student liveness or
+    remain deferred. **Correction (B23, 2026-10-04):** the reasoning below went stale at B13, which
+    added `ExamAttempt.last_seen_at`; B23 now derives a per-student `disconnected` flag and integrity
+    signal counts and shows both in the live table (audit `M-08`/`M-09`, ADR-0020 amendment). Only
+    the _alerting_ stays deferred. Original note: the disconnect half still has no underlying signal: no per-student liveness or
     last-seen value exists anywhere (`07` records only `startedAt`/`expiresAt`/`submittedAt`), so an
     abandoned attempt is indistinguishable from a quiet one. The low-time half is now more than a
     signal question — the live table already surfaces per-student time remaining (the scope `04 §46`
