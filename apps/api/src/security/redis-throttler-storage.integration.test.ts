@@ -7,14 +7,17 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Redis } from 'ioredis';
-import { RedisThrottlerStorage } from './redis-throttler-storage.service.js';
+import {
+  InMemoryThrottlerFallback,
+  RedisThrottlerStorage,
+} from './redis-throttler-storage.service.js';
 
 let redis: Redis;
 let storage: RedisThrottlerStorage;
 
 beforeAll(() => {
   redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
-  storage = new RedisThrottlerStorage(redis);
+  storage = new RedisThrottlerStorage(redis, new InMemoryThrottlerFallback(1));
 });
 
 afterAll(async () => {

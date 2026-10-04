@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import type { ThrottlerStorage } from '@nestjs/throttler';
+import type { DependencyHealth } from '../common/dependency-health.js';
 import { REDIS_CLIENT } from '../redis/redis.module.js';
 
 // @nestjs/throttler@6.5.0 declares ThrottlerStorageRecord in its own
@@ -65,9 +66,75 @@ end
 return {totalHits, remaining, isBlocked, timeToBlockExpire}
 `;
 
+/**
+ * B22 (decision 3, 2026-10-04): while Redis is unreachable the limiter
+ * fails OPEN to this per-process counter instead of failing every request.
+ * It is never looser than the shared limit: each process allows
+ * `floor(limit / processes)` (at least 1), so the cluster as a whole admits
+ * at most `limit` even if an attacker spreads requests across every
+ * process. Windows and blocks behave as in the Lua script above.
+ */
+export class InMemoryThrottlerFallback {
+  private readonly counters = new Map<string, { hits: number; expiresAt: number }>();
+  private readonly blocks = new Map<string, number>();
+  private lastSweep = 0;
+
+  constructor(private readonly processes: number) {}
+
+  effectiveLimit(limit: number): number {
+    return Math.max(1, Math.floor(limit / this.processes));
+  }
+
+  increment(
+    key: string,
+    ttl: number,
+    limit: number,
+    blockDuration: number,
+  ): ThrottlerStorageRecord {
+    const now = Date.now();
+    this.sweep(now);
+    const max = this.effectiveLimit(limit);
+    const blockedUntil = this.blocks.get(key);
+    const existing = this.counters.get(key);
+    const live = existing && existing.expiresAt > now ? existing : undefined;
+    if (blockedUntil !== undefined && blockedUntil > now) {
+      return {
+        totalHits: live?.hits ?? 0,
+        timeToExpire: live ? live.expiresAt - now : 0,
+        isBlocked: true,
+        timeToBlockExpire: blockedUntil - now,
+      };
+    }
+    const counter = live ?? { hits: 0, expiresAt: now + ttl };
+    counter.hits += 1;
+    this.counters.set(key, counter);
+    // Same rule as the Lua script: over the (reduced) limit sets a block.
+    // The guard's own blockDuration defaults to the window, so it is set.
+    const blocked = counter.hits > max && blockDuration > 0;
+    if (blocked) this.blocks.set(key, now + blockDuration);
+    return {
+      totalHits: counter.hits,
+      timeToExpire: counter.expiresAt - now,
+      isBlocked: blocked,
+      timeToBlockExpire: blocked ? blockDuration : 0,
+    };
+  }
+
+  private sweep(now: number): void {
+    if (now - this.lastSweep < 10_000) return;
+    this.lastSweep = now;
+    for (const [k, v] of this.counters) if (v.expiresAt <= now) this.counters.delete(k);
+    for (const [k, until] of this.blocks) if (until <= now) this.blocks.delete(k);
+  }
+}
+
 @Injectable()
 export class RedisThrottlerStorage implements ThrottlerStorage {
-  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
+  constructor(
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly fallback: InMemoryThrottlerFallback,
+    private readonly health?: DependencyHealth,
+  ) {}
 
   async increment(
     key: string,
@@ -79,15 +146,26 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
     const counterKey = `${NAMESPACE}${throttlerName}:${key}`;
     const blockKey = `${counterKey}:blocked`;
 
-    const result = (await this.redis.eval(
-      INCREMENT_SCRIPT,
-      2,
-      counterKey,
-      blockKey,
-      ttl,
-      limit,
-      blockDuration,
-    )) as [number, number, number, number];
+    if (this.health && !this.health.shouldTry('redis')) {
+      this.health.skipped('redis', `throttler:${throttlerName}`);
+      return this.fallback.increment(counterKey, ttl, limit, blockDuration);
+    }
+    let result: [number, number, number, number];
+    try {
+      result = (await this.redis.eval(
+        INCREMENT_SCRIPT,
+        2,
+        counterKey,
+        blockKey,
+        ttl,
+        limit,
+        blockDuration,
+      )) as [number, number, number, number];
+    } catch (err) {
+      this.health?.fellBack('redis', `throttler:${throttlerName}`, err);
+      return this.fallback.increment(counterKey, ttl, limit, blockDuration);
+    }
+    this.health?.succeeded('redis');
     const [totalHits, timeToExpire, isBlocked, timeToBlockExpire] = result;
 
     return {

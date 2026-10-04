@@ -9,6 +9,7 @@ import {
   shutdownTelemetry,
   withSpan,
 } from '@atlas/observability';
+import { DependencyHealth } from '../../common/dependency-health.js';
 import { AttemptMarkingQueueService } from './attempt-marking-queue.service.js';
 
 const exporter = new InMemorySpanExporter();
@@ -20,7 +21,10 @@ afterAll(async () => {
 
 describe('AttemptMarkingQueueService.enqueue (B20 trace propagation)', () => {
   it('stamps the active trace context onto the job payload', async () => {
-    const service = new AttemptMarkingQueueService({} as never);
+    const service = new AttemptMarkingQueueService(
+      { get: () => 2000 } as never,
+      new DependencyHealth(),
+    );
     const add = vi.fn().mockResolvedValue(undefined);
     (service as unknown as { queue: { add: typeof add } }).queue = { add };
 

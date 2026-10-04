@@ -189,6 +189,7 @@ export {
   ATTEMPT_MARKING_QUEUE_NAME,
   type AttemptMarkingJobPayload,
 } from './execution/attempt-marking-queue.js';
+export { FAILED_JOB_RETENTION } from './jobs/job-retention.js';
 export {
   EXAM_MEDIA_PRECACHE_QUEUE_NAME,
   type ExamMediaPrecacheJobPayload,

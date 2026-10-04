@@ -1,0 +1,387 @@
+{
+  "scenario": "chaos-api-kill9",
+  "title": "B22 chaos — API node killed (SIGKILL) mid-exam, restarted",
+  "startedAt": "2026-10-04T11:03:52.423Z",
+  "durationSeconds": 89,
+  "environment": {
+    "host": "vm",
+    "platform": "linux 6.18.44-fc-v64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGb": 15.7,
+    "node": "v22.22.0",
+    "network": "clean (loopback)",
+    "pooler": "none (direct)"
+  },
+  "parameters": {
+    "students": 200,
+    "schools": 4,
+    "questions": 20,
+    "apiProcesses": 2,
+    "proves": "08 §25 node crash; DoD 2"
+  },
+  "latency": [
+    {
+      "label": "answer.batch",
+      "count": 3216,
+      "ok": 3134,
+      "status": {
+        "200": 3134
+      },
+      "networkFailures": 82,
+      "p50": 16.93,
+      "p95": 153.98,
+      "p99": 281.6,
+      "max": 429.31,
+      "mean": 32.19,
+      "bytes": 887947
+    },
+    {
+      "label": "attempt.heartbeat",
+      "count": 525,
+      "ok": 510,
+      "status": {
+        "200": 510
+      },
+      "networkFailures": 15,
+      "p50": 16.64,
+      "p95": 63.68,
+      "p99": 292.1,
+      "max": 492.8,
+      "mean": 28.95,
+      "bytes": 8670
+    },
+    {
+      "label": "attempt.start",
+      "count": 200,
+      "ok": 200,
+      "status": {
+        "200": 200
+      },
+      "networkFailures": 0,
+      "p50": 716.29,
+      "p95": 1090.56,
+      "p99": 1170.43,
+      "max": 1179.65,
+      "mean": 728.62,
+      "bytes": 2853800
+    },
+    {
+      "label": "attempt.submit",
+      "count": 200,
+      "ok": 200,
+      "status": {
+        "200": 200
+      },
+      "networkFailures": 0,
+      "p50": 1499.14,
+      "p95": 1695.74,
+      "p99": 1704.96,
+      "max": 1705.98,
+      "mean": 1494.14,
+      "bytes": 64000
+    },
+    {
+      "label": "auth.login",
+      "count": 204,
+      "ok": 204,
+      "status": {
+        "200": 204
+      },
+      "networkFailures": 0,
+      "p50": 360.7,
+      "p95": 735.23,
+      "p99": 818.18,
+      "max": 835.58,
+      "mean": 398,
+      "bytes": 20596
+    },
+    {
+      "label": "session.open",
+      "count": 4,
+      "ok": 4,
+      "status": {
+        "201": 4
+      },
+      "networkFailures": 0,
+      "p50": 209.54,
+      "p95": 307.2,
+      "p99": 307.2,
+      "max": 307.2,
+      "mean": 246.82,
+      "bytes": 1764
+    },
+    {
+      "label": "setup",
+      "count": 16,
+      "ok": 16,
+      "status": {
+        "200": 12,
+        "201": 4
+      },
+      "networkFailures": 0,
+      "p50": 38.3,
+      "p95": 73.41,
+      "p99": 87.62,
+      "max": 87.62,
+      "mean": 46.85,
+      "bytes": 134324
+    },
+    {
+      "label": "student.assessment",
+      "count": 200,
+      "ok": 200,
+      "status": {
+        "200": 200
+      },
+      "networkFailures": 0,
+      "p50": 238.21,
+      "p95": 362.75,
+      "p99": 405.76,
+      "max": 457.98,
+      "mean": 236.47,
+      "bytes": 36800
+    },
+    {
+      "label": "student.preview",
+      "count": 200,
+      "ok": 200,
+      "status": {
+        "200": 200
+      },
+      "networkFailures": 0,
+      "p50": 249.98,
+      "p95": 393.22,
+      "p99": 429.06,
+      "max": 457.47,
+      "mean": 254.41,
+      "bytes": 80400
+    },
+    {
+      "label": "tenant.resolve",
+      "count": 204,
+      "ok": 204,
+      "status": {
+        "200": 204
+      },
+      "networkFailures": 0,
+      "p50": 87.68,
+      "p95": 191.62,
+      "p99": 214.02,
+      "max": 226.43,
+      "mean": 98.52,
+      "bytes": 49776
+    }
+  ],
+  "checks": [
+    {
+      "name": "attempts created",
+      "actual": "200",
+      "budget": "exactly 200",
+      "pass": true
+    },
+    {
+      "name": "duplicate attempts",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "results produced",
+      "actual": "200",
+      "budget": "exactly 200",
+      "pass": true
+    },
+    {
+      "name": "acknowledged answers lost",
+      "actual": "0 of 2996",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "attempts left IN_PROGRESS",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "attempts without a result",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "results not FINAL",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "results with a question unmarked",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "results whose total ≠ sum of question marks",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "answer rows without their accepted event",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "finalisation audited exactly once per attempt",
+      "actual": "200 audits / 200 attempts, 0 twice",
+      "budget": "equal, 0 twice",
+      "pass": true
+    },
+    {
+      "name": "marking jobs left failed",
+      "actual": "0",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "marking drained",
+      "actual": "2.2 s",
+      "budget": "within 180 s",
+      "pass": true
+    }
+  ],
+  "verification": [
+    {
+      "examId": "01a10695-a579-78fb-b87c-e12307024b02",
+      "expectedAttempts": 50,
+      "attempts": 50,
+      "distinctStudents": 50,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 50
+      },
+      "results": 50,
+      "resultsFinal": 50,
+      "answersChecked": 811,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10695-a844-706d-a293-6c23370c003a",
+      "expectedAttempts": 50,
+      "attempts": 50,
+      "distinctStudents": 50,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 50
+      },
+      "results": 50,
+      "resultsFinal": 50,
+      "answersChecked": 738,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10695-aa5c-766c-a0f5-391856442158",
+      "expectedAttempts": 50,
+      "attempts": 50,
+      "distinctStudents": 50,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 50
+      },
+      "results": 50,
+      "resultsFinal": 50,
+      "answersChecked": 743,
+      "answersMismatched": 0
+    },
+    {
+      "examId": "01a10695-abe7-7705-8d81-6322a4d96068",
+      "expectedAttempts": 50,
+      "attempts": 50,
+      "distinctStudents": 50,
+      "duplicateActive": 0,
+      "statesByCount": {
+        "SUBMITTED": 50
+      },
+      "results": 50,
+      "resultsFinal": 50,
+      "answersChecked": 704,
+      "answersMismatched": 0
+    }
+  ],
+  "notes": [
+    "Answer batches that failed during the fault and were retried: 82. Answer-save success over the run: 97.45 % (a fault row is not held to the 99.9 % steady-state budget — the integrity checks are the pass condition)."
+  ],
+  "extra": {
+    "timeline": [
+      {
+        "t": 11.6,
+        "event": "200 students answering"
+      },
+      {
+        "t": 41.6,
+        "event": "SIGKILL api-0"
+      },
+      {
+        "t": 54.9,
+        "event": "api-0 back"
+      },
+      {
+        "t": 86.6,
+        "event": "all submitted"
+      },
+      {
+        "t": 88.8,
+        "event": "marking drained"
+      }
+    ],
+    "integrity": [
+      {
+        "attempts": 50,
+        "inProgress": 0,
+        "attemptsWithoutResult": 0,
+        "resultsNotFinal": 0,
+        "resultsIncomplete": 0,
+        "totalsWrong": 0,
+        "answersWithoutEvent": 0,
+        "finalisationAudits": 50,
+        "attemptsAuditedTwice": 0
+      },
+      {
+        "attempts": 50,
+        "inProgress": 0,
+        "attemptsWithoutResult": 0,
+        "resultsNotFinal": 0,
+        "resultsIncomplete": 0,
+        "totalsWrong": 0,
+        "answersWithoutEvent": 0,
+        "finalisationAudits": 50,
+        "attemptsAuditedTwice": 0
+      },
+      {
+        "attempts": 50,
+        "inProgress": 0,
+        "attemptsWithoutResult": 0,
+        "resultsNotFinal": 0,
+        "resultsIncomplete": 0,
+        "totalsWrong": 0,
+        "answersWithoutEvent": 0,
+        "finalisationAudits": 50,
+        "attemptsAuditedTwice": 0
+      },
+      {
+        "attempts": 50,
+        "inProgress": 0,
+        "attemptsWithoutResult": 0,
+        "resultsNotFinal": 0,
+        "resultsIncomplete": 0,
+        "totalsWrong": 0,
+        "answersWithoutEvent": 0,
+        "finalisationAudits": 50,
+        "attemptsAuditedTwice": 0
+      }
+    ]
+  }
+}

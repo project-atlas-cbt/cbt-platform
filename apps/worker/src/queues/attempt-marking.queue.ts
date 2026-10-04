@@ -112,6 +112,17 @@ async function markAttempt(
       // transition. These are not transient marking failures worthy of retry.
       return;
     }
+    // B22: marking runs once per result. A job that arrives for a result
+    // already FINAL (a duplicate from the reconciliation pass or an
+    // operator replay), ADJUSTED or VOIDED is a no-op: re-marking a FINAL
+    // result would re-resolve its grade against today's grading scale,
+    // which ADR-0018 forbids (the grade is resolved once). A missing result
+    // (an attempt finalised before B15 wrote one) is still marked.
+    const existing = await tx.result.findUnique({
+      where: { schoolId_attemptId: { schoolId, attemptId } },
+      select: { state: true },
+    });
+    if (existing && existing.state !== 'PROCESSING') return;
 
     const snapshot = await tx.attemptQuestionSnapshot.findUniqueOrThrow({
       where: { schoolId_attemptId: { schoolId, attemptId } },
@@ -210,6 +221,14 @@ export function createAttemptMarkingWorker(
     async (job) => {
       await runAttemptMarking(deps, job.data);
     },
-    { connection, concurrency },
+    {
+      connection,
+      concurrency,
+      // B22: BullMQ's default (1) fails a job permanently the second time
+      // its worker dies under it — two worker restarts during one marking
+      // burst would strand every job in flight. Marking is idempotent, so a
+      // job that stalls is always safe to run again.
+      maxStalledCount: 5,
+    },
   );
 }

@@ -19,6 +19,21 @@ export interface TenancyStore {
    * `undefined` when not loaded — AuthGuard then reads it itself.
    */
   platformOverride?: PlatformOverride;
+  /**
+   * B22: the school lookup itself failed (database briefly unreachable).
+   * Reading `schoolId` then throws, so the request answers 503 + Retry-After
+   * instead of carrying on as if the host named no school — which would
+   * have signed a mid-exam student out with a 401.
+   */
+  lookupFailed?: boolean;
+}
+
+/** Mapped to 503 SERVICE_UNAVAILABLE by the global exception filter. */
+export class TenantLookupUnavailableError extends Error {
+  constructor() {
+    super('The school for this request could not be looked up.');
+    this.name = 'TenantLookupUnavailableError';
+  }
 }
 
 /**
@@ -38,7 +53,9 @@ export class TenancyContextService {
   }
 
   get schoolId(): string | null {
-    return this.storage.getStore()?.schoolId ?? null;
+    const store = this.storage.getStore();
+    if (store?.lookupFailed) throw new TenantLookupUnavailableError();
+    return store?.schoolId ?? null;
   }
 
   get platformOverride(): PlatformOverride | undefined {

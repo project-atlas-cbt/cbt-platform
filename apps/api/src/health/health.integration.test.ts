@@ -31,15 +31,16 @@ describe('health endpoints', () => {
     expect(res.json()).toEqual({ status: 'ok' });
   });
 
-  it('GET /health/ready reports database and redis reachable', async () => {
+  it('GET /health/ready reports database, redis and storage reachable', async () => {
     const res = await app.inject({ method: 'GET', url: '/health/ready' });
     expect(res.statusCode).toBe(200);
     const body: { status: string; checks: Array<{ name: string; ok: boolean }> } = res.json();
     expect(body.status).toBe('ok');
     expect(body.checks).toEqual(
       expect.arrayContaining([
-        { name: 'database', ok: true },
-        { name: 'redis', ok: true },
+        { name: 'database', ok: true, critical: true },
+        { name: 'redis', ok: true, critical: false },
+        { name: 'storage', ok: true, critical: false },
       ]),
     );
   });

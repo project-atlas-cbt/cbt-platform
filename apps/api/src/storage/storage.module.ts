@@ -27,24 +27,46 @@ export { S3_CLIENT };
     {
       provide: S3_CLIENT,
       inject: [ConfigService],
-      useFactory: (config: ConfigService<Env, true>) => {
-        const endpoint = config.get('S3_ENDPOINT', { infer: true });
-        // exactOptionalPropertyTypes forbids `endpoint: undefined` — omit
-        // the key entirely rather than passing it explicitly-empty.
-        return new S3Client({
-          ...(endpoint ? { endpoint } : {}),
-          region: config.get('S3_REGION', { infer: true }),
-          credentials: {
-            accessKeyId: config.get('S3_ACCESS_KEY_ID', { infer: true }),
-            secretAccessKey: config.get('S3_SECRET_ACCESS_KEY', { infer: true }),
-          },
-          systemClockOffset: config.get('S3_SYSTEM_CLOCK_OFFSET_MS', { infer: true }),
-          forcePathStyle: true,
-        });
-      },
+      useFactory: createS3Client,
     },
     ObjectStorageService,
   ],
   exports: [ObjectStorageService],
 })
 export class StorageModule {}
+
+/** The S3 client every storage user shares. Exported for the operator
+ * CLIs (B22), which run without the Nest app — see `createObjectStorage`. */
+export function createS3Client(config: ConfigService<Env, true>): S3Client {
+  const endpoint = config.get('S3_ENDPOINT', { infer: true });
+  // exactOptionalPropertyTypes forbids `endpoint: undefined` — omit
+  // the key entirely rather than passing it explicitly-empty.
+  return new S3Client({
+    ...(endpoint ? { endpoint } : {}),
+    region: config.get('S3_REGION', { infer: true }),
+    credentials: {
+      accessKeyId: config.get('S3_ACCESS_KEY_ID', { infer: true }),
+      secretAccessKey: config.get('S3_SECRET_ACCESS_KEY', { infer: true }),
+    },
+    systemClockOffset: config.get('S3_SYSTEM_CLOCK_OFFSET_MS', { infer: true }),
+    forcePathStyle: true,
+    // B22 (08 §25): without these a storage endpoint that stops
+    // answering held each call for the OS TCP timeout (minutes) per
+    // SDK attempt. Every call now fails within a bounded time, and the
+    // caller keeps its retry state.
+    maxAttempts: config.get('S3_MAX_ATTEMPTS', { infer: true }),
+    requestHandler: {
+      connectionTimeout: config.get('S3_CONNECT_TIMEOUT_MS', { infer: true }),
+      requestTimeout: config.get('S3_REQUEST_TIMEOUT_MS', { infer: true }),
+      throwOnRequestTimeout: true,
+    },
+  });
+}
+
+/** B22: an `ObjectStorageService` for a standalone operator command
+ * (ops:redact-subject deletes import source files), built from the same
+ * validated environment the API boots with. */
+export function createObjectStorage(env: Env): ObjectStorageService {
+  const config = new ConfigService<Env, true>(env);
+  return new ObjectStorageService(createS3Client(config), config);
+}

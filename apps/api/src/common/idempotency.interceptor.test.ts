@@ -4,6 +4,7 @@ import { firstValueFrom, of } from 'rxjs';
 import { generateIdempotencyKey } from '@atlas/validation';
 import { IdempotencyInterceptor } from './idempotency.interceptor.js';
 import { AppHttpException } from './app-http-exception.js';
+import { DependencyHealth } from './dependency-health.js';
 
 function makeContext(opts: {
   method: string;
@@ -70,7 +71,11 @@ describe('IdempotencyInterceptor (ADR-0033)', () => {
   });
 
   it('passes GET requests through untouched', async () => {
-    const interceptor = new IdempotencyInterceptor(redis as never, config as never);
+    const interceptor = new IdempotencyInterceptor(
+      redis as never,
+      config as never,
+      new DependencyHealth(),
+    );
     const ctx = makeContext({ method: 'GET', url: '/v1/health' });
     const result = await run(interceptor, ctx, makeHandler({ status: 'ok' }));
     expect(result).toEqual({ status: 'ok' });
@@ -78,14 +83,22 @@ describe('IdempotencyInterceptor (ADR-0033)', () => {
   });
 
   it('passes mutating requests through when no key header is present', async () => {
-    const interceptor = new IdempotencyInterceptor(redis as never, config as never);
+    const interceptor = new IdempotencyInterceptor(
+      redis as never,
+      config as never,
+      new DependencyHealth(),
+    );
     const ctx = makeContext({ method: 'POST', url: '/v1/whatever' });
     const result = await run(interceptor, ctx, makeHandler({ created: true }));
     expect(result).toEqual({ created: true });
   });
 
   it('rejects a non-UUIDv7 Idempotency-Key', async () => {
-    const interceptor = new IdempotencyInterceptor(redis as never, config as never);
+    const interceptor = new IdempotencyInterceptor(
+      redis as never,
+      config as never,
+      new DependencyHealth(),
+    );
     const ctx = makeContext({
       method: 'POST',
       url: '/v1/whatever',
@@ -97,7 +110,11 @@ describe('IdempotencyInterceptor (ADR-0033)', () => {
   });
 
   it('stores the response on first use and replays it unchanged on a retry with the same payload', async () => {
-    const interceptor = new IdempotencyInterceptor(redis as never, config as never);
+    const interceptor = new IdempotencyInterceptor(
+      redis as never,
+      config as never,
+      new DependencyHealth(),
+    );
     const key = generateIdempotencyKey();
     const body = { amount: 100 };
 
@@ -123,7 +140,11 @@ describe('IdempotencyInterceptor (ADR-0033)', () => {
   });
 
   it('rejects a replayed key sent with a different payload', async () => {
-    const interceptor = new IdempotencyInterceptor(redis as never, config as never);
+    const interceptor = new IdempotencyInterceptor(
+      redis as never,
+      config as never,
+      new DependencyHealth(),
+    );
     const key = generateIdempotencyKey();
 
     const ctx1 = makeContext({
@@ -143,5 +164,20 @@ describe('IdempotencyInterceptor (ADR-0033)', () => {
     await expect(run(interceptor, ctx2, makeHandler({ id: 'order_2' }))).rejects.toMatchObject({
       code: 'IDEMPOTENCY_KEY_REPLAY_MISMATCH',
     });
+  });
+
+  it('B22: fails open when Redis is unavailable — the request still runs, no unhandled rejection', async () => {
+    redis.get.mockRejectedValueOnce(new Error('Command timed out'));
+    redis.set.mockRejectedValue(new Error('Command timed out'));
+    const health = new DependencyHealth();
+    const interceptor = new IdempotencyInterceptor(redis as never, config as never, health);
+    const ctx = makeContext({
+      method: 'POST',
+      url: '/v1/things',
+      body: { a: 1 },
+      headers: { 'idempotency-key': generateIdempotencyKey() },
+    });
+    await expect(run(interceptor, ctx, makeHandler({ id: 'x' }))).resolves.toEqual({ id: 'x' });
+    expect(health.isDegraded('redis')).toBe(true);
   });
 });

@@ -3,7 +3,10 @@
  * finding M-14). The single machine-readable statement of what the
  * platform keeps and for how long — `docs/compliance/retention-schedule.md`
  * is its human-readable twin, and `apps/worker`'s retention sweep executes
- * exactly the `PURGE`/`REDACT_FIELD` rows below, nothing else.
+ * exactly the database `PURGE`/`REDACT_FIELD` rows below, nothing else.
+ * B22 added two object-storage rows: `import-source-files` (run by
+ * apps/api, which owns object storage) and `object-noncurrent-versions`
+ * (the bucket's lifecycle rule).
  *
  * Two hard rules, both enforced outside this file as well:
  * 1. Academic evidence and audit records are retained indefinitely (07 §42
@@ -19,11 +22,17 @@
  * holding minors' operational data indefinitely. They are provisional
  * until the legal review recorded as a B23 launch-readiness item.
  */
-export type RetentionAction = 'RETAIN_INDEFINITELY' | 'PURGE' | 'REDACT_FIELD';
+export type RetentionAction =
+  | 'RETAIN_INDEFINITELY'
+  | 'PURGE'
+  | 'REDACT_FIELD'
+  /** B22: deletes objects from object storage (not database rows). */
+  | 'DELETE_OBJECT';
 
 export interface RetentionRule {
   id: string;
-  /** Postgres table the rule applies to. */
+  /** Postgres table the rule applies to — or, for `DELETE_OBJECT` and
+   * the bucket lifecycle rule, the object-storage data it covers. */
   table: string;
   category: 'ACADEMIC_EVIDENCE' | 'AUDIT' | 'IDENTITY' | 'OPERATIONAL';
   action: RetentionAction;
@@ -102,6 +111,27 @@ export const RETENTION_SCHEDULE: readonly RetentionRule[] = [
     trigger: "the parent import job's updated_at, once COMPLETED / FAILED / EXPIRED",
     rationale:
       "raw_data is a verbatim copy of an uploaded spreadsheet row (names, admission numbers). The people it created live on in their own tables; the row's status and errors are kept, the copy of the source cells is not.",
+  },
+  {
+    id: 'import-source-files',
+    table: 'object storage: import source files (import_jobs.source_media_asset_id)',
+    category: 'OPERATIONAL',
+    action: 'DELETE_OBJECT',
+    afterDays: 90,
+    trigger:
+      "the import job's updated_at, once COMPLETED / FAILED / EXPIRED — or at once when any person the file created is redacted",
+    rationale:
+      'B22 (decision 6A): the uploaded spreadsheet is the same personal data as import_rows.raw_data, so it goes on the same clock. Redacting one person deletes the whole file, since it also holds other people. Executed by apps/api ImportSourcePurgeService (it owns object storage); import_jobs.source_purged_at records it.',
+  },
+  {
+    id: 'object-noncurrent-versions',
+    table: 'object storage: noncurrent object versions (bucket versioning)',
+    category: 'OPERATIONAL',
+    action: 'PURGE',
+    afterDays: 35,
+    trigger: 'the version became noncurrent (overwritten or deleted)',
+    rationale:
+      'B22: versioning is the object-storage backup (recover an overwritten or deleted object). 35 days covers PITR (RDS backups are kept 35 days at most), so a restored database never points at an object version already gone. It also bounds how long a deleted or redacted file survives. Executed by the bucket lifecycle rule (B23 infrastructure), not application code.',
   },
   {
     id: 'read-notifications',

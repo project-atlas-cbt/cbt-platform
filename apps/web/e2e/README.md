@@ -12,6 +12,7 @@ accessibility rules.
 | `matrix.spec.ts`           | 4 — `@matrix` student smoke; the only test the Firefox and WebKit projects run                                          |
 | `low-end.spec.ts`          | 5 — 4× CPU throttle: in-page selection/navigation latency and long-task budgets (Chromium)                              |
 | `precache.spec.ts`         | 7 — media pre-cached before Start and rendered offline; a second sitting loads from the precache; no API caching        |
+| `recovery.spec.ts`         | B22 — a reload mid-exam with unsynced answers: same attempt, selections kept, every answer synced                       |
 | `network.spec.ts`          | 8 — `503 Retry-After` on reads and answer saves; congested lossy link; full disconnect; no reload on reconnect          |
 | `security-headers.spec.ts` | 10 — nonce CSP and headers on every page; injected script and handlers do not run; no violations through an exam        |
 

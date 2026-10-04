@@ -1,11 +1,21 @@
 import { Worker, type ConnectionOptions, type Job, type Queue } from 'bullmq';
 import { prisma, withTenant } from '@atlas/db';
-import { attemptGraceWindowSeconds, type AttemptMarkingJobPayload } from '@atlas/domain';
+import {
+  attemptGraceWindowSeconds,
+  RESULT_ADJUSTMENT_CLAIM_TTL_MS,
+  type AttemptMarkingJobPayload,
+  type ResultAdjustmentJobPayload,
+} from '@atlas/domain';
+import { recordDependencyFallback, recordWorkReconciled } from '@atlas/observability';
+import { ensureProcessingResult } from './result-finalization.js';
+import type { JobReconcileOutcome } from '../job-reconcile.js';
 
 export const ATTEMPT_AUTO_SUBMIT_QUEUE_NAME = 'atlas-attempt-auto-submit-sweep';
 // A stable jobId so re-scheduling on every process restart doesn't pile up
 // duplicate repeatable jobs — same idiom as every other sweep in this file.
-const SWEEP_JOB_ID = 'sweep';
+/** Exported for the worker's schedule guard (B22, main.ts). */
+export const AUTO_SUBMIT_SWEEP_JOB_ID = 'sweep';
+const SWEEP_JOB_ID = AUTO_SUBMIT_SWEEP_JOB_ID;
 
 export interface AttemptAutoSubmitSweepDeps {
   /** Enqueues onto the shared `ATTEMPT_MARKING_QUEUE_NAME` queue — the
@@ -14,8 +24,22 @@ export interface AttemptAutoSubmitSweepDeps {
    * stays directly unit/integration-testable without standing up a real
    * BullMQ `Queue`. */
   enqueueMarking: (payload: AttemptMarkingJobPayload, jobId?: string) => Promise<void>;
+  /** B22: makes sure marking owed to a finalised attempt is actually
+   * queued — enqueues it if no job exists, retries it if the job failed.
+   * Optional so tests of the transition alone need not provide it. */
+  reconcileMarking?: (payload: AttemptMarkingJobPayload) => Promise<MarkingReconcileOutcome>;
+  /** B22: the same for a result adjustment whose run died or whose job
+   * was lost — its cohort stays held until it completes. */
+  reconcileAdjustment?: (payload: ResultAdjustmentJobPayload) => Promise<JobReconcileOutcome>;
   now?: () => Date;
 }
+
+export type MarkingReconcileOutcome = JobReconcileOutcome;
+
+/** A result still PROCESSING this long after finalisation is owed marking
+ * that has not happened. Comfortably past a normal marking run, so the pass
+ * never races the enqueue a submit is about to make. */
+export const MARKING_RECONCILE_AFTER_MS = 2 * 60 * 1000;
 
 /**
  * ADR-0004: "a background sweeper as the authority, plus opportunistic
@@ -51,12 +75,9 @@ export interface AttemptAutoSubmitSweepDeps {
  * a manual submit) already won this exact attempt between this sweep's own
  * `findMany` and this `updateMany` — never treated as an error.
  *
- * Shares one known, narrow, documented residual risk with `apps/api`'s own
- * `AttemptFinalizationService` — see that class's own doc comment: an
- * `enqueueMarking` failure after a successful transition has no automatic
- * retry path (the transition itself must commit immediately regardless,
- * per ADR-0004, unlike `subscription-expiry.queue.ts`'s own deferrable
- * "mark handled only after a successful enqueue" pattern).
+ * B22: also the reconciliation authority for marking — see
+ * `reconcileOwedMarking` below, which closed the residual risk (a lost
+ * marking enqueue was never retried) this comment used to record.
  */
 export async function runAttemptAutoSubmitSweep(deps: AttemptAutoSubmitSweepDeps): Promise<void> {
   const now = deps.now?.() ?? new Date();
@@ -74,31 +95,39 @@ export async function runAttemptAutoSubmitSweep(deps: AttemptAutoSubmitSweepDeps
 
       for (const { id: attemptId } of expired) {
         try {
-          const { count } = await withTenant(prisma, school.id, (tx) =>
-            tx.examAttempt.updateMany({
+          // B22: the transition, the PROCESSING result and the audit row
+          // commit together (they used to be three transactions, and the
+          // sweeper wrote no result at all), so a crash or outage between
+          // them can no longer leave a finalised attempt with no record that
+          // marking is owed.
+          const transitioned = await withTenant(prisma, school.id, async (tx) => {
+            const { count } = await tx.examAttempt.updateMany({
               where: { schoolId: school.id, id: attemptId, state: 'IN_PROGRESS' },
               data: { state: 'AUTO_SUBMITTED', submittedAt: now },
-            }),
-          );
-          if (count === 0) continue; // already finalized by another path — safe no-op.
-
-          const attempt = await withTenant(prisma, school.id, (tx) =>
-            tx.examAttempt.findUniqueOrThrow({
+            });
+            if (count === 0) return false; // already finalized by another path — safe no-op.
+            const attempt = await tx.examAttempt.findUniqueOrThrow({
               where: { id: attemptId },
               select: {
+                examId: true,
+                studentProfileId: true,
                 studentProfile: { select: { membership: { select: { userId: true } } } },
               },
-            }),
-          );
-          // Attributed to the attempt's own student — AuditEvent.actorUserId/
-          // actorRole are non-nullable and Role has no SYSTEM value, the
-          // same convention apps/api's own AttemptFinalizationService uses
-          // for this identical action. Written directly via Prisma, not
-          // through AuditService (Nest DI, unavailable in this process) —
-          // the same direct-write precedent this file's own sibling sweeps
-          // already use for Notification rows.
-          await withTenant(prisma, school.id, (tx) =>
-            tx.auditEvent.create({
+            });
+            await ensureProcessingResult(tx, {
+              schoolId: school.id,
+              attemptId,
+              examId: attempt.examId,
+              studentProfileId: attempt.studentProfileId,
+            });
+            // Attributed to the attempt's own student — AuditEvent.actorUserId/
+            // actorRole are non-nullable and Role has no SYSTEM value, the
+            // same convention apps/api's own AttemptFinalizationService uses
+            // for this identical action. Written directly via Prisma, not
+            // through AuditService (Nest DI, unavailable in this process) —
+            // the same direct-write precedent this file's own sibling sweeps
+            // already use for Notification rows.
+            await tx.auditEvent.create({
               data: {
                 schoolId: school.id,
                 actorUserId: attempt.studentProfile.membership.userId,
@@ -107,18 +136,107 @@ export async function runAttemptAutoSubmitSweep(deps: AttemptAutoSubmitSweepDeps
                 entityType: 'ExamAttempt',
                 entityId: attemptId,
               },
-            }),
-          );
+            });
+            return true;
+          });
+          if (!transitioned) continue;
 
           await deps.enqueueMarking({ schoolId: school.id, attemptId }, `mark-${attemptId}`);
         } catch (err) {
           console.error(`[worker] attempt-auto-submit failed for attempt ${attemptId}:`, err);
         }
       }
+      if (deps.reconcileMarking) {
+        await reconcileOwedMarking(school.id, now, deps.reconcileMarking);
+      }
+      if (deps.reconcileAdjustment) {
+        await reconcileOwedAdjustments(school.id, now, deps.reconcileAdjustment);
+      }
     } catch (err) {
       console.error(`[worker] attempt-auto-submit sweep failed for school ${school.id}:`, err);
     }
   }
+}
+
+/**
+ * B22 (08 §25 "worker crash" / "result worker failure"; closes the gap
+ * B14 recorded against itself): every finalised attempt holds a result
+ * that stays PROCESSING until marking commits. One still PROCESSING well
+ * after finalisation means its marking was lost — an enqueue that failed
+ * during a Redis outage, a job that stalled twice when workers were killed,
+ * a job that failed every retry — so this pass makes sure a job for it is
+ * queued. Marking itself is idempotent and ignores a result that is no
+ * longer PROCESSING, so a duplicate here costs one no-op job.
+ *
+ * Runs per school inside the sweep (RLS, as above). Uses the
+ * `(school_id, state, finalized_at)` index: PROCESSING results are only
+ * ever the handful not yet marked.
+ */
+/** Exhausted work stays exhausted until an operator replays it, so it is
+ * seen on every pass; it is logged once per EXHAUSTED_LOG_EVERY_MS per
+ * school, not every 15 s. Recovered work is always logged. */
+const EXHAUSTED_LOG_EVERY_MS = 10 * 60 * 1000;
+const lastExhaustedLog = new Map<string, number>();
+function shouldLogReconciliation(
+  key: string,
+  counts: Record<JobReconcileOutcome, number>,
+  now: Date,
+): boolean {
+  if (counts.enqueued + counts.retried > 0) return true;
+  if (counts.exhausted === 0) return false;
+  const last = lastExhaustedLog.get(key) ?? 0;
+  if (now.getTime() - last < EXHAUSTED_LOG_EVERY_MS) return false;
+  lastExhaustedLog.set(key, now.getTime());
+  return true;
+}
+
+export async function reconcileOwedMarking(
+  schoolId: string,
+  now: Date,
+  reconcile: NonNullable<AttemptAutoSubmitSweepDeps['reconcileMarking']>,
+): Promise<Record<MarkingReconcileOutcome, number>> {
+  const counts: Record<MarkingReconcileOutcome, number> = {
+    pending: 0,
+    enqueued: 0,
+    retried: 0,
+    exhausted: 0,
+  };
+  const owed = await withTenant(prisma, schoolId, (tx) =>
+    tx.result.findMany({
+      where: {
+        schoolId,
+        state: 'PROCESSING',
+        createdAt: { lte: new Date(now.getTime() - MARKING_RECONCILE_AFTER_MS) },
+        attempt: { state: { in: ['SUBMITTED', 'AUTO_SUBMITTED'] } },
+      },
+      select: { attemptId: true },
+      // Newest first: results left exhausted (an operator's job) must never
+      // crowd newly owed marking out of the batch.
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    }),
+  );
+  for (const { attemptId } of owed) {
+    try {
+      const outcome = await reconcile({ schoolId, attemptId });
+      counts[outcome] += 1;
+    } catch (err) {
+      // Redis unreachable: the next tick tries again.
+      recordDependencyFallback('queue', 'marking-reconcile');
+      console.error(`[worker] marking reconciliation failed for attempt ${attemptId}:`, err);
+      break;
+    }
+  }
+  for (const outcome of ['enqueued', 'retried', 'exhausted'] as const) {
+    recordWorkReconciled('marking', outcome, counts[outcome]);
+  }
+  if (shouldLogReconciliation(`marking:${schoolId}`, counts, now)) {
+    // Structured enough to alert on (B22 runbook): any non-zero
+    // `enqueued`/`retried` means marking was lost and recovered;
+    // `exhausted` needs an operator.
+    console.warn(JSON.stringify({ msg: 'marking reconciliation', schoolId, ...counts }));
+  }
+  return counts;
 }
 
 export function createAttemptAutoSubmitWorker(
@@ -151,4 +269,55 @@ export async function scheduleAttemptAutoSubmitSweep(queue: Queue, everyMs: numb
     { every: everyMs },
     { opts: { removeOnComplete: true, removeOnFail: 10 } },
   );
+}
+
+/**
+ * B22: a result adjustment holds its whole cohort (`adjustmentInProgress`)
+ * until it completes, so one whose job was lost or failed for good must
+ * not be left PENDING/PROCESSING. Owed = not finished, created a while
+ * ago, and no live lease (a running adjustment refreshes its lease every
+ * chunk, so an unrefreshed one is dead). The job itself is resumable and
+ * idempotent per result.
+ */
+export async function reconcileOwedAdjustments(
+  schoolId: string,
+  now: Date,
+  reconcile: NonNullable<AttemptAutoSubmitSweepDeps['reconcileAdjustment']>,
+): Promise<Record<JobReconcileOutcome, number>> {
+  const counts: Record<JobReconcileOutcome, number> = {
+    pending: 0,
+    enqueued: 0,
+    retried: 0,
+    exhausted: 0,
+  };
+  const staleBefore = new Date(now.getTime() - RESULT_ADJUSTMENT_CLAIM_TTL_MS);
+  const owed = await withTenant(prisma, schoolId, (tx) =>
+    tx.resultAdjustmentOperation.findMany({
+      where: {
+        schoolId,
+        status: { in: ['PENDING', 'PROCESSING'] },
+        createdAt: { lte: new Date(now.getTime() - MARKING_RECONCILE_AFTER_MS) },
+        OR: [{ processingClaimedAt: null }, { processingClaimedAt: { lt: staleBefore } }],
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+  );
+  for (const { id: operationId } of owed) {
+    try {
+      counts[await reconcile({ schoolId, operationId })] += 1;
+    } catch (err) {
+      recordDependencyFallback('queue', 'adjustment-reconcile');
+      console.error(`[worker] adjustment reconciliation failed for ${operationId}:`, err);
+      break;
+    }
+  }
+  for (const outcome of ['enqueued', 'retried', 'exhausted'] as const) {
+    recordWorkReconciled('result-adjustment', outcome, counts[outcome]);
+  }
+  if (shouldLogReconciliation(`adjustment:${schoolId}`, counts, now)) {
+    console.warn(JSON.stringify({ msg: 'adjustment reconciliation', schoolId, ...counts }));
+  }
+  return counts;
 }

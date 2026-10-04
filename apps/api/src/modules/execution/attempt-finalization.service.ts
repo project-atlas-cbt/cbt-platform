@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
 import { attemptGraceWindowSeconds } from '@atlas/domain';
 import { AuditService } from '../operations/audit-event.service.js';
@@ -28,24 +28,14 @@ import { ExamControlStreamService } from './exam-control-stream.service.js';
  * already won; the attempt's own current state is authoritative regardless
  * of which path produced it.
  *
- * Known, narrow residual risk (documented, not silently accepted): the
- * state transition itself must commit immediately, unconditionally,
- * regardless of downstream availability (ADR-0004) — so, unlike
- * `subscription-expiry.queue.ts`'s own "don't mark a threshold handled
- * until the dispatch enqueue actually succeeds" pattern, this method
- * cannot defer the transition until `marking.enqueue()` succeeds. If that
- * one call fails (e.g. a Redis outage at that exact instant — the same
- * Redis every other part of this platform already depends on), the
- * attempt is correctly finalized, but marking is never enqueued for it and
- * nothing currently re-discovers and retries that gap later. Not fixed
- * here: doing so would need a genuinely new "finalized attempts with no
- * marking output and no pending job" reconciliation scan, beyond this
- * phase's own scope — recorded here for whoever next revisits this class
- * of gap (a Candidate for B14's own hardening pass or B21).
+ * B22 closed the residual risk this comment used to record (a marking
+ * enqueue lost to a Redis outage was never retried): the PROCESSING result
+ * committed with the transition is now the durable record that marking is
+ * owed, and the worker's reconciliation pass re-enqueues marking for any
+ * finalised attempt whose result is still PROCESSING with no live job.
  *
- * Everything from the transition onward (loading the student for
- * attribution, the audit write, the Control Center publish, the marking
- * enqueue) is a best-effort side effect of a transition that has ALREADY
+ * Everything after the transition commits (the Control Center publish,
+ * the marking enqueue) is a best-effort side effect of a transition that has ALREADY
  * durably committed — never a reason to fail the caller. `heartbeat()`,
  * `resume()`, and `GET /status` all document themselves as non-blocking,
  * and `submit()`'s own late-arrival branch is meant to degrade to a clean
@@ -58,16 +48,14 @@ import { ExamControlStreamService } from './exam-control-stream.service.js';
  * unguarded — a single Redis blip (shared by both the stream and the
  * queue) would have turned an opportunistic, incidental side-check into a
  * 500 on `GET /:id`, `POST /:id/heartbeat`, and `GET /:id/status`, even
- * though the transition itself had already succeeded. Fixed by catching
- * and logging here, mirroring `apps/worker`'s own per-attempt `try/catch`
- * in its sweeper (`attempt-auto-submit.queue.ts`) — the return value is
- * `true` once the transition itself has committed, regardless of whether
- * these side effects succeeded.
+ * though the transition itself had already succeeded. Now the audit row
+ * commits inside the transition and the two remaining side effects never
+ * throw (`publishSoon` and `enqueueAfterCommit` log and fall back) — the
+ * return value is `true` once the transition itself has committed,
+ * regardless of whether these side effects succeeded.
  */
 @Injectable()
 export class AttemptFinalizationService {
-  private readonly logger = new Logger(AttemptFinalizationService.name);
-
   constructor(
     private readonly audit: AuditService,
     private readonly stream: ExamControlStreamService,
@@ -77,6 +65,7 @@ export class AttemptFinalizationService {
   async finalizeIfExpired(schoolId: string, attemptId: string, now: Date): Promise<boolean> {
     const cutoff = new Date(now.getTime() - attemptGraceWindowSeconds() * 1000);
 
+    let examId: string | undefined;
     const { count } = await withTenant(prisma, schoolId, async (tx) => {
       const transition = await tx.examAttempt.updateMany({
         where: { schoolId, id: attemptId, state: 'IN_PROGRESS', expiresAt: { lte: cutoff } },
@@ -90,7 +79,11 @@ export class AttemptFinalizationService {
       if (transition.count > 0) {
         const owner = await tx.examAttempt.findUniqueOrThrow({
           where: { id: attemptId },
-          select: { examId: true, studentProfileId: true },
+          select: {
+            examId: true,
+            studentProfileId: true,
+            studentProfile: { select: { membership: { select: { userId: true } } } },
+          },
         });
         await ensureProcessingResult(tx, {
           schoolId,
@@ -98,50 +91,34 @@ export class AttemptFinalizationService {
           examId: owner.examId,
           studentProfileId: owner.studentProfileId,
         });
+        // Attributed to the attempt's own student — matches every other
+        // system-initiated action in this schema: AuditEvent.actorUserId/
+        // actorRole are non-nullable and Role has no SYSTEM value, so a system
+        // action is recorded against its subject, the only option the schema
+        // permits (the same convention decision 1's BINDING_MISMATCH signal and
+        // every other B13 system path already use). B22: written in the
+        // transition's own transaction, so it can no longer be lost to a
+        // failure after commit.
+        await this.audit.recordInTx(tx, {
+          schoolId,
+          actorUserId: owner.studentProfile.membership.userId,
+          actorRole: 'STUDENT',
+          action: 'ATTEMPT_AUTO_SUBMITTED',
+          entityType: 'ExamAttempt',
+          entityId: attemptId,
+        });
+        examId = owner.examId;
       }
       return transition;
     });
-    if (count === 0) return false;
+    if (count === 0 || examId === undefined) return false;
 
-    try {
-      const attempt = await withTenant(prisma, schoolId, (tx) =>
-        tx.examAttempt.findUniqueOrThrow({
-          where: { id: attemptId },
-          select: {
-            examId: true,
-            studentProfile: { select: { membership: { select: { userId: true } } } },
-          },
-        }),
-      );
-
-      // Attributed to the attempt's own student — matches every other
-      // system-initiated action in this schema: AuditEvent.actorUserId/
-      // actorRole are non-nullable and Role has no SYSTEM value, so a system
-      // action is recorded against its subject, the only option the schema
-      // permits (the same convention decision 1's BINDING_MISMATCH signal and
-      // every other B13 system path already use).
-      await this.audit.record({
-        schoolId,
-        actorUserId: attempt.studentProfile.membership.userId,
-        actorRole: 'STUDENT',
-        action: 'ATTEMPT_AUTO_SUBMITTED',
-        entityType: 'ExamAttempt',
-        entityId: attemptId,
-      });
-      await this.stream.publishSoon(schoolId, attempt.examId);
-      await this.marking.enqueue({ schoolId, attemptId }, `mark-${attemptId}`);
-    } catch (error) {
-      // The transition above already committed — this is a best-effort
-      // side effect, not the outcome the caller is waiting on. Swallowed
-      // and logged loudly rather than thrown, per this class's own doc
-      // comment; see that comment for the known residual risk this leaves
-      // (a lost marking-enqueue is not currently retried by anything else).
-      this.logger.error(
-        `finalizeIfExpired: attempt ${attemptId} transitioned to AUTO_SUBMITTED, but a ` +
-          `downstream side effect (audit write / Control Center publish / marking enqueue) ` +
-          `failed: ${String(error)}`,
-      );
-    }
+    // The transition (with its PROCESSING result and audit row) has
+    // committed; what follows is best-effort and never throws. A lost
+    // marking enqueue is re-discovered by the worker's reconciliation pass
+    // (B22), so a Redis outage at this instant delays marking, never loses it.
+    await this.stream.publishSoon(schoolId, examId);
+    await this.marking.enqueueAfterCommit({ schoolId, attemptId });
 
     return true;
   }

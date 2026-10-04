@@ -28,4 +28,7 @@ export interface AttemptMarkingJobPayload {
    * so the worker's result-generation span joins the same trace. Optional —
    * jobs enqueued before B20, or by the sweeper outside any span, carry none. */
   trace?: Record<string, string>;
+  /** B22: how many times the reconciliation pass has retried this job
+   * after it failed every attempt (bounded; see apps/worker job-reconcile). */
+  autoRetries?: number;
 }

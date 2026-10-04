@@ -337,6 +337,41 @@ const envObject = z.object({
   MARKING_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
   /** Control Center SSE streams one API process will hold; beyond it, clients fall back to polling (R-04). */
   SSE_MAX_CONNECTIONS_PER_PROCESS: z.coerce.number().int().positive().default(500),
+
+  // B22 failure handling (08 §25). A Redis or object-storage outage must
+  // degrade, never hang: every dependency call is bounded and falls back.
+  /** Longest a single Redis command may take (including while reconnecting)
+   * before it fails and the caller's fallback runs. */
+  REDIS_COMMAND_TIMEOUT_MS: z.coerce.number().int().min(50).max(30_000).default(1000),
+  /** Longest a queue enqueue may take before the caller treats it as failed
+   * (the job id is stable, so a late success is harmless). */
+  QUEUE_ENQUEUE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(2000),
+  /** API processes the cluster may run at most. While Redis is down each
+   * process enforces rate limits and login lockout in memory at
+   * limit ÷ this number, so the cluster as a whole is never looser than
+   * the normal shared limit. Set it to the autoscaling maximum (B23). */
+  RATE_LIMIT_FALLBACK_PROCESSES: z.coerce.number().int().min(1).max(64).default(2),
+  /** Object-storage client: connect and per-request timeouts, and SDK attempts. */
+  S3_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(3000),
+  S3_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(500).max(300_000).default(15_000),
+  S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  /** Whether the API creates its bucket at boot. Dev/CI only — production's
+   * bucket is provisioned by infrastructure (B23), and the runtime role has
+   * no CreateBucket right. A failure is logged, never fatal. */
+  S3_ENSURE_BUCKET: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** Upper bound on a graceful shutdown (drain requests, stop consumers,
+   * flush telemetry) before the process exits anyway. Keep it below the
+   * orchestrator's stop timeout (ECS default 30 s). */
+  SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600_000).default(25_000),
+  /** Dev/CI only: also enable bucket versioning at boot (MinIO); s3rver
+   * does not support it, so it is off by default. */
+  S3_ENSURE_VERSIONING: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 const DEV_SECRET_MARKERS = ['dev-only', 'change-me', 'changeme', 'ci-only', 'example', 'secret'];

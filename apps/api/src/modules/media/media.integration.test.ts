@@ -254,6 +254,47 @@ describe('B4 — media upload/validate/sign pipeline (real MinIO)', () => {
     expect(unsigned.status).toBe(403);
   });
 
+  it('B22: an upload that landed inside its window completes even when complete() arrives after it (a retry through an outage)', async () => {
+    const school = await createSchool();
+    createdSchoolIds.push(school.id);
+    const host = `${school.subdomain}.${ROOT_DOMAIN}`;
+    const admin = await seedSchoolAdmin(school.id, `media-late-${RUN}`, 'CorrectHorseBattery1!');
+    createdUserIds.push(admin.id);
+    const ctx = await freshCtx(host, `10.${RUN}.1.7`);
+    await login(ctx, `media-late-${RUN}`, 'CorrectHorseBattery1!');
+
+    const upload = async () => {
+      const res = await post(ctx, '/media/uploads', {
+        type: 'QUESTION_IMAGE',
+        filename: 'late.png',
+        declaredMimeType: 'image/png',
+        declaredSizeBytes: REAL_PNG_1x1.length,
+      });
+      return res.json<{ mediaAssetId: string; uploadUrl: string }>();
+    };
+    const expireWindow = (id: string) =>
+      withTenant(prisma, school.id, (tx) =>
+        tx.mediaAsset.update({
+          where: { id },
+          data: { uploadUrlExpiresAt: new Date(Date.now() - 60_000) },
+        }),
+      );
+
+    // Uploaded in time; the complete() call is late.
+    const landed = await upload();
+    expect((await rawRequest('PUT', landed.uploadUrl, REAL_PNG_1x1)).status).toBe(200);
+    await expireWindow(landed.mediaAssetId);
+    const completed = await post(ctx, `/media/uploads/${landed.mediaAssetId}/complete`);
+    expect(completed.statusCode).toBe(201);
+    expect(completed.json<{ status: string }>().status).toBe('READY');
+
+    // Nothing uploaded and the window is over: still expired.
+    const never = await upload();
+    await expireWindow(never.mediaAssetId);
+    const late = await post(ctx, `/media/uploads/${never.mediaAssetId}/complete`);
+    expect(late.json<{ error: { code: string } }>().error.code).toBe('MEDIA_UPLOAD_EXPIRED');
+  });
+
   it('rejects content by sniffing, not extension — fake bytes uploaded as a PNG never reach READY', async () => {
     const school = await createSchool();
     createdSchoolIds.push(school.id);

@@ -198,7 +198,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Readiness probe — database and Redis are reachable. */
+        /** Readiness probe — 503 only when the database is unreachable or the process is draining; Redis and object storage are reported as degraded. */
         get: operations["HealthController_readiness"];
         put?: never;
         post?: never;

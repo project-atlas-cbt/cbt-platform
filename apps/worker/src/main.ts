@@ -2,7 +2,13 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { loadEnv, loadRootEnv, redisConnectionFromUrl } from '@atlas/config';
 import { prisma } from '@atlas/db';
-import { ATTEMPT_MARKING_QUEUE_NAME, type AttemptMarkingJobPayload } from '@atlas/domain';
+import {
+  FAILED_JOB_RETENTION,
+  ATTEMPT_MARKING_QUEUE_NAME,
+  RESULT_ADJUSTMENT_QUEUE_NAME,
+  type AttemptMarkingJobPayload,
+  type ResultAdjustmentJobPayload,
+} from '@atlas/domain';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
   OPERATIONAL_ALERT_TEMPLATE,
@@ -30,9 +36,12 @@ import {
   ATTEMPT_AUTO_SUBMIT_QUEUE_NAME,
   createAttemptAutoSubmitWorker,
   scheduleAttemptAutoSubmitSweep,
+  AUTO_SUBMIT_SWEEP_JOB_ID,
 } from './queues/attempt-auto-submit.queue.js';
 import { createAttemptMarkingWorker } from './queues/attempt-marking.queue.js';
 import { startLoadShedGate } from './load-shed-gate.js';
+import { startScheduleGuard } from './schedule-guard.js';
+import { reconcileJob } from './job-reconcile.js';
 import { createResultAdjustmentWorker } from './queues/result-adjustment.queue.js';
 import {
   SUBSCRIPTION_EXPIRY_QUEUE_NAME,
@@ -76,6 +85,9 @@ import {
   scheduleRetentionSweep,
 } from './queues/retention.queue.js';
 
+/** B22: how often the worker checks that its job schedulers still exist. */
+const SCHEDULE_GUARD_MS = 30_000;
+
 async function main() {
   loadRootEnv();
   const env = loadEnv();
@@ -102,7 +114,19 @@ async function main() {
   const connection = redisConnectionFromUrl(redisUrl.toString());
 
   const probeWorker = createProbeWorker(connection);
-  const redis = new Redis(env.REDIS_URL);
+  // B22: bounded commands (no ~73 s hang while Redis is down) and an
+  // 'error' listener, so a dropped connection is logged, rate-limited,
+  // instead of ioredis's unhandled-error noise on every reconnect attempt.
+  const redis = new Redis(env.REDIS_URL, {
+    commandTimeout: env.REDIS_COMMAND_TIMEOUT_MS,
+    maxRetriesPerRequest: 1,
+  });
+  let lastRedisErrorLogAt = 0;
+  redis.on('error', (err: Error) => {
+    if (Date.now() - lastRedisErrorLogAt < 30_000) return;
+    lastRedisErrorLogAt = Date.now();
+    logger.warn({ err: err.message }, 'Redis connection error (retrying)');
+  });
 
   // B10: this process is now a *producer only* onto the shared
   // notification-dispatch queue — apps/api's worker-hosted consumer
@@ -125,7 +149,7 @@ async function main() {
       attempts: 5,
       backoff: { type: 'exponential', delay: 30_000 },
       removeOnComplete: true,
-      removeOnFail: 10,
+      removeOnFail: FAILED_JOB_RETENTION,
     });
   };
 
@@ -199,7 +223,7 @@ async function main() {
       attempts: 5,
       backoff: { type: 'exponential', delay: 10_000 },
       removeOnComplete: true,
-      removeOnFail: 10,
+      removeOnFail: FAILED_JOB_RETENTION,
     });
   };
   const attemptMarkingWorker = createAttemptMarkingWorker(
@@ -217,8 +241,30 @@ async function main() {
   // as the authority, plus opportunistic finalisation, sharing one
   // idempotent routine" (apps/api's AttemptFinalizationService is the
   // opportunistic half).
+  // B22: a producer handle for the adjustment queue, used only by the
+  // reconciliation pass to re-queue an adjustment whose job was lost.
+  const resultAdjustmentQueue = new Queue<ResultAdjustmentJobPayload>(
+    RESULT_ADJUSTMENT_QUEUE_NAME,
+    { connection },
+  );
   const attemptAutoSubmitWorker = createAttemptAutoSubmitWorker(connection, {
     enqueueMarking,
+    // B22: re-queues marking lost to an outage or a worker crash.
+    reconcileMarking: (payload) =>
+      reconcileJob(attemptMarkingQueue, `mark-${payload.attemptId}`, () =>
+        enqueueMarking(payload, `mark-${payload.attemptId}`),
+      ),
+    // Same options as apps/api's ResultAdjustmentQueueService (the producer).
+    reconcileAdjustment: (payload) =>
+      reconcileJob(resultAdjustmentQueue, `adjust-${payload.operationId}`, async () => {
+        await resultAdjustmentQueue.add('adjust', payload, {
+          jobId: `adjust-${payload.operationId}`,
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 10_000 },
+          removeOnComplete: true,
+          removeOnFail: FAILED_JOB_RETENTION,
+        });
+      }),
   });
   const attemptAutoSubmitQueue = new Queue(ATTEMPT_AUTO_SUBMIT_QUEUE_NAME, { connection });
 
@@ -293,6 +339,39 @@ async function main() {
   const retentionWorker = createRetentionWorker(connection, { logger });
   const retentionQueue = new Queue(RETENTION_QUEUE_NAME, { connection });
   await scheduleRetentionSweep(retentionQueue, env.RETENTION_SWEEP_INTERVAL_MS);
+
+  // B22: re-registers the job schedulers if Redis lost them (schedule-guard.ts).
+  const reassertSchedules = async (): Promise<void> => {
+    await scheduleSubscriptionExpirySweep(
+      subscriptionExpiryQueue,
+      env.SUBSCRIPTION_SWEEP_INTERVAL_MS,
+    );
+    await scheduleUnassignedStudentsDigest(
+      unassignedStudentsDigestQueue,
+      env.UNASSIGNED_STUDENTS_DIGEST_INTERVAL_MS,
+    );
+    await scheduleOrphanMediaReport(orphanMediaReportQueue, env.MEDIA_ORPHAN_SWEEP_INTERVAL_MS);
+    await scheduleImportExpirySweep(importExpiryQueue, env.IMPORT_EXPIRY_SWEEP_INTERVAL_MS);
+    await scheduleExamControlRefreshSweep(
+      examControlRefreshQueue,
+      env.EXAM_CONTROL_REFRESH_INTERVAL_MS,
+    );
+    await scheduleAnalyticsRefresh(analyticsRefreshQueue, env.ANALYTICS_REFRESH_INTERVAL_MS);
+    await scheduleAttemptAutoSubmitSweep(
+      attemptAutoSubmitQueue,
+      env.ATTEMPT_AUTO_SUBMIT_SWEEP_INTERVAL_MS,
+    );
+    await scheduleExamHealthMonitor(examHealthMonitorQueue, env.EXAM_HEALTH_INTERVAL_MS);
+    await scheduleRetentionSweep(retentionQueue, env.RETENTION_SWEEP_INTERVAL_MS);
+  };
+  const scheduleGuard = startScheduleGuard({
+    sentinel: attemptAutoSubmitQueue,
+    sentinelId: AUTO_SUBMIT_SWEEP_JOB_ID,
+    reassert: reassertSchedules,
+    onRestored: () =>
+      logger.warn('Job schedulers were missing (Redis lost its data) — registered them again'),
+    everyMs: SCHEDULE_GUARD_MS,
+  });
 
   // Same 'error'-event risk as the Workers below, for the Queue (enqueue)
   // side of each connection.
@@ -383,23 +462,47 @@ async function main() {
     `${env.PRODUCT_NAME} worker listening`,
   );
 
+  // B22: bounded, like apps/api's. Active jobs get WORKER_CLOSE_TIMEOUT_MS
+  // to finish; a worker that cannot close (a Redis connection cut while it
+  // was blocked waiting for a job can leave BullMQ waiting forever) is
+  // abandoned — its held job is redelivered by the stalled-job check on
+  // another worker. SHUTDOWN_TIMEOUT_MS bounds the whole sequence.
+  const WORKER_CLOSE_TIMEOUT_MS = 10_000;
+  const closeBounded = async (worker: { name: string; close(): Promise<void> }) => {
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), WORKER_CLOSE_TIMEOUT_MS);
+    });
+    const outcome = await Promise.race([worker.close().then(() => 'closed' as const), timedOut]);
+    clearTimeout(timer);
+    if (outcome === 'timeout') {
+      logger.warn({ worker: worker.name }, 'Worker did not close in time; abandoning it');
+    }
+  };
   const shutdown = async () => {
+    scheduleGuard.stop();
     logger.info('Worker shutting down');
+    setTimeout(() => {
+      logger.error({ timeoutMs: env.SHUTDOWN_TIMEOUT_MS }, 'Shutdown timed out; exiting');
+      process.exit(1);
+    }, env.SHUTDOWN_TIMEOUT_MS).unref();
     loadShedGate.stop();
-    await Promise.all([
-      probeWorker.close(),
-      subscriptionExpiryWorker.close(),
-      orphanMediaReportWorker.close(),
-      importExpiryWorker.close(),
-      unassignedStudentsDigestWorker.close(),
-      examControlRefreshWorker.close(),
-      analyticsRefreshWorker.close(),
-      attemptMarkingWorker.close(),
-      resultAdjustmentWorker.close(),
-      attemptAutoSubmitWorker.close(),
-      examHealthMonitorWorker.close(),
-      retentionWorker.close(),
-    ]);
+    await Promise.all(
+      [
+        probeWorker,
+        subscriptionExpiryWorker,
+        orphanMediaReportWorker,
+        importExpiryWorker,
+        unassignedStudentsDigestWorker,
+        examControlRefreshWorker,
+        analyticsRefreshWorker,
+        attemptMarkingWorker,
+        resultAdjustmentWorker,
+        attemptAutoSubmitWorker,
+        examHealthMonitorWorker,
+        retentionWorker,
+      ].map((w) => closeBounded(w)),
+    );
     await subscriptionExpiryQueue.close();
     await orphanMediaReportQueue.close();
     await importExpiryQueue.close();
@@ -409,6 +512,7 @@ async function main() {
     await notificationDispatchQueue.close();
     await attemptMarkingQueue.close();
     await attemptAutoSubmitQueue.close();
+    await resultAdjustmentQueue.close();
     await examHealthMonitorQueue.close();
     await retentionQueue.close();
     await Promise.all([shutdownTelemetry(), shutdownMetrics(), flushSentry()]);
@@ -419,7 +523,10 @@ async function main() {
   // process.on expects a void-returning listener; wrapping avoids handing
   // it an async function directly (whose rejection would otherwise be
   // unhandled) — see @typescript-eslint/no-misused-promises.
+  let shuttingDown = false;
   const onSignal = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     void shutdown().catch((err: unknown) => {
       logger.error({ err }, 'Error during shutdown');
       process.exit(1);

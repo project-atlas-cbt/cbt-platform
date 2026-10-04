@@ -2,7 +2,12 @@ import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } fro
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import { redisConnectionFromUrl, type Env } from '@atlas/config';
-import { RESULT_ADJUSTMENT_QUEUE_NAME, type ResultAdjustmentJobPayload } from '@atlas/domain';
+import {
+  FAILED_JOB_RETENTION,
+  RESULT_ADJUSTMENT_QUEUE_NAME,
+  type ResultAdjustmentJobPayload,
+} from '@atlas/domain';
+import { withTimeout } from '../../common/dependency-health.js';
 
 /** B20: the hand-rolled `{ host, port }` parser this used to carry dropped
  * the Redis password and TLS; @atlas/config now owns the one full parser. */
@@ -48,12 +53,16 @@ export class ResultAdjustmentQueueService implements OnModuleInit, OnApplication
     if (!this.queue) {
       throw new Error('ResultAdjustmentQueueService.enqueue used before onModuleInit ran.');
     }
-    await this.queue.add('adjust', payload, {
-      jobId: `adjust-${payload.operationId}`,
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 10_000 },
-      removeOnComplete: true,
-      removeOnFail: 10,
-    });
+    await withTimeout(
+      this.queue.add('adjust', payload, {
+        jobId: `adjust-${payload.operationId}`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 10_000 },
+        removeOnComplete: true,
+        removeOnFail: FAILED_JOB_RETENTION,
+      }),
+      this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
+      'adjust enqueue',
+    );
   }
 }

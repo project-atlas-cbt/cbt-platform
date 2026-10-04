@@ -14,6 +14,7 @@ import {
   shutdownTelemetry,
 } from '@atlas/observability';
 import { PinoNestLogger } from './common/logging/pino-nest-logger.js';
+import { markDraining } from './common/lifecycle.js';
 import { AppModule } from './app.module.js';
 import { API_VERSION_PREFIX } from './openapi/version.js';
 import { registerHttpSecurity } from './security/http-security.js';
@@ -129,15 +130,35 @@ async function bootstrap() {
   // import workers above. See NotificationDispatchQueueService's own doc
   // comment.
   const notificationDispatchWorker = startNotificationDispatchWorker(app);
-  app.enableShutdownHooks();
-  const shutdown = () => {
+  // B22: one ordered, bounded shutdown (it used to race Nest's own
+  // shutdown hooks and could exit before in-flight requests finished).
+  // 1. readiness turns 503 so the load balancer stops routing here;
+  // 2. background consumers stop taking jobs (active ones finish);
+  // 3. app.close() ends SSE streams, then lets Fastify finish in-flight
+  //    requests, then closes queues and connections;
+  // 4. telemetry flushes. SHUTDOWN_TIMEOUT_MS bounds the whole sequence —
+  //    past it the process exits anyway and BullMQ redelivers any job it
+  //    held, so nothing is lost, only delayed.
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    markDraining();
+    logger.info({ signal }, 'Shutting down: draining in-flight requests');
+    const timeoutMs = config.get('SHUTDOWN_TIMEOUT_MS', { infer: true });
+    setTimeout(() => {
+      logger.error({ timeoutMs }, 'Shutdown timed out; exiting');
+      process.exit(1);
+    }, timeoutMs).unref();
     void Promise.all([importWorkers.close(), notificationDispatchWorker.close()])
       .catch((err: unknown) => logger.error({ err }, 'Error closing background workers'))
+      .then(() => app.close())
+      .catch((err: unknown) => logger.error({ err }, 'Error closing the application'))
       .then(() => Promise.all([shutdownTelemetry(), shutdownMetrics(), flushSentry()]))
       .finally(() => process.exit(0));
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 bootstrap().catch((err: unknown) => {

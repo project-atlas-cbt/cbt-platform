@@ -151,28 +151,30 @@ export class MediaService {
       return this.toSummary(asset);
     }
 
-    if (asset.uploadUrlExpiresAt.getTime() < Date.now()) {
+    // B22: HEAD first, then the window. The presigned PUT URL itself
+    // expires at uploadUrlExpiresAt, so an object that exists was uploaded
+    // inside the window — even if this complete() call arrives after it
+    // (the client retrying through a storage or API outage). Checking the
+    // window first rejected exactly those uploads.
+    const head = await this.storage.headObject(asset.storageKey);
+    if (!head) {
+      const expired = asset.uploadUrlExpiresAt.getTime() < Date.now();
       const rejected = await withTenant(prisma, schoolId, (tx) =>
         tx.mediaAsset.update({
           where: { id: mediaAssetId },
-          data: { status: 'REJECTED', rejectionReason: 'Upload window expired.' },
+          data: {
+            status: 'REJECTED',
+            rejectionReason: expired ? 'Upload window expired.' : 'No object received.',
+          },
         }),
       );
-      throw new AppHttpException({
-        code: 'MEDIA_UPLOAD_EXPIRED',
-        message: 'The upload window for this asset has expired.',
-        details: { rejectionReason: rejected.rejectionReason },
-      });
-    }
-
-    const head = await this.storage.headObject(asset.storageKey);
-    if (!head) {
-      await withTenant(prisma, schoolId, (tx) =>
-        tx.mediaAsset.update({
-          where: { id: mediaAssetId },
-          data: { status: 'REJECTED', rejectionReason: 'No object received.' },
-        }),
-      );
+      if (expired) {
+        throw new AppHttpException({
+          code: 'MEDIA_UPLOAD_EXPIRED',
+          message: 'The upload window for this asset has expired.',
+          details: { rejectionReason: rejected.rejectionReason },
+        });
+      }
       throw new AppHttpException({
         code: 'MEDIA_UPLOAD_NOT_RECEIVED',
         message: 'No file was received for this upload.',

@@ -9,6 +9,7 @@ import { ImportsService } from './imports.service.js';
 import { ImportQueueService } from './import-queue.service.js';
 import { ImportValidationService } from './import-validation.service.js';
 import { ImportCommitService } from './import-commit.service.js';
+import { ImportSourcePurgeService } from './import-source-purge.service.js';
 import { ImportsAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 
 /**
@@ -43,6 +44,8 @@ import { ImportsAuditActionRegistrationProvider } from './audit-action-registrat
     ImportQueueService,
     ImportValidationService,
     ImportCommitService,
+    // B22 (decision 6A): deletes import source files on the retention clock.
+    ImportSourcePurgeService,
     ImportsAuditActionRegistrationProvider,
   ],
   // ImportValidationService/ImportCommitService are exported so

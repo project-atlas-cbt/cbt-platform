@@ -2,7 +2,13 @@ import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } fro
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import { redisConnectionFromUrl, type Env } from '@atlas/config';
-import { EXPORT_EXPIRY_QUEUE_NAME, EXPORT_QUEUE_NAME, type ExportJobPayload } from '@atlas/domain';
+import {
+  FAILED_JOB_RETENTION,
+  EXPORT_EXPIRY_QUEUE_NAME,
+  EXPORT_QUEUE_NAME,
+  type ExportJobPayload,
+} from '@atlas/domain';
+import { withTimeout } from '../../common/dependency-health.js';
 
 @Injectable()
 export class ExportQueueService implements OnModuleInit, OnApplicationShutdown {
@@ -24,26 +30,36 @@ export class ExportQueueService implements OnModuleInit, OnApplicationShutdown {
 
   async enqueue(payload: ExportJobPayload): Promise<void> {
     if (!this.queue) throw new Error('Export queue used before initialization.');
-    await this.queue.add('generate', payload, {
-      jobId: `export-${payload.exportJobId}`,
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 10_000 },
-      removeOnComplete: true,
-      removeOnFail: 20,
-    });
+    await withTimeout(
+      this.queue.add('generate', payload, {
+        jobId: `export-${payload.exportJobId}`,
+        attempts: 5,
+        // B22: 1, 2, 4, 8 min — the retries outlast EXPORT_CLAIM_STALE_MS,
+        // so a redelivery after a killed worker can take the export over.
+        backoff: { type: 'exponential', delay: 60_000 },
+        removeOnComplete: true,
+        removeOnFail: FAILED_JOB_RETENTION,
+      }),
+      this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
+      'generate enqueue',
+    );
   }
   async enqueueExpiry(payload: ExportJobPayload, expiresAt: Date): Promise<void> {
     if (!this.expiryQueue) throw new Error('Export expiry queue used before initialization.');
-    await this.expiryQueue.add('expire', payload, {
-      jobId: `expire-export-${payload.exportJobId}`,
-      // The retention contract starts at request creation, not after a
-      // potentially long generation run.
-      delay: Math.max(0, expiresAt.getTime() - Date.now()),
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 10_000 },
-      removeOnComplete: true,
-      removeOnFail: 20,
-    });
+    await withTimeout(
+      this.expiryQueue.add('expire', payload, {
+        jobId: `expire-export-${payload.exportJobId}`,
+        // The retention contract starts at request creation, not after a
+        // potentially long generation run.
+        delay: Math.max(0, expiresAt.getTime() - Date.now()),
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 10_000 },
+        removeOnComplete: true,
+        removeOnFail: FAILED_JOB_RETENTION,
+      }),
+      this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
+      'expire enqueue',
+    );
   }
   async onApplicationShutdown(): Promise<void> {
     await this.queue?.close();

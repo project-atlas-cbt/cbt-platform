@@ -12,6 +12,8 @@ export const RESULT_ADJUSTMENT_QUEUE_NAME = 'atlas-result-adjustment';
 export interface ResultAdjustmentJobPayload {
   schoolId: string;
   operationId: string;
+  /** B22: automatic retries by the reconciliation pass (bounded). */
+  autoRetries?: number;
 }
 
 /**

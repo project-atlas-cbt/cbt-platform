@@ -2,10 +2,12 @@ import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } fro
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import { redisConnectionFromUrl, type Env } from '@atlas/config';
+import { FAILED_JOB_RETENTION } from '@atlas/domain';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
   type NotificationDispatchJobPayload,
 } from '@atlas/notifications';
+import { withTimeout } from '../../common/dependency-health.js';
 
 /** B20: the hand-rolled `{ host, port }` parser this used to carry dropped
  * the Redis password and TLS; @atlas/config now owns the one full parser. */
@@ -64,12 +66,16 @@ export class NotificationDispatchQueueService implements OnModuleInit, OnApplica
     if (!this.queue) {
       throw new Error('NotificationDispatchQueueService.enqueue used before onModuleInit ran.');
     }
-    await this.queue.add('dispatch', payload, {
-      ...(jobId !== undefined && { jobId }),
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 30_000 },
-      removeOnComplete: true,
-      removeOnFail: 10,
-    });
+    await withTimeout(
+      this.queue.add('dispatch', payload, {
+        ...(jobId !== undefined && { jobId }),
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 30_000 },
+        removeOnComplete: true,
+        removeOnFail: FAILED_JOB_RETENTION,
+      }),
+      this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
+      'dispatch enqueue',
+    );
   }
 }

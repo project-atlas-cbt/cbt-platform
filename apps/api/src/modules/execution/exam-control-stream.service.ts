@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, type BeforeApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Redis } from 'ioredis';
 import type { ServerResponse } from 'node:http';
@@ -18,6 +18,8 @@ import { REDIS_CLIENT, REDIS_SUBSCRIBER_CLIENT } from '../../redis/redis.module.
 import { loadParentExamOrThrow, type ExamControlParentExam } from './exam-control-mappers.js';
 import { computeExamControlSnapshot } from './exam-control-snapshot.util.js';
 import { LoadMonitorService } from '../../load/load-monitor.service.js';
+import { DependencyHealth } from '../../common/dependency-health.js';
+import { classifyUnavailable } from '../../common/dependency-errors.js';
 
 interface Connection {
   res: ServerResponse;
@@ -76,7 +78,7 @@ function writeEvent(res: ServerResponse, data: string, id?: string): void {
  * accepted, documented small race, not solved with distributed locking.
  */
 @Injectable()
-export class ExamControlStreamService {
+export class ExamControlStreamService implements BeforeApplicationShutdown {
   private readonly logger = new Logger(ExamControlStreamService.name);
   private readonly connectionsByChannel = new Map<string, Set<Connection>>();
   private listenerAttached = false;
@@ -88,6 +90,7 @@ export class ExamControlStreamService {
     private readonly config: ConfigService<Env, true>,
     private readonly authz: AuthorizationService,
     private readonly load: LoadMonitorService,
+    private readonly health: DependencyHealth,
   ) {}
 
   private ensureMessageListener(): void {
@@ -153,26 +156,52 @@ export class ExamControlStreamService {
     res.write(`retry: ${SSE_RETRY_MS}
 
 `);
-    if (lastEventId !== undefined) {
-      const entries = await this.redis.xrange(streamKey, `(${lastEventId}`, '+');
-      for (const [id, fields] of entries) {
-        const payload = fields[1];
-        if (payload !== undefined) writeEvent(res, payload, id);
+    try {
+      if (lastEventId !== undefined) {
+        const entries = await this.redis.xrange(streamKey, `(${lastEventId}`, '+');
+        for (const [id, fields] of entries) {
+          const payload = fields[1];
+          if (payload !== undefined) writeEvent(res, payload, id);
+        }
+      } else {
+        // Tagged with the newest replay entry's id (if any), so a reconnect
+        // after this first frame replays only what it missed.
+        const [latest] = await this.redis.xrevrange(streamKey, '+', '-', 'COUNT', 1);
+        const exam = await loadParentExamOrThrow(schoolId, examId);
+        const snapshot = await computeExamControlSnapshot(
+          schoolId,
+          examId,
+          exam.status,
+          thresholdMs,
+        );
+        writeEvent(res, JSON.stringify(snapshot), latest?.[0]);
       }
-    } else {
-      // Tagged with the newest replay entry's id (if any), so a reconnect
-      // after this first frame replays only what it missed.
-      const [latest] = await this.redis.xrevrange(streamKey, '+', '-', 'COUNT', 1);
+    } catch (err) {
+      if (!isRedisError(err)) throw err;
+      // B22 (08 §25): with Redis down there is no replay and no live
+      // fan-out. Send one live snapshot from the database and close; the
+      // browser's EventSource reconnects after SSE_RETRY_MS, which turns the
+      // stream into a database-backed poll until Redis is back.
+      this.health.fellBack('redis', 'control-stream', err);
       const exam = await loadParentExamOrThrow(schoolId, examId);
       const snapshot = await computeExamControlSnapshot(schoolId, examId, exam.status, thresholdMs);
-      writeEvent(res, JSON.stringify(snapshot), latest?.[0]);
+      writeEvent(res, JSON.stringify(snapshot));
+      res.end();
+      return;
     }
 
     let connections = this.connectionsByChannel.get(channel);
     if (!connections) {
+      try {
+        await this.subscriber.subscribe(channel);
+      } catch (err) {
+        // Same fallback as above: the snapshot is already written.
+        this.health.fellBack('redis', 'control-stream', err);
+        res.end();
+        return;
+      }
       connections = new Set();
       this.connectionsByChannel.set(channel, connections);
-      await this.subscriber.subscribe(channel);
     }
     const connection: Connection = {
       res,
@@ -188,7 +217,24 @@ export class ExamControlStreamService {
     });
   }
 
+  /**
+   * B22: an SSE response never finishes on its own, so the HTTP server's
+   * close would wait on every open Control Center stream until the
+   * shutdown timeout. End them first (Nest runs this before closing the
+   * server); each browser's EventSource reconnects to another instance
+   * after SSE_RETRY_MS and replays from Redis.
+   */
+  beforeApplicationShutdown(): void {
+    for (const [channel, connections] of [...this.connectionsByChannel]) {
+      for (const connection of [...connections]) {
+        connection.res.end();
+        this.detach(channel, connection);
+      }
+    }
+  }
+
   private detach(channel: string, connection: Connection): void {
+    if (!this.connectionsByChannel.get(channel)?.has(connection)) return;
     clearInterval(connection.heartbeat);
     this.load.streamClosed();
     const connections = this.connectionsByChannel.get(channel);
@@ -220,7 +266,16 @@ export class ExamControlStreamService {
     // snapshot in the cache afterwards.
     const pending = this.pending.get(examControlChannel(schoolId, examId));
     if (pending) pending.generation += 1;
-    await this.publishSnapshot(schoolId, examId, () => true);
+    // B22: never throws. Every caller has already committed its own change;
+    // a Redis outage here must not turn that success into a 500 (the worker
+    // sweep re-publishes every few seconds once Redis is back).
+    try {
+      await this.publishSnapshot(schoolId, examId, () => true);
+      this.health.succeeded('redis');
+    } catch (err) {
+      if (isRedisError(err)) this.health.fellBack('redis', 'control-publish', err);
+      this.logger.warn(`Control Center publish failed for exam ${examId}: ${String(err)}`);
+    }
   }
 
   /**
@@ -250,9 +305,13 @@ export class ExamControlStreamService {
     void this.redis
       .sadd(EXAM_CONTROL_ACTIVE_SET_KEY, `${schoolId}:${examId}`)
       .catch(() => undefined);
-    await this.redis.del(key).catch((err: unknown) => {
-      this.logger.warn(`Control Center cache invalidation failed for ${key}: ${String(err)}`);
+    const invalidate = this.redis.del(key).catch((err: unknown) => {
+      this.health.fellBack('redis', 'control-invalidate', err);
     });
+    // B22: while Redis is known to be down the invalidation cannot land and
+    // the cache cannot be read either (GET /control computes live), so the
+    // exam request does not wait on it.
+    if (!this.health.isDegraded('redis')) await invalidate;
     if (pending.running || pending.timer) {
       pending.dirty = true;
       return;
@@ -307,4 +366,9 @@ export class ExamControlStreamService {
     await this.redis.expire(streamKey, STREAM_TTL_SECONDS);
     await this.redis.publish(channel, id ? encodeExamControlEvent(id, payload) : payload);
   }
+}
+
+/** ioredis failures (timeout, closed connection, retries exhausted). */
+function isRedisError(err: unknown): boolean {
+  return classifyUnavailable(err) === 'redis';
 }

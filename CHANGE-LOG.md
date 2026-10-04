@@ -2,6 +2,78 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-04 — B22 Failure, Recovery & Disaster Recovery
+
+B22 is implemented. **DoD 6–9 are partial by project-owner decision** (1A, 2, 4A): restore, PITR
+and the RPO/RTO targets are verified locally with a real encrypted base-backup + WAL drill and are
+measured on RDS/ElastiCache/S3 staging in B23; the runbooks are followed by someone who did not
+write them on staging in B23. Owner decisions at planning are listed in the roadmap's B22
+Implementation notes; per-DoD evidence is there too.
+
+**Shipped**
+
+- **Redis outage fails fast** (decision 3A): bounded Redis and enqueue timeouts and a half-open
+  circuit breaker in the API and worker (previously a ~73 s hang per request); sign-in works and
+  brute-force lockout falls back to per-process limits never looser than shared; idempotency fails
+  open; readiness fails only on the database or while draining and reports Redis/storage as
+  `degraded`; `atlas.dependency.fallback` metric and degraded-mode logs.
+- **Lost work is found and finished:** the auto-submit sweeper's transition commits with its result
+  and audit row; a reconciliation pass re-queues owed marking and result adjustments (three
+  automatic retries); marking is a no-op once a result is no longer `PROCESSING`; failed jobs kept
+  14 days; `ops:replay-jobs` (audited `JOB_REPLAYED`); `atlas.work.reconciled` metric.
+- **An open exam page re-sends answers a database restore rolled back** (decision 2c): the sync
+  engine checks the attempt on reconnect; an attempt the server no longer has shows a clear screen
+  and keeps the local answers. Late answers stay evidence only, never scored (ADR-0003).
+- **Storage:** upload completion checks the object; pre-cache retries a failed job; object
+  versioning tested against MinIO; **uploaded import files are deleted at the 90-day trigger and,
+  whole, when anyone they created is redacted** (decision 6A — a defect against ADR-0028's schedule
+  that versioning would have made worse); noncurrent versions expire at 35 days; object storage
+  added to the data inventory.
+- **Redaction register** (decision 2b): `ops:redact-subject` records each redaction (UUIDs, DSR
+  reference, time — never the redacted PII) in object storage before applying it, and
+  `--replay --since` re-applies them after a restore.
+- **Chaos harness** (`pnpm --filter @atlas/load load chaos`): ten rows of real faults to real
+  processes under a 200-student exam — API SIGKILL/SIGTERM/hang, worker kill mid-marking and across
+  expiry, Redis hang and data loss, storage hang, Postgres connection kill and restart — with a SQL
+  oracle. **10 of 10 pass**, 0 acknowledged answers lost, 0 duplicates.
+- **Restore tooling and drill:** `ops:restore-verify`, `ops:attempts-affected`, `ops:anonymise-copy`;
+  `infra/dr/pitr-drill.sh` — encrypted (`age`) `pg_basebackup` + `pg_receivewal --synchronous`, PITR
+  to a timestamp into a clean cluster, integrity checks, the golden path through a fresh API and
+  worker on the restore, anonymisation, crash recovery to the end of the archive. Weekly in CI
+  (`dr-drill.yml`).
+- **Docs:** `docs/operations/recovery-objectives.md` (targets per failure class, long-term records
+  proposal for the B23 legal review), `backup-and-restore.md`, `failure-runbooks.md` (with the
+  invigilator script: do not let students reload), `chaos-testing.md`.
+
+**Defect the chaos run found:** Redis data loss also deletes BullMQ's job schedulers, so the
+auto-submit sweep and marking reconciliation stopped permanently — results stayed `PROCESSING`. The
+worker now checks a sentinel scheduler every 30 s and re-registers every schedule
+(`schedule-guard.ts`); the row passes.
+
+**Measured (local, single host — not RDS)**
+
+- **Restore drill:** 340 MB cluster — PITR restore to a verified database in 6.0 s; 3.0 GB cluster
+  (`DRILL_PAD_SCALE=200`) — 22.7 s (≈ 130 MB/s on this disk). Both: workload after the target
+  absent, `ops:attempts-affected` exactly the 40 attempts started after it, golden path and
+  anonymisation pass on the restore, **0 acknowledged commits lost** after an immediate-mode crash
+  (synchronous WAL streaming). Inferred, not measured: at that rate the year-one projection
+  (≈ 420 GB) would take ≈ 55 min — close to the 60-minute target, which is why B23 must measure it
+  on RDS.
+- **Chaos** (200 students per row, `docs/performance/results/*-chaos-*-b22*`): API SIGKILL 0 of
+  2,996 acknowledged answers lost (82 batches retried on the other node); worker killed twice
+  mid-marking drained 32 s after restart; submits during a 45 s Redis freeze p95 3.2 s; Redis wiped
+  with the burst's marking queued — every result FINAL after 136 s (schedule guard + reconciliation).
+
+**Deviation:** the planned "retry export" route was not added — requesting the export again gives
+the same result (Candidate / Deferred in the roadmap).
+
+**Carried to B23:** RDS Multi-AZ failover and PITR/restore time on a production-sized dataset,
+ElastiCache failover, the S3 versioning + lifecycle rule, restore IAM, the region-loss
+(cross-region copy) decision, the long-term academic records policy into the ADR-0028 legal review,
+a human walkthrough of every runbook.
+
+**Tests:** lint, typecheck, format clean; unit 1,457 pass; worker integration 56/56; API integration 399 pass, 1 fails only on the local s3rver (it serves unsigned GETs; MinIO in CI rejects them) and the object versioning test skips there (no versioning; runs on MinIO in CI); cross-cutting integration 157 pass, the two migration-reset tests fail only on the local PostgreSQL 16 (the reset drops the `uuidv7()` shim; CI runs 18); security 42/42; browser suite (Chromium) 28/28 including the new `recovery.spec.ts`; chaos 10/10; PITR drill pass at 340 MB and 3.0 GB.
+
 ### 2026-10-04 — F20 Accessibility, Performance & Hardening
 
 F20 is implemented; its automated suites pass. **Manual checks remain** (recorded below and in the

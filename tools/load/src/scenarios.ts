@@ -46,7 +46,7 @@ export async function pool<T, R>(
   return out;
 }
 
-interface Seat {
+export interface Seat {
   school: ProvisionedSchool;
   exam: PreparedExam;
   identifier: string;
@@ -55,7 +55,7 @@ interface Seat {
 }
 
 /** Spreads `n` students across the manifest's schools, one fresh exam per school. */
-async function seat(
+export async function seat(
   o: CommonOptions,
   n: number,
   recorder: Recorder,
@@ -95,7 +95,7 @@ async function seat(
   return { seats, exams };
 }
 
-function student(o: CommonOptions, s: Seat, i: number, recorder: Recorder): VirtualStudent {
+export function student(o: CommonOptions, s: Seat, i: number, recorder: Recorder): VirtualStudent {
   return new VirtualStudent({
     target: o.target[i % o.target.length]!,
     host: s.school.host,
@@ -110,13 +110,13 @@ function student(o: CommonOptions, s: Seat, i: number, recorder: Recorder): Virt
   });
 }
 
-function ackMap(students: VirtualStudent[]) {
+export function ackMap(students: VirtualStudent[]) {
   const map = new Map<string, Map<string, { selectedOptionId: string; sequenceNumber: number }>>();
   for (const s of students) if (s.attemptId) map.set(s.attemptId, s.acked);
   return map;
 }
 
-function correctnessChecks(
+export function correctnessChecks(
   verification: VerifyResult[],
   expectedPerExam: Map<string, number>,
   opts: { results: boolean },

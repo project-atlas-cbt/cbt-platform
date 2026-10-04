@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { AttemptSyncEngine } from './sync-engine';
 import { sendHeartbeat, flushEventOutbox } from './events';
-import { watchBrowserConnectivityHints } from './connectivity-store';
+import { connectivityStore, watchBrowserConnectivityHints } from './connectivity-store';
 
 /**
  * F13 — the heartbeat interval used both as the ADR-0020 liveness signal
@@ -46,6 +46,7 @@ const RECONNECT_SPREAD_MS = 3_000;
 export function useAttemptSyncEngine(
   attemptId: string | undefined,
   onAttemptNotWritable: () => void,
+  onAttemptMissing: () => void = () => undefined,
 ): {
   recordAnswer: (examQuestionId: string, selectedOptionId: string | null) => void;
   flushNow: () => Promise<void>;
@@ -55,6 +56,9 @@ export function useAttemptSyncEngine(
   useEffect(() => {
     engine?.setOnNotWritable(onAttemptNotWritable);
   }, [engine, onAttemptNotWritable]);
+  useEffect(() => {
+    engine?.setOnAttemptMissing(onAttemptMissing);
+  }, [engine, onAttemptMissing]);
 
   useEffect(() => {
     if (!attemptId || !engine) return;
@@ -83,6 +87,26 @@ export function useAttemptSyncEngine(
     engine.scheduleFlush({ force: true });
     scheduleHeartbeat(firstHeartbeatDelay());
 
+    // B22 (decision 2c): back from an outage, check the server still holds
+    // every answer it acknowledged (a database restore can roll some back)
+    // before flushing. Spread like the hints below: a whole lab reconnects
+    // together.
+    let wasOffline = connectivityStore.getSnapshot() === 'offline';
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    const stopWatchingConnectivity = connectivityStore.subscribe(() => {
+      const status = connectivityStore.getSnapshot();
+      if (status === 'offline') {
+        wasOffline = true;
+      } else if (status === 'online' && wasOffline) {
+        wasOffline = false;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(
+          () => engine.onReconnect(),
+          Math.round(RECONNECT_SPREAD_MS * Math.random()),
+        );
+      }
+    });
+
     const stopWatchingHints = watchBrowserConnectivityHints(() => {
       if (hintTimer) clearTimeout(hintTimer);
       hintTimer = setTimeout(tick, Math.round(RECONNECT_SPREAD_MS * Math.random()));
@@ -92,7 +116,9 @@ export function useAttemptSyncEngine(
       stopped = true;
       if (heartbeatTimer) clearTimeout(heartbeatTimer);
       if (hintTimer) clearTimeout(hintTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       stopWatchingHints();
+      stopWatchingConnectivity();
       engine.dispose();
     };
   }, [attemptId, engine]);
