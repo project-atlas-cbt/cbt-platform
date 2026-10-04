@@ -42,7 +42,11 @@ export class AppStack extends Stack {
   constructor(scope: Construct, id: string, env: AtlasEnvironment, props: AppStackProps) {
     super(scope, id, props);
     const { network, data, registry, inputs } = props;
+    // ADR-0022 amendment (2026-10-04): each school's browser calls the API
+    // at `<school>.api.<root>`, so the tenant still comes from the Host
+    // header (ADR-0005). One wildcard certificate and DNS record cover all.
     const apiHost = `api.${inputs.rootDomain}`;
+    const schoolApiHosts = `*.${apiHost}`;
 
     this.cluster = new ecs.Cluster(this, 'Cluster', {
       vpc: network.vpc,
@@ -200,7 +204,8 @@ export class AppStack extends Stack {
     const certificate = inputs.apiCertificateArn
       ? acm.Certificate.fromCertificateArn(this, 'ApiCertificate', inputs.apiCertificateArn)
       : new acm.Certificate(this, 'ApiCertificate', {
-          domainName: apiHost,
+          domainName: schoolApiHosts,
+          subjectAlternativeNames: [apiHost],
           validation: acm.CertificateValidation.fromDns(),
         });
     alb.addRedirect({ sourcePort: 80, targetPort: 443 });
@@ -401,7 +406,7 @@ export class AppStack extends Stack {
 
     new CfnOutput(this, 'LoadBalancerDns', {
       value: alb.loadBalancerDnsName,
-      description: `CNAME ${apiHost} to this at Vercel DNS`,
+      description: `CNAME ${schoolApiHosts} and ${apiHost} to this at Vercel DNS`,
     });
     new CfnOutput(this, 'ClusterName', { value: this.cluster.clusterName });
     new CfnOutput(this, 'ApiServiceName', { value: this.apiService.serviceName });

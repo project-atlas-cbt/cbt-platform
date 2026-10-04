@@ -190,6 +190,12 @@ describe.each(['staging', 'production'] as const)('%s', (environment) => {
       HealthCheckPath: '/v1/health/ready',
     });
     t.app.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
+    // ADR-0022 amendment: every school's API host under one wildcard.
+    t.app.hasResourceProperties('AWS::CertificateManager::Certificate', {
+      DomainName: '*.api.example.ng',
+      SubjectAlternativeNames: ['api.example.ng'],
+      ValidationMethod: 'DNS',
+    });
   });
 
   it('rolls a failed deployment back automatically and routes alarms to on-call', () => {
