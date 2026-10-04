@@ -39,17 +39,20 @@ export class StorageModule {}
  * CLIs (B22), which run without the Nest app — see `createObjectStorage`. */
 export function createS3Client(config: ConfigService<Env, true>): S3Client {
   const endpoint = config.get('S3_ENDPOINT', { infer: true });
+  const accessKeyId = config.get('S3_ACCESS_KEY_ID', { infer: true });
+  const secretAccessKey = config.get('S3_SECRET_ACCESS_KEY', { infer: true });
   // exactOptionalPropertyTypes forbids `endpoint: undefined` — omit
   // the key entirely rather than passing it explicitly-empty.
   return new S3Client({
     ...(endpoint ? { endpoint } : {}),
     region: config.get('S3_REGION', { infer: true }),
-    credentials: {
-      accessKeyId: config.get('S3_ACCESS_KEY_ID', { infer: true }),
-      secretAccessKey: config.get('S3_SECRET_ACCESS_KEY', { infer: true }),
-    },
+    // B23: on ECS no static keys are configured — the SDK's default chain
+    // picks up the task role's short-lived credentials instead.
+    ...(accessKeyId && secretAccessKey ? { credentials: { accessKeyId, secretAccessKey } } : {}),
     systemClockOffset: config.get('S3_SYSTEM_CLOCK_OFFSET_MS', { infer: true }),
-    forcePathStyle: true,
+    // Path-style for MinIO/s3rver (local, CI); virtual-hosted on AWS so
+    // presigned media URLs carry the bucket's own origin (CSP/CORS).
+    forcePathStyle: config.get('S3_FORCE_PATH_STYLE', { infer: true }),
     // B22 (08 §25): without these a storage endpoint that stops
     // answering held each call for the OS TCP timeout (minutes) per
     // SDK attempt. Every call now fails within a bounded time, and the

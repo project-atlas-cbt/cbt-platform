@@ -111,6 +111,11 @@ const envObject = z.object({
   S3_ACCESS_KEY_ID: z.string().optional().default(''),
   S3_SECRET_ACCESS_KEY: z.string().optional().default(''),
   S3_REGION: z.string().optional().default('eu-west-1'),
+  /** B23: path-style addressing for local/CI S3 stand-ins; `false` on AWS. */
+  S3_FORCE_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   // Local Docker Desktop can retain a stale VM clock after host sleep. An
   // explicit signing offset keeps presigned URLs valid against that storage
   // clock; production should leave this at the default zero.
