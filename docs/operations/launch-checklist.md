@@ -19,7 +19,7 @@ when the platform moves to the AWS design.
 | 0.5 | `.env` and `app.env` copied into a password manager (restores depend on them)         | Haneef |          |
 | 0.6 | First deploy green (`bin/deploy.sh` readiness all ok); first Software Admin signed in | Claude |          |
 | 0.7 | Manual backup reaches off-site storage; restore rehearsed onto a scratch database     | Claude |          |
-| 0.8 | Golden path run against the pilot server before the school's data is loaded           | Claude |          |
+| 0.8 | Golden path on a non-production copy of the stack (never the pilot's live database)   | Claude |          |
 | 0.9 | External uptime check on `https://api.<root>/v1/health`                               | Haneef |          |
 
 ## 1. Accounts, domain and decisions

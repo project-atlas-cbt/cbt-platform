@@ -12,6 +12,12 @@ But there are a few places where I think we should deliberately debate the optio
 
 # 1. My proposed production stack
 
+> **Pilot hosting (2026-10-04, ADR-0032 amendment).** The project owner chose a single VPS for
+> the pilot for cost: web, API, worker, PostgreSQL, Redis and S3-compatible storage (MinIO) run in
+> Docker Compose behind Caddy, and email goes through SMTP (ADR-0019 amendment). The AWS and
+> Vercel hosting below remains the target design for when the platform outgrows one server
+> (`infra/cdk`); runbook for the pilot: `docs/operations/vps-pilot.md`.
+
 | Layer                | Recommendation                                      |
 | -------------------- | --------------------------------------------------- |
 | Language             | **TypeScript**                                      |
@@ -967,6 +973,9 @@ This isn't essential to the architecture, but it gives us a clean development st
 
 # 28. Vercel vs AWS for Next.js
 
+> **2026-10-04:** for the pilot the web app is served by `next start` on the same VPS as the API
+> (ADR-0032 amendment); Vercel is not used until the AWS design is adopted.
+
 Here I would actually choose:
 
 ### Next.js
@@ -1701,6 +1710,9 @@ These three determine whether this is truly production-grade CBT or merely a nic
 ---
 
 # 49. My Current Technology Decision Matrix
+
+> **2026-10-04:** hosting rows (compute, database, Redis, storage, frontend) are superseded for the
+> pilot by a single VPS (ADR-0032 amendment) and email by SMTP (ADR-0019 amendment).
 
 | Decision             | Recommendation          | Confidence |
 | -------------------- | ----------------------- | ---------: |

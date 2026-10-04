@@ -35,6 +35,17 @@ dump that restored into a scratch database. **Not run here:** the three image bu
 MinIO and Caddy containers (this environment cannot reach Docker Hub or `cgr.dev` from builds),
 so the first deploy on the server is their first run; `deploy.sh` stops unless readiness is all ok.
 
+**Also fixed (found by this PR's browser suite):** an answer whose save request was in flight
+when the page reloaded stayed marked `in-flight` in IndexedDB and was never sent again, so the
+B22 recovery test (`e2e/recovery.spec.ts`) could fail depending on timing. A new sync engine now
+returns such rows to `pending` before its first flush; the server keeps only the newest sequence
+per question, so a repeat is harmless. Unit test in `sync-engine.test.ts` reproduces it.
+
+**Docs brought in line:** `09` (dated notes), data-protection sub-processors (pilot list, the
+cross-border transfer added to the legal review), threat model (single-host topology), backend B23
+status, the F21 section (Vercel replaced for the pilot; previews and staging open for F21's plan),
+roadmap index, and `CLAUDE.md`.
+
 **Accepted for the pilot:** no failover, nightly backups only (recovery point up to 24 hours),
 one machine's capacity. B23 stays IN PROGRESS.
 

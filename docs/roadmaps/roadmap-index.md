@@ -195,7 +195,7 @@ The gates are retained below because they record **which decisions govern which 
 | ADR      | Decision                                                        |
 | -------- | --------------------------------------------------------------- |
 | ADR-0005 | Tenant resolution at login; `login_identifier` uniqueness scope |
-| ADR-0022 | Cross-origin session strategy (Vercel ↔ AWS)                    |
+| ADR-0022 | Cross-origin session strategy (web ↔ API hosts)                 |
 | ADR-0023 | PostgreSQL Row-Level Security as defence in depth               |
 | ADR-0027 | Timezone policy                                                 |
 | ADR-0031 | Technology version baseline re-validation                       |
