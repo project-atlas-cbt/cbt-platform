@@ -5,6 +5,9 @@ import { redisConnectionFromUrl, type Env } from '@atlas/config';
 import { FAILED_JOB_RETENTION } from '@atlas/domain';
 import { withTimeout } from '../../common/dependency-health.js';
 
+/** B22: 60 s, 2, 4, 8 min between attempts — past CLAIM_STALE_MS. */
+export const IMPORT_JOB_ATTEMPTS = 5;
+
 export const IMPORT_VALIDATION_QUEUE_NAME = 'atlas-import-validation';
 export const IMPORT_COMMIT_QUEUE_NAME = 'atlas-import-commit';
 
@@ -88,7 +91,16 @@ export class ImportQueueService implements OnModuleInit, OnApplicationShutdown {
       this.requireQueue(this.validationQueue, 'validationQueue').add(
         'validate',
         { schoolId, importJobId },
-        { jobId: importJobId, removeOnComplete: true, removeOnFail: FAILED_JOB_RETENTION },
+        {
+          jobId: importJobId,
+          // B22: imports used to get one attempt, so a storage or database
+          // blip failed them for good. Validation and commit are both
+          // resumable; the backoff outlasts the commit claim's lease.
+          attempts: IMPORT_JOB_ATTEMPTS,
+          backoff: { type: 'exponential', delay: 60_000 },
+          removeOnComplete: true,
+          removeOnFail: FAILED_JOB_RETENTION,
+        },
       ),
       this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
       'queue enqueue',
@@ -100,7 +112,16 @@ export class ImportQueueService implements OnModuleInit, OnApplicationShutdown {
       this.requireQueue(this.commitQueue, 'commitQueue').add(
         'commit',
         { schoolId, importJobId },
-        { jobId: importJobId, removeOnComplete: true, removeOnFail: FAILED_JOB_RETENTION },
+        {
+          jobId: importJobId,
+          // B22: imports used to get one attempt, so a storage or database
+          // blip failed them for good. Validation and commit are both
+          // resumable; the backoff outlasts the commit claim's lease.
+          attempts: IMPORT_JOB_ATTEMPTS,
+          backoff: { type: 'exponential', delay: 60_000 },
+          removeOnComplete: true,
+          removeOnFail: FAILED_JOB_RETENTION,
+        },
       ),
       this.config.get('QUEUE_ENQUEUE_TIMEOUT_MS', { infer: true }),
       'queue enqueue',

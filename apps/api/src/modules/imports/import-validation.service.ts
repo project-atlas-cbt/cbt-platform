@@ -13,6 +13,7 @@ import {
   type TeacherValidationContext,
   type QuestionValidationContext,
 } from './import-row-validator.js';
+import { classifyUnavailable } from '../../common/dependency-errors.js';
 
 /** A-17's own recommended number, adopted as the engineering default —
  * generous headroom above the DoD's 1,500-row fixture. */
@@ -64,7 +65,17 @@ export class ImportValidationService {
 
   constructor(private readonly storage: ObjectStorageService) {}
 
-  async validate(schoolId: string, importJobId: string): Promise<void> {
+  /**
+   * `finalAttempt` (B22): whether BullMQ has no retry left after this run.
+   * A storage or database outage is rethrown for BullMQ to retry while
+   * attempts remain — it says nothing about the file — and only fails the
+   * import on the last one.
+   */
+  async validate(
+    schoolId: string,
+    importJobId: string,
+    opts: { finalAttempt?: boolean } = {},
+  ): Promise<void> {
     const job = await withTenant(prisma, schoolId, (tx) =>
       tx.importJob.findUnique({ where: { id: importJobId } }),
     );
@@ -307,6 +318,22 @@ export class ImportValidationService {
     } catch (error) {
       if (error instanceof ImportParseError) {
         await this.fail(schoolId, importJobId, error.message);
+        return;
+      }
+      if (classifyUnavailable(error) !== undefined && !opts.finalAttempt) {
+        this.logger.warn({
+          msg: 'validate(): dependency unavailable; BullMQ will retry',
+          importJobId,
+        });
+        throw error;
+      }
+      if (classifyUnavailable(error) !== undefined) {
+        await this.fail(
+          schoolId,
+          importJobId,
+          'The file could not be read because a service was temporarily unavailable. ' +
+            'Please upload it again.',
+        );
         return;
       }
       // An unexpected (non-parse) failure — surface it the same way rather

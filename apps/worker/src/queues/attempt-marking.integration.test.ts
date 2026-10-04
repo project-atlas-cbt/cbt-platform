@@ -746,6 +746,39 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
         }),
       ),
     ).rejects.toThrow();
+
+    // B22: a duplicate marking job (the reconciliation pass, an operator
+    // replay) arriving after the school published a new scale version must
+    // not re-resolve the grade: marking is a no-op once the result is FINAL.
+    await withTenant(prisma, fixture.schoolId, async (tx) => {
+      const v2 = await tx.gradingScaleVersion.create({
+        data: { schoolId: fixture.schoolId, scaleId: version.scaleId, versionNumber: 2 },
+      });
+      await tx.gradingScaleBand.create({
+        data: {
+          schoolId: fixture.schoolId,
+          versionId: v2.id,
+          label: 'NEW',
+          minPercentage: 0,
+          maxPercentage: 100,
+          isPassing: true,
+          sortOrder: 0,
+        },
+      });
+      await tx.gradingScale.update({
+        where: { id: version.scaleId },
+        data: { currentVersionId: v2.id },
+      });
+    });
+    await runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId });
+    const replayed = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.findUniqueOrThrow({
+        where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId } },
+      }),
+    );
+    expect(replayed.grade).toBe('P');
+    expect(replayed.gradingScaleVersionId).toBe(version.id);
+    expect(replayed.finalizedAt).toEqual(result.finalizedAt);
   });
 
   it('B15 DoD 6: an AUTOMATIC-policy exam publishes its results at finalisation', async () => {

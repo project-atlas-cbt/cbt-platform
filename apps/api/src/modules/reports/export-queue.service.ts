@@ -34,7 +34,9 @@ export class ExportQueueService implements OnModuleInit, OnApplicationShutdown {
       this.queue.add('generate', payload, {
         jobId: `export-${payload.exportJobId}`,
         attempts: 5,
-        backoff: { type: 'exponential', delay: 10_000 },
+        // B22: 1, 2, 4, 8 min — the retries outlast EXPORT_CLAIM_STALE_MS,
+        // so a redelivery after a killed worker can take the export over.
+        backoff: { type: 'exponential', delay: 60_000 },
         removeOnComplete: true,
         removeOnFail: FAILED_JOB_RETENTION,
       }),

@@ -24,6 +24,38 @@ import {
  * partial run rolls back the transition along with the marks.
  */
 
+/**
+ * The worker's copy of `apps/api`'s `ensureProcessingResult` (same reason
+ * as above: the apps cannot import each other). B22: the ADR-0004 sweeper
+ * now writes the PROCESSING result in its own transition transaction, as
+ * every `apps/api` path already did — that row is the durable record that
+ * marking is owed, which the sweeper's reconciliation pass relies on.
+ * Never resets an existing result (it may be FINAL, ADJUSTED or VOIDED).
+ */
+export async function ensureProcessingResult(
+  tx: Prisma.TransactionClient,
+  input: { schoolId: string; attemptId: string; examId: string; studentProfileId: string },
+): Promise<void> {
+  await tx.result.upsert({
+    where: { schoolId_attemptId: { schoolId: input.schoolId, attemptId: input.attemptId } },
+    update: {},
+    create: {
+      schoolId: input.schoolId,
+      attemptId: input.attemptId,
+      examId: input.examId,
+      studentProfileId: input.studentProfileId,
+      state: 'PROCESSING',
+      totalMarks: 0,
+      earnedMarks: 0,
+      percentage: 0,
+      correctCount: 0,
+      incorrectCount: 0,
+      unansweredCount: 0,
+      partialCount: 0,
+    },
+  });
+}
+
 export interface FinalizedResultOutcome {
   resultId: string;
   examId: string;

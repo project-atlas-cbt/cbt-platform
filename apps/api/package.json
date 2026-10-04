@@ -16,6 +16,7 @@
     "clean": "rimraf dist",
     "ops:redact-subject": "tsx src/ops/redact-subject.ts",
     "ops:mfa-reset": "tsx src/ops/mfa-reset.ts",
+    "ops:replay-jobs": "tsx src/ops/replay-jobs.ts",
     "test:security": "vitest run --config vitest.security.config.ts"
   },
   "dependencies": {

@@ -20,6 +20,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import type { AttemptMarkingJobPayload } from '@atlas/domain';
 import {
+  MARKING_RECONCILE_AFTER_MS,
+  reconcileOwedMarking,
   runAttemptAutoSubmitSweep,
   type AttemptAutoSubmitSweepDeps,
 } from './attempt-auto-submit.queue.js';
@@ -257,6 +259,11 @@ async function cleanupSchool(schoolId: string): Promise<void> {
   await withTenant(prisma, schoolId, (tx) =>
     tx.auditEvent.deleteMany({ where: { schoolId } }),
   ).catch(() => undefined);
+  // B22: the sweeper now writes a PROCESSING result; atlas_app may not
+  // delete results (B20 least privilege), so the owner connection does.
+  await ownerPrisma()
+    .result.deleteMany({ where: { schoolId } })
+    .catch(() => undefined);
   await withTenant(prisma, schoolId, (tx) =>
     tx.examAttempt.deleteMany({ where: { schoolId } }),
   ).catch(() => undefined);
@@ -448,12 +455,80 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-auto-submit sweep (B14, ADR-0004)', 
     const ok = await withTenant(prisma, fixture.schoolId, (tx) =>
       tx.examAttempt.findUniqueOrThrow({ where: { id: okAttemptId } }),
     );
-    // Both attempts still finalize — the DB transition and audit write both
-    // commit before the enqueue call that fails (this file's own doc
-    // comment records this as a known, narrow, documented residual risk:
-    // the failing attempt's own marking is never enqueued by this tick).
+    // Both attempts still finalize — the DB transition, PROCESSING result
+    // and audit write commit together before the enqueue call that fails.
+    // The failing attempt's marking is not enqueued by this tick; the
+    // reconciliation pass (tested below) re-enqueues it on a later one.
     expect(failing.state).toBe('AUTO_SUBMITTED');
     expect(ok.state).toBe('AUTO_SUBMITTED');
     expect(myCalls).toEqual([{ schoolId: fixture.schoolId, attemptId: okAttemptId }]);
+  });
+
+  it('B22: the transition, its PROCESSING result and its audit row commit together', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    const attemptId = await createAttempt(fixture, {
+      expiresAt: new Date(Date.now() - 5 * 60 * 1000),
+    });
+
+    await runAttemptAutoSubmitSweep({ enqueueMarking: () => Promise.resolve() });
+
+    const result = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.findUnique({
+        where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId } },
+      }),
+    );
+    expect(result?.state).toBe('PROCESSING');
+    const audits = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.auditEvent.count({
+        where: {
+          schoolId: fixture.schoolId,
+          entityId: attemptId,
+          action: 'ATTEMPT_AUTO_SUBMITTED',
+        },
+      }),
+    );
+    expect(audits).toBe(1);
+  });
+
+  it('B22: reconciliation re-queues marking for a finalised attempt whose enqueue was lost, and only once it is overdue', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    const lostAttemptId = await createAttempt(fixture, {
+      expiresAt: new Date(Date.now() - 5 * 60 * 1000),
+    });
+    const secondStudent = await createSecondStudent(fixture);
+    const markedAttemptId = await createAttempt(fixture, {
+      expiresAt: new Date(Date.now() - 5 * 60 * 1000),
+      studentProfileId: secondStudent,
+    });
+
+    // Both finalise; the enqueue for one is lost (a Redis outage).
+    await runAttemptAutoSubmitSweep({
+      enqueueMarking: (payload) =>
+        payload.attemptId === lostAttemptId
+          ? Promise.reject(new Error('simulated Redis outage'))
+          : Promise.resolve(),
+    });
+    // The other is marked: its result moves on from PROCESSING.
+    await ownerPrisma().result.update({
+      where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId: markedAttemptId } },
+      data: { state: 'FINAL', finalizedAt: new Date() },
+    });
+
+    const seen: string[] = [];
+    const reconcile = (payload: AttemptMarkingJobPayload) => {
+      seen.push(payload.attemptId);
+      return Promise.resolve('enqueued' as const);
+    };
+
+    // Not yet overdue: a normal submit's own enqueue may still be landing.
+    await reconcileOwedMarking(fixture.schoolId, new Date(), reconcile);
+    expect(seen).toEqual([]);
+
+    const later = new Date(Date.now() + MARKING_RECONCILE_AFTER_MS + 1000);
+    const counts = await reconcileOwedMarking(fixture.schoolId, later, reconcile);
+    expect(seen).toEqual([lostAttemptId]);
+    expect(counts.enqueued).toBe(1);
   });
 });

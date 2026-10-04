@@ -94,6 +94,20 @@ export function recordDependencyFallback(dependency: DegradedDependency, compone
   fallbackCounter.add(1, { dependency, component });
 }
 
+let reconciledCounter: Counter | undefined;
+
+/** B22: counts work that was lost and found again — a marking job
+ * re-enqueued or retried by the reconciliation pass, a stale import, export
+ * or adjustment claim reclaimed after its worker died. Any non-zero rate is
+ * worth a look; `outcome="exhausted"` needs an operator (alert). */
+export function recordWorkReconciled(kind: string, outcome: string, count = 1): void {
+  if (count <= 0) return;
+  reconciledCounter ??= meter().createCounter('atlas.work.reconciled', {
+    description: 'Background work recovered after it was lost (re-enqueued, retried, reclaimed).',
+  });
+  reconciledCounter.add(count, { kind, outcome });
+}
+
 /** Observable gauges registered by the worker's health job, which already
  * computes these each tick. */
 export function registerHealthGauges(

@@ -12,8 +12,12 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
-import type { AdjustableResultValues } from '@atlas/domain';
+import { RESULT_ADJUSTMENT_CLAIM_TTL_MS, type AdjustableResultValues } from '@atlas/domain';
 import { runResultAdjustment } from './result-adjustment.queue.js';
+import {
+  MARKING_RECONCILE_AFTER_MS,
+  reconcileOwedAdjustments,
+} from './attempt-auto-submit.queue.js';
 import { ownerPrisma } from '../test-support/owner-prisma.js';
 
 interface Fixture {
@@ -530,7 +534,11 @@ describe('B15 result adjustment worker (ADR-0025)', () => {
       }),
     );
 
-    await runResultAdjustment({}, { schoolId: fixture.schoolId, operationId });
+    // B22: declined by throwing, so BullMQ retries it later — a killed
+    // holder's lease goes stale and the retry takes over.
+    await expect(
+      runResultAdjustment({}, { schoolId: fixture.schoolId, operationId }),
+    ).rejects.toThrow(/held by another run/);
 
     const result = await withTenant(prisma, fixture.schoolId, (tx) =>
       tx.result.findFirstOrThrow({ where: { schoolId: fixture.schoolId } }),
@@ -640,5 +648,57 @@ describe('B15 result adjustment worker (ADR-0025)', () => {
     );
     expect(history.map((h) => h.adjustmentType)).toEqual(['AWARD_MARK', 'VOID_QUESTION']);
     expect((history[0]!.oldValue as unknown as AdjustableResultValues).earnedMarks).toBe(5);
+  });
+
+  it('B22: reconciliation re-queues an adjustment whose run died, and leaves live or finished ones alone', async () => {
+    const fixture = await createFixture(1);
+    schools.push(fixture.schoolId);
+    await createFinalisedResult(fixture, fixture.studentProfileIds[0]!, 1);
+    const dead = await createOperation(fixture, {
+      type: 'AWARD_MARK',
+      reason: 'One mark awarded to all.',
+      markDelta: 1,
+      totalCount: 1,
+    });
+    // A worker claimed it and was killed: the lease is never refreshed.
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultAdjustmentOperation.update({
+        where: { id: dead },
+        data: { status: 'PROCESSING', processingClaimedAt: new Date() },
+      }),
+    );
+
+    const seen: string[] = [];
+    const reconcile = (payload: { operationId: string }) => {
+      seen.push(payload.operationId);
+      return Promise.resolve('enqueued' as const);
+    };
+    // While the lease is live, it is left alone.
+    await reconcileOwedAdjustments(
+      fixture.schoolId,
+      new Date(Date.now() + MARKING_RECONCILE_AFTER_MS + 1000),
+      reconcile,
+    );
+    expect(seen).toEqual([]);
+    // Once the lease is stale, it is owed.
+    await reconcileOwedAdjustments(
+      fixture.schoolId,
+      new Date(Date.now() + RESULT_ADJUSTMENT_CLAIM_TTL_MS + MARKING_RECONCILE_AFTER_MS),
+      reconcile,
+    );
+    expect(seen).toEqual([dead]);
+
+    // And the re-queued run takes the stale lease over and completes.
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultAdjustmentOperation.update({
+        where: { id: dead },
+        data: { processingClaimedAt: new Date(Date.now() - RESULT_ADJUSTMENT_CLAIM_TTL_MS - 1000) },
+      }),
+    );
+    await runResultAdjustment({}, { schoolId: fixture.schoolId, operationId: dead });
+    const done = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultAdjustmentOperation.findUniqueOrThrow({ where: { id: dead } }),
+    );
+    expect(done.status).toBe('COMPLETED');
   });
 });

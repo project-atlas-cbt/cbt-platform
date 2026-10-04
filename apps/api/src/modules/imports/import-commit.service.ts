@@ -19,6 +19,14 @@ const CHUNK_SIZE = 100;
  * claim in the `finally` below on every exit. */
 const CLAIM_STALE_MS = 10 * 60 * 1000;
 
+/** B22: another run holds this import's lease; retry later. */
+export class ImportClaimHeldError extends Error {
+  constructor(importJobId: string) {
+    super(`ImportJob ${importJobId} is held by another run's claim; retrying later`);
+    this.name = 'ImportClaimHeldError';
+  }
+}
+
 /**
  * The commit half of B7's pipeline — writes through `StudentEnrollment
  * Service.enroll()`/`IdentityService.issueStaffInvitation()` exactly as the
@@ -95,10 +103,14 @@ export class ImportCommitService {
       }),
     );
     if (claim.count === 0) {
-      this.logger.warn(
-        `commit(): ImportJob ${importJobId} is already being processed by another run; skipping.`,
-      );
-      return;
+      // B22: thrown, not returned. Another run holds a live lease — either
+      // it really is running, or it was killed and its lease has not gone
+      // stale yet (a BullMQ stalled-job redelivery arrives within ~30 s, the
+      // lease lasts CLAIM_STALE_MS). Returning used to complete this job
+      // and leave the import IMPORTING forever in the second case; throwing
+      // lets BullMQ retry after its backoff, by which time a dead holder's
+      // lease is stale and this run takes over.
+      throw new ImportClaimHeldError(importJobId);
     }
 
     const actor = { actorUserId: job.uploaderUserId, actorRole: job.uploaderRole };

@@ -25,6 +25,7 @@ export {
   examInstruments,
   registerHealthGauges,
   recordDependencyFallback,
+  recordWorkReconciled,
   type AnswerSaveOutcome,
   type DegradedDependency,
 } from './metrics.js';

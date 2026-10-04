@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import { EXPORT_ARTEFACT_TTL_MS, type Role } from '@atlas/domain';
@@ -10,14 +10,37 @@ import type { CreateExportDto, ExportJobResponseDto, ExportScope } from './dto/e
 import type { Readable } from 'node:stream';
 import { ExportQueueService } from './export-queue.service.js';
 import { csv } from './csv.js';
+import { classifyUnavailable } from '../../common/dependency-errors.js';
 import { buildQuestionsExportCsv } from '../questions/question-export.util.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 
 const CSV_CONTENT_TYPE = 'text/csv; charset=utf-8';
 
+/** B22: how long a PROCESSING export may go untouched before it is treated
+ * as abandoned by a killed worker. Generous against a real generation run;
+ * the export queue's backoff (export-queue.service.ts) outlasts it. */
+export const EXPORT_CLAIM_STALE_MS = 10 * 60 * 1000;
+
+/** B22: another run holds this export's claim; retry later. */
+export class ExportClaimHeldError extends Error {
+  constructor(exportJobId: string) {
+    super(`Export ${exportJobId} is held by another run's claim; retrying later`);
+    this.name = 'ExportClaimHeldError';
+  }
+}
+
+/** B22: the staff-visible reason, never the raw error (which can name
+ * buckets, hosts or SQL). The full error goes to the log. */
+export function exportFailureReason(error: unknown): string {
+  return classifyUnavailable(error) !== undefined
+    ? 'A service was temporarily unavailable while this export was generated. Please try again.'
+    : 'This export could not be generated. Please try again, or contact support if it keeps failing.';
+}
+
 @Injectable()
 export class ExportService {
+  private readonly logger = new Logger(ExportService.name);
   constructor(
     private readonly queue: ExportQueueService,
     private readonly storage: ObjectStorageService,
@@ -214,13 +237,32 @@ export class ExportService {
         where: {
           id,
           schoolId,
-          status: { in: ['PENDING', 'FAILED'] },
           expiresAt: { gt: new Date() },
+          // B22: a PROCESSING export untouched for EXPORT_CLAIM_STALE_MS was
+          // abandoned by a killed worker; the redelivered job takes it over
+          // instead of finding nothing to claim and leaving it PROCESSING
+          // until it expires.
+          OR: [
+            { status: { in: ['PENDING', 'FAILED'] } },
+            {
+              status: 'PROCESSING',
+              updatedAt: { lt: new Date(Date.now() - EXPORT_CLAIM_STALE_MS) },
+            },
+          ],
         },
         data: { status: 'PROCESSING', failureReason: null },
       }),
     );
-    if (job.count === 0) return;
+    if (job.count === 0) {
+      const current = await withTenant(prisma, schoolId, (tx) =>
+        tx.exportJob.findFirst({ where: { id, schoolId }, select: { status: true } }),
+      );
+      // B22: still PROCESSING under a live claim — possibly a killed worker
+      // whose claim is not stale yet. Retry after the backoff rather than
+      // completing the job with the export stranded.
+      if (current?.status === 'PROCESSING') throw new ExportClaimHeldError(id);
+      return;
+    }
     let uploadedKey: string | undefined;
     try {
       const record = await withTenant(prisma, schoolId, (tx) =>
@@ -274,10 +316,13 @@ export class ExportService {
           where: { id, schoolId, status: 'PROCESSING' },
           data: {
             status: 'FAILED',
-            failureReason: error instanceof Error ? error.message.slice(0, 1000) : 'Export failed.',
+            // B22: never the raw error text — SDK and driver messages can
+            // name buckets, hosts and SQL, and this is shown to staff.
+            failureReason: exportFailureReason(error),
           },
         }),
       );
+      this.logger.error({ msg: 'Export generation failed', exportJobId: id, err: error });
       throw error;
     }
   }

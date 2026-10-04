@@ -49,7 +49,22 @@ export async function runResultAdjustment(
   const { schoolId, operationId } = payload;
 
   const claimed = await claimOperation(schoolId, operationId);
-  if (!claimed) return;
+  if (!claimed) {
+    const current = await withTenant(prisma, schoolId, (tx) =>
+      tx.resultAdjustmentOperation.findUnique({
+        where: { id: operationId },
+        select: { status: true },
+      }),
+    );
+    // Finished (or gone): this is a duplicate job, nothing to do.
+    if (!current || current.status === 'COMPLETED' || current.status === 'FAILED') return;
+    // B22: still owed, but another run holds a live lease — it really is
+    // running, or it was killed and the lease has not gone stale yet. Thrown
+    // so BullMQ retries after its backoff and a dead holder's lease can be
+    // taken over; returning used to complete the job and leave the cohort
+    // held (adjustmentInProgress) indefinitely.
+    throw new Error(`result adjustment ${operationId} is held by another run's claim; retrying`);
+  }
 
   const operation = await withTenant(prisma, schoolId, (tx) =>
     tx.resultAdjustmentOperation.findUniqueOrThrow({ where: { id: operationId } }),

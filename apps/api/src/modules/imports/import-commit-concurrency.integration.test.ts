@@ -9,8 +9,8 @@
  * .test.ts` already proves for `confirm()`'s own `VALIDATED -> IMPORTING`
  * transition (see that file's own doc comment).
  *
- * Two cases here: (1) a second `commit()` call while a claim is fresh is a
- * pure no-op — the row is left untouched, never double-processed; (2) a
+ * Two cases here: (1) a second `commit()` call while a claim is fresh
+ * touches nothing (B22: and throws, so BullMQ retries it later) — the row is left untouched, never double-processed; (2) a
  * second `commit()` call after the previous claim has gone stale (the
  * holder presumably crashed) is honoured — this is the self-healing half of
  * the design, proven directly rather than only asserted in a comment.
@@ -22,7 +22,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { prisma, withTenant } from '@atlas/db';
 import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import { AppModule } from '../../app.module.js';
-import { ImportCommitService } from './import-commit.service.js';
+import { ImportClaimHeldError, ImportCommitService } from './import-commit.service.js';
 
 let app: NestFastifyApplication;
 let commit: ImportCommitService;
@@ -107,7 +107,7 @@ async function seedJobWithOneTeacherRow(schoolId: string, uploaderUserId: string
 }
 
 describe('B7 review follow-up — ImportCommitService.commit() single-runner claim', () => {
-  it('a second commit() call is a no-op while the first run holds a fresh claim', async () => {
+  it('a second commit() call touches nothing while the first run holds a fresh claim, and asks to be retried', async () => {
     const school = await createSchool();
     createdSchoolIds.push(school.id);
     const user = await prisma.user.create({
@@ -129,7 +129,10 @@ describe('B7 review follow-up — ImportCommitService.commit() single-runner cla
       tx.importJob.update({ where: { id: job.id }, data: { processingClaimedAt: new Date() } }),
     );
 
-    await commit.commit(school.id, job.id);
+    // B22: it throws (BullMQ retries it after its backoff) rather than
+    // returning — a return completed the job, and if the holder had been
+    // killed the import stayed IMPORTING forever.
+    await expect(commit.commit(school.id, job.id)).rejects.toBeInstanceOf(ImportClaimHeldError);
 
     // The row must be untouched — a real, unclaimed run would have moved it
     // to COMMITTED or FAILED; a correctly-skipped run leaves it exactly as

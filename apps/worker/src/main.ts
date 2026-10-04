@@ -5,7 +5,9 @@ import { prisma } from '@atlas/db';
 import {
   FAILED_JOB_RETENTION,
   ATTEMPT_MARKING_QUEUE_NAME,
+  RESULT_ADJUSTMENT_QUEUE_NAME,
   type AttemptMarkingJobPayload,
+  type ResultAdjustmentJobPayload,
 } from '@atlas/domain';
 import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
@@ -37,6 +39,7 @@ import {
 } from './queues/attempt-auto-submit.queue.js';
 import { createAttemptMarkingWorker } from './queues/attempt-marking.queue.js';
 import { startLoadShedGate } from './load-shed-gate.js';
+import { reconcileJob } from './job-reconcile.js';
 import { createResultAdjustmentWorker } from './queues/result-adjustment.queue.js';
 import {
   SUBSCRIPTION_EXPIRY_QUEUE_NAME,
@@ -233,8 +236,30 @@ async function main() {
   // as the authority, plus opportunistic finalisation, sharing one
   // idempotent routine" (apps/api's AttemptFinalizationService is the
   // opportunistic half).
+  // B22: a producer handle for the adjustment queue, used only by the
+  // reconciliation pass to re-queue an adjustment whose job was lost.
+  const resultAdjustmentQueue = new Queue<ResultAdjustmentJobPayload>(
+    RESULT_ADJUSTMENT_QUEUE_NAME,
+    { connection },
+  );
   const attemptAutoSubmitWorker = createAttemptAutoSubmitWorker(connection, {
     enqueueMarking,
+    // B22: re-queues marking lost to an outage or a worker crash.
+    reconcileMarking: (payload) =>
+      reconcileJob(attemptMarkingQueue, `mark-${payload.attemptId}`, () =>
+        enqueueMarking(payload, `mark-${payload.attemptId}`),
+      ),
+    // Same options as apps/api's ResultAdjustmentQueueService (the producer).
+    reconcileAdjustment: (payload) =>
+      reconcileJob(resultAdjustmentQueue, `adjust-${payload.operationId}`, async () => {
+        await resultAdjustmentQueue.add('adjust', payload, {
+          jobId: `adjust-${payload.operationId}`,
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 10_000 },
+          removeOnComplete: true,
+          removeOnFail: FAILED_JOB_RETENTION,
+        });
+      }),
   });
   const attemptAutoSubmitQueue = new Queue(ATTEMPT_AUTO_SUBMIT_QUEUE_NAME, { connection });
 
@@ -448,6 +473,7 @@ async function main() {
     await notificationDispatchQueue.close();
     await attemptMarkingQueue.close();
     await attemptAutoSubmitQueue.close();
+    await resultAdjustmentQueue.close();
     await examHealthMonitorQueue.close();
     await retentionQueue.close();
     await Promise.all([shutdownTelemetry(), shutdownMetrics(), flushSentry()]);

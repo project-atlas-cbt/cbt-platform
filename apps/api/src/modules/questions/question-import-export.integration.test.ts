@@ -24,7 +24,12 @@ import { PasswordService } from '../identity/password.service.js';
 import { ImportValidationService } from '../imports/import-validation.service.js';
 import { ImportCommitService } from '../imports/import-commit.service.js';
 import { IMPORT_TEMPLATE_VERSION } from '../imports/import-templates.js';
-import { ExportService } from '../reports/export.service.js';
+import {
+  EXPORT_CLAIM_STALE_MS,
+  ExportClaimHeldError,
+  ExportService,
+} from '../reports/export.service.js';
+import { ownerPrisma } from '../../test-support/owner-prisma.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -452,8 +457,14 @@ describe('B8 — question import/export', () => {
     });
     expect(created.statusCode).toBe(202);
     const jobId = created.json<{ id: string }>().id;
-    // generate() is a no-op when the worker has already claimed the job.
-    await app.get(ExportService).generate(schoolId, jobId);
+    // The in-process export worker may have claimed the job first: then
+    // generate() leaves it to that run (B22: by asking to be retried).
+    await app
+      .get(ExportService)
+      .generate(schoolId, jobId)
+      .catch((err: unknown) => {
+        if (!(err instanceof ExportClaimHeldError)) throw err;
+      });
     let job: { status: string; downloadUrl?: string } = { status: 'PENDING' };
     for (let i = 0; i < 50 && job.status !== 'COMPLETED' && job.status !== 'FAILED'; i++) {
       if (i > 0) await new Promise((resolve) => setTimeout(resolve, 200));
@@ -471,6 +482,18 @@ describe('B8 — question import/export', () => {
       'Question,Option A,Option B,Option C,Option D,Correct Answer,Subject,Class,Topic,Difficulty,Marks,Status',
     );
     expect(res.body).toContain('Export me');
+
+    // B22: a worker killed mid-generation leaves the export PROCESSING. Once
+    // that claim is stale, the redelivered job takes it over and finishes
+    // it, instead of finding nothing to claim and stranding it.
+    await ownerPrisma().$executeRaw`
+      UPDATE export_jobs
+         SET status = 'PROCESSING',
+             updated_at = now() - make_interval(secs => ${EXPORT_CLAIM_STALE_MS / 1000 + 60})
+       WHERE id = ${jobId}::uuid`;
+    await app.get(ExportService).generate(schoolId, jobId);
+    const retaken = await get(teacher, `/exports/${jobId}`);
+    expect(retaken.json<{ status: string }>().status).toBe('COMPLETED');
   });
 
   // Regression: `assertCanAccessJob` used to narrow every non-admin role

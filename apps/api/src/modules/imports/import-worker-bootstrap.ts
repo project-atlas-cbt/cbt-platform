@@ -37,7 +37,9 @@ export function startImportWorkers(app: INestApplicationContext): ImportWorkers 
   const validationWorker = new Worker<ImportJobPayload>(
     IMPORT_VALIDATION_QUEUE_NAME,
     async (job: Job<ImportJobPayload>) => {
-      await validation.validate(job.data.schoolId, job.data.importJobId);
+      await validation.validate(job.data.schoolId, job.data.importJobId, {
+        finalAttempt: job.attemptsMade + 1 >= (job.opts.attempts ?? 1),
+      });
     },
     { connection },
   );
