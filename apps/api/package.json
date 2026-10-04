@@ -17,6 +17,9 @@
     "ops:redact-subject": "tsx src/ops/redact-subject.ts",
     "ops:mfa-reset": "tsx src/ops/mfa-reset.ts",
     "ops:replay-jobs": "tsx src/ops/replay-jobs.ts",
+    "ops:restore-verify": "tsx src/ops/restore-verify.ts",
+    "ops:anonymise-copy": "tsx src/ops/anonymise-copy-cli.ts",
+    "ops:attempts-affected": "tsx src/ops/attempts-affected-cli.ts",
     "test:security": "vitest run --config vitest.security.config.ts"
   },
   "dependencies": {

@@ -1,0 +1,247 @@
+{
+  "scenario": "dr-drill",
+  "startedAt": "2026-10-04T11-37-50",
+  "postgres": "postgres (PostgreSQL) 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)",
+  "clusterBytes": 356644963,
+  "encryptedBaseBackupBytes": 23941379,
+  "baseBackupSeconds": 2.5,
+  "walSegmentsArchived": 3,
+  "target": "2026-10-04 11:38:18.732277+00",
+  "attempts": {
+    "beforeTarget": 40,
+    "afterWorkloadB": 80,
+    "pitrRestored": 40,
+    "latestRestored": 80
+  },
+  "pitr": { "rtoSeconds": 6.0, "finalResults": 40 },
+  "affectedAttempts": { "total": 40, "missing": 40 },
+  "latest": {
+    "rtoSeconds": 6.3,
+    "lastAcknowledgedMarker": 175,
+    "lastRestoredMarker": 175,
+    "markersLost": 0,
+    "rpoSeconds": 0.0
+  },
+  "verification": {
+    "pitr": {
+      "ok": true,
+      "schools": 1,
+      "checks": [
+        {
+          "name": "migrations half-applied or missing",
+          "severity": "error",
+          "count": 0,
+          "detail": "29 applied of 29"
+        },
+        {
+          "name": "school-owned tables without forced row-level security",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "application role missing or able to bypass row-level security",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "answer rows without their accepted event",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "finalised attempts without a result",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "FINAL results with a question unmarked",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "FINAL results whose total is not the sum of question marks",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "results still PROCESSING (marking owed; the worker reconciles it)",
+          "severity": "warning",
+          "count": 0
+        },
+        {
+          "name": "finalised attempts without a finalisation audit (expected only before B22)",
+          "severity": "warning",
+          "count": 0
+        }
+      ]
+    },
+    "afterGoldenPath": {
+      "ok": true,
+      "schools": 1,
+      "checks": [
+        {
+          "name": "migrations half-applied or missing",
+          "severity": "error",
+          "count": 0,
+          "detail": "29 applied of 29"
+        },
+        {
+          "name": "school-owned tables without forced row-level security",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "application role missing or able to bypass row-level security",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "answer rows without their accepted event",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "finalised attempts without a result",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "FINAL results with a question unmarked",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "FINAL results whose total is not the sum of question marks",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "results still PROCESSING (marking owed; the worker reconciles it)",
+          "severity": "warning",
+          "count": 0
+        },
+        {
+          "name": "finalised attempts without a finalisation audit (expected only before B22)",
+          "severity": "warning",
+          "count": 0
+        }
+      ]
+    },
+    "anonymised": {
+      "ok": true,
+      "schools": 1,
+      "checks": [
+        {
+          "name": "migrations half-applied or missing",
+          "severity": "error",
+          "count": 0,
+          "detail": "29 applied of 29"
+        },
+        {
+          "name": "school-owned tables without forced row-level security",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "application role missing or able to bypass row-level security",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "answer rows without their accepted event",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "finalised attempts without a result",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "FINAL results with a question unmarked",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "FINAL results whose total is not the sum of question marks",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "results still PROCESSING (marking owed; the worker reconciles it)",
+          "severity": "warning",
+          "count": 0
+        },
+        {
+          "name": "finalised attempts without a finalisation audit (expected only before B22)",
+          "severity": "warning",
+          "count": 0
+        }
+      ]
+    },
+    "latest": {
+      "ok": true,
+      "schools": 1,
+      "checks": [
+        {
+          "name": "migrations half-applied or missing",
+          "severity": "error",
+          "count": 0,
+          "detail": "29 applied of 29"
+        },
+        {
+          "name": "school-owned tables without forced row-level security",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "application role missing or able to bypass row-level security",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "answer rows without their accepted event",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "finalised attempts without a result",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "FINAL results with a question unmarked",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "FINAL results whose total is not the sum of question marks",
+          "severity": "error",
+          "count": 0
+        },
+        {
+          "name": "results still PROCESSING (marking owed; the worker reconciles it)",
+          "severity": "warning",
+          "count": 0
+        },
+        {
+          "name": "finalised attempts without a finalisation audit (expected only before B22)",
+          "severity": "warning",
+          "count": 0
+        }
+      ]
+    }
+  },
+  "anonymise": {
+    "anonymised": "127.0.0.1:5433/atlas_drill",
+    "users": 43,
+    "memberships": 43,
+    "studentProfiles": 40,
+    "teacherProfiles": 2,
+    "importRows": 0,
+    "notifications": 90,
+    "attempts": 80,
+    "sessionsDeleted": 85,
+    "schools": 1
+  }
+}
