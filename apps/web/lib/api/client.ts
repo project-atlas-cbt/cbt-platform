@@ -86,7 +86,14 @@ const dynamicOriginMiddleware: Middleware = {
     // property value — the key must be entirely absent (not present with
     // an undefined value) for a bodyless request, matching this codebase's
     // established `primaryColor`-omission pattern (tenant-context.tsx).
-    const bodyInit = request.body ? { body: await request.clone().arrayBuffer() } : {};
+    // Read the body by method, never by `request.body`: Firefox does not
+    // implement `Request.body` (request streams), so that check was always
+    // false there and every POST/PUT/PATCH left with no body — Firefox could
+    // not even sign in (F20 browser matrix, PR #34).
+    const method = request.method.toUpperCase();
+    const buffered =
+      method === 'GET' || method === 'HEAD' ? null : await request.clone().arrayBuffer();
+    const bodyInit = buffered && buffered.byteLength > 0 ? { body: buffered } : {};
     return new Request(rewritten, {
       method: request.method,
       headers: request.headers,
