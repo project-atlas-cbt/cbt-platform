@@ -1,0 +1,249 @@
+{
+  "scenario": "lab-burst",
+  "title": "F20 lab burst (pre-cached): 40 clients press Start behind one link",
+  "startedAt": "2026-10-04T02:47:02.746Z",
+  "durationSeconds": 1074,
+  "environment": {
+    "host": "vm",
+    "platform": "linux 6.18.44-fc-v64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logicalCpus": 4,
+    "memoryGb": 15.7,
+    "node": "v22.22.0",
+    "network": "ng-congested (≈300 ms RTT ±100, ~3% loss, 2 Mbit shared, 1,000-packet queue) via user-space shaper (tools/load/netem/shaper.mjs — no sch_netem in this kernel)",
+    "pooler": "none (direct)"
+  },
+  "parameters": {
+    "clients": 40,
+    "arrivalWindowSeconds": 20,
+    "questions": 40,
+    "mediaKbPerQuestion": 150,
+    "precache": true
+  },
+  "latency": [
+    {
+      "label": "answer.batch",
+      "count": 150,
+      "ok": 150,
+      "status": {
+        "200": 150
+      },
+      "networkFailures": 0,
+      "p50": 332.29,
+      "p95": 461.82,
+      "p99": 898.56,
+      "max": 1018.88,
+      "mean": 341.43,
+      "bytes": 42303
+    },
+    {
+      "label": "attempt.heartbeat",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 356.86,
+      "p95": 869.38,
+      "p99": 1050.62,
+      "max": 1050.62,
+      "mean": 389.68,
+      "bytes": 680
+    },
+    {
+      "label": "attempt.start",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 797.18,
+      "p95": 1537.02,
+      "p99": 1918.98,
+      "max": 1918.98,
+      "mean": 941.54,
+      "bytes": 2121560
+    },
+    {
+      "label": "auth.login",
+      "count": 41,
+      "ok": 41,
+      "status": {
+        "200": 41
+      },
+      "networkFailures": 0,
+      "p50": 6475.78,
+      "p95": 8888.32,
+      "p99": 12222.46,
+      "max": 12222.46,
+      "mean": 5804.14,
+      "bytes": 4139
+    },
+    {
+      "label": "media.precache",
+      "count": 3105,
+      "ok": 1600,
+      "status": {
+        "200": 1600,
+        "403": 37
+      },
+      "networkFailures": 1468,
+      "p50": 12255.23,
+      "p95": 76939.26,
+      "p99": 77463.55,
+      "max": 78118.91,
+      "mean": 34530.68,
+      "bytes": 245760695
+    },
+    {
+      "label": "precache.manifest",
+      "count": 70,
+      "ok": 70,
+      "status": {
+        "200": 70
+      },
+      "networkFailures": 0,
+      "p50": 14114.82,
+      "p95": 19726.34,
+      "p99": 21069.82,
+      "max": 23281.66,
+      "mean": 13191.75,
+      "bytes": 1948170
+    },
+    {
+      "label": "session.open",
+      "count": 1,
+      "ok": 1,
+      "status": {
+        "201": 1
+      },
+      "networkFailures": 0,
+      "p50": 627.71,
+      "p95": 627.71,
+      "p99": 627.71,
+      "max": 627.71,
+      "mean": 627.46,
+      "bytes": 441
+    },
+    {
+      "label": "setup",
+      "count": 4,
+      "ok": 4,
+      "status": {
+        "200": 3,
+        "201": 1
+      },
+      "networkFailures": 0,
+      "p50": 469.25,
+      "p95": 556.54,
+      "p99": 556.54,
+      "max": 556.54,
+      "mean": 491.55,
+      "bytes": 59566
+    },
+    {
+      "label": "student.assessment",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 8691.71,
+      "p95": 12156.93,
+      "p99": 12394.5,
+      "max": 12394.5,
+      "mean": 8036.89,
+      "bytes": 8720
+    },
+    {
+      "label": "student.preview",
+      "count": 40,
+      "ok": 40,
+      "status": {
+        "200": 40
+      },
+      "networkFailures": 0,
+      "p50": 11509.76,
+      "p95": 12369.92,
+      "p99": 12926.98,
+      "max": 12926.98,
+      "mean": 9598.35,
+      "bytes": 16080
+    },
+    {
+      "label": "tenant.resolve",
+      "count": 41,
+      "ok": 41,
+      "status": {
+        "200": 41
+      },
+      "networkFailures": 0,
+      "p50": 3921.92,
+      "p95": 7327.74,
+      "p99": 9379.84,
+      "max": 9379.84,
+      "mean": 4029.55,
+      "bytes": 10250
+    }
+  ],
+  "checks": [
+    {
+      "name": "clients pre-cached before the bell",
+      "actual": "40/40",
+      "budget": "40",
+      "pass": true
+    },
+    {
+      "name": "media at Start served from the pre-cache (no live media fetch)",
+      "actual": "0 live fetches",
+      "budget": "0",
+      "pass": true
+    },
+    {
+      "name": "clients ready (signed in, started, media cached)",
+      "actual": "40/40",
+      "budget": "40",
+      "pass": true
+    },
+    {
+      "name": "whole lab ready (first arrival → last ready)",
+      "actual": "21.2 s",
+      "budget": "≤ 60 s",
+      "pass": true
+    },
+    {
+      "name": "answer save success",
+      "actual": "100.000%",
+      "budget": "≥ 99.9%",
+      "pass": true
+    }
+  ],
+  "sampler": {
+    "samples": 216,
+    "peakConnections": 7,
+    "peakActive": 2,
+    "peakIdleInTransaction": 1,
+    "peakWaitingLocks": 0,
+    "avgCommitsPerSecond": 3,
+    "peakCommitsPerSecond": 38,
+    "peakRedisClients": 23,
+    "peakRedisMemoryMb": 2.9,
+    "minHostFreeMemoryMb": 12983,
+    "hostMemoryPressure": false,
+    "peakHarnessLoopDelayMs": 105,
+    "harnessStalls": []
+  },
+  "notes": [],
+  "extra": {
+    "perClientReadyP95Seconds": 1.7,
+    "perClientReadyMaxSeconds": 1.9,
+    "mediaBytesTransferred": 0,
+    "mediaFiles": 0,
+    "precacheSeconds": 1019.2,
+    "precacheBytes": 245752000,
+    "studentsWithMediaKey": 40
+  }
+}

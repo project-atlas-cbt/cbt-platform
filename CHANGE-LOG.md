@@ -66,7 +66,7 @@ evidence: `frontend-roadmap.md` F20 Implementation notes.
   the shared auth barrel; `@atlas/domain`, `contracts`, `validation` marked side-effect free).
 - Low-end (4× CPU, 1366 × 768): answer selection 38–85 ms, question change 38–107 ms, longest task
   ≤ 108 ms.
-- LAB_CHANGELOG_PLACEHOLDER
+- Pre-cached lab burst, 40 clients, 40 × 150 KB paper, `ng-congested` (user-space relay): pre-cache of the whole lab **1,019 s (~17 min) for 246 MB**, all 1,600 downloads verified (37 expired URLs re-signed); at the bell **all 40 ready in 21.2 s** (20 s arrival window; per-student ≤ 1.9 s, start p95 1.5 s), no media fetched live, answer saves 100 %. B21's same link without pre-cache: 3 of 40 ready after 224 s. The link was emulated by a new user-space relay (`tools/load/netem/shaper.mjs`; this kernel has no `sch_netem`). The run also found that signed ciphertext URLs (15 min) expire during a congested pre-cache; the client now re-signs them instead of failing.
 
 **Tested:** web unit 979/979 (plus new tests for every fix jsdom can reproduce); Chromium browser
 suites 27/27 locally. **Not yet executed:** the Firefox/WebKit `@matrix` smoke and the new `web-e2e`

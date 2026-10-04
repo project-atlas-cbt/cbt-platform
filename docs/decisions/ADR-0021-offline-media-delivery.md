@@ -106,8 +106,8 @@ schoolId, info = "exam-media:v1:" + examId)`.
   (slower, never wrong). Rotate between exam windows.
 
 **Measured** (lab burst, 40 clients, 40 × 150 KB paper, `ng-congested`; see the F20 entry in
-`CHANGE-LOG.md` and `docs/performance/results/*-lab-burst-ng-congested-media150-precached.*`):
-LAB_RESULT_PLACEHOLDER
+`CHANGE-LOG.md` and `docs/performance/results/2026-10-04T02-47-02-lab-burst-ng-congested-media150-precached.*`):
+Pre-cached lab burst, 40 clients, 40 × 150 KB paper, `ng-congested` (user-space relay): pre-cache of the whole lab **1,019 s (~17 min) for 246 MB**, all 1,600 downloads verified (37 expired URLs re-signed); at the bell **all 40 ready in 21.2 s** (20 s arrival window; per-student ≤ 1.9 s, start p95 1.5 s), no media fetched live, answer saves 100 %. B21's same link without pre-cache: 3 of 40 ready after 224 s. Signed ciphertext URLs live 15 minutes, which a congested lab outlasts; the client re-signs them from the manifest on expiry.
 
 **Consequences.** A lab needs its session opened early enough for the pre-cache to finish — the
 download is the same ~16 minutes on a 2 Mbit link, but it is now spent while students sit at the

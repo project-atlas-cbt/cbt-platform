@@ -3355,7 +3355,7 @@ before the window. Full record: the 2026-10-04 F20 entry in `CHANGE-LOG.md`.
    honoured by reads (calm "temporarily unavailable" state, retry held until Retry-After) and by
    answer saves. Found and fixed: Serwist reloaded the page on every reconnect (back to question 1
    mid-exam); a heartbeat ignored Retry-After; a refused save waited up to 30 s for the next heartbeat.
-9. LAB_DOD_PLACEHOLDER
+9. ✅ (emulated link) **The 40-client lab burst completes within the agreed time.** Pre-cached lab burst, 40 clients, 40 × 150 KB paper, `ng-congested` (user-space relay): pre-cache of the whole lab **1,019 s (~17 min) for 246 MB**, all 1,600 downloads verified (37 expired URLs re-signed); at the bell **all 40 ready in 21.2 s** (20 s arrival window; per-student ≤ 1.9 s, start p95 1.5 s), no media fetched live, answer saves 100 %. B21's same link without pre-cache: 3 of 40 ready after 224 s. Evidence: `2026-10-04T02-47-02-lab-burst-ng-congested-media150-precached`; method: `load lab --precache` (`docs/performance/load-testing.md`). The link is a user-space shaper (no `sch_netem` in the cloud sandbox); a re-run through real netem or on a real lab is a B23 staging item. Found and fixed: the client failed the pre-cache on an expired signed URL instead of re-signing it.
 10. ✅ **CSP and security headers without breaking functionality.** `proxy.ts` + `lib/security/csp.ts`;
     `e2e/security-headers.spec.ts` (nonce per request; injected script and handlers blocked; no
     violation from sign-in through a running exam). Amendments: `docs/security/web-csp-policy.md`.
