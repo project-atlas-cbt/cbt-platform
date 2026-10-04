@@ -23,13 +23,15 @@ function / legal obligation for assessment records) and handles parental consent
 
 Derived from `packages/db/prisma/schema.prisma`.
 
-| Category          | Where                                                                                                                                                             | Retention                                                                    |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Identity (PII)    | `users` (names, email — staff only, never students), `school_memberships.login_identifier`, `student_profiles` (student id, admission number), `teacher_profiles` | Indefinite; redactable per person on request (§4)                            |
-| Academic evidence | `exam_attempts`, `attempt_question_snapshots`, `attempt_answers`, `attempt_answer_events`, `attempt_events`, `attempt_question_results`, `results`, …             | **Indefinite — never destroyed** (invariant 14; ADR-0028)                    |
-| Audit             | `audit_events`                                                                                                                                                    | **Indefinite — append-only** (invariant 15)                                  |
-| Operational       | `sessions`, `platform_sessions`, `password_reset_tokens`, `import_rows.raw_data`, read `notifications`                                                            | Purged/redacted on schedule — [retention-schedule.md](retention-schedule.md) |
-| Integrity signals | `exam_attempts.start_ip_address/user_agent/device_id`, `attempt_events.metadata`                                                                                  | Kept with the attempt (they are evidence of how it was taken)                |
+| Category             | Where                                                                                                                                                                                                                                                                       | Retention                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity (PII)       | `users` (names, email — staff only, never students), `school_memberships.login_identifier`, `student_profiles` (student id, admission number), `teacher_profiles`                                                                                                           | Indefinite; redactable per person on request (§4)                                                                                                 |
+| Academic evidence    | `exam_attempts`, `attempt_question_snapshots`, `attempt_answers`, `attempt_answer_events`, `attempt_events`, `attempt_question_results`, `results`, …                                                                                                                       | **Indefinite — never destroyed** (invariant 14; ADR-0028)                                                                                         |
+| Audit                | `audit_events`                                                                                                                                                                                                                                                              | **Indefinite — append-only** (invariant 15)                                                                                                       |
+| Operational          | `sessions`, `platform_sessions`, `password_reset_tokens`, `import_rows.raw_data`, read `notifications`                                                                                                                                                                      | Purged/redacted on schedule — [retention-schedule.md](retention-schedule.md)                                                                      |
+| Integrity signals    | `exam_attempts.start_ip_address/user_agent/device_id`, `attempt_events.metadata`                                                                                                                                                                                            | Kept with the attempt (they are evidence of how it was taken)                                                                                     |
+| Object storage (B22) | School logos, question media (school content); **uploaded import files** (personal data: the spreadsheet of students/staff); report exports (personal data, expire with the export); encrypted exam-media copies (content); the redaction register (UUIDs only). Versioned. | Import files: 90 days or at once on redaction; exports: B18 expiry; noncurrent versions: 35 days — [retention-schedule.md](retention-schedule.md) |
+| Backups (B22)        | Database snapshots and transaction logs (everything above, encrypted)                                                                                                                                                                                                       | 35-day PITR window; long-term policy proposed for B23 legal review                                                                                |
 
 What is **not** collected: biometrics, photographs, location, guardians' data, health data, free-text
 answers outside the exam itself.
@@ -66,6 +68,15 @@ written instruction, received by the operator from the school's verified School 
    attempts, answers, snapshots, results, adjustments, participation or audit: those are the school's
    academic record (invariant 14). The DPA states this explicitly so it is agreed, not discovered.
    Every run writes a `DATA_SUBJECT_REDACTED` audit event (field names and counts, never values).
+   The reason is kept in the audit trail, so it must never contain the person's name; the request
+   reference must be the `DSR-YYYY-NNN` number (the command rejects anything else).
+
+   B22 (decisions 2b and 6A, 2026-10-04): the command also deletes, whole, every uploaded import
+   file that created the person (the file holds other people's rows too and cannot be edited), and
+   records the redaction in the **redaction register** — object storage, outside the database,
+   holding only the DSR number, the school, membership, user and operator UUIDs and the time. After
+   any database restore the operator re-applies every redaction made since the restore point
+   (`ops:redact-subject --replay --since <restore point> --apply`; [../operations/backup-and-restore.md](../operations/backup-and-restore.md) §3).
 
 5. **Respond** to the school within the period the school must meet (NDPA: without undue delay; the
    school sets the clock). Target: 5 working days from a verified instruction.
