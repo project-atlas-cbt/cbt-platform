@@ -1,0 +1,7 @@
+# Generated on the server, never committed (docs/operations/vps-pilot.md).
+.env
+app.env
+Caddyfile
+certs/
+backups/
+releases.log

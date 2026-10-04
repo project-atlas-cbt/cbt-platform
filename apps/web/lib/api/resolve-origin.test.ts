@@ -37,4 +37,22 @@ describe('resolveApiOrigin', () => {
       resolveApiOrigin('greenfield.localtest.me', 'http:', 'http://localhost:3001', '4001'),
     ).toBe('http://greenfield.localtest.me:4001');
   });
+
+  it('uses the per-school API host in production when no API port is set (B23)', () => {
+    expect(resolveApiOrigin('greenfield.atlas.app', 'https:', 'https://api.atlas.app', '')).toBe(
+      'https://greenfield.api.atlas.app',
+    );
+  });
+
+  it('maps the platform-admin host onto its API host in production (B23)', () => {
+    expect(resolveApiOrigin('admin.atlas.app', 'https:', 'https://api.atlas.app', '')).toBe(
+      'https://admin.api.atlas.app',
+    );
+  });
+
+  it('uses the fallback origin for a bare hostname with no API port', () => {
+    expect(resolveApiOrigin('intranet', 'https:', 'https://api.atlas.app', '')).toBe(
+      'https://api.atlas.app',
+    );
+  });
 });

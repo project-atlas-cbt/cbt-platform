@@ -99,3 +99,25 @@ Consequences:
 - SES sends from the same region; the MAIL FROM MX record uses its endpoint.
 - Cross-region backup copy (B22) remains a separate, open decision.
 - Revisit only with probes from real school connections showing a consistently better region.
+
+## Amendment — 2026-10-04 (B23): a single VPS for the pilot
+
+**Decision (project owner, B23):** the pilot runs on **one rented VPS**, not AWS. The AWS design
+(about $900–1,200 a month for staging alone, estimated) is out of budget before the first paying
+school; the owner will move to stronger infrastructure when usage justifies it. The web app runs
+on the same server rather than Vercel (owner's choice, to avoid Vercel Pro's cost).
+
+Consequences:
+
+- Runbook and code: `docs/operations/vps-pilot.md`, `infra/vps/` (Docker Compose, Caddy with a
+  certificate per host, nightly off-site backups). `infra/cdk` and its runbooks stay for later.
+- **Region:** wherever the VPS is (the owner's shortlist is Frankfurt). The B21 probe measured
+  Frankfurt at 185 ms median from Nigeria against Cape Town's 115 ms; answer saves do not depend
+  on RTT (F13 offline queue), so this is accepted for the pilot.
+- **Accepted losses against the AWS design:** no Multi-AZ failover, no managed point-in-time
+  restore (nightly `pg_dump`, recovery point up to 24 hours), one machine's capacity. The B22
+  recovery objectives in `recovery-objectives.md` do not hold on this deployment.
+- **Kept:** TLS to PostgreSQL and Redis (private CA), RLS-bound `atlas_app` for the running
+  application, the schema owner password only in the ops service, expand-only migrations,
+  per-school API hosts (ADR-0022 amendment).
+- Revisit before a second school, or when a sitting's size approaches the server's measured limit.

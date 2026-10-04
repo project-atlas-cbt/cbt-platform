@@ -6,13 +6,15 @@
 // Reserved labels are platform hosts, never a school subdomain (ADR-0022's
 // topology): `api.<root>` is the API itself, `admin.<root>` is the
 // Software Admin's platform-branded login (04 §2), `www.<root>` is
-// reserved for a future marketing site. A request to any of these, or to
+// reserved for a future marketing site, `media.<root>` is the object
+// storage host on a single-server deployment (docs/operations/vps-pilot.md).
+// A request to any of these, or to
 // the bare root domain, resolves no tenant — which is correct, not an
 // error: not every request needs one (see TenancyMiddleware's comment).
 // Exported (not just module-private) so B3's subdomain-generator.ts can
 // avoid ever *generating* a reserved label for a new school, the mirror
 // image of this file's own job of never *resolving* one to a school.
-export const RESERVED_SUBDOMAIN_LABELS = new Set(['api', 'admin', 'www']);
+export const RESERVED_SUBDOMAIN_LABELS = new Set(['api', 'admin', 'www', 'media']);
 
 // B23 (ADR-0022 amendment, 2026-10-04): in production the browser on
 // `<school>.<root>` (Vercel) calls the API at `<school>.api.<root>` (AWS),

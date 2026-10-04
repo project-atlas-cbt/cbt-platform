@@ -224,7 +224,9 @@ open). **B23** (production readiness) is **IN PROGRESS** (2026-10-04). Its repos
 CDK infrastructure in `af-south-1`, the deploy and rollback pipeline, migration safety, the golden
 path and smoke checks, SES email, invigilator signals, and the operations docs. Provisioning,
 staging measurements, the legal review and the pilot remain, all tracked in
-`docs/operations/launch-checklist.md`. **F21** pairs with it next. Each phase's DoD outcome,
+`docs/operations/launch-checklist.md`. **The pilot runs on a single VPS** (owner decision
+2026-10-04, ADR-0032 amendment; `docs/operations/vps-pilot.md`, `infra/vps`), with SMTP email; the
+AWS design waits until the platform outgrows one server. **F21** pairs with it next. Each phase's DoD outcome,
 partial items and design reasoning are in its dated `CHANGE-LOG.md` entry and its roadmap section;
 read those before resuming related work.
 

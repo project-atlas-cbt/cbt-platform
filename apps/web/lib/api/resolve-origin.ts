@@ -12,13 +12,11 @@
  * plain default, and F0's original health-check demo) — `fallbackOrigin`
  * (`NEXT_PUBLIC_API_ORIGIN`) is used unchanged there instead.
  *
- * Deliberately not a general production solution: ADR-0022's topology
- * diagram shows a single flat `api.<root>` in production, which can't carry
- * a per-school subdomain via Host header the way this mirrors it locally.
- * That reconciliation is an explicitly flagged open question for B23
- * ("production DNS reflecting this topology" — ADR-0022's own Required
- * changes table already defers wildcard DNS/TLS there for the same reason).
- * This function implements only the local-dev-and-test-verified half.
+ * Production (ADR-0022 amendment, B23): an empty `apiPort`
+ * (`NEXT_PUBLIC_API_PORT=""`) means the API has its own hosts, so the page
+ * at `<school>.<root>` calls `<school>.api.<root>` on the default port —
+ * `apps/api/src/common/subdomain.ts` strips the `.api` label back off to
+ * resolve the same school, and `admin.<root>` maps to `admin.api.<root>`.
  *
  * Pure, no I/O, no framework dependency — same shape as the API's own
  * `subdomain.ts`, for the same testability reason.
@@ -30,6 +28,13 @@ export function resolveApiOrigin(
   apiPort: string,
 ): string {
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return fallbackOrigin;
+  }
+  if (apiPort === '') {
+    const dot = hostname.indexOf('.');
+    if (dot > 0) {
+      return `${protocol}//${hostname.slice(0, dot)}.api${hostname.slice(dot)}`;
+    }
     return fallbackOrigin;
   }
   return `${protocol}//${hostname}:${apiPort}`;

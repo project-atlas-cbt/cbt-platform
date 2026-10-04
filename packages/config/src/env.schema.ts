@@ -291,16 +291,26 @@ const envObject = z.object({
 
   // Exam Health Monitor (09 §37) and operational/security alert dispatch.
   // OPS_ALERT_EMAILS: comma-separated operator addresses, delivered through
-  // the NotificationChannel (SES in production, console in dev/CI).
+  // the NotificationChannel (SES or SMTP in production, console in dev/CI).
   OPS_ALERT_EMAILS: z.string().optional().default(''),
   /** B23 (ADR-0019 provider decision): `ses` sends real email through
-   * Amazon SES; `console` is the dev/CI transport. Production requires `ses`. */
-  NOTIFICATION_TRANSPORT: z.enum(['console', 'ses']).default('console'),
+   * Amazon SES, `smtp` through an SMTP provider (the VPS pilot, ADR-0019
+   * amendment 2026-10-04); `console` is the dev/CI transport. Production
+   * requires `ses` or `smtp`. */
+  NOTIFICATION_TRANSPORT: z.enum(['console', 'ses', 'smtp']).default('console'),
   /** Sender address for SES, on the domain's verified SES identity
    * (e.g. `"Atlas" <no-reply@example.ng>`). */
   SES_FROM_ADDRESS: z.string().optional().default(''),
   /** Region of the SES identity; defaults to the deployment's own region. */
   SES_REGION: z.string().optional().default(''),
+  /** SMTP transport (VPS pilot). Port 465 is implicit TLS; any other port
+   * must offer STARTTLS, which the channel requires. */
+  SMTP_HOST: z.string().optional().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().optional().default(''),
+  SMTP_PASSWORD: z.string().optional().default(''),
+  /** Sender address for SMTP, on a domain the provider has verified. */
+  SMTP_FROM_ADDRESS: z.string().optional().default(''),
   EXAM_HEALTH_INTERVAL_MS: z.coerce
     .number()
     .int()
@@ -444,10 +454,20 @@ export const envSchema = envObject.superRefine((env, ctx) => {
   }
   // B23: the console transport withholds content in production, so a
   // reset or activation email would silently never arrive.
-  if (env.NOTIFICATION_TRANSPORT !== 'ses') {
-    fail('NOTIFICATION_TRANSPORT', 'must be ses in production (ADR-0019)');
-  } else if (!/@[^@\s]+\.[^@\s]+>?$/.test(env.SES_FROM_ADDRESS)) {
-    fail('SES_FROM_ADDRESS', 'must be a sender address on the verified SES identity');
+  const sender = /@[^@\s]+\.[^@\s]+>?$/;
+  if (env.NOTIFICATION_TRANSPORT === 'ses') {
+    if (!sender.test(env.SES_FROM_ADDRESS)) {
+      fail('SES_FROM_ADDRESS', 'must be a sender address on the verified SES identity');
+    }
+  } else if (env.NOTIFICATION_TRANSPORT === 'smtp') {
+    if (!sender.test(env.SMTP_FROM_ADDRESS)) {
+      fail('SMTP_FROM_ADDRESS', 'must be a sender address the SMTP provider has verified');
+    }
+    for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD'] as const) {
+      if (!env[key]) fail(key, 'is required when NOTIFICATION_TRANSPORT is smtp');
+    }
+  } else {
+    fail('NOTIFICATION_TRANSPORT', 'must be ses or smtp in production (ADR-0019)');
   }
 });
 

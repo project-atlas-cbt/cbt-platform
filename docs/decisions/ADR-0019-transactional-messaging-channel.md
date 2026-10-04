@@ -65,3 +65,17 @@ transport or without `SES_FROM_ADDRESS`. Call sites and templates are unchanged.
 - Deliverability monitoring (this ADR's B23 item): CloudWatch alarms on the account's SES bounce
   and complaint rates route to on-call, and each message is tagged with its template so delivery
   problems can be traced to a message type. The SMS question is revisited after the pilot.
+
+## Amendment — 2026-10-04 (B23): SMTP for the VPS pilot
+
+**Decision (project owner, B23):** on the single-server pilot (ADR-0032 amendment, same date),
+email goes through **SMTP** to a provider such as Brevo or Resend, not SES. `apps/api`
+`SmtpNotificationChannel` implements the same `NotificationChannel`, selected by
+`NOTIFICATION_TRANSPORT=smtp`; production accepts `ses` or `smtp` and refuses to boot without
+`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` and a sender address. The channel requires TLS
+(implicit on port 465, STARTTLS otherwise). Transports are chosen in one place,
+`createNotificationChannel`, shared by the API and the ops CLIs. SES remains for the AWS design.
+
+- Launch items: verify the sender domain with the provider (SPF, DKIM) and publish DMARC.
+- Deliverability monitoring moves to the provider's dashboard; there is no bounce alarm on
+  this deployment.

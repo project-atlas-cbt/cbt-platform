@@ -26,9 +26,12 @@ wildcard domains require it); the API records (`api.<root>` and `*.api.<root>` a
 load balancer, ACM validation, SES DKIM and MAIL FROM) are added there —
 [infrastructure.md](infrastructure.md).
 
+**Pilot (single VPS, [vps-pilot.md](vps-pilot.md)):** the same hosts, all served by one Caddy,
+plus `media.<root>` for object storage. `media` is therefore a reserved label too.
+
 - **Tenant resolution** (ADR-0005): the API resolves the school from the inbound `Host` header's
   subdomain label against `School.subdomain` — see `apps/api/src/common/subdomain.ts` and
-  `tenancy.middleware.ts`. `api`, `admin`, and `www` are reserved labels, never a school.
+  `tenancy.middleware.ts`. `api`, `admin`, `www` and `media` are reserved labels, never a school.
 - **Session cookie** (ADR-0022, issued by B1): `Domain=<root>` (the env var `COOKIE_DOMAIN`, e.g.
   `atlas.app` — no leading dot needed; modern browsers treat a `Domain` attribute as including
   subdomains), `Secure`, `HttpOnly`, `SameSite=Lax`. This is what makes the cookie readable by
