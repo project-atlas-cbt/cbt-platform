@@ -70,10 +70,13 @@ What stays the same:
    Caddy obtains one certificate per host from Let's Encrypt over HTTP, so no DNS API access is
    needed, but every host must resolve before its first request.
 
-3. **Clone and configure** (as `atlas`):
+3. **Clone and configure** (as `atlas`). The repository is private, so first create a key for the
+   server (`ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N ""`, with an `IdentityFile` entry
+   for github.com in `~/.ssh/config`) and add its public half under the repository's Settings,
+   Deploy keys, read-only:
 
    ```sh
-   git clone https://github.com/project-atlas-cbt/cbt-platform.git ~/cbt-platform
+   git clone git@github.com:project-atlas-cbt/cbt-platform.git ~/cbt-platform
    cd ~/cbt-platform/infra/vps
    bin/init-env.sh <root> "<product name>"
    ```
