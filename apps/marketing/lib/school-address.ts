@@ -1,6 +1,6 @@
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-// docs/operations/domain-plan.md: never a school.
-const RESERVED = new Set(['www', 'api', 'admin']);
+// Never a school: mirrors RESERVED_SUBDOMAIN_LABELS in apps/api/src/common/subdomain.ts.
+const RESERVED = new Set(['www', 'api', 'admin', 'media']);
 
 /**
  * Turns whatever someone types ("ole", "ole.examkeep.com",

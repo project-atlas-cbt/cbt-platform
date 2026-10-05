@@ -126,6 +126,12 @@ export class AttemptSyncEngine {
     onNotWritable?: () => void,
   ) {
     this.onNotWritable = onNotWritable;
+    // B22: a new engine has no request in flight, so any row still marked
+    // `in-flight` was left by a page that reloaded or crashed mid-request
+    // and would otherwise never be sent again. Return it to `pending` before
+    // the first flush; a duplicate send is harmless, because the server
+    // keeps only the newest sequence number per question (ADR-0007).
+    this.flushChain = this.revertInFlightToPending().catch(() => undefined);
   }
 
   setOnNotWritable(callback: () => void): void {

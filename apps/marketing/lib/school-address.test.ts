@@ -17,6 +17,7 @@ describe('schoolLabel', () => {
     'www',
     'api',
     'admin',
+    'media',
     '-ole',
     'ole-',
     'a.b',

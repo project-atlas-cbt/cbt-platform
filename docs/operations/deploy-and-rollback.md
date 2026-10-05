@@ -3,6 +3,10 @@
 **Status:** B23 (2026-10-04), DoD 3. Workflows: `.github/workflows/deploy.yml`,
 `deploy-release.yml`, `rollback.yml`.
 
+**Paused for the VPS pilot (2026-10-04):** the AWS deploy no longer runs on merges or tags, only
+by hand from the Actions tab, until the AWS accounts exist (ADR-0032 amendment). The pilot deploys
+with `infra/vps/bin/deploy.sh` ([vps-pilot.md](vps-pilot.md)). The table below is the AWS design.
+
 ## Environments
 
 | Environment | Where                            | Data                                                | Deploys                                                                  |

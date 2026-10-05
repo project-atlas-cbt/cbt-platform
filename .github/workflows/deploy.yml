@@ -4,11 +4,15 @@ name: Deploy
 # a version tag deploys to production after the `production` environment's
 # required reviewer approves. Both run the same procedure
 # (deploy-release.yml). Rollback: rollback.yml.
+#
+# Paused for the VPS pilot (ADR-0032 amendment, 2026-10-04): there are no AWS
+# accounts yet, so a run on every merge could only fail. Run it by hand from
+# the Actions tab (on a branch for staging, on a v* tag for production), and
+# restore these push triggers when the AWS design is provisioned:
+#   push: { branches: [dev], tags: ['v*'] }
 
 on:
-  push:
-    branches: [dev]
-    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# B23 production images. Two targets from one build:
+# B23 production images. Three targets from one build:
 #
 #   server — apps/api and apps/worker (one image; the ECS task definition
 #            picks the process with its command: `node apps/api/dist/main.js`
@@ -9,6 +9,10 @@
 #            `pnpm db:migrate:deploy` as the pre-deploy one-off task, and the
 #            ops CLIs (ops:restore-verify, ops:redact-subject, …) which run
 #            through tsx. Never serves traffic.
+#   web    — apps/web (`next start`), for a single-server deployment
+#            (docs/operations/vps-pilot.md). NEXT_PUBLIC_* values are
+#            inlined at build time, so they are build arguments; on Vercel
+#            (the AWS topology) this target is unused.
 #
 # The local/CI development image stays infra/docker/Dockerfile.node.
 # CI Trivy-scans both targets here (HIGH/CRITICAL blocks the merge), as B20
@@ -77,3 +81,28 @@ USER node
 EXPOSE 3001
 HEALTHCHECK NONE
 CMD ["node", "apps/api/dist/main.js"]
+
+# --- Web (single-server deployment) -----------------------------------------
+FROM base AS web
+ARG PRODUCT_NAME
+ARG NEXT_PUBLIC_API_ORIGIN
+# Empty: the page at <school>.<root> calls <school>.api.<root>
+# (apps/web/lib/api/resolve-origin.ts).
+ARG NEXT_PUBLIC_API_PORT=""
+ARG NEXT_PUBLIC_MEDIA_ORIGIN
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG NEXT_PUBLIC_RELEASE_VERSION=""
+ENV PRODUCT_NAME=${PRODUCT_NAME} \
+    NEXT_PUBLIC_API_ORIGIN=${NEXT_PUBLIC_API_ORIGIN} \
+    NEXT_PUBLIC_API_PORT=${NEXT_PUBLIC_API_PORT} \
+    NEXT_PUBLIC_MEDIA_ORIGIN=${NEXT_PUBLIC_MEDIA_ORIGIN} \
+    NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN} \
+    NEXT_PUBLIC_RELEASE_VERSION=${NEXT_PUBLIC_RELEASE_VERSION} \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --chown=node:node . .
+RUN --mount=type=cache,target=/home/node/.local/share/pnpm/store,uid=1000,gid=1000 \
+    pnpm install --frozen-lockfile
+RUN pnpm turbo run build --filter=@atlas/web
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["pnpm", "--filter", "@atlas/web", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]

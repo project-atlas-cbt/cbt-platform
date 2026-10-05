@@ -43,9 +43,61 @@ real app after a visual-only polish of the showcase screens, never retouched ima
   redirects, and the form's failure and consent paths.
 - Lighthouse (mobile, home): performance 96, accessibility 100, best practices 100, SEO 100.
 
-**Open:** real screenshots and the 60-second teaser (after the showcase-screen polish); contact
-details, starting price, company story and logo from the owner; legal review of Privacy and Terms;
-choosing the host with the pilot's DNS.
+**Open:** real screenshots and the 60-second teaser (after the showcase-screen polish); the logo
+from the owner; legal review of Privacy and Terms; deploying it on the pilot VPS or Vercel. Contact
+details, the starting price (₦2,000 per student per year, under discussion) and the owning company
+(MushakTech Ventures) were added on 2026-10-05 in `apps/marketing/.env.production`.
+
+### 2026-10-04 — Pilot hosting on a single VPS (B23)
+
+**Owner decisions:** the AWS design is out of budget for the pilot, so the pilot runs on **one
+rented VPS** with the web app on the same server (ADR-0032 amendment), and email goes through
+**SMTP** (ADR-0019 amendment). `infra/cdk` stays for later. Staging on AWS was not provisioned:
+the account Haneef created is an "AWS (new)" simplified account locked by organization policy to
+`eu-north-1`, and unlocking it needs a paid upgrade.
+
+**Shipped**
+
+- `infra/vps/`: Docker Compose (Caddy, web, API, worker, PostgreSQL 18, Redis 8, MinIO), a
+  Caddyfile rendered per host (Let's Encrypt over HTTP, one certificate per host), and scripts for
+  server preparation, settings with generated secrets, a private CA for TLS to PostgreSQL and
+  Redis, deploy with migrations and a readiness gate, and nightly off-site backups.
+- `infra/docker/Dockerfile.prod`: a `web` target (`next start`, `NEXT_PUBLIC_*` as build args).
+- `apps/api`: `SmtpNotificationChannel` (TLS required) and `createNotificationChannel`, shared by
+  the API and the ops CLIs. `media` joins the reserved subdomain labels.
+- `packages/config`: `NOTIFICATION_TRANSPORT=smtp` and `SMTP_*`; production accepts `ses` or
+  `smtp` and checks the SMTP settings.
+- `apps/web`: `resolveApiOrigin` maps `<school>.<root>` to `<school>.api.<root>` when
+  `NEXT_PUBLIC_API_PORT` is empty (the F21 production branch this deployment needs).
+- Docs: `docs/operations/vps-pilot.md` (runbook), launch checklist section 0, notes in
+  `infrastructure.md` and `domain-plan.md`.
+
+**Tested:** unit tests for the SMTP channel, the new env rules and the origin mapping; config,
+API and web typechecks. In Docker here: PostgreSQL and Redis accept only TLS and verify against the
+private CA by host name; node-postgres refuses a certificate from another CA under
+`sslmode=require`; migrations applied over TLS; the built API booted with production validation
+(SMTP transport) and reported database and Redis ready; the worker booted; `backup.sh` produced a
+dump that restored into a scratch database. **Not run here:** the three image builds and the
+MinIO and Caddy containers (this environment cannot reach Docker Hub or `cgr.dev` from builds),
+so the first deploy on the server is their first run; `deploy.sh` stops unless readiness is all ok.
+
+**Also fixed (found by this PR's browser suite):** an answer whose save request was in flight
+when the page reloaded stayed marked `in-flight` in IndexedDB and was never sent again, so the
+B22 recovery test (`e2e/recovery.spec.ts`) could fail depending on timing. A new sync engine now
+returns such rows to `pending` before its first flush; the server keeps only the newest sequence
+per question, so a repeat is harmless. Unit test in `sync-engine.test.ts` reproduces it.
+
+**Docs brought in line:** `09` (dated notes), data-protection sub-processors (pilot list, the
+cross-border transfer added to the legal review), threat model (single-host topology), backend B23
+status, the F21 section (Vercel replaced for the pilot; previews and staging open for F21's plan),
+roadmap index, and `CLAUDE.md`.
+
+**AWS deploy paused** (owner decision, same day): `deploy.yml` no longer runs on merges to `dev` or
+`v*` tags, only by hand, because with no AWS accounts every run failed (after #36 and #37). Restore
+the push triggers when the AWS design is provisioned.
+
+**Accepted for the pilot:** no failover, nightly backups only (recovery point up to 24 hours),
+one machine's capacity. B23 stays IN PROGRESS.
 
 ### 2026-10-04 — B23 Production Readiness & Launch (in progress)
 

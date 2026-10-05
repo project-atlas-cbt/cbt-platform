@@ -1,6 +1,5 @@
 import { Global, Module } from '@nestjs/common';
 import {
-  ConsoleNotificationChannel,
   OPERATIONAL_ALERT_TEMPLATE,
   TemplateRegistry,
   type NotificationChannel,
@@ -10,7 +9,7 @@ import type { Env } from '@atlas/config';
 
 import { NOTIFICATION_CHANNEL, NOTIFICATION_TEMPLATE_REGISTRY } from './notification-tokens.js';
 import { OperationalAlertService } from './operational-alert.service.js';
-import { SesNotificationChannel, sesSender } from './ses-channel.js';
+import { createNotificationChannel } from './create-channel.js';
 
 export { NOTIFICATION_CHANNEL, NOTIFICATION_TEMPLATE_REGISTRY };
 
@@ -31,8 +30,8 @@ function createRegistry(): TemplateRegistry {
  * it (see packages/notifications' README) — there's exactly one registry
  * for the process, not one per call site.
  *
- * NOTIFICATION_TRANSPORT picks the transport: Amazon SES (B23, required in
- * production) or ConsoleNotificationChannel for dev and CI. Call sites
+ * NOTIFICATION_TRANSPORT picks the transport (createNotificationChannel):
+ * Amazon SES or SMTP in production, the console for dev and CI. Call sites
  * never change, which is the whole point of depending on the interface.
  */
 @Global()
@@ -42,23 +41,24 @@ function createRegistry(): TemplateRegistry {
     {
       provide: NOTIFICATION_CHANNEL,
       inject: [NOTIFICATION_TEMPLATE_REGISTRY, ConfigService],
-      // B20: message content (live reset/activation links, recipient
-      // address) is never printed in production — dev and test runs keep it,
-      // since developers and the integration suites complete reset/activation
-      // flows by reading the link from this output.
       useFactory: (
         registry: TemplateRegistry,
         config: ConfigService<Env, true>,
       ): NotificationChannel =>
-        config.get('NOTIFICATION_TRANSPORT', { infer: true }) === 'ses'
-          ? new SesNotificationChannel(
-              registry,
-              config.get('SES_FROM_ADDRESS', { infer: true }),
-              sesSender(config.get('SES_REGION', { infer: true }) || undefined),
-            )
-          : new ConsoleNotificationChannel(registry, console.log, {
-              revealContent: config.get('NODE_ENV', { infer: true }) !== 'production',
-            }),
+        createNotificationChannel(
+          {
+            NODE_ENV: config.get('NODE_ENV', { infer: true }),
+            NOTIFICATION_TRANSPORT: config.get('NOTIFICATION_TRANSPORT', { infer: true }),
+            SES_FROM_ADDRESS: config.get('SES_FROM_ADDRESS', { infer: true }),
+            SES_REGION: config.get('SES_REGION', { infer: true }),
+            SMTP_HOST: config.get('SMTP_HOST', { infer: true }),
+            SMTP_PORT: config.get('SMTP_PORT', { infer: true }),
+            SMTP_USER: config.get('SMTP_USER', { infer: true }),
+            SMTP_PASSWORD: config.get('SMTP_PASSWORD', { infer: true }),
+            SMTP_FROM_ADDRESS: config.get('SMTP_FROM_ADDRESS', { infer: true }),
+          },
+          registry,
+        ),
     },
     OperationalAlertService,
   ],

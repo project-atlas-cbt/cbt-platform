@@ -3400,14 +3400,24 @@ the MFA enrolment gate unmounted the one-time recovery codes on confirm; a CSRF 
 
 **Status:** NOT STARTED · **Backend pair:** B23
 
+> **Hosting changed before this phase started (2026-10-04, ADR-0032 amendment).** The pilot runs
+> the web app with `next start` on the same VPS as the API, behind Caddy (`infra/vps`,
+> `docs/operations/vps-pilot.md`), not on Vercel. Already delivered with B23: the `web` image
+> target, per-host TLS, and the production API host mapping in `lib/api/resolve-origin.ts`
+> (`<school>.<root>` → `<school>.api.<root>` when `NEXT_PUBLIC_API_PORT` is empty). Open for F21's
+> plan, to be decided with the project owner: what replaces per-PR preview deployments (DoD 2) and
+> staging (DoD 9) without Vercel or an AWS staging account. The golden path never runs against the
+> pilot's live database.
+
 ## Objective
 
 Complete frontend production deployment, documentation, and launch verification.
 
 ## Scope
 
-- Vercel production deployment with environment configuration (`09 §28`).
-- Preview deployments per pull request.
+- Production deployment with environment configuration (`09 §28`) — for the pilot, the VPS web
+  container (see the note above); Vercel when the AWS design is adopted.
+- Preview deployments per pull request (replacement without Vercel to be decided in F21's plan).
 - Production build optimisation and source-map handling.
 - User documentation: school onboarding guide, teacher guide, invigilator guide, student instructions.
 - **Lab-preparation guidance** — installing the PWA and warming the cache before exam day (`R-09`).

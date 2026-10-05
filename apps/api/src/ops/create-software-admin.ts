@@ -9,7 +9,7 @@
  *     [--actor <existing admin id>] [--apply]
  *
  * The password is generated here and sent only to the new admin's address
- * through the NotificationChannel (SES in production) — never printed or
+ * through the NotificationChannel (SES or SMTP in production) — never printed or
  * logged (B20). Software Admin MFA is required in production, so the
  * account is enrolled at first sign-in before it can do anything. Runs as
  * the ops task (the only task with the owner password); the first account
@@ -19,15 +19,11 @@
 import { randomInt } from 'node:crypto';
 import { loadEnv, loadRootEnv } from '@atlas/config';
 import { createPrismaClient, prisma } from '@atlas/db';
-import {
-  ConsoleNotificationChannel,
-  TemplateRegistry,
-  type NotificationChannel,
-} from '@atlas/notifications';
+import { TemplateRegistry } from '@atlas/notifications';
 import { PasswordService } from '../modules/identity/password.service.js';
 import { AuditActionRegistry } from '../modules/operations/audit-action.registry.js';
 import { AuditService } from '../modules/operations/audit-event.service.js';
-import { SesNotificationChannel, sesSender } from '../notifications/ses-channel.js';
+import { createNotificationChannel } from '../notifications/create-channel.js';
 import { assertSoftwareAdmin, parseArgs, requireArg } from './cli-args.js';
 
 loadRootEnv();
@@ -52,21 +48,6 @@ export const SOFTWARE_ADMIN_INVITATION_TEMPLATE = {
 export function generateAdminPassword(): string {
   const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   return Array.from({ length: 24 }, () => alphabet[randomInt(alphabet.length)]).join('');
-}
-
-function channel(
-  env: ReturnType<typeof loadEnv>,
-  templates: TemplateRegistry,
-): NotificationChannel {
-  return env.NOTIFICATION_TRANSPORT === 'ses'
-    ? new SesNotificationChannel(
-        templates,
-        env.SES_FROM_ADDRESS,
-        sesSender(env.SES_REGION || undefined),
-      )
-    : new ConsoleNotificationChannel(templates, console.log, {
-        revealContent: env.NODE_ENV !== 'production',
-      });
 }
 
 async function main(): Promise<void> {
@@ -125,7 +106,7 @@ async function main(): Promise<void> {
 
     const templates = new TemplateRegistry();
     templates.register(SOFTWARE_ADMIN_INVITATION_TEMPLATE);
-    await channel(env, templates).send({
+    await createNotificationChannel(env, templates).send({
       to: email,
       template: SOFTWARE_ADMIN_INVITATION_TEMPLATE.name,
       variables: {

@@ -5,6 +5,10 @@ TypeScript, owner decision). Staging and production are the same code with diffe
 (`infra/cdk/src/config.ts`). The web tier is on Vercel and is F21's. Deploying is
 [deploy-and-rollback.md](deploy-and-rollback.md); migrations are [migrations.md](migrations.md).
 
+> **Pilot (2026-10-04):** the pilot runs on a single VPS instead
+> ([vps-pilot.md](vps-pilot.md), ADR-0032 amendment). This document describes the AWS design kept
+> for when the platform outgrows one server.
+
 ## What exists
 
 Every stack is in **af-south-1** (Cape Town), the owner's decision recorded as the ADR-0032

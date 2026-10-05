@@ -21,9 +21,12 @@ describe('parseTenantSubdomain (ADR-0005)', () => {
     expect(parseTenantSubdomain('localtest.me:3001', ROOT)).toBeNull();
   });
 
-  it.each(['api', 'admin', 'www'])('returns null for the reserved platform label "%s"', (label) => {
-    expect(parseTenantSubdomain(`${label}.localtest.me`, ROOT)).toBeNull();
-  });
+  it.each(['api', 'admin', 'www', 'media'])(
+    'returns null for the reserved platform label "%s"',
+    (label) => {
+      expect(parseTenantSubdomain(`${label}.localtest.me`, ROOT)).toBeNull();
+    },
+  );
 
   it('returns null for a host entirely outside the root domain', () => {
     expect(parseTenantSubdomain('localhost:3001', ROOT)).toBeNull();

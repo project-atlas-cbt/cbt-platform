@@ -102,17 +102,31 @@ Owner: the operator's designated security lead (named in the DPA before GA).
 
 ## 6. Sub-processors and location
 
-| Sub-processor            | Purpose                           | Location                                                        |
-| ------------------------ | --------------------------------- | --------------------------------------------------------------- |
-| Amazon Web Services      | Database, cache, storage, compute | `eu-west-1` (ADR-0032; Nigerian residency would need a new ADR) |
-| Vercel                   | Web application hosting           | Global edge; serves the UI, holds no academic data at rest      |
-| Sentry (when configured) | Error tracking                    | Events are scrubbed: no bodies, cookies, headers, PII           |
-| Email provider (B23)     | Transactional email (staff only)  | To be selected (ADR-0019)                                       |
+**Pilot (2026-10-04, ADR-0032 amendment):** the pilot runs on a single rented server, so its
+sub-processors are:
+
+| Sub-processor                         | Purpose                                               | Location                                                   |
+| ------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------- |
+| VPS provider (to be named)            | All compute and storage: web, API, database, files    | The provider's data centre (shortlist: Frankfurt, Germany) |
+| Off-site backup storage (to be named) | Encrypted-in-transit copies of the database and files | The provider's region; 30-day retention                    |
+| SMTP provider (Brevo or Resend)       | Transactional email (staff only)                      | The provider's region (ADR-0019 amendment)                 |
+| Sentry (when configured)              | Error tracking                                        | Events are scrubbed: no bodies, cookies, headers, PII      |
+
+The AWS design (used once the platform outgrows one server):
+
+| Sub-processor            | Purpose                           | Location                                                   |
+| ------------------------ | --------------------------------- | ---------------------------------------------------------- |
+| Amazon Web Services      | Database, cache, storage, compute | `af-south-1` (ADR-0032 amendment)                          |
+| Vercel                   | Web application hosting           | Global edge; serves the UI, holds no academic data at rest |
+| Amazon SES               | Transactional email (staff only)  | Same region (ADR-0019 amendment)                           |
+| Sentry (when configured) | Error tracking                    | Events are scrubbed: no bodies, cookies, headers, PII      |
 
 ## 7. Open items before general availability (B23)
 
 - Legal review of this posture, the DPA ([dpa-template.md](dpa-template.md)) and the retention
   schedule — ADR-0028's recorded condition.
 - Name the security lead and breach contact in the DPA.
-- Data residency confirmation per customer (ADR-0032).
+- Data residency confirmation per customer (ADR-0032), including the pilot's transfer of school
+  data to a server outside Nigeria (the legal review covers NDPA cross-border transfer).
+- Name the pilot's VPS, backup and SMTP providers in the DPA's sub-processor list.
 - Third-party penetration test (B20 deferred item).

@@ -174,6 +174,10 @@ The detailed technical decision record is:
 
 `docs/09-technology-selection-and-technical-stack-evaluation.md`
 
+**Pilot hosting (2026-10-04):** the AWS/Vercel rows above are the target design. The pilot runs on
+a single VPS (Docker Compose: Caddy, `next start`, API, worker, PostgreSQL, Redis, MinIO) with SMTP
+email — ADR-0032 and ADR-0019 amendments, `docs/operations/vps-pilot.md`.
+
 Technology choices must still be validated during implementation where specific versions, infrastructure capabilities, or constraints have changed.
 
 ---
@@ -224,7 +228,9 @@ open). **B23** (production readiness) is **IN PROGRESS** (2026-10-04). Its repos
 CDK infrastructure in `af-south-1`, the deploy and rollback pipeline, migration safety, the golden
 path and smoke checks, SES email, invigilator signals, and the operations docs. Provisioning,
 staging measurements, the legal review and the pilot remain, all tracked in
-`docs/operations/launch-checklist.md`. **F21** pairs with it next. Each phase's DoD outcome,
+`docs/operations/launch-checklist.md`. **The pilot runs on a single VPS** (owner decision
+2026-10-04, ADR-0032 amendment; `docs/operations/vps-pilot.md`, `infra/vps`), with SMTP email; the
+AWS design waits until the platform outgrows one server. **F21** pairs with it next. Each phase's DoD outcome,
 partial items and design reasoning are in its dated `CHANGE-LOG.md` entry and its roadmap section;
 read those before resuming related work.
 
@@ -235,9 +241,10 @@ Open items carried forward:
 - `F12` operational alerts (DoD item 10) stay deferred; the disconnected flag and signal counts now
   show in the live table (B23).
 - Excused absence is intentionally deferred (`F16`).
-- B23 launch items (from B20–B22 and B23): accounts, domain and DNS at Vercel; SES out of the
-  sandbox; staging run of level 1,000, proxy pinning, failover and PITR timing, and rollback
-  rehearsal; legal review of retention and the DPA; the pilot. Full list:
+- B23 launch items for the VPS pilot (launch checklist section 0): server, domain and DNS, SMTP
+  provider, off-site backups, first deploy and restore rehearsal; legal review of retention, the
+  DPA and the pilot's cross-border transfer; the pilot itself. The AWS items (staging level 1,000,
+  proxy pinning, failover and PITR timing) wait for the AWS design. Full list:
   `docs/operations/launch-checklist.md`. Audit BLOCKER/HIGH: 57/58 closed, R-03 waits on staging
   (`docs/audit/blocker-high-closure.md`).
 - Product name decided: **ExamKeep** (still read from `PRODUCT_NAME`). Its public marketing site is
@@ -272,9 +279,11 @@ Engineering facts every session needs:
   run (`apps/api/src/load/`); the web client must honour `Retry-After`.
 - Logging goes through `@atlas/observability` (redacting pino); never log request bodies, answers,
   tokens or PII. Route params named `id`/`…Id` must be UUIDs (global pipe).
-- B23 deploys: infrastructure is `infra/cdk` (asserted by `infra/cdk/test`); staging deploys on
-  merge to `dev`, production on a `v*` tag after Haneef approves; never run the golden path (which
-  writes test data) against production. Migrations must be expand-only (`pnpm lint:migrations`,
+- B23 deploys: the pilot deploys with `infra/vps/bin/deploy.sh` on the VPS (`vps-pilot.md`). The
+  AWS design is `infra/cdk` (asserted by `infra/cdk/test`): staging on merge to `dev`, production on
+  a `v*` tag after Haneef approves — those triggers are paused until AWS is provisioned, so
+  `deploy.yml` runs only by hand. Never run the golden path (which writes test data) against
+  production. Migrations must be expand-only (`pnpm lint:migrations`,
   `docs/operations/migrations.md`). Schools reach the API at `<school>.api.<root>`.
 - F20 web: every page carries a per-request nonce CSP (`apps/web/proxy.ts`) — no inline script, and
   new external origins must be added in `lib/security/csp.ts`. API requests must never be cached by
@@ -371,7 +380,8 @@ The relevant roadmap phase must define the exact Definition of Done.
 - Resilient/offline-tolerant CBT client
 - REST/OpenAPI API approach
 - SSE initially for operational realtime
-- AWS backend infrastructure + Vercel Next.js frontend
+- AWS backend infrastructure + Vercel Next.js frontend (target design; the pilot runs on a single
+  VPS with SMTP email, 2026-10-04 amendments to ADR-0032 and ADR-0019)
 
 ### Architecture decisions — all 33 resolved (2026-08-24)
 
@@ -414,7 +424,7 @@ Full outcomes: `docs/decisions/README.md`. The decisions that most change how th
 ### Conditional decisions to carry forward
 
 - **ADR-0028** — retention schedule formalised in `B20` (2026-10-02 amendment); legal review carried to `B23` as a launch-readiness item.
-- **ADR-0032** — `eu-west-1` chosen on reasoning; RTT must be measured from real Nigerian networks in `B21` and may trigger an amendment before `B23`.
+- **ADR-0032** — `af-south-1` for the AWS design (B23 amendment); the pilot runs on a single VPS (2026-10-04 amendment). Revisit before a second school or when a sitting nears the server's limit.
 
 ### Deferred / intentionally not part of the immediate implementation
 
