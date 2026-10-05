@@ -39,10 +39,17 @@ describe('ServiceWorkerUpdates (F21 DoD 5)', () => {
     );
   });
 
-  it('leaves the waiting worker alone during an exam', async () => {
+  it('leaves the waiting worker alone during an exam and keeps a heartbeat mark', async () => {
+    const put = vi.fn().mockResolvedValue(undefined);
+    const del = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal('caches', { open: () => Promise.resolve({ put, delete: del }) });
     pathname = '/student/exam/a1';
-    render(<ServiceWorkerUpdates />);
-    await new Promise((r) => setTimeout(r, 20));
+    const view = render(<ServiceWorkerUpdates />);
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(String(put.mock.calls[0]![0])).toMatch(/^\/__atlas\/open-attempt\//);
     expect(postMessage).not.toHaveBeenCalled();
+    view.unmount();
+    await waitFor(() => expect(del).toHaveBeenCalled());
+    vi.unstubAllGlobals();
   });
 });

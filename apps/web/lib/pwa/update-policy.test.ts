@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAttemptPath, mayActivateUpdate } from './update-policy';
+import { MARK_FRESH_MS, anyFreshMark, isAttemptPath } from './update-policy';
 
 describe('service-worker update policy (F21 DoD 5)', () => {
   it('treats only the running exam page as an attempt', () => {
@@ -12,21 +12,11 @@ describe('service-worker update policy (F21 DoD 5)', () => {
     expect(isAttemptPath('/teacher/exam-control/abc/students')).toBe(false);
   });
 
-  it('refuses while any open window is on an attempt', () => {
-    expect(
-      mayActivateUpdate([
-        'https://kings.example.test/teacher/exams',
-        'https://kings.example.test/student/exam/a1',
-      ]),
-    ).toBe(false);
-  });
-
-  it('allows when no window is on an attempt, including none at all', () => {
-    expect(mayActivateUpdate(['https://kings.example.test/student/exam/a1/submitted'])).toBe(true);
-    expect(mayActivateUpdate([])).toBe(true);
-  });
-
-  it('errs on the side of the exam for a URL it cannot read', () => {
-    expect(mayActivateUpdate(['not a url'])).toBe(false);
+  it('a recent heartbeat mark means an exam is open; a stale one does not', () => {
+    const now = 1_000_000;
+    expect(anyFreshMark([now - 5_000], now)).toBe(true);
+    expect(anyFreshMark([now - MARK_FRESH_MS - 1], now)).toBe(false);
+    expect(anyFreshMark([Number.NaN], now)).toBe(false);
+    expect(anyFreshMark([], now)).toBe(false);
   });
 });

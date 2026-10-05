@@ -57,6 +57,15 @@ describe('AssessmentPreview', () => {
     expect(screen.getByText('Answer all questions.')).toBeInTheDocument();
   });
 
+  it('F21 (ADR-0003) — states what a long disconnection near the end costs, before Start', async () => {
+    mockGet.mockResolvedValue(ok(PREVIEW));
+    renderWithClient();
+    expect(await screen.findByText('If the connection drops')).toBeInTheDocument();
+    expect(
+      screen.getByText(/more than about a minute after your time runs out are not counted/),
+    ).toBeInTheDocument();
+  });
+
   it('DoD 3 — a double-click on Start triggers exactly one start-attempt call', async () => {
     mockGet.mockResolvedValue(ok(PREVIEW));
     mockPost.mockReturnValue(new Promise(() => undefined)); // never resolves — button should be disabled after first click

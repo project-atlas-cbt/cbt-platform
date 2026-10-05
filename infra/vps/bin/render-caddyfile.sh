@@ -2,7 +2,11 @@
 # Writes infra/vps/Caddyfile from .env: one site per host, each with its own
 # Let's Encrypt certificate (HTTP-01, so no DNS API access is needed).
 # A school is added by appending its label to SCHOOLS and redeploying.
-#   CADDY_LOCAL_CA=1 issues certificates from Caddy's own CA instead (testing).
+#   CADDY_LOCAL_CA=1 issues certificates from Caddy's own CA instead (testing),
+#     and adds wildcard sites so schools created during a test need no
+#     redeploy. CADDY_LOCAL_CA_ROOT=<dir inside the caddy container> makes
+#     that CA's root the one in <dir>/ca.crt and ca.key (the CI stack uses
+#     the internal CA, which every service already trusts).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
@@ -19,11 +23,19 @@ for school in ${SCHOOLS//,/ }; do
   api_hosts="$api_hosts, $school.api.$ROOT_DOMAIN"
 done
 root_re=${ROOT_DOMAIN//./\\.}
+if [ "${CADDY_LOCAL_CA:-}" = 1 ]; then
+  web_hosts="$web_hosts, *.$ROOT_DOMAIN"
+  api_hosts="$api_hosts, *.api.$ROOT_DOMAIN"
+fi
 
 {
   echo '{'
   [ -n "${ACME_EMAIL:-}" ] && echo "  email $ACME_EMAIL"
   [ "${CADDY_LOCAL_CA:-}" = 1 ] && echo '  local_certs'
+  if [ "${CADDY_LOCAL_CA:-}" = 1 ] && [ -n "${CADDY_LOCAL_CA_ROOT:-}" ]; then
+    printf '  pki {\n    ca local {\n      root {\n        cert %s/ca.crt\n        key %s/ca.key\n      }\n    }\n  }\n' \
+      "$CADDY_LOCAL_CA_ROOT" "$CADDY_LOCAL_CA_ROOT"
+  fi
   echo '}'
   cat <<CADDY
 

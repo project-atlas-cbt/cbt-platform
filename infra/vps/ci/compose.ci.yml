@@ -1,0 +1,28 @@
+# F21 (owner decision 2026-10-04): the CI stack, which stands in for
+# per-PR preview deployments and staging while the pilot runs on one VPS.
+# Layered over ../compose.yml by ci/stack.sh (COMPOSE_FILE); never used on
+# the server. Only test plumbing lives here: the application services run
+# exactly as on the pilot server.
+services:
+  caddy:
+    # Caddy's local CA uses the internal CA as its root (CADDY_LOCAL_CA_ROOT),
+    # which every service already trusts through NODE_EXTRA_CA_CERTS.
+    volumes:
+      - ./certs:/ci-ca:ro
+
+  # Catches the platform's email (activation keys, Exam Health Monitor) over
+  # STARTTLS with a certificate from the internal CA, as the API requires
+  # TLS to its SMTP server.
+  mailpit:
+    image: axllent/mailpit@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48 # v1.31.4
+    environment:
+      MP_SMTP_BIND_ADDR: 0.0.0.0:587
+      MP_SMTP_TLS_CERT: /certs/server.crt
+      MP_SMTP_TLS_KEY: /certs/server.key
+      MP_SMTP_REQUIRE_STARTTLS: 'true'
+      MP_SMTP_AUTH_ACCEPT_ANY: 'true'
+    volumes:
+      - ./certs/mailpit:/certs:ro
+    ports:
+      - '127.0.0.1:8025:8025'
+    networks: [internal]

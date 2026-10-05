@@ -1,7 +1,7 @@
 import { defaultCache } from '@serwist/next/worker';
 import { CacheFirst, Serwist } from 'serwist';
 import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist';
-import { ACTIVATE_UPDATE_MESSAGE, mayActivateUpdate } from '@/lib/pwa/update-policy';
+import { ACTIVATE_UPDATE_MESSAGE, hasOpenAttempt } from '@/lib/pwa/update-policy';
 
 // F0 scope: app-shell precaching only (doctrine defers exam-asset runtime
 // caching rules to F13's offline engine — this is deliberately the
@@ -14,9 +14,6 @@ import { ACTIVATE_UPDATE_MESSAGE, mayActivateUpdate } from '@/lib/pwa/update-pol
 declare const self: SerwistGlobalConfig & {
   __SW_MANIFEST: (PrecacheEntry | string)[] | undefined;
   location: Location;
-  clients: {
-    matchAll(options: { type: 'window'; includeUncontrolled: boolean }): Promise<{ url: string }[]>;
-  };
   skipWaiting(): Promise<void>;
   addEventListener(type: 'fetch', listener: (event: FetchEvent) => void): void;
   addEventListener(type: 'activate', listener: (event: ExtendableEvent) => void): void;
@@ -92,19 +89,14 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
  * precache, which a running exam page may still load chunks from. A page
  * asks it to take over once that page is not an exam
  * (components/pwa/service-worker-updates.tsx), and it agrees only if no
- * open window is on a running exam (lib/pwa/update-policy.ts). The browser
+ * open window is running an exam, which it learns from the exam pages'
+ * heartbeat marks (lib/pwa/update-policy.ts). The browser
  * also activates it on its own once every tab of the site is closed.
  */
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
   const data = event.data as { type?: unknown } | null;
   if (data?.type !== ACTIVATE_UPDATE_MESSAGE) return;
-  event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((windows) =>
-        mayActivateUpdate(windows.map((w) => w.url)) ? self.skipWaiting() : undefined,
-      ),
-  );
+  event.waitUntil(hasOpenAttempt().then((examOpen) => (examOpen ? undefined : self.skipWaiting())));
 });
 
 const serwist = new Serwist({

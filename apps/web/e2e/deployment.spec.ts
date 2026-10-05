@@ -189,7 +189,12 @@ test('a deployment during an exam waits for submission, then replaces the old bu
       timeout: 30_000,
     })
     .toBe(true);
-  expect((await precachedUrls(page)).filter((u) => u.includes(previousBuild))).toEqual([]);
+  // The old entries go when the new worker finishes activating.
+  await expect
+    .poll(async () => (await precachedUrls(page)).filter((u) => u.includes(previousBuild)), {
+      timeout: 30_000,
+    })
+    .toEqual([]);
 
   // A fresh visit runs the current build.
   await page.goto(schoolUrl('/student/assessment', PROXY_PORT));

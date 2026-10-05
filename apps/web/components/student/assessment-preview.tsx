@@ -190,6 +190,21 @@ export function AssessmentPreview({ examId }: { examId: string }) {
         </p>
       ) : null}
 
+      {/* F21 (ADR-0003): the consequence of a long disconnection, stated
+          before Start. The server accepts answers for a short grace window
+          after time runs out (ATTEMPT_GRACE_WINDOW_SECONDS, 60 s), never more. */}
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-text-muted">
+          If the connection drops
+        </p>
+        <p className="mt-1 text-sm text-text-secondary">
+          Keep answering. Your answers are saved on this computer and sent when the connection
+          returns. Do not reload the page or close the browser. Answers that reach the school&apos;s
+          server more than about a minute after your time runs out are not counted, so tell your
+          invigilator at once if the connection is down near the end.
+        </p>
+      </div>
+
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Keyboard</p>
         <p className="mt-1 text-sm text-text-secondary">
