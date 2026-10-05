@@ -113,6 +113,22 @@ What stays the same:
 Create the school in the Software Admin console, add its subdomain label to `SCHOOLS` in `.env`,
 and run `bin/deploy.sh`. Caddy fetches the new certificates on start.
 
+## Demo school (staging only)
+
+Before the pilot the server is staging and may hold the fictional demo school (Oakridge College and
+Riverside Grammar School, `tools/load/src/demo-school.ts`). Never run it once a real school is on
+the server. It goes straight to the API inside the network, so it needs no certificates yet:
+
+```sh
+docker compose --profile ops run --rm --no-deps \
+  -e DEMO_API_TARGET=http://api:3001/v1 -e DEMO_PASSWORD='<a password for every demo user>' \
+  ops pnpm --filter @atlas/load demo-school seed
+```
+
+Then add `oakridge,riverside` to `SCHOOLS` and run `bin/deploy.sh`. The demo staff have
+`@….example` addresses; the email transports skip those reserved names, so no invitation is sent
+or bounces.
+
 ## Deploying and rolling back
 
 - **Deploy:** `bin/deploy.sh <ref>` checks out a tag or commit, then deploys it. After the
