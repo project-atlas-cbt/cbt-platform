@@ -2,6 +2,21 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-05 — First pilot VPS deploy: post-deploy smoke fixed for listed-only school hosts
+
+The first deploy to the pilot VPS (staging until the pilot, demo data only) built and started every
+service, but its smoke failed three checks with a TLS alert: the unknown-school check, and the
+school-route and CORS checks, which fall back to the same unknown school when `SCHOOLS` is empty.
+The VPS gives a certificate only to listed hosts (HTTP-01, one per school), so an unlisted school
+host fails its handshake by design. CI passed because its stack issues wildcard certificates.
+
+- `tools/load/src/smoke.ts`: new `SMOKE_ANY_SCHOOL_HOST`. Without it the unknown-school check is
+  skipped, and the school-route and CORS checks run against `SMOKE_SCHOOL` only (skipped, with a
+  line saying so, until a school is listed).
+- `infra/vps/bin/deploy.sh` sets it from `CADDY_LOCAL_CA` (the CI stack's wildcards), so CI keeps
+  every check; `deploy-release.yml` sets it for the AWS design's wildcard API certificate.
+- Tested: typecheck, lint, format; the smoke run in both modes lists the expected checks.
+
 ### 2026-10-05 — Product renamed ExamKeep in what users see and in the project docs
 
 **Owner decision (2026-10-04):** the commercial name is **ExamKeep** (examkeep.com); "Project Atlas"
