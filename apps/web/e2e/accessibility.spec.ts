@@ -33,12 +33,20 @@ const STAFF: { role: string; user: () => string; pages: string[] }[] = [
       '/school/analytics',
       '/school/reports',
       '/school/settings',
+      '/school/help',
+      '/school/help/rollover',
     ],
   },
   {
     role: 'Moderator',
     user: () => fixture().users.moderator,
-    pages: ['/moderator', '/moderator/people/teachers', '/moderator/exams', '/moderator/results'],
+    pages: [
+      '/moderator',
+      '/moderator/people/teachers',
+      '/moderator/exams',
+      '/moderator/results',
+      '/moderator/help',
+    ],
   },
   {
     role: 'HOD',
@@ -50,6 +58,8 @@ const STAFF: { role: string; user: () => string; pages: string[] }[] = [
       '/hod/exams',
       '/hod/exam-control',
       '/hod/department-analytics',
+      '/hod/help',
+      '/hod/help/review-questions',
     ],
   },
   {
@@ -64,6 +74,8 @@ const STAFF: { role: string; user: () => string; pages: string[] }[] = [
       '/teacher/exam-control',
       '/teacher/results',
       '/teacher/reports',
+      '/teacher/help',
+      '/teacher/help/build-an-exam',
     ],
   },
 ];

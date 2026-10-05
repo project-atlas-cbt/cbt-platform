@@ -1,0 +1,310 @@
+import type { Guide } from '../types';
+
+/**
+ * Guides for the school-office work school admins and moderators share:
+ * people, accounts and the academic structure. Both roles' workspaces use
+ * the same relative paths (`people/teachers`, `academics/sessions`, ...),
+ * and each guide's `requires` keeps it to whoever holds the permission.
+ */
+export function schoolOfficeGuides(): Guide[] {
+  return [
+    {
+      id: 'add-teachers',
+      title: 'Add teachers',
+      summary: 'Create teacher accounts one at a time or from a file.',
+      area: 'people',
+      keywords: ['new teacher', 'staff', 'invite', 'import teachers', 'csv'],
+      requires: ['users.teacher.create'],
+      steps: [
+        'Open **People**, then **Teachers**.',
+        'For one teacher, press **Add teacher** and enter their name, email and staff ID.',
+        'For many, press **Import**, then **Download template**. Fill it in, choose the file, check the rows that need attention, and press the **Import … valid rows** button.',
+        'Each teacher receives an email with a link to set their password. The link opens on your school’s own address.',
+      ],
+      notes: [
+        'A teacher who loses the email or forgets their password: open the teacher and press **Reset credentials**. A fresh link is emailed to them.',
+      ],
+      screen: { label: 'Teachers', href: 'people/teachers' },
+      related: ['assign-teachers', 'reset-passwords'],
+    },
+    {
+      id: 'assign-teachers',
+      title: 'Assign a teacher to subjects and classes',
+      summary: 'Decide which subjects each teacher teaches in which classes.',
+      area: 'people',
+      keywords: ['assign', 'assignment', 'subject teacher', 'class teacher', 'allocate'],
+      requires: ['assignments.teacherToSubject'],
+      steps: [
+        'Open **People**, then **Teachers**, and press **Assignments** on the teacher’s row.',
+        'Under **Subject & class assignments**, tick each class and subject they teach.',
+        'Press **Save**.',
+      ],
+      notes: [
+        'You need a current academic session, and classes that offer subjects, before you can assign teachers.',
+        'A teacher can write questions and build exams only for the subjects and levels they are assigned.',
+      ],
+      screen: { label: 'Teachers', href: 'people/teachers' },
+      related: ['add-teachers', 'classes-and-subjects'],
+    },
+    {
+      id: 'make-hod',
+      title: 'Make a teacher the head of a department',
+      summary: 'Give a teacher HOD standing so they review their department’s questions.',
+      area: 'people',
+      keywords: ['hod', 'head of department', 'promote', 'department head', 'reviewer'],
+      requires: ['users.hod.create'],
+      steps: [
+        'Open **People**, then **HODs**, and press **Promote teacher**.',
+        'Choose the teacher and, if you know it, their department. Press **Promote to HOD**.',
+      ],
+      notes: [
+        'An HOD reviews questions only for subjects in their department. A subject with no department is outside every HOD’s review.',
+        '**Remove HOD standing** returns them to an ordinary teacher.',
+      ],
+      screen: { label: 'HODs', href: 'people/hods' },
+      related: ['assign-teachers'],
+    },
+    {
+      id: 'add-students',
+      title: 'Add students and give them their sign-in details',
+      summary:
+        'Create student accounts one at a time or from a file, then hand out their passwords.',
+      area: 'people',
+      keywords: [
+        'new student',
+        'enrol',
+        'import students',
+        'csv',
+        'credentials',
+        'login slip',
+        'student id',
+      ],
+      requires: ['users.student.create'],
+      steps: [
+        'Open **People**, then **Students**.',
+        'For one student, press **Add student**, enter their name, student ID and class, and press **Add student**. Their password is shown once: write it down or copy it before pressing **Done**.',
+        'For many, press **Import**, then **Download template**. Fill it in, choose the file, check the rows that need attention, and press the **Import … valid rows** button.',
+        'To print sign-in details for a whole class, open **Academics**, then **Classes**, open the class and press **Download credential sheet**.',
+      ],
+      notes: [
+        'Downloading a credential sheet gives every active student in that class a new password. Do it before they first sign in, or when you mean to reset the whole class.',
+        'Students choose their own password the first time they sign in.',
+        'Students are registered for the subjects their class offers automatically.',
+      ],
+      screen: { label: 'Students', href: 'people/students' },
+      related: ['reset-passwords', 'move-student'],
+    },
+    {
+      id: 'reset-passwords',
+      title: 'Reset someone’s password',
+      summary: 'A student or member of staff cannot sign in.',
+      area: 'people',
+      keywords: [
+        'password',
+        'forgot',
+        'locked out',
+        'cannot sign in',
+        'login',
+        'reset',
+        'credentials',
+      ],
+      requires: ['users.student.resetCredentials', 'users.teacher.resetCredentials'],
+      steps: [
+        'Open **People** and find the person under **Students**, **Teachers** or **HODs**.',
+        'Open the student or teacher and press **Reset credentials**, then confirm. For an HOD, the button is on their row under **HODs**.',
+        'For a student, a new password is shown once. Write it down or copy it and give it to the student.',
+        'For staff, a fresh reset link is emailed to them. Their old password stops working once they use it.',
+      ],
+      notes: [
+        'Staff can also reset their own password with **Forgot your password?** on the sign-in page.',
+      ],
+      screen: { label: 'People', href: 'people' },
+      related: ['add-students', 'add-teachers'],
+    },
+    {
+      id: 'move-student',
+      title: 'Move a student to another class',
+      summary: 'A student changed arm or was placed in the wrong class.',
+      area: 'people',
+      keywords: ['move', 'change class', 'transfer', 'wrong class', 'arm'],
+      requires: ['assignments.moveStudent'],
+      steps: [
+        'Open **People**, then **Students**, and open the student.',
+        'Press **Move class**, choose the new class and press **Move student**.',
+      ],
+      notes: [
+        'The student’s enrolment history keeps the old class, so past results stay where they were sat.',
+      ],
+      screen: { label: 'Students', href: 'people/students' },
+      related: ['add-students'],
+    },
+    {
+      id: 'deactivate-account',
+      title: 'Deactivate an account for someone who has left',
+      summary: 'Stop a teacher or student signing in without losing their records.',
+      area: 'people',
+      keywords: ['deactivate', 'left school', 'disable', 'remove', 'suspend'],
+      requires: ['users.teacher.deactivate', 'users.student.deactivate'],
+      steps: [
+        'Open **People**, find the teacher or student and open them.',
+        'Press **Deactivate** and confirm.',
+      ],
+      notes: ['Their exams, answers and results are kept. **Reactivate** lets them sign in again.'],
+      screen: { label: 'People', href: 'people' },
+    },
+    {
+      id: 'sessions-and-terms',
+      title: 'Start a new term',
+      summary: 'Add the terms of an academic session and switch to the next one.',
+      area: 'academics',
+      keywords: ['term', 'second term', 'third term', 'current term', 'session', 'set as current'],
+      requires: ['schoolConfig.term.manage'],
+      steps: [
+        'Open **Academics**, then **Terms**, and choose the academic session.',
+        'If the term is not there yet, press **Add term** and enter its name, order and dates.',
+        'Press **Set as current** on the term that is starting.',
+      ],
+      notes: [
+        'Moving to a new academic session (a new school year) is a rollover, not a new term.',
+      ],
+      screen: { label: 'Terms', href: 'academics/terms' },
+      related: ['rollover'],
+    },
+    {
+      id: 'classes-and-subjects',
+      title: 'Add classes and choose the subjects they offer',
+      summary: 'Set up arms such as SS2A and the subjects each one takes.',
+      area: 'academics',
+      keywords: ['class', 'arm', 'level', 'subject', 'offer subject', 'department'],
+      requires: ['schoolConfig.class.manage'],
+      steps: [
+        'Open **Academics**, then **Classes**, choose the academic session and press **Add class**. Choose the level and arm (for example SS2 and A).',
+        'Open the class and, under **Subjects offered**, press **Offer subject** for each subject it takes.',
+        'New subjects and departments are added on the **Subjects** and **Departments** tabs.',
+      ],
+      notes: [
+        'Give every subject a department, or no HOD will review its questions.',
+        'Students in the class are registered for its offered subjects automatically; an elective can be deregistered on the student’s page.',
+      ],
+      screen: { label: 'Classes', href: 'academics/classes' },
+      related: ['assign-teachers'],
+    },
+    {
+      id: 'rollover',
+      title: 'Move to a new academic session (rollover)',
+      summary: 'Close the school year, promote students and carry classes and teachers forward.',
+      area: 'academics',
+      keywords: [
+        'rollover',
+        'new session',
+        'new year',
+        'promote',
+        'promotion',
+        'graduate',
+        'close session',
+      ],
+      requires: ['progression.promote.execute'],
+      steps: [
+        'Prepare the new session first: on **Academics → Sessions** press **Add session**, then add its terms on the **Terms** tab. Do not set it as current.',
+        'On **Sessions**, press **Close session** on the current session. The readiness check lists exams still running and results still pending; clear those first.',
+        'Press **Close Academic Session** and confirm.',
+        'Choose the new session as the target and press **Generate Rollover Plan**.',
+        '**Structure Review**: check the classes, subject offerings and proposed teacher assignments copied forward. Press **Save Structure Changes** after any edits.',
+        '**Student Decisions**: check each student’s outcome (promote, repeat, change department, graduate, transfer, withdraw). **Override** one with a reason where needed.',
+        '**Final Confirmation**: tick the confirmation, type the new session’s name, and press **Commit Session Rollover**.',
+      ],
+      notes: [
+        'The rollover applies all at once. The old session is archived with every record kept, and the new session becomes current with its first term active.',
+        'Every override is recorded in the audit trail.',
+      ],
+      screen: { label: 'Rollover', href: 'academics/rollover' },
+      related: ['sessions-and-terms'],
+    },
+  ];
+}
+
+/** Results and reports guides that school admins and moderators share. */
+export function schoolResultsGuides(): Guide[] {
+  return [
+    {
+      id: 'publish-results',
+      title: 'Check and publish results',
+      summary: 'See an exam’s results and release them to students.',
+      area: 'results',
+      keywords: ['results', 'scores', 'publish', 'release', 'marks', 'grades'],
+      requires: ['results.publish'],
+      steps: [
+        'Open **Results** and choose the exam.',
+        'Check the results table and the summary (average, highest, lowest, pass rate). Filter by class if needed.',
+        'Press **Publish results**. Every result is released except those withheld or voided.',
+      ],
+      notes: [
+        'The school’s result policy decides who normally releases results; see **School Settings → Results**.',
+        '**Unpublish** takes results back from students and asks for a reason.',
+        '**Withhold from student**, on a student’s result, keeps that one result back. **Release to student** undoes it.',
+      ],
+      screen: { label: 'Results', href: 'results' },
+      related: ['adjust-a-question', 'export-results'],
+    },
+    {
+      id: 'adjust-a-question',
+      title: 'Correct marks for a faulty question',
+      summary:
+        'Void a question, or award or deduct marks for it, for every student who sat the exam.',
+      area: 'results',
+      keywords: ['adjust', 'void', 'wrong answer key', 'mistake', 'award marks', 'deduct'],
+      requires: ['results.adjust'],
+      steps: [
+        'Open **Results**, choose the exam and open any student’s result.',
+        'In the question breakdown, press **Adjust…** on the faulty question.',
+        'Choose to void the question for every student, award additional marks, or deduct marks. Enter the marks if asked.',
+        'Write the reason and press **Apply adjustment**.',
+      ],
+      notes: [
+        'The adjustment applies to every result for that question and runs in the background; its progress shows under **Adjustment history**.',
+        'Original scores are kept, and the reason is recorded against every result it changes.',
+      ],
+      screen: { label: 'Results', href: 'results' },
+      related: ['publish-results'],
+    },
+    {
+      id: 'export-results',
+      title: 'Download or print an exam’s results',
+      summary: 'Get a CSV file or a printable broadsheet of one exam’s results.',
+      area: 'reports',
+      keywords: ['export', 'csv', 'excel', 'print', 'broadsheet', 'download'],
+      requires: ['results.exportCsv'],
+      steps: [
+        'Open **Results** and choose the exam.',
+        'Press **Export CSV** for a spreadsheet, **Print Broadsheet** for a printable results sheet, or **Print Analysis** for question-by-question performance.',
+      ],
+      screen: { label: 'Results', href: 'results' },
+      related: ['export-school-data'],
+    },
+    {
+      id: 'export-school-data',
+      title: 'Export a list of students, classes or teachers',
+      summary: 'Download a CSV of school records for your own files.',
+      area: 'reports',
+      keywords: [
+        'export',
+        'csv',
+        'student list',
+        'directory',
+        'staff list',
+        'class list',
+        'backup',
+      ],
+      requires: ['reporting.exportStudentList'],
+      steps: [
+        'Open **Reports** and press **Request Export**.',
+        'Choose the dataset: **Student Directory**, **Class Groups & Levels** or **Teaching Staff Directory**. Leave the optional filters blank for the whole school.',
+        'Under **Recent Export Requests**, press **View Status**. The page updates by itself while the file is prepared.',
+        'When it says **Export completed successfully**, press the download button.',
+      ],
+      notes: ['The download link works for 15 minutes. After that, request the export again.'],
+      screen: { label: 'Reports', href: 'reports' },
+      related: ['export-results'],
+    },
+  ];
+}

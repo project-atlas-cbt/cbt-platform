@@ -18,6 +18,7 @@ import {
   PieChart,
   UserCircle,
   KeyRound,
+  CircleHelp,
 } from 'lucide-react';
 import type { Role } from '@atlas/domain';
 
@@ -59,6 +60,14 @@ export interface RoleWorkspace {
   variant: 'platform' | 'school';
   items: readonly NavItem[];
 }
+
+const HELP_ITEM: NavItem = {
+  id: 'help',
+  label: 'Help',
+  href: 'help',
+  icon: CircleHelp,
+  match: 'always',
+};
 
 export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
   SOFTWARE_ADMIN: {
@@ -178,6 +187,10 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
           'schoolConfig.settings',
         ],
       },
+      // ADR-0035: every staff workspace ends with its role's Help screen
+      // (amends 04 §68). Everyone in the role sees it; each guide inside is
+      // filtered by permission.
+      HELP_ITEM,
     ],
   },
   MODERATOR: {
@@ -221,6 +234,7 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
         match: ['examAdmin.'],
       },
       { id: 'reports', label: 'Reports', href: 'reports', icon: FileText, match: ['reporting.'] },
+      HELP_ITEM,
     ],
   },
   HOD: {
@@ -294,6 +308,7 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
         match: ['analytics.department'],
       },
       { id: 'reports', label: 'Reports', href: 'reports', icon: FileText, match: ['reporting.'] },
+      HELP_ITEM,
     ],
   },
   TEACHER: {
@@ -326,6 +341,7 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
       },
       { id: 'results', label: 'Results', href: 'results', icon: BarChart3, match: ['results.'] },
       { id: 'reports', label: 'Reports', href: 'reports', icon: FileText, match: ['reporting.'] },
+      HELP_ITEM,
     ],
   },
   STUDENT: {

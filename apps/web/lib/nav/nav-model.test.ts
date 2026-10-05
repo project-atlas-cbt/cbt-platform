@@ -22,7 +22,7 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
     ]);
   });
 
-  it('School Admin: Dashboard, People, Academics, Questions, Exams, Exam Operations, Results, Reports, School Settings (04 §11 + F12 gap closure)', () => {
+  it('School Admin: Dashboard, People, Academics, Questions, Exams, Exam Operations, Results, Reports, School Settings, Help (04 §11 + F12 gap closure + ADR-0035)', () => {
     // `04 §11`'s own list doesn't name "Exam Operations" — School Admin's
     // real SCHOOL-scoped `examAdmin.*` grants (B12's Control Center) had no
     // nav item to reach them from before F12, even though Moderator's
@@ -40,10 +40,11 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
       'Results',
       'Reports',
       'School Settings',
+      'Help',
     ]);
   });
 
-  it('Moderator: Dashboard, People, Academics, Exams, Exam Operations, Reports (04 §20 + F11 gap closure)', () => {
+  it('Moderator: Dashboard, People, Academics, Exams, Exam Operations, Reports, Help (04 §20 + F11 gap closure + ADR-0035)', () => {
     // `04 §20`'s own list doesn't name "Exams" — Moderator's real `exam.*`
     // SCHOOL-scoped grants (view/edit/cancel/archive an existing exam,
     // packages/domain's permission table) had no nav item to reach them
@@ -59,10 +60,11 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
       'Exams',
       'Exam Operations',
       'Reports',
+      'Help',
     ]);
   });
 
-  it('HOD: Dashboard, Academics, Question Review, Question Bank, Exams, Exam Control, Results, Department Analytics, Reports (04 §28 + F6/F12 gap closures)', () => {
+  it('HOD: Dashboard, Academics, Question Review, Question Bank, Exams, Exam Control, Results, Department Analytics, Reports, Help (04 §28 + F6/F12 gap closures + ADR-0035)', () => {
     // `04 §28`'s own list doesn't name "Academics" (F6 gap closure) or
     // "Exam Control" (F12 gap closure) — HOD's real
     // `schoolConfig.{department,class,subject,session,term}.view` and
@@ -81,10 +83,11 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
       'Results',
       'Department Analytics',
       'Reports',
+      'Help',
     ]);
   });
 
-  it('Teacher: Dashboard, My Classes, Question Bank, Exams, Exam Control, Results, Reports (04 §35)', () => {
+  it('Teacher: Dashboard, My Classes, Question Bank, Exams, Exam Control, Results, Reports, Help (04 §35 + ADR-0035)', () => {
     expect(ROLE_WORKSPACES.TEACHER.items.map((i) => i.label)).toEqual([
       'Dashboard',
       'My Classes',
@@ -93,6 +96,7 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
       'Exam Control',
       'Results',
       'Reports',
+      'Help',
     ]);
   });
 
