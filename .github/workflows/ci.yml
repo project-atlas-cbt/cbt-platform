@@ -696,6 +696,44 @@ jobs:
   # constrained network and 503 Retry-After, media pre-cache, the low-end
   # CPU profile, and the @matrix smoke in Firefox and WebKit — plus the
   # first-load bundle budgets (exam route the smallest).
+  marketing-e2e:
+    name: Marketing site browser checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PRODUCT_NAME: 'ExamKeep'
+      PLATFORM_ROOT_DOMAIN: 'localtest.me'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter @atlas/marketing build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @atlas/marketing exec playwright install --with-deps chromium
+
+      - name: Browser checks
+        run: pnpm --filter @atlas/marketing test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketing-playwright-report
+          path: apps/marketing/playwright-report
+
   web-e2e:
     name: Web browser suites and bundle budgets
     runs-on: ubuntu-latest
