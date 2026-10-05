@@ -57,5 +57,21 @@ echo "api readiness: ${ready:-unreachable}"
 case $ready in
   *degraded*|"") docker compose logs --tail 80 api; exit 1 ;;
 esac
+
+# F21 (DoD 10): the read-only smoke through Caddy with each real host name
+# (TLS certificates, every critical web page, the API's tenancy, auth and
+# CORS). It connects to Caddy inside the network, so it does not depend on
+# the server reaching its own public address; public DNS is the external
+# uptime check's job. It writes nothing, so it is safe here; the golden
+# path never runs against this database.
+echo "== post-deploy smoke"
+first_school=${SCHOOLS%%,*}
+if ! docker compose --profile ops run --rm --no-deps \
+  -e SMOKE_ROOT="$ROOT_DOMAIN" -e SMOKE_SCHOOL="${first_school}" -e SMOKE_WEB=true \
+  -e SMOKE_API=https://caddy/v1 -e SMOKE_WEB_URL=https://caddy \
+  ops pnpm --filter @atlas/load smoke; then
+  echo "smoke FAILED for $RELEASE; it is running. Roll back with: bin/deploy.sh $(tail -n 1 releases.log 2>/dev/null || echo '<previous ref>')" >&2
+  exit 1
+fi
 echo "$RELEASE" >> releases.log
 echo "deployed $RELEASE"

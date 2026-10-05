@@ -33,8 +33,8 @@ export function fixture(): Fixture {
 
 export const WEB_PORT = 3000;
 
-export function schoolUrl(pathname = '/'): string {
-  return `http://${fixture().schoolHost}:${WEB_PORT}${pathname}`;
+export function schoolUrl(pathname = '/', port = WEB_PORT): string {
+  return `http://${fixture().schoolHost}:${port}${pathname}`;
 }
 
 export function adminUrl(pathname = '/'): string {
@@ -59,10 +59,11 @@ export const STUDENT = {
   shed: 10,
   offline: 11,
   reload: 12,
+  deployment: 13,
 } as const;
 
-export async function signIn(page: Page, identifier: string): Promise<void> {
-  await page.goto(schoolUrl('/login'));
+export async function signIn(page: Page, identifier: string, port = WEB_PORT): Promise<void> {
+  await page.goto(schoolUrl('/login', port));
   // Sign in is enabled only once the form has hydrated and the school is
   // resolved. Typing before that is lost: hydration resets the controlled
   // inputs, and the submit then fails validation without any request (a
@@ -119,8 +120,8 @@ export async function signIn(page: Page, identifier: string): Promise<void> {
 }
 
 /** Student → preview of the fixture exam (via the real home screen link). */
-export async function openPreview(page: Page): Promise<void> {
-  await page.goto(schoolUrl(`/student/assessment/${fixture().examId}`));
+export async function openPreview(page: Page, port = WEB_PORT): Promise<void> {
+  await page.goto(schoolUrl(`/student/assessment/${fixture().examId}`, port));
   await expect(page.getByRole('heading', { level: 2 })).toBeVisible();
 }
 

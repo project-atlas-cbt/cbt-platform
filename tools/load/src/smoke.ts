@@ -17,7 +17,10 @@ import https from 'node:https';
  *   host it names; a fixed URL sends every request there with that Host.
  * SMOKE_SCHOOL: a real school's subdomain whose branding must resolve
  *   (optional; without it only the unknown-school path is checked).
- * SMOKE_WEB: `true` once the web tier is live (F21) to check it too.
+ * SMOKE_WEB: `true` to check the web tier too (F21: its critical pages, the
+ *   404 page, service-worker freshness and static asset caching).
+ * SMOKE_WEB_URL: `https://{host}` by default; a fixed URL sends every web
+ *   request there with that Host (like SMOKE_API).
  * SMOKE_PRODUCTION: `false` to skip production-only header checks (local).
  */
 
@@ -25,6 +28,7 @@ const root = required('SMOKE_ROOT');
 const apiSpec = process.env.SMOKE_API ?? 'https://{host}/v1';
 const school = process.env.SMOKE_SCHOOL;
 const checkWeb = process.env.SMOKE_WEB === 'true';
+const webSpec = process.env.SMOKE_WEB_URL ?? 'https://{host}';
 const production = process.env.SMOKE_PRODUCTION !== 'false';
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS ?? 10_000);
 
@@ -158,11 +162,81 @@ await check('CORS admits a school origin with credentials, refuses a foreign one
 });
 
 if (checkWeb) {
-  await check(`web tier serves ${root} with a nonce CSP`, async () => {
-    const host = school ? `${school}.${root}` : root;
-    const r = await request(new URL(`https://${host}/`), host, 'GET', { accept: 'text/html' });
+  // F21 (DoD 10): every page a school or operator opens first, the service
+  // worker and its update path, the 404 page and a hashed static asset.
+  const webHost = school ? `${school}.${root}` : root;
+  const page = (host: string, path: string) =>
+    request(new URL(`${webSpec.replace('{host}', host)}${path}`), host, 'GET', {
+      accept: 'text/html',
+    });
+
+  await check(`web tier serves ${webHost} with a nonce CSP`, async () => {
+    const r = await page(webHost, '/');
     expect(r.status === 200, `HTTP ${r.status}`);
     expect(/'nonce-/.test(String(r.headers['content-security-policy'])), 'no nonce CSP');
+  });
+
+  const schoolPages = [
+    '/login',
+    '/reset-password',
+    '/activate',
+    '/password/change',
+    '/student/assessment',
+    '/teacher',
+    '/hod',
+    '/moderator',
+    '/school',
+    '/unsupported-browser',
+  ];
+  for (const path of schoolPages) {
+    await check(`web page ${path} renders`, async () => {
+      const r = await page(webHost, path);
+      expect(r.status === 200, `HTTP ${r.status}`);
+      expect(r.body.includes('</html>'), 'not a complete HTML page');
+    });
+  }
+
+  await check('Software Admin sign-in page renders on the admin host', async () => {
+    const r = await page(`admin.${root}`, '/admin/login');
+    expect(r.status === 200, `HTTP ${r.status}`);
+  });
+
+  await check('an unknown page is a 404 page, not an error', async () => {
+    const r = await page(webHost, `/smoke-${Date.now()}`);
+    expect(r.status === 404, `HTTP ${r.status}`);
+    expect(
+      r.body.includes('This page doesn&#x27;t exist') || r.body.includes("This page doesn't exist"),
+      'not the 404 page',
+    );
+  });
+
+  await check('service worker is served fresh, so a deployment reaches lab computers', async () => {
+    const r = await page(webHost, '/sw.js');
+    expect(r.status === 200, `HTTP ${r.status}`);
+    expect(
+      String(r.headers['content-type']).includes('javascript'),
+      String(r.headers['content-type']),
+    );
+    const cache = String(r.headers['cache-control'] ?? '');
+    expect(!/immutable/.test(cache) && !/max-age=[1-9]/.test(cache), `cache-control: ${cache}`);
+  });
+
+  await check('hashed static assets are served and cached for good', async () => {
+    const html = (await page(webHost, '/login')).body;
+    const asset = /\/_next\/static\/[^"']+\.js/.exec(html)?.[0];
+    expect(Boolean(asset), 'no static script on /login');
+    if (!asset) return;
+    const r = await page(webHost, asset);
+    expect(r.status === 200, `HTTP ${r.status} for ${asset}`);
+    expect(
+      /immutable/.test(String(r.headers['cache-control'])),
+      String(r.headers['cache-control']),
+    );
+  });
+
+  await check('web manifest is served', async () => {
+    const r = await page(webHost, '/manifest.webmanifest');
+    expect(r.status === 200, `HTTP ${r.status}`);
   });
 }
 
