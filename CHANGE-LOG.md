@@ -2,6 +2,29 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-05 — Software Admin password change
+
+Haneef signed in with the temporary password `ops:create-software-admin` emailed him and found no
+way to replace it (the gap `operator-access.md` recorded). Now:
+
+- `POST /v1/platform/auth/password/change` (`account.resetOwnPassword`, auth rate limit): the
+  current password is always required, the temporary one included, and the new one must differ
+  (10+ characters, as for school accounts). It ends the admin's other sessions, writes a
+  platform-level `PLATFORM_PASSWORD_CHANGED` audit row, and emails a notice
+  (`platform-password-changed`, product name from `PRODUCT_NAME`, time in Africa/Lagos). A mail
+  failure is logged and does not fail the change.
+- `ops:create-software-admin` creates the account `MUST_CHANGE_PASSWORD`. `PlatformAuthGuard`
+  answers `PASSWORD_CHANGE_REQUIRED` on every platform route but the change itself, sign-out, `me`
+  and two-step setup, after its MFA gate, so first sign-in is password, two-step setup, then a
+  password of the admin's own. `GET /platform/auth/me` reports `mustChangePassword`. Existing
+  accounts are not forced; they change it from Sign-in security.
+- Web: `PasswordChangeGate` (after `MfaEnrolmentGate` in the platform shell) and a "Your password"
+  section on `/admin/security`.
+- Tested: new `platform-password.security.integration.test.ts` (current-password check, gate and
+  its order after MFA, other sessions ended, audit row, email without the password); the whole
+  security suite; new `password-change-gate.test.tsx`; web and API typecheck and lint.
+- Not changed: school accounts still get no email after a password change (out of this ask).
+
 ### 2026-10-05 — Pilot server findings: admin sign-in route, demo form through ZeptoMail
 
 Haneef's first look at the deployed pilot server (staging, demo data only) found two problems.
