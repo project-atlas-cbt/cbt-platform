@@ -1,9 +1,9 @@
-# Project Atlas — UI/UX Principles
+# ExamKeep — UI/UX Principles
 
 **Status:** Design governance, effective from `F0` onward · **Companion asset:**
 [`.claude/skills/project-atlas-ui/SKILL.md`](../../.claude/skills/project-atlas-ui/SKILL.md)
 
-This is a design _specification_ — the standing rationale behind Project Atlas's visual and UX
+This is a design _specification_ — the standing rationale behind ExamKeep's visual and UX
 decisions. It is not implementation. It does not contain a component library, a token
 implementation, or code. The operational, agent-facing instruction set that enforces this
 document day-to-day is the linked skill above; read this document for the _why_.
@@ -15,7 +15,7 @@ product specifications in `docs/` and the architecture decision records in `docs
 
 ## 1. Design philosophy
 
-Project Atlas is a commercial, multi-tenant **school examination platform**, not a learning
+ExamKeep is a commercial, multi-tenant **school examination platform**, not a learning
 management system and not a generic business dashboard. Its UI must communicate, on sight, that
 it is a serious tool a school trusts with student results and exam integrity.
 
@@ -24,7 +24,7 @@ The governing test for any visual or interaction decision:
 > **Does this choice help a specific role do a specific job faster, more clearly, or more safely
 > — or does it just make the screen look more like software?**
 
-If a design choice doesn't pass that test, it's decoration, and Project Atlas has a documented
+If a design choice doesn't pass that test, it's decoration, and ExamKeep has a documented
 bias against decoration that doesn't serve the work (§8).
 
 Two skills operationalize this for AI-assisted implementation:
@@ -34,7 +34,7 @@ Two skills operationalize this for AI-assisted implementation:
 - **web-design-guidelines** (Vercel) — a compliance checker that fetches and applies a live set of
   ~79 web-interface rules (accessibility, forms, performance, motion, etc.) against implemented
   screens.
-- **project-atlas-ui** (this project) — specializes both for Project Atlas specifically. See
+- **project-atlas-ui** (this project) — specializes both for ExamKeep specifically. See
   `.claude/skills/project-atlas-ui/SKILL.md`.
 
 ---
@@ -231,7 +231,7 @@ source rather than an opaque dependency, which is what a token-driven, per-tenan
 needs. The rule:
 
 > Component library = implementation foundation.
-> Project Atlas design doctrine = visual identity and UX judgment.
+> ExamKeep design doctrine = visual identity and UX judgment.
 
 Shadcn/ui's default styling is never shipped untouched — restyled to this document's tokens and
 role-specific rules. Conversely, this project does not reinvent primitives (focus management,

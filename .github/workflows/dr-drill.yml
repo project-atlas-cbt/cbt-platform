@@ -39,7 +39,7 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      PRODUCT_NAME: 'Project Atlas'
+      PRODUCT_NAME: 'ExamKeep'
       SESSION_COOKIE_SECRET: 'ci-only-secret-ci-only-secret-32'
       WEB_ORIGIN: 'http://localhost:3000'
       PLATFORM_ROOT_DOMAIN: 'localtest.me'

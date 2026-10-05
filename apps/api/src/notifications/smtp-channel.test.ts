@@ -18,7 +18,7 @@ describe('SmtpNotificationChannel (VPS pilot, ADR-0019 amendment)', () => {
     const sendMail = vi.fn<(mail: SmtpMail) => Promise<unknown>>(() => Promise.resolve({}));
     const channel = new SmtpNotificationChannel(
       registry(),
-      'Atlas <no-reply@example.ng>',
+      'ExamKeep <no-reply@example.ng>',
       sendMail,
     );
     await channel.send({
@@ -27,7 +27,7 @@ describe('SmtpNotificationChannel (VPS pilot, ADR-0019 amendment)', () => {
       variables: { school: 'Kings', link: 'https://kings.example.ng/r/abc' },
     });
     expect(sendMail).toHaveBeenCalledWith({
-      from: 'Atlas <no-reply@example.ng>',
+      from: 'ExamKeep <no-reply@example.ng>',
       to: 'admin@school.ng',
       subject: 'Reset for Kings',
       text: 'Open https://kings.example.ng/r/abc',

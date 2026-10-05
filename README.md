@@ -1,11 +1,13 @@
-# Project Atlas
+# ExamKeep
 
 Multi-tenant Computer-Based Testing platform for secondary schools. See
 [`PROJECT.md`](./PROJECT.md) and [`CLAUDE.md`](./CLAUDE.md) for product
 context, and [`docs/`](./docs) for the full specification, audit, roadmaps,
 and architecture decision records.
 
-> "Project Atlas" is a temporary internal codename — see `PROJECT.md`.
+> ExamKeep was developed under the temporary codename "Project Atlas", which internal identifiers
+> (`@atlas/*`, `atlas_app`, the repository name) still carry. The name shown to users always comes
+> from `PRODUCT_NAME` — see `PROJECT.md`.
 
 ## Status
 

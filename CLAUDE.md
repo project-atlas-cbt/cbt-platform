@@ -2,10 +2,12 @@
 
 ## Project
 
-**Project Atlas**
+**ExamKeep** (examkeep.com)
 Commercial multi-tenant Computer-Based Testing (CBT) platform for secondary schools, initially targeting Nigeria.
 
-> The internal codename "Project Atlas" is temporary unless/until a final commercial product name is established.
+> "Project Atlas" was the temporary codename until ExamKeep was chosen (2026-10-04). Internal
+> identifiers (`@atlas/*`, `atlas_*` roles, the `project-atlas-ui` skill, the repo) keep it; the name
+> users see always comes from `PRODUCT_NAME`.
 
 Agent working rules (imported so they load every session): @AGENTS.md
 
@@ -250,7 +252,8 @@ Open items carried forward:
   proxy pinning, failover and PITR timing) wait for the AWS design. Full list:
   `docs/operations/launch-checklist.md`. Audit BLOCKER/HIGH: 57/58 closed, R-03 waits on staging
   (`docs/audit/blocker-high-closure.md`).
-- Product name decided: **ExamKeep** (still read from `PRODUCT_NAME`). Its public marketing site is
+- Product name: **ExamKeep**, always read from `PRODUCT_NAME`; a lint rule in every workspace
+  rejects a literal product name (2026-10-05 rename entry). Its public marketing site is
   `apps/marketing` on the root domain (ADR-0034). Its screenshots are real captures from the
   fictional demo school (`demo-school` seed, `apps/marketing/scripts/capture-screens.mjs`); site
   claims and captions must stay true of the product (`lib/content.ts`).

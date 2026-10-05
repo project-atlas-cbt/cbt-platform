@@ -1,6 +1,6 @@
 # Minimal allowlist on top of gitleaks' default ruleset (B0 CI secret-scan job).
 # Extend deliberately — never broaden to silence a real finding.
-title = "Project Atlas gitleaks config"
+title = "ExamKeep gitleaks config"
 
 [extend]
 useDefault = true

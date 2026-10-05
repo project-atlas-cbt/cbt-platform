@@ -9,12 +9,15 @@ import { OverlaySection } from './sections/overlay-section';
 import { StatesSection } from './sections/states-section';
 import { ApiSection } from './sections/api-section';
 
+// PROJECT.md: the product name comes from PRODUCT_NAME, never a literal.
+const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
+
 export function WorkbenchClient() {
   return (
     <main className="mx-auto max-w-4xl space-y-10 px-6 py-10">
       <header className="space-y-1">
         <h1 className="text-xl font-semibold text-text-primary">
-          Project Atlas — Component Workbench
+          {productName} — Component Workbench
         </h1>
         <p className="text-sm text-text-muted">
           F0&apos;s component workbench (dev-only). Every component in its default, loading, error,

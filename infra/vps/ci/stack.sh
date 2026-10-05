@@ -25,7 +25,7 @@ setting() { # file key value — replace or append KEY=value
 up() {
   [ ! -f .env ] || [ "$(. ./.env; echo "${ROOT_DOMAIN:-}")" = "$ROOT" ] ||
     { echo "infra/vps/.env is for another domain; refusing to touch it" >&2; exit 1; }
-  bin/init-env.sh "$ROOT" "${PRODUCT_NAME:-Project Atlas}"
+  bin/init-env.sh "$ROOT" "${PRODUCT_NAME:-ExamKeep}"
   setting .env CADDY_LOCAL_CA 1
   setting .env CADDY_LOCAL_CA_ROOT /ci-ca
   setting .env SCHOOLS ''

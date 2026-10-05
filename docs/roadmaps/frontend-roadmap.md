@@ -1,7 +1,10 @@
-# Frontend Implementation Roadmap — Project Atlas CBT Platform
+# Frontend Implementation Roadmap — ExamKeep CBT Platform
 
 **Version:** 1.0 · **Created:** 2026-08-24 · **Status:** Awaiting approval
 **Companion documents:** [`roadmap-index.md`](./roadmap-index.md) · [`backend-roadmap.md`](./backend-roadmap.md) · [`../audit/specification-audit.md`](../audit/specification-audit.md)
+
+> Written under the codename "Project Atlas"; the product is ExamKeep (2026-10-04). Phase IDs and
+> history below are unchanged.
 
 ---
 

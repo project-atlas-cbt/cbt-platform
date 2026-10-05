@@ -4,6 +4,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
+import { productNameSelectors, productNameTestFiles } from './scripts/eslint-product-name.mjs';
 
 export default tseslint.config(
   {
@@ -71,21 +72,7 @@ export default tseslint.config(
     },
     rules: {
       // Product name must come from environment, never be hardcoded (PROJECT.md).
-      'no-restricted-syntax': [
-        'error',
-        {
-          // This selector string is the rule's own pattern definition, not
-          // a hardcoded product-name usage — it legitimately contains the
-          // phrase this very rule looks for. Written as a template literal
-          // (a TemplateLiteral AST node) rather than a plain string so the
-          // selector's own `Literal[...]` target doesn't match itself; a
-          // plain string here would need a disable comment whose correct
-          // line prettier is free to move on reformat.
-          selector: `Literal[value=/project atlas/i]:not(:matches(TSImportEqualsDeclaration, ImportDeclaration))`,
-          message:
-            'Do not hardcode the product name. Read it from env via @atlas/config (PROJECT.md requirement).',
-        },
-      ],
+      'no-restricted-syntax': ['error', ...productNameSelectors],
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
@@ -94,6 +81,11 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-explicit-any': 'warn',
     },
+  },
+  {
+    // Tests set PRODUCT_NAME to the real name to prove what users see.
+    files: productNameTestFiles,
+    rules: { 'no-restricted-syntax': 'off' },
   },
   {
     files: ['eslint.config.mjs', 'scripts/*.mjs'],
