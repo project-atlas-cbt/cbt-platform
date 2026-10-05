@@ -6,6 +6,7 @@ import type { Manifest, ProvisionedSchool } from './provision.js';
 export interface PreparedExam {
   school: ProvisionedSchool;
   examId: string;
+  examTitle: string;
   examSessionId: string;
   /** Opening the session writes one participant row per eligible student (ADR-0006) — sized here. */
   sessionOpenMs: number;
@@ -37,11 +38,12 @@ export async function prepareExam(
     return res.body;
   };
 
+  const title = `Load ${new Date().toISOString().slice(0, 16)} ${randomUUID().slice(0, 4)}`;
   const exam = await call<{ id: string }>('POST', '/exams', {
     academicSessionId: school.academicSessionId,
     academicTermId: school.academicTermId,
     subjectId: school.subjectId,
-    title: `Load ${new Date().toISOString().slice(0, 16)} ${randomUUID().slice(0, 4)}`,
+    title,
     examType: 'Test',
     classIds: school.classIds,
   });
@@ -68,5 +70,12 @@ export async function prepareExam(
   });
   const sessionOpenMs = performance.now() - t0;
   if (res.status !== 201) throw new Error(`open session ${res.status}: ${res.raw.slice(0, 300)}`);
-  return { school, examId: exam.id, examSessionId: res.body.id, sessionOpenMs, teacher };
+  return {
+    school,
+    examId: exam.id,
+    examTitle: title,
+    examSessionId: res.body.id,
+    sessionOpenMs,
+    teacher,
+  };
 }

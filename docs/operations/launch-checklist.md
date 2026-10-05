@@ -56,14 +56,14 @@ when the platform moves to the AWS design.
 
 ## 3. Production
 
-| #   | Item                                                                                     | Owner  | Evidence |
-| --- | ---------------------------------------------------------------------------------------- | ------ | -------- |
-| 3.1 | Production provisioned and first release deployed (Haneef applies)                       | Haneef |          |
-| 3.2 | Encryption at rest verified in production                                                | Haneef |          |
-| 3.3 | Smoke passes against production                                                          | Haneef |          |
-| 3.4 | First automated backup present; one restore to a scratch instance verified (DoD 7)       | Haneef |          |
-| 3.5 | First Software Admins created with `ops:create-software-admin`; TOTP enrolled            | Haneef |          |
-| 3.6 | Web tier live on Vercel with nonce CSP, `NEXT_PUBLIC_MEDIA_ORIGIN` = bucket origin (F21) | F21    |          |
+| #   | Item                                                                                                                         | Owner  | Evidence |
+| --- | ---------------------------------------------------------------------------------------------------------------------------- | ------ | -------- |
+| 3.1 | Production provisioned and first release deployed (Haneef applies)                                                           | Haneef |          |
+| 3.2 | Encryption at rest verified in production                                                                                    | Haneef |          |
+| 3.3 | Smoke passes against production                                                                                              | Haneef |          |
+| 3.4 | First automated backup present; one restore to a scratch instance verified (DoD 7)                                           | Haneef |          |
+| 3.5 | First Software Admins created with `ops:create-software-admin`; TOTP enrolled                                                | Haneef |          |
+| 3.6 | Web tier live on Vercel with nonce CSP, `NEXT_PUBLIC_MEDIA_ORIGIN` = bucket origin (AWS design; the pilot's web tier is 0.6) | Claude |          |
 
 ## 4. Legal and data protection (B20 carry-over)
 
@@ -76,13 +76,13 @@ when the platform moves to the AWS design.
 
 ## 5. Product readiness
 
-| #   | Item                                                                                             | Owner  | Evidence |
-| --- | ------------------------------------------------------------------------------------------------ | ------ | -------- |
-| 5.1 | B19's roadmap section closed                                                                     | Claude |          |
-| 5.2 | Browser suites cover F16, F18 and F19 flows                                                      | F21    |          |
-| 5.3 | F20 manual checks: NVDA, Chrome/Edge 111 and Firefox 115 ESR on Windows 7, a real low-end lab PC | Haneef |          |
-| 5.4 | Password-reset and activation links point at the school's own host, not the root (see F21 notes) | F21    |          |
-| 5.5 | User guides for each role (F21)                                                                  | F21    |          |
+| #   | Item                                                                                             | Owner  | Evidence                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------ | ------ | ----------------------------------------------------------------------------------------- |
+| 5.1 | B19's roadmap section closed                                                                     | Claude |                                                                                           |
+| 5.2 | Browser suites cover F16, F18 and F19 flows                                                      | F21    | ✅ `apps/web/e2e/exam-operations.spec.ts`, `reports.spec.ts`, `rollover.spec.ts` (PR #40) |
+| 5.3 | F20 manual checks: NVDA, Chrome/Edge 111 and Firefox 115 ESR on Windows 7, a real low-end lab PC | Haneef |                                                                                           |
+| 5.4 | Password-reset and activation links point at the school's own host, not the root (see F21 notes) | F21    | ✅ `apps/api/src/common/school-url.ts`; `identity.integration.test.ts` (PR #40)           |
+| 5.5 | User guides for each role (F21)                                                                  | F21    | ✅ [docs/user-guides](../user-guides/README.md) (PR #40)                                  |
 
 ## 6. Pilot (DoD 11)
 

@@ -43,7 +43,8 @@ plus `media.<root>` for object storage. `media` is therefore a reserved label to
   (B20 tightened this from "any subdomain"; nested names are refused) (see `apps/api/src/security/cors.ts`)
   — a single static origin can't express "every school's subdomain."
 - **Wildcard DNS/TLS**: `*.api.<root>` and `api.<root>` share one DNS-validated ACM certificate on
-  the load balancer (`infra/cdk`, B23); `*.<root>` for the web tier is Vercel's (F21).
+  the load balancer (`infra/cdk`, B23); `*.<root>` for the web tier is Vercel's. On the pilot, Caddy obtains a certificate per host
+  ([vps-pilot.md](vps-pilot.md)).
 
 ## Local development
 

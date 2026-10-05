@@ -232,6 +232,9 @@ if (checkWeb) {
       /immutable/.test(String(r.headers['cache-control'])),
       String(r.headers['cache-control']),
     );
+    // F21 source-map policy: none are published to browsers.
+    const map = await page(webHost, `${asset}.map`);
+    expect(map.status === 404, `HTTP ${map.status} for ${asset}.map (source maps must not ship)`);
   });
 
   await check('web manifest is served', async () => {

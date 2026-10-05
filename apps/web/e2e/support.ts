@@ -20,6 +20,16 @@ export interface Fixture {
   accommodatedStudent: string;
   examId: string;
   examSessionId: string;
+  examTitle: string;
+  /** F16: a second exam, ended in the browser, then makeup access. */
+  makeupExamId: string;
+  /** F19: a second school whose session closes and rolls over. */
+  rollover: {
+    schoolHost: string;
+    schoolAdmin: string;
+    sessionId: string;
+    nextSessionName: string;
+  };
   questionCount: number;
 }
 
@@ -33,8 +43,8 @@ export function fixture(): Fixture {
 
 export const WEB_PORT = 3000;
 
-export function schoolUrl(pathname = '/', port = WEB_PORT): string {
-  return `http://${fixture().schoolHost}:${port}${pathname}`;
+export function schoolUrl(pathname = '/', port = WEB_PORT, host = fixture().schoolHost): string {
+  return `http://${host}:${port}${pathname}`;
 }
 
 export function adminUrl(pathname = '/'): string {
@@ -60,10 +70,16 @@ export const STUDENT = {
   offline: 11,
   reload: 12,
   deployment: 13,
+  makeup: 14,
 } as const;
 
-export async function signIn(page: Page, identifier: string, port = WEB_PORT): Promise<void> {
-  await page.goto(schoolUrl('/login', port));
+export async function signIn(
+  page: Page,
+  identifier: string,
+  port = WEB_PORT,
+  host = fixture().schoolHost,
+): Promise<void> {
+  await page.goto(schoolUrl('/login', port, host));
   // Sign in is enabled only once the form has hydrated and the school is
   // resolved. Typing before that is lost: hydration resets the controlled
   // inputs, and the submit then fails validation without any request (a
@@ -120,8 +136,12 @@ export async function signIn(page: Page, identifier: string, port = WEB_PORT): P
 }
 
 /** Student → preview of the fixture exam (via the real home screen link). */
-export async function openPreview(page: Page, port = WEB_PORT): Promise<void> {
-  await page.goto(schoolUrl(`/student/assessment/${fixture().examId}`, port));
+export async function openPreview(
+  page: Page,
+  port = WEB_PORT,
+  examId = fixture().examId,
+): Promise<void> {
+  await page.goto(schoolUrl(`/student/assessment/${examId}`, port));
   await expect(page.getByRole('heading', { level: 2 })).toBeVisible();
 }
 
