@@ -2,6 +2,51 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-04 — Public marketing site (`apps/marketing`, ADR-0034)
+
+The product name is **ExamKeep** (owner decision; still read from `PRODUCT_NAME`, never
+hardcoded). A public marketing site for the root domain is built as its own static app, outside the
+B/F roadmap, at the owner's request. Proposal and decisions:
+`/mnt/project-files/marketing-site/proposal.md`.
+
+**Owner decisions:** a separate static app rather than pages in `apps/web` (ADR-0034); the pricing
+page shows a "from ₦X per student per year" line plus a quote request; screenshots come from the
+real app after a visual-only polish of the showcase screens, never retouched images.
+
+**Shipped**
+
+- Pages: Home, Features (by area and by role), How it works, Exam-day reliability, Security and
+  data, Pricing, FAQ, Request a demo (with sent and not-sent pages), Find your school, About, three
+  guides, Privacy and Terms (both marked as drafts pending legal review), 404.
+- Every claim is checked against the product and kept in `apps/marketing/lib/content.ts`. Left off
+  on purpose: testimonials, "NDPA compliant", uptime or capacity figures, essay marking (only
+  single-choice and true/false exist), PDF reports, remote proctoring.
+- Design: the product's neutrals and blue, Literata for headings and Inter for text, and an
+  exercise-book signature (feint ruled lines, a red margin rule) on page openings only.
+- Product screens are labelled schematic illustrations (`components/product-shot.tsx`) until the
+  real captures exist; a `src` swaps each one in.
+- Demo form: plain HTML (works without JavaScript), Zod validation, honeypot, per-client rate
+  limit, cross-site Origin refusal. Leads are emailed via Resend or Brevo and never stored or
+  logged; without email configured the visitor is told plainly and offered the contact details.
+- Find your school: a typed address becomes `https://<label>.<root>/login` with no lookup;
+  reserved labels and anything that isn't one DNS label are refused.
+- SEO: per-page titles, descriptions and canonicals, `en-NG`, sitemap, robots, Open Graph image,
+  JSON-LD (SoftwareApplication, FAQPage, Article).
+- Static security headers: CSP with no third-party origin, `frame-ancestors 'none'`, HSTS.
+
+**Tested**
+
+- 36 unit tests (`pnpm --filter @atlas/marketing test`): lead parsing, honeypot, rate limit, email
+  escaping, provider requests, no personal data in error logs, school-address parsing, config.
+- 46 browser checks (`test:e2e`, new CI job `marketing-e2e`): axe WCAG 2.2 AA on all 19 pages, one
+  `h1` each, no sideways scroll at 360 px, every internal link resolves, headers, sitemap, both
+  redirects, and the form's failure and consent paths.
+- Lighthouse (mobile, home): performance 96, accessibility 100, best practices 100, SEO 100.
+
+**Open:** real screenshots and the 60-second teaser (after the showcase-screen polish); contact
+details, starting price, company story and logo from the owner; legal review of Privacy and Terms;
+choosing the host with the pilot's DNS.
+
 ### 2026-10-04 — B23 Production Readiness & Launch (in progress)
 
 B23's repository work is done and B23 stays **IN PROGRESS**. The rest needs an AWS account, the

@@ -1,0 +1,61 @@
+/**
+ * Everything about the business that is not copy: the product name, the
+ * domain and the contact details. PROJECT.md: the product name is never
+ * hardcoded, so it comes from PRODUCT_NAME like the rest of the platform;
+ * the domain from PLATFORM_ROOT_DOMAIN, which is the same root the school
+ * subdomains hang off (docs/operations/domain-plan.md).
+ *
+ * Contact details and the starting price are optional. When one is unset,
+ * the page that would show it leaves it out instead of showing a
+ * placeholder, so the site is safe to deploy before every detail exists.
+ */
+export interface SiteConfig {
+  name: string;
+  rootDomain: string;
+  url: string;
+  email?: string | undefined;
+  phone?: string | undefined;
+  /** Digits only, international format without "+", e.g. 2348012345678. */
+  whatsapp?: string | undefined;
+  address?: string | undefined;
+  /** Starting price per student per year, in naira. */
+  priceFromNgn?: number | undefined;
+}
+
+function optional(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export function readSiteConfig(env: Record<string, string | undefined> = process.env): SiteConfig {
+  const name = optional(env.PRODUCT_NAME) ?? 'CBT Platform';
+  const rootDomain = optional(env.PLATFORM_ROOT_DOMAIN) ?? 'localtest.me';
+  const local = rootDomain === 'localtest.me' || rootDomain === 'localhost';
+  const url =
+    optional(env.MARKETING_SITE_URL) ?? (local ? 'http://localhost:3100' : `https://${rootDomain}`);
+  const whatsapp = optional(env.MARKETING_WHATSAPP)?.replace(/\D/g, '');
+  const price = Number(optional(env.MARKETING_PRICE_FROM_NGN));
+
+  return {
+    name,
+    rootDomain,
+    url: url.replace(/\/$/, ''),
+    email: optional(env.MARKETING_CONTACT_EMAIL),
+    phone: optional(env.MARKETING_CONTACT_PHONE),
+    whatsapp: whatsapp || undefined,
+    address: optional(env.MARKETING_CONTACT_ADDRESS),
+    priceFromNgn: Number.isFinite(price) && price > 0 ? price : undefined,
+  };
+}
+
+export const site = readSiteConfig();
+
+export function whatsappLink(config: SiteConfig, text?: string): string | undefined {
+  if (!config.whatsapp) return undefined;
+  const query = text ? `?text=${encodeURIComponent(text)}` : '';
+  return `https://wa.me/${config.whatsapp}${query}`;
+}
+
+export function formatNaira(amount: number): string {
+  return `₦${amount.toLocaleString('en-NG')}`;
+}

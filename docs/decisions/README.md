@@ -2,7 +2,7 @@
 
 This directory holds the project's ADRs.
 
-**Status: 33 of 33 decided and accepted (2026-08-24).** All gates are resolved. Implementation may begin at `B0`.
+**Status: 33 of 33 decided and accepted (2026-08-24).** All gates are resolved. Implementation may begin at `B0`. One later decision, outside the gates: [ADR-0034](./ADR-0034-public-marketing-site.md) (2026-10-04).
 
 Two carry conditions: [ADR-0028](./ADR-0028-data-protection-and-retention.md)'s retention schedule was formalised in B20 with its legal review carried to B23 as a launch-readiness item (2026-10-02 amendment), and [ADR-0032](./ADR-0032-aws-region.md)'s region was measured at B21: `af-south-1` was faster than `eu-west-1` from the one Nigerian connection probed, meeting the ADR's revisit condition, so the region is the project owner's decision at B23 (2026-10-03 amendment).
 
@@ -76,6 +76,14 @@ Unblocks `B11`–`B14`. The highest-integrity subsystem.
 | [0029](./ADR-0029-exam-sections.md)                  | Sections and marks      | Default section always created, no UI; `ExamQuestion.marks` authoritative               |
 | [0030](./ADR-0030-printable-reporting.md)            | Printable reports       | Browser print stylesheets; PDF deferred                                                 |
 | [0032](./ADR-0032-aws-region.md)                     | Region                  | `eu-west-1`; client batches and debounces; B21 RTT met revisit condition → owner at B23 |
+
+---
+
+## After the gates
+
+| ADR                                         | Decision       | Outcome                                                                                  |
+| ------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| [0034](./ADR-0034-public-marketing-site.md) | Marketing site | Separate static `apps/marketing` on the root domain; no platform coupling; leads emailed |
 
 ---
 

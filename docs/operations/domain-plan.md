@@ -17,6 +17,7 @@ Final commercial domain is **TBD** (`PROJECT.md`). Everywhere below, `<root>` st
 admin.<root>                  → platform web (Software Admin), per 04 §2 / ADR-0005
 admin.api.<root>              → API (AWS) for the platform host
 api.<root>                    → API (AWS) with no tenant: health checks and tools
+<root>, www.<root>            → public marketing site (apps/marketing), per ADR-0034
 ```
 
 **B23:** the API resolves the school from its own host, `<school>.api.<root>`, stripping the
