@@ -20,11 +20,9 @@ import { useOnboardingStatus } from '@/lib/onboarding/queries';
  * F4's own design ("other roles are never redirected by onboarding
  * completion").
  *
- * Always resolves to `/login`, never `/admin/login`, for an unauthenticated
- * visitor — Software Admin login isn't functional against the API yet (see
- * app/admin/login/page.tsx's doc comment), so there's no live-traffic
- * reason to branch on host here today; a platform-host visitor can still
- * reach `/admin/login` directly.
+ * Resolves to `/login` for an unauthenticated visitor. The platform host
+ * (`admin.<root>`) never reaches this route: the proxy sends its `/` and
+ * `/login` to the Software Admin console (`lib/tenant/admin-host.ts`).
  */
 export default function TenantEntryPage() {
   const router = useRouter();
