@@ -1,0 +1,72 @@
+<!doctype html>
+<!--
+  F21 (DoD 4): served by Caddy, not the web app, so it shows while the web
+  container is stopped, restarting, or switched off with bin/maintenance.sh.
+  Plain HTML and inline CSS only: no script, no product name (PROJECT.md),
+  readable on any browser a lab still runs.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta http-equiv="refresh" content="60" />
+    <title>Back shortly</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f6f7f9;
+        color: #1c2430;
+        font:
+          16px/1.55 'Segoe UI',
+          Arial,
+          Helvetica,
+          sans-serif;
+      }
+      main {
+        max-width: 34rem;
+        margin: 12vh auto 0;
+        padding: 28px 32px;
+        background: #ffffff;
+        border: 1px solid #d5dae1;
+        border-radius: 6px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.3rem;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      .exam {
+        margin-top: 20px;
+        padding: 14px 16px;
+        background: #eef4fb;
+        border-left: 3px solid #2f5f9e;
+      }
+      .muted {
+        color: #56606e;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>The service is briefly unavailable</h1>
+      <p>
+        It is being updated or restarted. This page checks again every minute and returns you as
+        soon as the service is back.
+      </p>
+      <div class="exam">
+        <p>
+          <strong>If you were taking an exam:</strong> your answers are saved on this computer and
+          will be sent when the service is back. Your time is kept by the server.
+        </p>
+        <p>
+          Do not close the browser, clear its data or restart the computer. Tell your invigilator.
+        </p>
+      </div>
+      <p class="muted">Error 503 &middot; Service unavailable</p>
+    </main>
+  </body>
+</html>

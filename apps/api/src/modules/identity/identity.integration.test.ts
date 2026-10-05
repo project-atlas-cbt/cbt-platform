@@ -349,6 +349,11 @@ describe('Staff password reset request → confirm cycle (DoD 7)', () => {
 
     const logged = consoleLogSpy.mock.calls.map((c) => String(c[0])).join('\n');
     expect(logged).toContain('to=staffreset01@example.test');
+    // F21 (launch checklist 5.4): the link opens on the school's own host,
+    // where the reset page can resolve the tenant (ADR-0005).
+    expect(logged).toMatch(
+      new RegExp(`//${host.replace(/\./g, '\\.')}(:\\d+)?/reset-password\\?token=`),
+    );
     const match = /token=([\w-]+)/.exec(logged);
     expect(match).not.toBeNull();
     const token = match![1];

@@ -1,6 +1,9 @@
 'use client';
 
 import { usePrintStudentPerformance } from '@/lib/reports/queries';
+import { useStudent } from '@/lib/people/queries';
+import { formatDate } from '@/lib/format/date';
+import { useHasPermission, usePermissions } from '@/lib/nav/use-permissions';
 import { PrintLayout } from './print-layout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
@@ -11,8 +14,15 @@ export interface PrintStudentPerformanceViewProps {
 
 export function PrintStudentPerformanceView({ studentId }: PrintStudentPerformanceViewProps) {
   const { data, isLoading, error, refetch } = usePrintStudentPerformance(studentId);
+  // Student analytics carry only the profile id. Name, IDs and class come
+  // from the student record, read only when the viewer may view students
+  // (HOD, Teacher and the student themself cannot); otherwise those cells
+  // print as unknown rather than invented.
+  const permissions = usePermissions();
+  const canViewStudent = useHasPermission('users.student.view');
+  const studentQuery = useStudent(canViewStudent ? studentId : undefined);
 
-  if (isLoading) {
+  if (isLoading || permissions.isLoading || studentQuery.isLoading) {
     return (
       <PrintLayout title="Student Academic Transcript" subtitle="Loading student records...">
         <div className="space-y-4 py-8">
@@ -38,51 +48,36 @@ export function PrintStudentPerformanceView({ studentId }: PrintStudentPerforman
     );
   }
 
-  const student = data as {
-    displayName?: string;
-    studentId?: string;
-    admissionNumber?: string;
-    className?: string;
-    metrics?: {
-      gpa?: number;
-      averageScore?: number;
-      totalExams?: number;
-    };
-    assessments?: Array<{
-      examTitle: string;
-      subjectName: string;
-      earnedMarks: number;
-      totalMarks: number;
-      percentage: number;
-      grade?: string;
-      status: string;
-    }>;
-  };
+  const performance = data;
+  const student = studentQuery.data;
 
   return (
     <PrintLayout
       title="Student Academic Transcript"
-      subtitle={`Candidate: ${student.displayName ?? 'Student'} — Official Results`}
+      subtitle={`Candidate: ${student?.displayName ?? 'Student'} — Official Results`}
     >
       <div className="space-y-6" data-testid="print-student-performance">
         <div className="border border-black/20 p-4 rounded text-xs grid grid-cols-2 gap-4">
           <div>
             <p>
               <span className="font-semibold text-black">Candidate Name:</span>{' '}
-              {student.displayName ?? '—'}
+              {student?.displayName ?? '—'}
             </p>
             <p className="mt-1">
               <span className="font-semibold text-black">Student / Admission ID:</span>{' '}
-              {student.studentId || student.admissionNumber || '—'}
+              {student
+                ? [student.studentId, student.admissionNumber].filter(Boolean).join(' / ')
+                : '—'}
             </p>
           </div>
           <div className="text-right">
             <p>
-              <span className="font-semibold text-black">Class:</span> {student.className ?? '—'}
+              <span className="font-semibold text-black">Class:</span>{' '}
+              {student?.currentClassName ?? '—'}
             </p>
             <p className="mt-1">
               <span className="font-semibold text-black">Cumulative Average:</span>{' '}
-              {student.metrics?.averageScore != null ? `${student.metrics.averageScore}%` : '—'}
+              {performance.averagePercentage != null ? `${performance.averagePercentage}%` : '—'}
             </p>
           </div>
         </div>
@@ -96,23 +91,22 @@ export function PrintStudentPerformanceView({ studentId }: PrintStudentPerforman
               <tr className="border-b-2 border-black bg-black/5 text-black">
                 <th className="p-2 border-r border-black font-semibold w-10 text-center">S/N</th>
                 <th className="p-2 border-r border-black font-semibold">Subject / Assessment</th>
-                <th className="p-2 border-r border-black font-semibold text-right w-28">Score</th>
                 <th className="p-2 border-r border-black font-semibold text-right w-20">%</th>
                 <th className="p-2 border-r border-black font-semibold text-center w-16">Grade</th>
-                <th className="p-2 font-semibold text-center w-28">Status</th>
+                <th className="p-2 font-semibold text-center w-32">Finalised</th>
               </tr>
             </thead>
             <tbody>
-              {!student.assessments || student.assessments.length === 0 ? (
+              {performance.history.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-text-muted">
+                  <td colSpan={5} className="p-4 text-center text-text-muted">
                     No assessments recorded for this candidate.
                   </td>
                 </tr>
               ) : (
-                student.assessments.map((item, idx) => (
+                performance.history.map((item, idx) => (
                   <tr
-                    key={item.examTitle || idx}
+                    key={item.examId}
                     className="border-b border-black/20 even:bg-black/[0.02] text-black"
                   >
                     <td className="p-2 border-r border-black/20 text-center font-mono">
@@ -122,19 +116,14 @@ export function PrintStudentPerformanceView({ studentId }: PrintStudentPerforman
                       <p className="font-medium">{item.subjectName}</p>
                       <p className="text-[11px] text-text-muted">{item.examTitle}</p>
                     </td>
-                    <td className="p-2 border-r border-black/20 text-right font-mono">
-                      {item.earnedMarks}/{item.totalMarks}
-                    </td>
                     <td className="p-2 border-r border-black/20 text-right font-mono font-bold">
                       {item.percentage}%
                     </td>
                     <td className="p-2 border-r border-black/20 text-center font-bold">
                       {item.grade ?? '—'}
                     </td>
-                    <td className="p-2 text-center">
-                      <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider">
-                        {item.status}
-                      </span>
+                    <td className="p-2 text-center font-mono">
+                      {item.finalizedAt ? formatDate(item.finalizedAt) : '—'}
                     </td>
                   </tr>
                 ))

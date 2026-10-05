@@ -32,6 +32,12 @@
           'Ask your teacher or the lab administrator for help.'
       )
     );
+    box.appendChild(document.createTextNode(' '));
+    var more = document.createElement('a');
+    more.setAttribute('href', '/unsupported-browser');
+    more.setAttribute('style', 'color:#78350f;text-decoration:underline');
+    more.appendChild(document.createTextNode('Supported browsers'));
+    box.appendChild(more);
     document.body.appendChild(box);
   }
   function check() {

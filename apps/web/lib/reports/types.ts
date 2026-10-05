@@ -1,3 +1,5 @@
+import type { ApiComponents } from '@atlas/contracts';
+
 export const EXPORT_TYPES = [
   'EXAM_RESULTS',
   'STUDENTS',
@@ -68,56 +70,23 @@ export interface PlatformSearchResponse {
   schools: SearchItem[];
 }
 
-export interface PrintSummaryStats {
-  totalParticipants?: number;
-  presentCount?: number;
-  absentCount?: number;
-  averageScore?: number;
-  averagePercentage?: number;
-  passCount?: number;
-  failCount?: number;
-  passRate?: number;
-  highestPercentage?: number;
-  lowestPercentage?: number;
-}
+/**
+ * F18 print datasets (ADR-0030). Aliased to the generated OpenAPI schemas of
+ * `GET /v1/reports/...` (print-data.controller.ts) rather than hand-written,
+ * so a view reading a field the API never returns fails typecheck instead of
+ * silently printing blanks — the defect the hand-written shapes here hid.
+ */
+type Schemas = ApiComponents['schemas'];
 
-export interface PrintExamResultsData {
-  exam: {
-    id: string;
-    title: string;
-    description?: string | null;
-    durationMinutes: number;
-    totalMarks: number;
-    subject: { id: string; name: string; code: string };
-  };
-  results: Array<{
-    id: string;
-    studentId: string;
-    studentName: string;
-    className?: string;
-    earnedMarks: number;
-    totalMarks: number;
-    percentage: number;
-    grade?: string | null;
-    state: string;
-    submittedAt?: string | null;
-  }>;
-  summary?: PrintSummaryStats;
-}
-
-export interface PrintQuestionAnalysisItem {
-  questionId: string;
-  sequenceNumber: number;
-  textSnippet: string;
-  topicName?: string | null;
-  difficulty?: string;
-  marks: number;
-  totalAnswers?: number;
-  correctAnswers?: number;
-  successRate?: number;
-}
+/** `ResultQueryService.listForExam` — result rows only; absence lives in
+ * participation (ADR-0010) and reaches the print only as `summary.absentCount`. */
+export type PrintExamResultsData = Schemas['ExamResultsResponseDto'];
+export type PrintExamResultItem = Schemas['ResultListItemDto'];
 
 export interface PrintExamPerformanceData {
-  summary: Record<string, unknown>;
-  questions: PrintQuestionAnalysisItem[];
+  summary: Schemas['ExamAnalyticsResponseDto'];
+  questions: Schemas['QuestionAnalyticsResponseDto'];
 }
+
+export type PrintClassPerformanceData = Schemas['ClassAnalyticsResponseDto'];
+export type PrintStudentPerformanceData = Schemas['StudentAnalyticsResponseDto'];

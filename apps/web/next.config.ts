@@ -15,6 +15,11 @@ loadDotenv({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // F21 source-map policy: no browser source maps in production. They would
+  // publish the whole client source (exam runtime included) to anyone; stack
+  // traces are read from the build that produced them instead. The
+  // post-deploy smoke (tools/load/src/smoke.ts) checks that none are served.
+  productionBrowserSourceMaps: false,
   // Only NEXT_PUBLIC_-prefixed names are ever safe to inline into the
   // client bundle. Listed explicitly (rather than trusting every var in
   // the root .env to already be correctly named) so it's obvious exactly

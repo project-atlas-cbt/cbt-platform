@@ -813,6 +813,18 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          NEXT_PUBLIC_RELEASE_VERSION: e2e-previous
+
+      # F21 (DoD 5–6): e2e/deployment.spec.ts deploys a new build mid-exam.
+      # The build above becomes "the previous release"; the web app is then
+      # built again as the current one, which every other suite runs on.
+      - name: Previous and current web builds
+        run: |
+          node apps/web/scripts/snapshot-build.mjs .e2e-deploy/previous
+          pnpm --filter @atlas/web build
+        env:
+          NEXT_PUBLIC_RELEASE_VERSION: e2e-current
 
       - name: Install Playwright browsers
         run: pnpm --filter @atlas/web exec playwright install --with-deps chromium firefox webkit
@@ -828,6 +840,8 @@ jobs:
 
       - name: Browser suites
         run: pnpm --filter @atlas/web test:e2e
+        env:
+          E2E_PREVIOUS_WEB_DIR: ../../.e2e-deploy/previous
 
       - name: Upload Playwright report
         if: failure()
@@ -838,6 +852,73 @@ jobs:
             apps/web/playwright-report
             apps/web/test-results
           if-no-files-found: ignore
+
+  # F21 (owner decision 2026-10-04): the CI stack replaces per-PR preview
+  # deployments and staging while the pilot runs on one VPS. The pilot's
+  # own Compose stack (infra/vps) is built from this commit and deployed
+  # with bin/deploy.sh exactly as on the server: production configuration,
+  # TLS everywhere, SMTP over STARTTLS. Then the golden path (09 §39, the
+  # staging gate), the post-deploy smoke (inside deploy.sh) and browser
+  # checks run against it. Page screenshots are uploaded as the preview.
+  pilot-stack:
+    name: CI stack (production configuration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      # deploy.sh runs git as root (it prepares the internal CA as root).
+      - name: Allow git as root on this checkout
+        run: sudo git config --system --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build and deploy the stack
+        run: sudo -E infra/vps/ci/stack.sh up
+
+      - name: Golden path against the stack
+        run: sudo -E infra/vps/ci/stack.sh golden
+
+      - name: Install dependencies (browser checks)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium and trust the stack's CA
+        run: |
+          pnpm --filter @atlas/web exec playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends libnss3-tools
+          mkdir -p "$HOME/.pki/nssdb"
+          certutil -d "sql:$HOME/.pki/nssdb" -N --empty-password
+          sudo cat infra/vps/certs/ca.crt > /tmp/atlas-ci-ca.crt
+          certutil -d "sql:$HOME/.pki/nssdb" -A -t "C,," -n atlas-ci -i /tmp/atlas-ci-ca.crt
+
+      - name: Browser checks against the stack
+        run: pnpm --filter @atlas/web exec playwright test -c playwright.stack.config.ts
+
+      - name: Upload page preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-preview
+          path: |
+            apps/web/stack-preview
+            apps/web/playwright-report
+            apps/web/test-results
+          if-no-files-found: ignore
+
+      - name: Stack logs
+        if: failure()
+        run: sudo -E infra/vps/ci/stack.sh logs
+
+      - name: Tear down
+        if: always()
+        run: sudo -E infra/vps/ci/stack.sh down
 
   supply-chain:
     name: Dependency and container scanning

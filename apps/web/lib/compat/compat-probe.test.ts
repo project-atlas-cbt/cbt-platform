@@ -33,6 +33,8 @@ describe('public/compat-probe.js (F20 DoD 12)', () => {
     expect(notice).not.toBeNull();
     expect(notice?.getAttribute('role')).toBe('alert');
     expect(notice?.textContent).toMatch(/Firefox ESR/);
+    // F21: the notice links to the full unsupported-browser page.
+    expect(notice?.querySelector('a')?.getAttribute('href')).toBe('/unsupported-browser');
   });
 
   it('stays silent when the app is running', () => {

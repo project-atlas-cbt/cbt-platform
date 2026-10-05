@@ -7,6 +7,7 @@ import { AuthProvider } from '@/lib/auth';
 import { Toaster } from '@/components/ui/toaster';
 import { NonceProvider } from '@/lib/security/nonce-context';
 import { ClientErrorTracking } from '@/components/observability/client-error-tracking';
+import { ServiceWorkerUpdates } from '@/components/pwa/service-worker-updates';
 // F20 CSP: sonner's own runtime <style> injection is patched out
 // (patches/sonner*.patch — it can't carry a nonce); its stylesheet ships
 // as a normal bundled CSS file instead.
@@ -39,7 +40,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
-    <html lang="en" className={inter.variable}>
+    // F21: which release this page was built from, for support ("which
+    // version is that lab computer on?") and the deployment browser suite.
+    <html
+      lang="en"
+      className={inter.variable}
+      data-release={process.env.NEXT_PUBLIC_RELEASE_VERSION || undefined}
+    >
       <body>
         {/* No school colour is known at this layer — every school-branded
             route (F1 onward) wraps its own subtree in a nested
@@ -59,6 +66,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 {children}
                 <Toaster />
                 <ClientErrorTracking />
+                <ServiceWorkerUpdates />
               </AuthProvider>
             </QueryProvider>
           </ThemeProvider>

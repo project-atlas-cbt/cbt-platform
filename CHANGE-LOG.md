@@ -2,6 +2,68 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-05 — F21 frontend production readiness (implemented, pilot pending)
+
+**Owner decision (2026-10-04):** a **CI stack** replaces per-PR preview deployments and staging.
+Every pull request runs the pilot's own Compose stack in CI with production images and
+configuration; nothing new is rented and the golden path never touches the live database.
+
+**Shipped**
+
+- **Exam-safe updates:** the service worker no longer calls `skipWaiting` on install. Pages ask it
+  to activate, and it refuses while any tab of the browser has an attempt open (heartbeat marks in
+  Cache Storage, `lib/pwa/update-policy.ts`). Off-exam pages show "A new version is ready" with a
+  Reload button. `data-release` on `<html>` names the build (`NEXT_PUBLIC_RELEASE_VERSION`).
+- **Error pages:** 404, unsupported browser (linked from the compatibility notice), and a static
+  maintenance page. Caddy serves it for `bin/maintenance.sh on` and whenever the web or API
+  container answers 502–504; API requests get the canonical `SERVICE_UNAVAILABLE` envelope with
+  `retryable: true` and CORS for school origins only.
+- **Deploys:** `bin/deploy.sh` runs the post-deploy smoke (`tools/load/src/smoke.ts`, now with every
+  critical web route, the 404, CSP, service-worker caching, immutable assets and no source maps)
+  and records a release only when it passes. `productionBrowserSourceMaps: false` states the
+  policy.
+- **CI:** `web-e2e` builds the web app twice for the new deployment suite; a new `pilot-stack` job
+  brings up `infra/vps` with a CI-only root CA and Mailpit (`infra/vps/ci/`), deploys, runs the
+  golden path and the stack browser checks (`apps/web/e2e/stack`), and uploads screenshots as
+  `stack-preview`.
+- **Links:** password-reset and staff-invitation emails point at `https://<school>.<root>`
+  (`apps/api/src/common/school-url.ts`), closing launch checklist 5.4.
+- **Browser suites for F16, F18 and F19** (checklist 5.2): ending an exam with its absentee list
+  then makeup; CSV export, Ctrl+K search and the results print view; close readiness to committed
+  rollover. The fixture gains a second exam and a second school with an empty next session.
+- **Docs:** `docs/user-guides/` (teacher, invigilator, student); credential-sheet handling and the
+  one-hour invitation link in `school-onboarding.md` (ADR-0019); update behaviour in
+  `lab-preparation.md`; maintenance, smoke and the CI stack in `vps-pilot.md`; the e2e README.
+- The assessment preview tells students what happens if the connection drops (ADR-0003 grace).
+
+**Also fixed**
+
+- **Printed reports were blank** (found by the F18 suite): all four print views read response
+  shapes the API never returned, so the results broadsheet had no title, a made-up total of 100
+  and no rows. They now read the real responses, typed from the generated contract; the print
+  endpoints declare their real response types. The print footer no longer hardcodes the product
+  name or a fixed "Page 1 of 1", and the context switcher's fallback name comes from the
+  environment too.
+- **The server's first deploy would have failed** (found by the `pilot-stack` job's first run):
+  the API and worker image declares `HEALTHCHECK NONE`, which `docker compose up --wait` in
+  `bin/deploy.sh` rejects as "no healthcheck configured". `compose.yml` now gives the API a
+  liveness check and the worker a process check, and `deploy.sh` prints the containers' state
+  and logs with the rollback command when the application does not become healthy.
+- **`.dockerignore`** now excludes `infra/vps`'s live `.env`, `app.env`, CA key, certificates and
+  backups. The server builds images with the repository as context, so these would otherwise have
+  been copied into image layers.
+
+**Tested:** the full Chromium browser suite, 34 tests including the deployment suite and the
+three new flow suites, against production builds; web, API and load typecheck, lint and unit
+tests for the changed code; API identity, platform and users integration suites (60/60); the
+Caddy configuration and maintenance behaviour against a local Caddy 2.10. **Not run here:** the
+`pilot-stack` job, because production images cannot be built in this sandbox; its first run is
+this PR's CI.
+
+**Remaining:** the pilot exam (DoD 11, launch checklist section 6). Candidate/deferred findings are
+listed in the F21 roadmap Implementation notes (raw-ID export fields, one-hour staff invitations,
+print gaps, two small accessibility points).
+
 ### 2026-10-04 — Public marketing site (`apps/marketing`, ADR-0034)
 
 The product name is **ExamKeep** (owner decision; still read from `PRODUCT_NAME`, never

@@ -14,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
+
 const ROLE_LABEL: Record<Role, string> = {
   SOFTWARE_ADMIN: 'Software Admin',
   SCHOOL_ADMIN: 'School Admin',
@@ -76,7 +78,7 @@ export function ContextSwitcher({
     <DropdownMenu>
       <DropdownMenuTrigger className="flex min-w-0 items-center gap-2 rounded-md border border-border px-3 py-1.5 text-left text-sm hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
         <div className="min-w-0">
-          <p className="truncate font-medium text-text-primary">{schoolName ?? 'Project Atlas'}</p>
+          <p className="truncate font-medium text-text-primary">{schoolName ?? productName}</p>
           <p className="truncate text-xs text-text-muted">{subtitle}</p>
         </div>
         <ChevronsUpDown className="size-3.5 shrink-0 text-text-muted" aria-hidden />

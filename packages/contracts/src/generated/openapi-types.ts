@@ -9748,7 +9748,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ExamResultsResponseDto"];
                 };
             };
         };
@@ -9769,7 +9769,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        summary: components["schemas"]["ExamAnalyticsResponseDto"];
+                        questions: components["schemas"]["QuestionAnalyticsResponseDto"];
+                    };
                 };
             };
         };
@@ -9794,7 +9797,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["ClassAnalyticsResponseDto"];
                 };
             };
         };
@@ -9819,7 +9822,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["StudentAnalyticsResponseDto"];
                 };
             };
         };
@@ -9840,7 +9843,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["QuestionAnalyticsResponseDto"];
                 };
             };
         };

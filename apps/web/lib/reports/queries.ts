@@ -11,6 +11,8 @@ import type {
   PlatformSearchResponse,
   PrintExamResultsData,
   PrintExamPerformanceData,
+  PrintClassPerformanceData,
+  PrintStudentPerformanceData,
 } from './types';
 
 const FALLBACK_API_ORIGIN = process.env.NEXT_PUBLIC_API_ORIGIN ?? 'http://localhost:3001';
@@ -151,19 +153,19 @@ export function usePlatformSearch(query: string) {
 }
 
 /**
- * F18: Print data queries (ADR-0030).
+ * F18: Print data queries (ADR-0030). No casts: each response is typed by
+ * the generated OpenAPI contract of `print-data.controller.ts`, so a view
+ * that expects a field the API does not return fails typecheck.
  */
 export function usePrintExamResults(examId: string) {
   return useQuery({
     queryKey: reportsKeys.printExamResults(examId),
-    queryFn: () =>
+    queryFn: (): Promise<PrintExamResultsData> =>
       unwrap(
         apiClient.GET('/reports/exams/{id}/results', {
-          params: {
-            path: { id: examId },
-          },
+          params: { path: { id: examId } },
         }),
-      ) as Promise<PrintExamResultsData>,
+      ),
     enabled: Boolean(examId),
   });
 }
@@ -171,12 +173,12 @@ export function usePrintExamResults(examId: string) {
 export function usePrintExamPerformance(examId: string) {
   return useQuery({
     queryKey: reportsKeys.printExamPerformance(examId),
-    queryFn: () =>
+    queryFn: (): Promise<PrintExamPerformanceData> =>
       unwrap(
         apiClient.GET('/reports/exams/{id}/performance', {
           params: { path: { id: examId } },
         }),
-      ) as Promise<PrintExamPerformanceData>,
+      ),
     enabled: Boolean(examId),
   });
 }
@@ -184,12 +186,12 @@ export function usePrintExamPerformance(examId: string) {
 export function usePrintClassPerformance(classId: string) {
   return useQuery({
     queryKey: reportsKeys.printClassPerformance(classId),
-    queryFn: () =>
+    queryFn: (): Promise<PrintClassPerformanceData> =>
       unwrap(
         apiClient.GET('/reports/classes/{id}/performance', {
           params: { path: { id: classId } },
         }),
-      ) as Promise<Record<string, unknown>>,
+      ),
     enabled: Boolean(classId),
   });
 }
@@ -197,12 +199,12 @@ export function usePrintClassPerformance(classId: string) {
 export function usePrintStudentPerformance(studentId: string) {
   return useQuery({
     queryKey: reportsKeys.printStudentPerformance(studentId),
-    queryFn: () =>
+    queryFn: (): Promise<PrintStudentPerformanceData> =>
       unwrap(
         apiClient.GET('/reports/students/{id}/performance', {
           params: { path: { id: studentId } },
         }),
-      ) as Promise<Record<string, unknown>>,
+      ),
     enabled: Boolean(studentId),
   });
 }

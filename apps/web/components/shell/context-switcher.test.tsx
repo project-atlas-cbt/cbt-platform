@@ -62,7 +62,9 @@ describe('ContextSwitcher', () => {
 
   it('falls back to the platform name with no school (Software Admin shell) and never fetches academic context', () => {
     render(<ContextSwitcher currentRole="SOFTWARE_ADMIN" roles={['SOFTWARE_ADMIN']} />);
-    expect(screen.getByText('Project Atlas')).toBeInTheDocument();
+    expect(
+      screen.getByText(process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform'),
+    ).toBeInTheDocument();
     expect(mockUseAcademicsContext).toHaveBeenCalledWith({ enabled: false });
   });
 

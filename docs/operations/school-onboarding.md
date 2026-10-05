@@ -33,19 +33,43 @@ session and at least one class (05 §5.2).
    deregistered (ADR-0011).
 5. **Grading scale** and **result policy** (ADR-0018, ADR-0010).
 6. **Staff**: import teachers from the CSV template (Imports → Teachers) or add them one by one;
-   assign HODs to departments and teachers to subject-class offerings. Each receives a first
-   password by email and must change it at first sign-in.
-7. **Students**: import from the CSV template (Imports → Students). Print or download the
-   credential sheet; students change their password at first sign-in.
+   assign HODs to departments and teachers to subject-class offerings. Each receives an
+   invitation email with a link to the school's own address (`https://<school>.<root>`), where
+   they set their password. The link works for one hour (`PASSWORD_RESET_TOKEN_TTL_SECONDS`); if
+   it lapses, the school admin opens that person's page and uses **Reset credentials** to send a
+   fresh one. "Forgot password" does not work until the invitation has been used.
+7. **Students**: import from the CSV template (Imports → Students). Download each class's
+   credential sheet from the class's page and handle it as below; students change their password
+   at first sign-in.
 8. **Questions**: teachers write or import questions; HODs review and approve them. Only approved
    revisions can go into an exam.
 9. **Practice sitting**: before the first real exam, run a short practice exam in the lab with a
    real class, using [lab-preparation.md](lab-preparation.md). It proves the lab, the accounts
    and the invigilators' routine.
 
+## Credential sheets (ADR-0019)
+
+Students have no email, so their first passwords reach them on paper. A credential sheet is a list
+of working passwords for a whole class, and the school must treat it that way:
+
+- Print only when the class is about to sign in for the first time, and print one copy.
+- Hand each student their own slip, cut from the sheet; never pin the sheet up or leave it in the
+  lab.
+- Collect and shred the remainder the same day. Delete the downloaded file from the computer and
+  its downloads folder.
+- Every student must change the password at first sign-in, so a sheet stops working once its
+  class has signed in.
+- **Download credential sheet** (the class's page) gives every student in the class a new
+  password, including those who already changed theirs. Download it once per class. Download it
+  again only when a sheet was lost or exposed before the class signed in, because that is what
+  makes the old sheet useless.
+- One forgotten password: **Reset credentials** on that student's page gives only that student a
+  new password, shown once.
+
 ## What we hand the school
 
-- The user guides for each role (F21).
+- The user guides for each role: [docs/user-guides](../user-guides/README.md) (teachers,
+  invigilators, students).
 - The invigilator card: [lab-preparation.md §On the day](lab-preparation.md#on-the-day).
 - The support address and the escalation promise for exam hours
   ([on-call-and-incident-response.md](on-call-and-incident-response.md)).

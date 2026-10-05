@@ -26,6 +26,10 @@ tools/load/.state/
 
 # F20 browser suites (apps/web/e2e)
 apps/web/e2e/.fixture.json
+# F21 CI stack page screenshots (uploaded by CI as the PR preview)
+apps/web/stack-preview/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/blob-report/
+# F21 deployment browser suite: the previous build (apps/web/scripts/snapshot-build.mjs)
+.e2e-deploy/
