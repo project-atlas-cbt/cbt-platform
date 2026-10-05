@@ -104,7 +104,7 @@ What stays the same:
      --email <address> --first <name> --last <name> --reason "pilot operator" --apply
    ```
 
-   The password goes to that address by email only. Sign in at `https://admin.<root>`.
+   The password goes to that address by email only. Sign in at `https://admin.<root>/admin/login`.
 
 6. **Back up once by hand** (`bin/backup.sh`) and check the objects arrived off-site.
 

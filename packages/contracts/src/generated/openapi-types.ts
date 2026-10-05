@@ -446,6 +446,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/auth/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change own Software Admin password (current password required). Ends every other session and emails a notice. */
+        post: operations["PlatformAuthController_changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/auth/logout": {
         parameters: {
             query?: never;
@@ -4018,6 +4035,10 @@ export interface components {
             /** @description How many other sessions were ended. */
             signedOut: number;
         };
+        PlatformPasswordChangeDto: {
+            currentPassword: string;
+            newPassword: string;
+        };
         PlatformMeUserDto: {
             id: string;
             firstName: string;
@@ -4030,6 +4051,8 @@ export interface components {
             user: components["schemas"]["PlatformMeUserDto"];
             /** @description Active PlatformRoleAssignment.role values (02). */
             roles: ("SOFTWARE_ADMIN" | "SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT")[];
+            /** @description True while the account is still on the temporary password it was emailed; every route but the password change, sign-out, this one and two-step setup answers PASSWORD_CHANGE_REQUIRED until it is changed. */
+            mustChangePassword: boolean;
         };
         PlatformAdminSummaryDto: {
             userId: string;
@@ -6802,6 +6825,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SignOutOtherSessionsResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformPasswordChangeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
                 };
             };
         };

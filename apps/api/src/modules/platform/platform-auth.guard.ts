@@ -6,7 +6,10 @@ import { Reflector } from '@nestjs/core';
 import { enrichLogContext } from '@atlas/observability';
 import { PlatformSessionService } from './platform-session.service.js';
 import { PlatformMfaService } from './mfa/platform-mfa.service.js';
-import { ALLOW_MFA_ENROLMENT_PENDING_KEY } from './mfa/decorators.js';
+import {
+  ALLOW_MFA_ENROLMENT_PENDING_KEY,
+  ALLOW_PLATFORM_PASSWORD_CHANGE_PENDING_KEY,
+} from './mfa/decorators.js';
 
 /**
  * Software Admin's equivalent of identity/auth.guard.ts's AuthGuard —
@@ -17,12 +20,11 @@ import { ALLOW_MFA_ENROLMENT_PENDING_KEY } from './mfa/decorators.js';
  * failure covers every rejection reason, matching AuthGuard's own
  * enumeration-resistance reasoning.
  *
- * No forced-password-change gate here (contrast AuthGuard): there is no
- * `/v1/platform/auth/password/change` endpoint in B3's scope — the seeded
- * Software Admin account ships with a usable password directly (see
- * packages/db/prisma/seed.ts), not a MUST_CHANGE_PASSWORD one. Recorded as
- * Candidate/Deferred (self-service Software Admin password change) rather
- * than built to fill the gap.
+ * Also enforces the forced password change for an account still on the
+ * temporary password `ops:create-software-admin` emailed (MUST_CHANGE_PASSWORD),
+ * after the MFA gate: first sign-in is password, two-step setup, then a
+ * password of the admin's own (2026-10-05, owner request). Same shape as
+ * AuthGuard's PASSWORD_CHANGE_REQUIRED gate.
  */
 @Injectable()
 export class PlatformAuthGuard implements CanActivate {
@@ -60,6 +62,19 @@ export class PlatformAuthGuard implements CanActivate {
         throw new AppHttpException({
           code: 'MFA_ENROLMENT_REQUIRED',
           message: 'Enrol a second factor before continuing.',
+        });
+      }
+    }
+
+    if (user.credentialState !== 'OK') {
+      const allowPending = this.reflector.getAllAndOverride<boolean>(
+        ALLOW_PLATFORM_PASSWORD_CHANGE_PENDING_KEY,
+        [context.getHandler(), context.getClass()],
+      );
+      if (!allowPending) {
+        throw new AppHttpException({
+          code: 'PASSWORD_CHANGE_REQUIRED',
+          message: 'A password change is required before continuing.',
         });
       }
     }

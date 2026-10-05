@@ -33,6 +33,7 @@ import {
 } from '@/lib/platform/mfa';
 import { describeDevice } from '@/lib/platform/describe-device';
 import { MfaEnrolmentFlow } from './mfa-enrolment-flow';
+import { PlatformPasswordForm } from './platform-password-form';
 import { RecoveryCodesPanel } from './recovery-codes-panel';
 
 /** At or below this many unused codes the screen suggests a new set. */
@@ -278,7 +279,8 @@ function SessionsSection() {
 
 /**
  * F20 (carried from B20) — `/admin/security`: the Software Admin's own
- * two-step sign-in (status, enrol, turn off) and peer reset for a colleague
+ * two-step sign-in (status, enrol, turn off), own password change
+ * (2026-10-05), and peer reset for a colleague
  * who has lost their authenticator. Reset is audited with a reason and ends
  * the colleague's sessions; it is never offered for yourself (the server
  * refuses that too).
@@ -407,6 +409,22 @@ export function SecuritySettingsScreen() {
             <Button onClick={() => setMode('enrol')}>Set up two-step sign-in</Button>
           </div>
         )}
+      </section>
+
+      <section
+        aria-labelledby="own-password"
+        className="space-y-4 rounded-md border border-border p-5"
+      >
+        <div className="space-y-1">
+          <h2 id="own-password" className="text-sm font-semibold text-text-primary">
+            Your password
+          </h2>
+          <p className="text-sm text-text-muted">
+            Changing it signs you out on every other device and sends a confirmation to your email
+            address.
+          </p>
+        </div>
+        <PlatformPasswordForm />
       </section>
 
       <SessionsSection />

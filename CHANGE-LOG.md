@@ -31,6 +31,50 @@ link lifetime). Exam rules (ADR-0003, ADR-0015) stay where they are. Recorded as
   suites' cases for settings, recovery codes and sessions), web component tests, typecheck and
   lint; browser suite `e2e/mfa.spec.ts` gains both pages in its axe scan.
 
+### 2026-10-05 — Software Admin password change
+
+Haneef signed in with the temporary password `ops:create-software-admin` emailed him and found no
+way to replace it (the gap `operator-access.md` recorded). Now:
+
+- `POST /v1/platform/auth/password/change` (`account.resetOwnPassword`, auth rate limit): the
+  current password is always required, the temporary one included, and the new one must differ
+  (10+ characters, as for school accounts). It ends the admin's other sessions, writes a
+  platform-level `PLATFORM_PASSWORD_CHANGED` audit row, and emails a notice
+  (`platform-password-changed`, product name from `PRODUCT_NAME`, time in Africa/Lagos). A mail
+  failure is logged and does not fail the change.
+- `ops:create-software-admin` creates the account `MUST_CHANGE_PASSWORD`. `PlatformAuthGuard`
+  answers `PASSWORD_CHANGE_REQUIRED` on every platform route but the change itself, sign-out, `me`
+  and two-step setup, after its MFA gate, so first sign-in is password, two-step setup, then a
+  password of the admin's own. `GET /platform/auth/me` reports `mustChangePassword`. Existing
+  accounts are not forced; they change it from Sign-in security.
+- Web: `PasswordChangeGate` (after `MfaEnrolmentGate` in the platform shell) and a "Your password"
+  section on `/admin/security`.
+- Tested: new `platform-password.security.integration.test.ts` (current-password check, gate and
+  its order after MFA, other sessions ended, audit row, email without the password); the whole
+  security suite; new `password-change-gate.test.tsx`; web and API typecheck and lint.
+- Not changed: school accounts still get no email after a password change (out of this ask).
+
+### 2026-10-05 — Pilot server findings: admin sign-in route, demo form through ZeptoMail
+
+Haneef's first look at the deployed pilot server (staging, demo data only) found two problems.
+
+- **Admin sign-in:** the Software Admin invitation linked to `https://admin.<root>`, whose root and
+  `/login` render the school entry route and school sign-in, which can never succeed there. The
+  email now links to `/admin/login`. The web proxy also sends the admin host's `/` to `/admin` and
+  `/login` to `/admin/login` (`apps/web/lib/tenant/admin-host.ts`). The smoke and the CI stack
+  spec check both redirects, and the smoke now reads the sign-in page at `/admin/login` when no
+  school is listed.
+- **Demo request form:** the form failed because no lead email provider was set. The pilot sends
+  everything through ZeptoMail, so `MARKETING_LEAD_EMAIL_PROVIDER` now accepts `zeptomail` (its
+  HTTP API with the agent's Send Mail token), beside `resend` and `brevo`.
+- **Handed to other threads (Haneef's call):** a Software Admin password change (none exists;
+  the API's platform auth has no change-password route), and the System Configuration and
+  Sign-in Security console pages.
+- Tested: new unit tests for the admin host redirect and the ZeptoMail request; the marketing
+  lead tests and platform template tests; typecheck and lint for api, load and marketing; the
+  redirects against `next dev`. The web typecheck has 4 errors in `lib/reports/queries.ts` that
+  exist on dev without this change.
+
 ### 2026-10-05 — Email transports skip reserved recipient names; demo school on the pilot server
 
 The pilot server is staging until the pilot and gets the fictional demo school. Its staff have

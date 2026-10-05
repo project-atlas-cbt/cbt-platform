@@ -53,9 +53,12 @@ export interface PlatformMe {
    * today given the DB `CHECK` constraint, but typed as `Role[]` for
    * consistency with `AuthMe.roles`. */
   roles: Role[];
+  /** Still on the emailed temporary password: `PasswordChangeGate` asks for
+   * a new one before the console loads. */
+  mustChangePassword: boolean;
 }
 
-/** No `password-change-required` state: B3 shipped no forced-password-change
- * gate for platform accounts (recorded as a deferral in its own change-log
- * entry) — there is no `/v1/platform/auth/password/change` endpoint yet. */
+/** No `password-change-required` state: unlike the school `GET /auth/me`,
+ * `GET /platform/auth/me` answers a temporary-password account normally
+ * and reports it as `PlatformMe.mustChangePassword`. */
 export type PlatformAuthStatus = 'loading' | 'authenticated' | 'unauthenticated';

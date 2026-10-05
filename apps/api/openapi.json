@@ -764,6 +764,38 @@
         ]
       }
     },
+    "/platform/auth/password/change": {
+      "post": {
+        "operationId": "PlatformAuthController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlatformPasswordChangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Change own Software Admin password (current password required). Ends every other session and emails a notice.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/platform/auth/logout": {
       "post": {
         "operationId": "PlatformAuthController_logout",
@@ -10252,6 +10284,23 @@
           "signedOut"
         ]
       },
+      "PlatformPasswordChangeDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
+      },
       "PlatformMeUserDto": {
         "type": "object",
         "properties": {
@@ -10300,11 +10349,16 @@
                 "STUDENT"
               ]
             }
+          },
+          "mustChangePassword": {
+            "type": "boolean",
+            "description": "True while the account is still on the temporary password it was emailed; every route but the password change, sign-out, this one and two-step setup answers PASSWORD_CHANGE_REQUIRED until it is changed."
           }
         },
         "required": [
           "user",
-          "roles"
+          "roles",
+          "mustChangePassword"
         ]
       },
       "PlatformAdminSummaryDto": {

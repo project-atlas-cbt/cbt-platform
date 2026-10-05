@@ -32,4 +32,11 @@ export class PlatformMeResponseDto {
     description: 'Active PlatformRoleAssignment.role values (02).',
   })
   roles!: Role[];
+
+  @ApiProperty({
+    type: Boolean,
+    description:
+      'True while the account is still on the temporary password it was emailed; every route but the password change, sign-out, this one and two-step setup answers PASSWORD_CHANGE_REQUIRED until it is changed.',
+  })
+  mustChangePassword!: boolean;
 }

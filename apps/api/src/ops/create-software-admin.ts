@@ -11,7 +11,8 @@
  * The password is generated here and sent only to the new admin's address
  * through the NotificationChannel (SES or SMTP in production) — never printed or
  * logged (B20). Software Admin MFA is required in production, so the
- * account is enrolled at first sign-in before it can do anything. Runs as
+ * account is enrolled at first sign-in, then the temporary password is
+ * replaced, before it can do anything. Runs as
  * the ops task (the only task with the owner password); the first account
  * names itself as actor, every later one names an existing admin.
  * docs/operations/operator-access.md.
@@ -36,7 +37,8 @@ export const SOFTWARE_ADMIN_INVITATION_TEMPLATE = {
     'A Software Admin account on {{productName}} has been created for this address.',
     '',
     'Sign in at {{signInUrl}} with this email address and the temporary password below.',
-    'You will set up two-factor authentication before you can do anything else.',
+    'You will set up two-factor authentication, then choose a password of your own,',
+    'before you can do anything else.',
     '',
     'Temporary password: {{password}}',
     '',
@@ -86,7 +88,9 @@ async function main(): Promise<void> {
         email,
         passwordHash: await new PasswordService().hash(password),
         status: 'ACTIVE',
-        credentialState: 'OK',
+        // Emailed in plain text: replaced at first sign-in, after two-step
+        // setup (PlatformAuthGuard's PASSWORD_CHANGE_REQUIRED gate).
+        credentialState: 'MUST_CHANGE_PASSWORD',
         platformRoleAssignments: { create: { role: 'SOFTWARE_ADMIN' } },
       },
       select: { id: true },
@@ -111,7 +115,7 @@ async function main(): Promise<void> {
       template: SOFTWARE_ADMIN_INVITATION_TEMPLATE.name,
       variables: {
         productName: env.PRODUCT_NAME,
-        signInUrl: `https://admin.${env.PLATFORM_ROOT_DOMAIN}`,
+        signInUrl: `https://admin.${env.PLATFORM_ROOT_DOMAIN}/admin/login`,
         password,
       },
     });

@@ -38,9 +38,12 @@ scripts/ci/ecs-ops-task.sh production <ops image> \
 
 The first account names no `--actor`; every later one must name an existing admin. The command
 generates a 24-character password, emails it through SES to that address only (never printed in
-production), and records `PLATFORM_SOFTWARE_ADMIN_CREATED`. The new admin must enrol TOTP at first
-sign-in. Run without `--apply` first to check the inputs. **Known gap:** platform accounts have no
-self-service password change yet; rotate by deactivating the account and creating a new one.
+production), and records `PLATFORM_SOFTWARE_ADMIN_CREATED`. At first sign-in the new admin enrols
+TOTP, then replaces the temporary password with their own (the account is created
+`MUST_CHANGE_PASSWORD`; every other platform route answers `PASSWORD_CHANGE_REQUIRED` until then).
+Run without `--apply` first to check the inputs. Admins change their password later under Sign-in
+security; each change needs the current password, ends their other sessions, is audited as
+`PLATFORM_PASSWORD_CHANGED` and emails a notice to the account's address.
 
 Removing an admin: set their `platform_role_assignments` row to inactive through the ops task on
 the owner connection, with an audit reason, and revoke their sessions (`ops:mfa-reset` revokes

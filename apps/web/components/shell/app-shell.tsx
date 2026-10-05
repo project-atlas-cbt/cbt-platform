@@ -6,6 +6,7 @@ import type { Role } from '@atlas/domain';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { PlatformRouteGuard } from '@/components/auth/platform-route-guard';
 import { MfaEnrolmentGate } from '@/components/platform/security/mfa-enrolment-gate';
+import { PasswordChangeGate } from '@/components/platform/security/password-change-gate';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useAuth, usePlatformAuth } from '@/lib/auth';
 import { useNavigation, usePlatformNavigation, type NavigationResult } from '@/lib/nav';
@@ -148,10 +149,13 @@ function PlatformAppShell({ role, children }: Omit<AppShellProps, 'schoolName'>)
   // F20: the MFA gate sits between the session guard and anything that
   // loads platform data — an unenrolled admin under PLATFORM_MFA_REQUIRED
   // sees only the enrolment flow, never a shell whose requests all 403.
+  // Then an admin still on the emailed temporary password replaces it.
   return (
     <PlatformRouteGuard>
       <MfaEnrolmentGate>
-        <PlatformShellBody role={role}>{children}</PlatformShellBody>
+        <PasswordChangeGate>
+          <PlatformShellBody role={role}>{children}</PlatformShellBody>
+        </PasswordChangeGate>
       </MfaEnrolmentGate>
     </PlatformRouteGuard>
   );
