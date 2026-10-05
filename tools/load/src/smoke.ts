@@ -186,19 +186,21 @@ if (checkWeb) {
   // The root domain is the marketing site (ADR-0034), so without a school
   // the platform pages are checked on the admin host.
   const webHost = school ? `${school}.${root}` : `admin.${root}`;
+  // The admin host sends `/` and `/login` on to the Software Admin console.
+  const signIn = school ? '/login' : '/admin/login';
   const page = (host: string, path: string) =>
     request(new URL(`${webSpec.replace('{host}', host)}${path}`), host, 'GET', {
       accept: 'text/html',
     });
 
   await check(`web tier serves ${webHost} with a nonce CSP`, async () => {
-    const r = await page(webHost, '/');
+    const r = await page(webHost, school ? '/' : signIn);
     expect(r.status === 200, `HTTP ${r.status}`);
     expect(/'nonce-/.test(String(r.headers['content-security-policy'])), 'no nonce CSP');
   });
 
   const schoolPages = [
-    '/login',
+    signIn,
     '/reset-password',
     '/activate',
     '/password/change',
@@ -222,6 +224,19 @@ if (checkWeb) {
     expect(r.status === 200, `HTTP ${r.status}`);
   });
 
+  await check('the admin host sends / and /login to the Software Admin console', async () => {
+    for (const [from, to] of [
+      ['/', '/admin'],
+      ['/login', '/admin/login'],
+    ] as const) {
+      const r = await page(`admin.${root}`, from);
+      expect(
+        r.status === 307 && new URL(String(r.headers.location), 'https://x').pathname === to,
+        `${from}: HTTP ${r.status} to ${r.headers.location}`,
+      );
+    }
+  });
+
   await check('an unknown page is a 404 page, not an error', async () => {
     const r = await page(webHost, `/smoke-${Date.now()}`);
     expect(r.status === 404, `HTTP ${r.status}`);
@@ -243,9 +258,9 @@ if (checkWeb) {
   });
 
   await check('hashed static assets are served and cached for good', async () => {
-    const html = (await page(webHost, '/login')).body;
+    const html = (await page(webHost, signIn)).body;
     const asset = /\/_next\/static\/[^"']+\.js/.exec(html)?.[0];
-    expect(Boolean(asset), 'no static script on /login');
+    expect(Boolean(asset), `no static script on ${signIn}`);
     if (!asset) return;
     const r = await page(webHost, asset);
     expect(r.status === 200, `HTTP ${r.status} for ${asset}`);

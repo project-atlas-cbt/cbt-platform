@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { resolveApiOrigin } from '@/lib/api/resolve-origin';
+import { adminHostRedirect } from '@/lib/tenant/admin-host';
 import {
   buildSecurityHeaders,
   generateNonce,
@@ -23,6 +24,14 @@ export function proxy(request: NextRequest) {
     ? `${forwardedProto.split(',')[0]!.trim()}:`
     : request.nextUrl.protocol;
   const hostname = (request.headers.get('host') ?? request.nextUrl.host).split(':')[0]!;
+
+  const adminPath = adminHostRedirect(hostname, request.nextUrl.pathname);
+  if (adminPath) {
+    // Built from the Host header and forwarded scheme the browser used:
+    // behind Caddy, nextUrl carries the internal address.
+    const host = request.headers.get('host') ?? request.nextUrl.host;
+    return NextResponse.redirect(new URL(adminPath, `${protocol}//${host}`), 307);
+  }
 
   const headers = buildSecurityHeaders({
     nonce,

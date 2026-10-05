@@ -25,6 +25,27 @@ way to replace it (the gap `operator-access.md` recorded). Now:
   security suite; new `password-change-gate.test.tsx`; web and API typecheck and lint.
 - Not changed: school accounts still get no email after a password change (out of this ask).
 
+### 2026-10-05 — Pilot server findings: admin sign-in route, demo form through ZeptoMail
+
+Haneef's first look at the deployed pilot server (staging, demo data only) found two problems.
+
+- **Admin sign-in:** the Software Admin invitation linked to `https://admin.<root>`, whose root and
+  `/login` render the school entry route and school sign-in, which can never succeed there. The
+  email now links to `/admin/login`. The web proxy also sends the admin host's `/` to `/admin` and
+  `/login` to `/admin/login` (`apps/web/lib/tenant/admin-host.ts`). The smoke and the CI stack
+  spec check both redirects, and the smoke now reads the sign-in page at `/admin/login` when no
+  school is listed.
+- **Demo request form:** the form failed because no lead email provider was set. The pilot sends
+  everything through ZeptoMail, so `MARKETING_LEAD_EMAIL_PROVIDER` now accepts `zeptomail` (its
+  HTTP API with the agent's Send Mail token), beside `resend` and `brevo`.
+- **Handed to other threads (Haneef's call):** a Software Admin password change (none exists;
+  the API's platform auth has no change-password route), and the System Configuration and
+  Sign-in Security console pages.
+- Tested: new unit tests for the admin host redirect and the ZeptoMail request; the marketing
+  lead tests and platform template tests; typecheck and lint for api, load and marketing; the
+  redirects against `next dev`. The web typecheck has 4 errors in `lib/reports/queries.ts` that
+  exist on dev without this change.
+
 ### 2026-10-05 — Email transports skip reserved recipient names; demo school on the pilot server
 
 The pilot server is staging until the pilot and gets the fictional demo school. Its staff have
