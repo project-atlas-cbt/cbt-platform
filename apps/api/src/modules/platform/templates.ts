@@ -3,6 +3,7 @@ import type { TemplateRegistry } from '@atlas/notifications';
 export const SCHOOL_ACTIVATION_TEMPLATE_NAME = 'platform-school-activation';
 export const SUBSCRIPTION_RENEWAL_TEMPLATE_NAME = 'platform-subscription-renewal';
 export const SUBSCRIPTION_WARNING_TEMPLATE_NAME = 'platform-subscription-warning';
+export const PLATFORM_PASSWORD_CHANGED_TEMPLATE_NAME = 'platform-password-changed';
 
 /**
  * ADR-0019's template pipeline ships no real product templates by design —
@@ -61,6 +62,22 @@ export function registerPlatformTemplates(registry: TemplateRegistry, productNam
         'Existing examinations and historical data are never affected by an expired ' +
         'subscription, but new activity is blocked after expiry.\n\n' +
         'Visit your subscription screen to renew.',
+    });
+  }
+
+  // Security notice after a Software Admin changes their own password: the
+  // only signal a hijacked session's owner gets, so it says what to do.
+  if (!registry.has(PLATFORM_PASSWORD_CHANGED_TEMPLATE_NAME)) {
+    registry.register({
+      name: PLATFORM_PASSWORD_CHANGED_TEMPLATE_NAME,
+      subject: `Your ${productName} password was changed`,
+      text:
+        'Hello {{displayName}},\n\n' +
+        `The password for your ${productName} Software Admin account was changed on {{changedAt}}. ` +
+        'Any other device signed in to this account has been signed out.\n\n' +
+        'If you made this change, you do not need to do anything.\n\n' +
+        'If you did not, someone else may have access to your account: tell the platform ' +
+        'owner at once.',
     });
   }
 }

@@ -11,7 +11,8 @@ import { PlatformAuthService } from './platform-auth.service.js';
 import { PlatformLoginDto } from './dto/platform-login.dto.js';
 import { PlatformMeResponseDto } from './dto/platform-me-response.dto.js';
 import { PlatformMfaService } from './mfa/platform-mfa.service.js';
-import { AllowMfaEnrolmentPending } from './mfa/decorators.js';
+import { AllowMfaEnrolmentPending, AllowPlatformPasswordChangePending } from './mfa/decorators.js';
+import { PlatformPasswordChangeDto } from './dto/platform-password-change.dto.js';
 import {
   MfaCodeDto,
   MfaEnrolmentConfirmResponseDto,
@@ -99,6 +100,7 @@ export class PlatformAuthController {
   @Get('mfa')
   @AuthorizedPlatform('identity.mfa.manage')
   @AllowMfaEnrolmentPending()
+  @AllowPlatformPasswordChangePending()
   @ApiOperation({ summary: "B20: the current Software Admin's second-factor status." })
   @ApiOkResponse({ type: MfaStatusResponseDto })
   async mfaStatus(@Req() req: FastifyRequest): Promise<MfaStatusResponseDto> {
@@ -109,6 +111,7 @@ export class PlatformAuthController {
   @HttpCode(HttpStatus.OK)
   @AuthorizedPlatform('identity.mfa.manage')
   @AllowMfaEnrolmentPending()
+  @AllowPlatformPasswordChangePending()
   @ApiOperation({ summary: 'B20: start TOTP enrolment — returns the secret and otpauth URI.' })
   @ApiOkResponse({ type: MfaEnrolmentStartResponseDto })
   async startEnrolment(@Req() req: FastifyRequest): Promise<MfaEnrolmentStartResponseDto> {
@@ -120,6 +123,7 @@ export class PlatformAuthController {
   @RateLimitClass('auth')
   @AuthorizedPlatform('identity.mfa.manage')
   @AllowMfaEnrolmentPending()
+  @AllowPlatformPasswordChangePending()
   @ApiOperation({
     summary:
       'B20: confirm enrolment with a first code; returns the recovery codes (shown once). Ends every other session.',
@@ -164,10 +168,35 @@ export class PlatformAuthController {
     return { status: 'ok' as const };
   }
 
+  @Post('password/change')
+  @HttpCode(HttpStatus.OK)
+  @RateLimitClass('auth')
+  @AuthorizedPlatform('account.resetOwnPassword')
+  @AllowPlatformPasswordChangePending()
+  @ApiOperation({
+    summary:
+      'Change own Software Admin password (current password required). Ends every other session and emails a notice.',
+  })
+  @ApiOkResponse({ type: StatusResponseDto })
+  async changePassword(
+    @Req() req: FastifyRequest,
+    @Body() body: PlatformPasswordChangeDto,
+  ): Promise<StatusResponseDto> {
+    const user = currentPlatformUser(req);
+    await this.platformAuth.changePassword(
+      user.userId,
+      user.sessionId,
+      body.currentPassword,
+      body.newPassword,
+    );
+    return { status: 'ok' as const };
+  }
+
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @AuthorizedPlatform('identity.session.manage')
   @AllowMfaEnrolmentPending()
+  @AllowPlatformPasswordChangePending()
   @ApiOperation({ summary: 'Revoke the current Software Admin session.' })
   @ApiOkResponse({ type: StatusResponseDto })
   async logout(
@@ -182,6 +211,7 @@ export class PlatformAuthController {
   @Get('me')
   @AuthorizedPlatform('identity.me.read')
   @AllowMfaEnrolmentPending()
+  @AllowPlatformPasswordChangePending()
   @ApiOperation({
     summary: 'Current Software Admin identity and roles — read live from the database.',
   })

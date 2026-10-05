@@ -1,13 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { Env } from '@atlas/config';
 import { prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
+import type { NotificationChannel } from '@atlas/notifications';
+import { formatInTimeZone } from '@atlas/validation';
+import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { PasswordService } from '../identity/password.service.js';
 import { AuthLockoutService } from '../identity/auth-lockout.service.js';
 import { PlatformSessionService } from './platform-session.service.js';
 import { PlatformMfaService, PLATFORM_MFA_AUDIT_ACTIONS } from './mfa/platform-mfa.service.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { PLATFORM_PASSWORD_CHANGED_TEMPLATE_NAME } from './templates.js';
+
+export const PLATFORM_PASSWORD_CHANGED_AUDIT_ACTION = 'PLATFORM_PASSWORD_CHANGED';
 
 /** B20: what `POST /platform/auth/login` tells the caller. */
 export type PlatformLoginResult =
@@ -51,6 +59,8 @@ export class PlatformAuthService {
     private readonly lockout: AuthLockoutService,
     private readonly mfa: PlatformMfaService,
     private readonly audit: AuditService,
+    @Inject(NOTIFICATION_CHANNEL) private readonly notifications: NotificationChannel,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   async evaluateLogin(email: string, password: string): Promise<PlatformLoginOutcome> {
@@ -175,9 +185,74 @@ export class PlatformAuthService {
     this.sessions.clearCookie(res);
   }
 
+  /**
+   * A Software Admin replaces their own password. The current password is
+   * always required, the temporary one included: this is a platform
+   * account, and a session cookie alone must never be enough to take it
+   * over. Other sessions end, the change is audited at platform level, and
+   * a notice goes to the account's address so a change the owner did not
+   * make is noticed.
+   */
+  async changePassword(
+    userId: string,
+    sessionId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.passwordHash || !(await this.passwords.verify(user.passwordHash, currentPassword))) {
+      throw new AppHttpException({
+        code: 'UNAUTHENTICATED',
+        message: 'Current password is incorrect.',
+      });
+    }
+    if (newPassword === currentPassword) {
+      throw new AppHttpException({
+        code: 'VALIDATION_ERROR',
+        message: 'Choose a new password that is different from your current one.',
+      });
+    }
+
+    const wasTemporary = user.credentialState !== 'OK';
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await this.passwords.hash(newPassword), credentialState: 'OK' },
+    });
+    const revoked = await this.sessions.revokeAllForUser(userId, sessionId);
+    await this.audit.recordPlatform({
+      actorUserId: userId,
+      actorRole: 'SOFTWARE_ADMIN',
+      action: PLATFORM_PASSWORD_CHANGED_AUDIT_ACTION,
+      entityType: 'User',
+      entityId: userId,
+      metadata: { otherSessionsRevoked: revoked, wasTemporary },
+    });
+
+    // The change has happened; a mail outage must not turn it into an
+    // error the admin retries with a password that no longer works.
+    if (user.email) {
+      const changedAt = formatInTimeZone(new Date(), {
+        timeZone: this.config.get('DEFAULT_SCHOOL_TIMEZONE', { infer: true }),
+        locale: 'en-NG',
+        dateStyle: 'long',
+        timeStyle: 'short',
+      });
+      await this.notifications
+        .send({
+          to: user.email,
+          template: PLATFORM_PASSWORD_CHANGED_TEMPLATE_NAME,
+          variables: { displayName: user.displayName, changedAt },
+        })
+        .catch((err: unknown) =>
+          this.logger.error({ msg: 'Platform password-changed notice failed to send', err }),
+        );
+    }
+  }
+
   async me(userId: string): Promise<{
     user: { id: string; firstName: string; lastName: string; displayName: string; status: string };
     roles: Role[];
+    mustChangePassword: boolean;
   }> {
     const [user, roleAssignments] = await Promise.all([
       prisma.user.findUniqueOrThrow({ where: { id: userId } }),
@@ -193,6 +268,7 @@ export class PlatformAuthService {
         status: user.status,
       },
       roles: roleAssignments.map((r) => r.role),
+      mustChangePassword: user.credentialState !== 'OK',
     };
   }
 }
