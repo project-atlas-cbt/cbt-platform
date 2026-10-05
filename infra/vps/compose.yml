@@ -83,6 +83,8 @@ services:
         NEXT_PUBLIC_MEDIA_ORIGIN: https://media.${ROOT_DOMAIN}
         NEXT_PUBLIC_SENTRY_DSN: ${SENTRY_DSN:-}
         NEXT_PUBLIC_RELEASE_VERSION: ${RELEASE:-unset}
+        NEXT_PUBLIC_SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+        NEXT_PUBLIC_SUPPORT_WHATSAPP: ${SUPPORT_WHATSAPP:-}
     restart: unless-stopped
     environment:
       PRODUCT_NAME: ${PRODUCT_NAME}

@@ -31,6 +31,7 @@ import { MetadataPanel } from './metadata-panel';
 import { QuestionContentField } from './question-content-field';
 import { OptionBuilder } from './option-builder';
 import { MediaUploader } from './media-uploader';
+import { HelpLink } from '@/components/help/help-link';
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 const DRAFT_STORAGE_KEY = 'question-draft:new';
@@ -405,6 +406,7 @@ export function QuestionEditorScreen({ questionId }: { questionId?: string }) {
             <h1 className="text-lg font-semibold text-text-primary">
               {isEditMode ? 'Edit question' : 'New question'}
             </h1>
+            <HelpLink context="questionEditor" />
           </div>
           <SaveIndicator state={saveState} />
         </div>

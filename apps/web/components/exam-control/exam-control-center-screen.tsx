@@ -35,6 +35,7 @@ import { ReopenExamDialog } from './dialogs/reopen-exam-dialog';
 import { CloseSessionDialog } from './dialogs/close-session-dialog';
 import { ReopenSessionDialog } from './dialogs/reopen-session-dialog';
 import { EndExaminationDialog } from './dialogs/end-examination-dialog';
+import { HelpLink } from '@/components/help/help-link';
 
 /**
  * F12 — `04 §69`'s "single most important screen in the product": the
@@ -114,6 +115,7 @@ export function ExamControlCenterScreen({
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-text-primary">{examData.title}</h1>
             <ExamStatusBadge value={snapshot.examStatus} />
+            <HelpLink context="examControl" />
           </div>
           <StalenessIndicator
             openSince={snapshot.staleness.openSince}

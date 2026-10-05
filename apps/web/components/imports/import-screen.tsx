@@ -8,6 +8,14 @@ import { useHasPermission } from '@/lib/nav';
 import { useDownloadImportTemplate } from '@/lib/imports/use-import-download';
 import type { ImportJobType } from '@/lib/imports/queries';
 import { BulkImportFlow } from './bulk-import-flow';
+import { HelpLink } from '@/components/help/help-link';
+import type { HelpContext } from '@/lib/help/contextual';
+
+const IMPORT_HELP: Record<ImportJobType, HelpContext> = {
+  STUDENTS: 'studentImport',
+  TEACHERS: 'teacherImport',
+  QUESTIONS: 'questionImport',
+};
 
 export interface ImportScreenProps {
   type: ImportJobType;
@@ -40,6 +48,7 @@ export function ImportScreen({ type, permission, title, backHref, backLabel }: I
             <ArrowLeft className="size-3.5" aria-hidden /> {backLabel}
           </Link>
           <h2 className="text-base font-semibold text-text-primary">{title}</h2>
+          <HelpLink context={IMPORT_HELP[type]} />
         </div>
         <Button
           variant="secondary"

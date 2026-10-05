@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { useExamsPaginated } from '@/lib/exams/queries';
 import { examControlMakeupPath } from '@/lib/exam-control/navigation';
+import { HelpLink } from '@/components/help/help-link';
 
 const PAGE_SIZE = 25;
 
@@ -63,6 +64,7 @@ export function MakeupExamPickerScreen({ basePath }: { basePath: string }) {
         <p className="mt-1 text-sm text-text-secondary">
           Choose a completed exam to review recorded absences and grant makeup access.
         </p>
+        <HelpLink context="makeup" className="mt-1" />
       </div>
       <DataTable
         columns={columns}

@@ -24,6 +24,8 @@ vi.mock('@/lib/academics/mutations', () => ({
 }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 vi.mock('next/navigation', () => ({
+  // HelpLink (ADR-0035) reads the path; outside a workspace it renders nothing.
+  usePathname: () => '/',
   useRouter: () => ({ push: vi.fn() }),
 }));
 

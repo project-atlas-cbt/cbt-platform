@@ -27,6 +27,7 @@ import { ExamResultsTable } from './exam-results-table';
 import { ExamResultClassTabs, ExamResultSummaryPanel } from './exam-result-summary-panel';
 import { PublicationControls } from './publication-controls';
 import { AdjustmentProgress } from './adjustment-progress';
+import { HelpLink } from '@/components/help/help-link';
 
 const PAGE_SIZE = 50;
 const ALL = '__all__';
@@ -148,7 +149,10 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold text-text-primary">Results</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold text-text-primary">Results</h1>
+          <HelpLink context="results" />
+        </div>
         <div className="flex items-center gap-2">
           <Button
             variant="secondary"

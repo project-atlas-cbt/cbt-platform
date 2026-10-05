@@ -18,6 +18,7 @@ import {
   RetryAuthorizationDialog,
   InvalidationDialog,
 } from './dialogs/attempt-administration-dialogs';
+import { HelpLink } from '@/components/help/help-link';
 
 export function ParticipationScreen({
   basePath,
@@ -84,6 +85,7 @@ export function ParticipationScreen({
           <p className="mt-1 text-sm text-text-secondary">
             Exam status is a server-derived roll-up. Session history preserves original absences.
           </p>
+          <HelpLink context="makeup" className="mt-1" />
         </div>
         {canMakeup && selectedStudents.length > 0 ? (
           <Button onClick={() => setMakeupOpen(true)}>

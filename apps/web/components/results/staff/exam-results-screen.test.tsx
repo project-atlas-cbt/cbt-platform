@@ -13,6 +13,8 @@ import { ExamResultsScreen } from './exam-results-screen';
 const replace = vi.fn();
 let params = new URLSearchParams();
 vi.mock('next/navigation', () => ({
+  // HelpLink (ADR-0035) reads the path; outside a workspace it renders nothing.
+  usePathname: () => '/',
   useRouter: () => ({ replace }),
   useSearchParams: () => params,
 }));

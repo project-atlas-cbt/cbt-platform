@@ -30,6 +30,7 @@ import {
 import { useUpdateRolloverStructure } from '@/lib/academics/mutations';
 import { useHasPermission } from '@/lib/nav';
 import { RolloverStepper } from './rollover-stepper';
+import { HelpLink } from '@/components/help/help-link';
 
 interface RolloverPlanScreenProps {
   planId?: string;
@@ -135,6 +136,7 @@ export function RolloverPlanScreen({ planId, basePath }: RolloverPlanScreenProps
             Rollover clones academic structures, enables student promotion review, and transitions
             the school to a new academic session.
           </p>
+          <HelpLink context="rollover" className="mt-1" />
         </div>
 
         {closedSessions.length > 0 ? (
