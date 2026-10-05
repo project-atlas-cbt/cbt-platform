@@ -73,6 +73,7 @@ echo "== post-deploy smoke"
 first_school=${SCHOOLS%%,*}
 if ! docker compose --profile ops run --rm --no-deps \
   -e SMOKE_ROOT="$ROOT_DOMAIN" -e SMOKE_SCHOOL="${first_school}" -e SMOKE_WEB=true -e SMOKE_MARKETING=true \
+  -e SMOKE_ANY_SCHOOL_HOST="$([ "${CADDY_LOCAL_CA:-}" = 1 ] && echo true || echo false)" \
   -e SMOKE_API=https://caddy/v1 -e SMOKE_WEB_URL=https://caddy \
   ops pnpm --filter @atlas/load smoke; then
   echo "smoke FAILED for $RELEASE; it is running. Roll back with: bin/deploy.sh $(tail -n 1 releases.log 2>/dev/null || echo '<previous ref>')" >&2

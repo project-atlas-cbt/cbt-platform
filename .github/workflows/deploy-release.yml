@@ -123,6 +123,8 @@ jobs:
           SMOKE_ROOT: ${{ vars.ROOT_DOMAIN }}
           SMOKE_SCHOOL: ${{ vars.SMOKE_SCHOOL }}
           SMOKE_WEB: ${{ vars.SMOKE_WEB }}
+          # The AWS design serves *.api.<root> under one wildcard certificate.
+          SMOKE_ANY_SCHOOL_HOST: 'true'
         run: pnpm --filter @atlas/load smoke
 
       # 09 §39 against the deployed stack, from inside the VPC: it writes
