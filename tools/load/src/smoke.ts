@@ -26,7 +26,8 @@ import https from 'node:https';
 
 const root = required('SMOKE_ROOT');
 const apiSpec = process.env.SMOKE_API ?? 'https://{host}/v1';
-const school = process.env.SMOKE_SCHOOL;
+// An empty value (deploy.sh with SCHOOLS='', as in CI) means no school yet.
+const school = process.env.SMOKE_SCHOOL || undefined;
 const checkWeb = process.env.SMOKE_WEB === 'true';
 const webSpec = process.env.SMOKE_WEB_URL ?? 'https://{host}';
 const production = process.env.SMOKE_PRODUCTION !== 'false';
