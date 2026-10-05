@@ -27,6 +27,7 @@ import { SchoolResultPolicyController } from './school-result-policy.controller.
 import { SchoolOnboardingService } from './school-onboarding.service.js';
 import { SchoolOnboardingController } from './school-onboarding.controller.js';
 import { registerPlatformTemplates } from './templates.js';
+import { registerPlatformSecurityTemplates } from './mfa/security-alert-template.js';
 import { PlatformAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 // B10: GET /v1/platform/audit lives here, not in OperationsModule — it
 // needs PlatformAuthGuard's own DI graph (an unexported, PlatformModule-
@@ -115,5 +116,6 @@ export class PlatformModule implements OnModuleInit {
       PRODUCT_NAME: this.config.get('PRODUCT_NAME', { infer: true }),
     });
     registerPlatformTemplates(this.templates, productName);
+    registerPlatformSecurityTemplates(this.templates, productName);
   }
 }

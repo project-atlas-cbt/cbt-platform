@@ -175,6 +175,28 @@ export class PlatformAuthService {
     this.sessions.clearCookie(res);
   }
 
+  /** Sign-in Security: the caller's own live sessions, the current one
+   * marked. Device and network details only — never a token. */
+  async listSessions(userId: string, currentSessionId: string) {
+    const sessions = await this.sessions.listActive(userId);
+    return sessions.map((s) => ({ ...s, isCurrent: s.id === currentSessionId }));
+  }
+
+  /** Sign-in Security: ends every session but the caller's own (a lost
+   * laptop, a shared computer left signed in). Audited. */
+  async signOutOtherSessions(userId: string, currentSessionId: string): Promise<number> {
+    const signedOut = await this.sessions.revokeAllForUser(userId, currentSessionId);
+    await this.audit.recordPlatform({
+      actorUserId: userId,
+      actorRole: 'SOFTWARE_ADMIN',
+      action: PLATFORM_MFA_AUDIT_ACTIONS.otherSessionsSignedOut,
+      entityType: 'User',
+      entityId: userId,
+      metadata: { sessionsRevoked: signedOut },
+    });
+    return signedOut;
+  }
+
   async me(userId: string): Promise<{
     user: { id: string; firstName: string; lastName: string; displayName: string; status: string };
     roles: Role[];

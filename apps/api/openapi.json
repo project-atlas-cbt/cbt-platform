@@ -656,6 +656,38 @@
         ]
       }
     },
+    "/platform/auth/mfa/recovery-codes": {
+      "post": {
+        "operationId": "PlatformAuthController_regenerateRecoveryCodes",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaEnrolmentConfirmResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Replace all own recovery codes — requires a current code; the new codes are shown once.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/platform/auth/mfa/reset": {
       "post": {
         "operationId": "PlatformAuthController_resetMfa",
@@ -683,6 +715,50 @@
           }
         },
         "summary": "B20: clear another Software Admin's lost second factor (reason required, audited; ends their sessions).",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/sessions": {
+      "get": {
+        "operationId": "PlatformAuthController_sessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSessionListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The current Software Admin's own live sessions.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/auth/sessions/sign-out-others": {
+      "post": {
+        "operationId": "PlatformAuthController_signOutOthers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignOutOtherSessionsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "End every own session except this one (audited).",
         "tags": [
           "platform"
         ]
@@ -9404,7 +9480,7 @@
     }
   },
   "info": {
-    "title": "ExamKeep API",
+    "title": "Project Atlas API",
     "description": "Multi-tenant CBT platform API. Error envelope and idempotency contract: ADR-0033.",
     "version": "1.0.0",
     "contact": {}
@@ -10037,6 +10113,69 @@
         "required": [
           "userId",
           "reason"
+        ]
+      },
+      "PlatformSessionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "userAgent": {
+            "type": "string",
+            "nullable": true
+          },
+          "ipAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCurrent": {
+            "type": "boolean",
+            "description": "The session making this request."
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "lastSeenAt",
+          "userAgent",
+          "ipAddress",
+          "isCurrent"
+        ]
+      },
+      "PlatformSessionListResponseDto": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformSessionDto"
+            }
+          }
+        },
+        "required": [
+          "sessions"
+        ]
+      },
+      "SignOutOtherSessionsResponseDto": {
+        "type": "object",
+        "properties": {
+          "signedOut": {
+            "type": "number",
+            "description": "How many other sessions were ended."
+          }
+        },
+        "required": [
+          "signedOut"
         ]
       },
       "PlatformMeUserDto": {

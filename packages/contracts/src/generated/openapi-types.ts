@@ -378,6 +378,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/auth/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace all own recovery codes — requires a current code; the new codes are shown once. */
+        post: operations["PlatformAuthController_regenerateRecoveryCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/auth/mfa/reset": {
         parameters: {
             query?: never;
@@ -389,6 +406,40 @@ export interface paths {
         put?: never;
         /** B20: clear another Software Admin's lost second factor (reason required, audited; ends their sessions). */
         post: operations["PlatformAuthController_resetMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The current Software Admin's own live sessions. */
+        get: operations["PlatformAuthController_sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/sessions/sign-out-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End every own session except this one (audited). */
+        post: operations["PlatformAuthController_signOutOthers"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3913,6 +3964,25 @@ export interface components {
             userId: string;
             reason: string;
         };
+        PlatformSessionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            userAgent: string | null;
+            ipAddress: string | null;
+            /** @description The session making this request. */
+            isCurrent: boolean;
+        };
+        PlatformSessionListResponseDto: {
+            sessions: components["schemas"]["PlatformSessionDto"][];
+        };
+        SignOutOtherSessionsResponseDto: {
+            /** @description How many other sessions were ended. */
+            signedOut: number;
+        };
         PlatformMeUserDto: {
             id: string;
             firstName: string;
@@ -6567,6 +6637,29 @@ export interface operations {
             };
         };
     };
+    PlatformAuthController_regenerateRecoveryCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolmentConfirmResponseDto"];
+                };
+            };
+        };
+    };
     PlatformAuthController_resetMfa: {
         parameters: {
             query?: never;
@@ -6586,6 +6679,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSessionListResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_signOutOthers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignOutOtherSessionsResponseDto"];
                 };
             };
         };

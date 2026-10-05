@@ -87,3 +87,33 @@ export class MfaResetDto {
   @MaxLength(500)
   reason!: string;
 }
+
+export class PlatformSessionDto {
+  @ApiProperty({ type: String, format: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  createdAt!: string;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  lastSeenAt!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  userAgent!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  ipAddress!: string | null;
+
+  @ApiProperty({ type: Boolean, description: 'The session making this request.' })
+  isCurrent!: boolean;
+}
+
+export class PlatformSessionListResponseDto {
+  @ApiProperty({ type: [PlatformSessionDto] })
+  sessions!: PlatformSessionDto[];
+}
+
+export class SignOutOtherSessionsResponseDto {
+  @ApiProperty({ type: Number, description: 'How many other sessions were ended.' })
+  signedOut!: number;
+}

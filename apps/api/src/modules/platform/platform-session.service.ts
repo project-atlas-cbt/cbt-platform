@@ -104,6 +104,30 @@ export class PlatformSessionService {
     return { sessionId: session.id, userId: session.userId };
   }
 
+  /** Sign-in Security: a Software Admin's own live sessions, newest first —
+   * the same liveness rules `resolve()` applies (not revoked, not expired,
+   * not idle past the timeout), so a row listed here would still sign in. */
+  async listActive(userId: string): Promise<
+    {
+      id: string;
+      createdAt: Date;
+      lastSeenAt: Date;
+      userAgent: string | null;
+      ipAddress: string | null;
+    }[]
+  > {
+    const now = Date.now();
+    const idleMs = this.config.get('PLATFORM_SESSION_IDLE_TIMEOUT_SECONDS', { infer: true }) * 1000;
+    const rows = await prisma.platformSession.findMany({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date(now) } },
+      select: { id: true, createdAt: true, lastSeenAt: true, userAgent: true, ipAddress: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows
+      .map((r) => ({ ...r, lastSeenAt: r.lastSeenAt ?? r.createdAt }))
+      .filter((r) => now - r.lastSeenAt.getTime() <= idleMs);
+  }
+
   /** B20: ends every live session a Software Admin holds (MFA enrolment,
    * disable or reset), optionally keeping the caller's own. */
   async revokeAllForUser(userId: string, exceptSessionId?: string): Promise<number> {

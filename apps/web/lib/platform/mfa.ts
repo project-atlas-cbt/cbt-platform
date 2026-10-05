@@ -65,3 +65,32 @@ export function useResetPeerMfa() {
     onSuccess: () => void client.invalidateQueries({ queryKey: ['platform', 'admins'] }),
   });
 }
+
+/** Replaces every recovery code with a new set, shown once. Needs a
+ * current code; the old codes stop working at once. */
+export function useRegenerateRecoveryCodes() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (otp: string) =>
+      unwrap(apiClient.POST('/platform/auth/mfa/recovery-codes', { body: { otp } })),
+    onSuccess: () => void client.invalidateQueries({ queryKey: MFA_STATUS_QUERY_KEY }),
+  });
+}
+
+export const PLATFORM_SESSIONS_QUERY_KEY = ['platform', 'sessions'] as const;
+
+/** The signed-in admin's own live sessions, the current one marked. */
+export function usePlatformSessions() {
+  return useQuery({
+    queryKey: PLATFORM_SESSIONS_QUERY_KEY,
+    queryFn: () => unwrap(apiClient.GET('/platform/auth/sessions', {})),
+  });
+}
+
+export function useSignOutOtherSessions() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(apiClient.POST('/platform/auth/sessions/sign-out-others', {})),
+    onSuccess: () => void client.invalidateQueries({ queryKey: PLATFORM_SESSIONS_QUERY_KEY }),
+  });
+}

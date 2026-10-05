@@ -35,6 +35,28 @@ const ADMINS = {
     },
   ],
 };
+const SESSIONS = {
+  sessions: [
+    {
+      id: 's-current',
+      createdAt: '2026-10-05T08:00:00.000Z',
+      lastSeenAt: '2026-10-05T09:00:00.000Z',
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36',
+      ipAddress: '203.0.113.7',
+      isCurrent: true,
+    },
+    {
+      id: 's-phone',
+      createdAt: '2026-10-04T08:00:00.000Z',
+      lastSeenAt: '2026-10-04T09:00:00.000Z',
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36',
+      ipAddress: '198.51.100.4',
+      isCurrent: false,
+    },
+  ],
+};
 const RECOVERY = Array.from({ length: 10 }, (_, i) => `code-${i}-aaaa-bbbb`);
 
 function renderScreen() {
@@ -52,7 +74,11 @@ describe('SecuritySettingsScreen (F20, carried from B20)', { timeout: 20_000 }, 
     mockGet.mockReset();
     mockPost.mockReset();
     mockGet.mockImplementation(((path: string) =>
-      path === '/platform/auth/mfa' ? ok(status) : ok(ADMINS)) as never);
+      path === '/platform/auth/mfa'
+        ? ok(status)
+        : path === '/platform/auth/sessions'
+          ? ok(SESSIONS)
+          : ok(ADMINS)) as never);
     mockPost.mockImplementation(((path: string) => {
       if (path === '/platform/auth/mfa/enrol')
         return ok({
@@ -63,6 +89,11 @@ describe('SecuritySettingsScreen (F20, carried from B20)', { timeout: 20_000 }, 
         status = { enrolled: true, required: false, recoveryCodesRemaining: 10 };
         return ok({ recoveryCodes: RECOVERY });
       }
+      if (path === '/platform/auth/mfa/recovery-codes') {
+        status = { enrolled: true, required: false, recoveryCodesRemaining: 10 };
+        return ok({ recoveryCodes: RECOVERY });
+      }
+      if (path === '/platform/auth/sessions/sign-out-others') return ok({ signedOut: 1 });
       return ok({ status: 'ok' });
     }) as never);
   });
@@ -114,5 +145,40 @@ describe('SecuritySettingsScreen (F20, carried from B20)', { timeout: 20_000 }, 
         body: { userId: 'u-peer', reason: 'Lost phone, verified by call' },
       }),
     );
+  });
+
+  it('warns when recovery codes run low and replaces them with a current code', async () => {
+    status = { enrolled: true, required: false, recoveryCodesRemaining: 2 };
+    renderScreen();
+    const user = userEvent.setup();
+    expect(await screen.findByText(/running low on recovery codes/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /new recovery codes/i }));
+    await user.type(screen.getByLabelText(/current 6-digit code/i), '654321');
+    await user.click(screen.getByRole('button', { name: /create new codes/i }));
+    await waitFor(() =>
+      expect(mockPost).toHaveBeenCalledWith('/platform/auth/mfa/recovery-codes', {
+        body: { otp: '654321' },
+      }),
+    );
+    const list = await screen.findByRole('list', { name: /recovery codes/i });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10);
+    await user.click(screen.getByLabelText(/i have saved these codes/i));
+    await user.click(screen.getByRole('button', { name: /finish/i }));
+    expect(await screen.findByText(/10 unused recovery codes left/i)).toBeInTheDocument();
+    expect(screen.queryByText(/running low/i)).toBeNull();
+  });
+
+  it('lists your sessions with this device marked and signs out the others', async () => {
+    renderScreen();
+    const user = userEvent.setup();
+    const table = await screen.findByRole('table', { name: /your sessions/i });
+    expect(within(table).getByText('Chrome on Windows')).toBeInTheDocument();
+    expect(within(table).getByText('Chrome on Android')).toBeInTheDocument();
+    expect(within(table).getByText('This device')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /sign out other sessions/i }));
+    await waitFor(() =>
+      expect(mockPost).toHaveBeenCalledWith('/platform/auth/sessions/sign-out-others', {}),
+    );
+    expect(await screen.findByText(/signed out 1 other session\./i)).toBeInTheDocument();
   });
 });
