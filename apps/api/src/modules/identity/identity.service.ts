@@ -15,6 +15,7 @@ import { SessionService, type AuthenticatedSession } from './session.service.js'
 import { AuthLockoutService } from './auth-lockout.service.js';
 import { PASSWORD_RESET_TEMPLATE_NAME } from './templates.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { PlatformSettingsService } from '../../platform-settings/platform-settings.service.js';
 
 /** B20: identity audit actions (registered by
  * IdentityAuditActionRegistrationProvider). Ids and outcomes only — the
@@ -64,6 +65,7 @@ export class IdentityService {
     @Inject(NOTIFICATION_CHANNEL) private readonly notifications: NotificationChannel,
     private readonly accessGate: AccessGateService,
     private readonly audit: AuditService,
+    private readonly settings: PlatformSettingsService,
   ) {}
 
   /** The role an identity audit event is attributed to (see ROLE_PRECEDENCE). */
@@ -356,7 +358,7 @@ export class IdentityService {
     if (!user || user.status !== 'ACTIVE' || !user.email) return;
 
     const rawToken = randomBytes(32).toString('base64url');
-    const ttlSeconds = this.config.get('PASSWORD_RESET_TOKEN_TTL_SECONDS', { infer: true });
+    const ttlSeconds = (await this.settings.current()).passwordResetTokenTtlSeconds;
     await withTenant(prisma, schoolId, (tx) =>
       tx.passwordResetToken.create({
         data: {
@@ -402,7 +404,7 @@ export class IdentityService {
     }
 
     const rawToken = randomBytes(32).toString('base64url');
-    const ttlSeconds = this.config.get('PASSWORD_RESET_TOKEN_TTL_SECONDS', { infer: true });
+    const ttlSeconds = (await this.settings.current()).passwordResetTokenTtlSeconds;
     await withTenant(prisma, schoolId, (tx) =>
       tx.passwordResetToken.create({
         data: {

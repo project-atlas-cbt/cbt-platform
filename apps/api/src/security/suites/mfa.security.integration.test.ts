@@ -10,6 +10,8 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createPrismaClient, prisma } from '@atlas/db';
 import { timeStep, totpAt } from '../../modules/platform/mfa/totp.js';
 import { PlatformMfaService } from '../../modules/platform/mfa/platform-mfa.service.js';
+import { PLATFORM_SECURITY_ALERT_TEMPLATE_NAME } from '../../modules/platform/admin-templates.js';
+import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
 import {
   ADMIN_HOST,
   bootSecurityApp,
@@ -188,6 +190,113 @@ describe('Software Admin MFA', () => {
       where: { schoolId: null, entityId: target.userId },
     });
     expect(visibleToApp).toEqual([]);
+  });
+});
+
+describe('Sign-in Security: recovery codes, sessions and alerts', () => {
+  it('regenerating recovery codes needs a fresh code, replaces the old set and emails the admin', async () => {
+    const channel = app.get<{ send: (m: { to: string; template: string }) => Promise<void> }>(
+      NOTIFICATION_CHANNEL,
+    );
+    const send = vi.spyOn(channel, 'send');
+    try {
+      const admin = await fixture.createPlatformAdmin();
+      const ctx = await fixture.loginPlatform(app, admin.email);
+      const { secret, recoveryCodes: oldCodes, step } = await enrol(ctx);
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: admin.email,
+          template: PLATFORM_SECURITY_ALERT_TEMPLATE_NAME,
+        }),
+      );
+
+      const wrong = await call(app, ctx, 'POST', '/platform/auth/mfa/recovery-codes', {
+        otp: '000000',
+      });
+      expect(wrong.statusCode).toBe(401);
+      // The code that confirmed enrolment is spent.
+      const replay = await call(app, ctx, 'POST', '/platform/auth/mfa/recovery-codes', {
+        otp: totpAt(secret, step),
+      });
+      expect(replay.statusCode).toBe(401);
+
+      send.mockClear();
+      const ok = await call(app, ctx, 'POST', '/platform/auth/mfa/recovery-codes', {
+        otp: totpAt(secret, step + 1),
+      });
+      expect(ok.statusCode).toBe(200);
+      const newCodes = ok.json<{ recoveryCodes: string[] }>().recoveryCodes;
+      expect(newCodes).toHaveLength(10);
+      expect(newCodes).not.toContain(oldCodes[0]);
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: admin.email,
+          template: PLATFORM_SECURITY_ALERT_TEMPLATE_NAME,
+        }),
+      );
+      const status = await call(app, ctx, 'GET', '/platform/auth/mfa');
+      expect(status.json<{ recoveryCodesRemaining: number }>().recoveryCodesRemaining).toBe(10);
+
+      const oldTry = await passwordStep(admin.email);
+      expect(
+        (
+          await call(app, oldTry.ctx, 'POST', '/platform/auth/mfa/recovery', {
+            challengeToken: oldTry.body.challengeToken,
+            recoveryCode: oldCodes[0],
+          })
+        ).statusCode,
+      ).toBe(401);
+      const newTry = await passwordStep(admin.email);
+      expect(
+        (
+          await call(app, newTry.ctx, 'POST', '/platform/auth/mfa/recovery', {
+            challengeToken: newTry.body.challengeToken,
+            recoveryCode: newCodes[0],
+          })
+        ).statusCode,
+      ).toBe(200);
+    } finally {
+      send.mockRestore();
+    }
+  });
+
+  it('lists only the admin’s own live sessions and signs out the others, audited', async () => {
+    const admin = await fixture.createPlatformAdmin();
+    const other = await fixture.createPlatformAdmin();
+    const laptop = await fixture.loginPlatform(app, admin.email);
+    const phone = await fixture.loginPlatform(app, admin.email);
+    await fixture.loginPlatform(app, other.email);
+
+    const listed = await call(app, laptop, 'GET', '/platform/auth/sessions');
+    expect(listed.statusCode).toBe(200);
+    const sessions = listed.json<{ sessions: { id: string; isCurrent: boolean }[] }>().sessions;
+    expect(sessions).toHaveLength(2);
+    expect(sessions.filter((s) => s.isCurrent)).toHaveLength(1);
+    expect(JSON.stringify(sessions)).not.toMatch(/token/iu);
+
+    const out = await call(app, laptop, 'POST', '/platform/auth/sessions/sign-out-others');
+    expect(out.statusCode).toBe(200);
+    expect(out.json<{ signedOut: number }>().signedOut).toBe(1);
+    expect((await call(app, phone, 'GET', '/platform/auth/me')).statusCode).toBe(401);
+    expect((await call(app, laptop, 'GET', '/platform/auth/me')).statusCode).toBe(200);
+    expect(
+      (await call(app, laptop, 'GET', '/platform/auth/sessions')).json<{ sessions: unknown[] }>()
+        .sessions,
+    ).toHaveLength(1);
+
+    const reader = createPrismaClient(process.env.DATABASE_AUDIT_READER_URL);
+    try {
+      const row = await reader.auditEvent.findFirst({
+        where: {
+          schoolId: null,
+          entityId: admin.userId,
+          action: 'PLATFORM_OTHER_SESSIONS_SIGNED_OUT',
+        },
+      });
+      expect(row?.actorUserId).toBe(admin.userId);
+    } finally {
+      await reader.$disconnect();
+    }
   });
 });
 

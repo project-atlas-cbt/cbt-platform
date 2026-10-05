@@ -292,6 +292,10 @@ Engineering facts every session needs:
   `deploy.yml` runs only by hand. Never run the golden path (which writes test data) against
   production. Migrations must be expand-only (`pnpm lint:migrations`,
   `docs/operations/migrations.md`). Schools reach the API at `<school>.api.<root>`.
+- Editable platform settings (ADR-0036): alert recipients, email sender, new-school timezone,
+  session lengths, idle sign-out, lockout and reset-link lifetime are read through
+  `PlatformSettingsService` (API) or `createPlatformSettingsReader` (worker), never straight from
+  env; the env value is only the default. A new editable setting needs an ADR-0036 amendment.
 - Help (ADR-0035): staff task guides live in `apps/web/lib/help/guides/` and in
   `docs/user-guides/`; a change to a screen a guide names updates both. No AI assistant for staff
   without a new owner decision, and never one for students.

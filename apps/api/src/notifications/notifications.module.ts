@@ -10,6 +10,7 @@ import type { Env } from '@atlas/config';
 import { NOTIFICATION_CHANNEL, NOTIFICATION_TEMPLATE_REGISTRY } from './notification-tokens.js';
 import { OperationalAlertService } from './operational-alert.service.js';
 import { createNotificationChannel } from './create-channel.js';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service.js';
 
 export { NOTIFICATION_CHANNEL, NOTIFICATION_TEMPLATE_REGISTRY };
 
@@ -40,10 +41,11 @@ function createRegistry(): TemplateRegistry {
     { provide: NOTIFICATION_TEMPLATE_REGISTRY, useFactory: createRegistry },
     {
       provide: NOTIFICATION_CHANNEL,
-      inject: [NOTIFICATION_TEMPLATE_REGISTRY, ConfigService],
+      inject: [NOTIFICATION_TEMPLATE_REGISTRY, ConfigService, PlatformSettingsService],
       useFactory: (
         registry: TemplateRegistry,
         config: ConfigService<Env, true>,
+        settings: PlatformSettingsService,
       ): NotificationChannel =>
         createNotificationChannel(
           {
@@ -58,6 +60,7 @@ function createRegistry(): TemplateRegistry {
             SMTP_FROM_ADDRESS: config.get('SMTP_FROM_ADDRESS', { infer: true }),
           },
           registry,
+          () => settings.sender(),
         ),
     },
     OperationalAlertService,

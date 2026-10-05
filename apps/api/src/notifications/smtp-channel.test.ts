@@ -35,6 +35,31 @@ describe('SmtpNotificationChannel (VPS pilot, ADR-0019 amendment)', () => {
     });
   });
 
+  it('reads the sender per message when given a function (ADR-0036)', async () => {
+    const sendMail = vi.fn<(mail: SmtpMail) => Promise<unknown>>(() => Promise.resolve({}));
+    let sender = '"Pilot" <a@example.ng>';
+    const channel = new SmtpNotificationChannel(
+      registry(),
+      () => Promise.resolve(sender),
+      sendMail,
+    );
+    await channel.send({
+      to: 'x@school.ng',
+      template: 'password.reset',
+      variables: { school: 'K', link: 'l' },
+    });
+    sender = '"Exams" <b@example.ng>';
+    await channel.send({
+      to: 'x@school.ng',
+      template: 'password.reset',
+      variables: { school: 'K', link: 'l' },
+    });
+    expect(sendMail.mock.calls.map(([mail]) => mail.from)).toEqual([
+      '"Pilot" <a@example.ng>',
+      '"Exams" <b@example.ng>',
+    ]);
+  });
+
   it('rejects, so the dispatch queue retries, when the SMTP server fails', async () => {
     const channel = new SmtpNotificationChannel(registry(), 'no-reply@example.ng', () =>
       Promise.reject(new Error('421 try again later')),

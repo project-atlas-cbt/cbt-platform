@@ -378,6 +378,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/auth/mfa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace all own recovery codes — requires a current code; the new codes are shown once. */
+        post: operations["PlatformAuthController_regenerateRecoveryCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/auth/mfa/reset": {
         parameters: {
             query?: never;
@@ -389,6 +406,40 @@ export interface paths {
         put?: never;
         /** B20: clear another Software Admin's lost second factor (reason required, audited; ends their sessions). */
         post: operations["PlatformAuthController_resetMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The current Software Admin's own live sessions. */
+        get: operations["PlatformAuthController_sessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/auth/sessions/sign-out-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End every own session except this one (audited). */
+        post: operations["PlatformAuthController_signOutOthers"];
         delete?: never;
         options?: never;
         head?: never;
@@ -474,6 +525,41 @@ export interface paths {
         get: operations["PlatformAdminsController_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ADR-0036: editable platform settings, their limits and sources. */
+        get: operations["PlatformSettingsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** ADR-0036: change or reset platform settings (reason required; audited; other Software Admins emailed). */
+        patch: operations["PlatformSettingsController_update"];
+        trace?: never;
+    };
+    "/platform/settings/test-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** ADR-0036: email the signed-in admin using the settings in effect. */
+        post: operations["PlatformSettingsController_sendTestEmail"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3930,6 +4016,25 @@ export interface components {
             userId: string;
             reason: string;
         };
+        PlatformSessionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            userAgent: string | null;
+            ipAddress: string | null;
+            /** @description The session making this request. */
+            isCurrent: boolean;
+        };
+        PlatformSessionListResponseDto: {
+            sessions: components["schemas"]["PlatformSessionDto"][];
+        };
+        SignOutOtherSessionsResponseDto: {
+            /** @description How many other sessions were ended. */
+            signedOut: number;
+        };
         PlatformPasswordChangeDto: {
             currentPassword: string;
             newPassword: string;
@@ -3960,6 +4065,56 @@ export interface components {
         };
         PlatformAdminListResponseDto: {
             admins: components["schemas"]["PlatformAdminSummaryDto"][];
+        };
+        PlatformSettingDto: {
+            /** @enum {string} */
+            key: "opsAlertEmails" | "emailSenderName" | "emailSenderAddress" | "defaultSchoolTimezone" | "platformSessionTtlSeconds" | "platformSessionIdleTimeoutSeconds" | "schoolSessionTtlSeconds" | "authLockoutMaxAttempts" | "authLockoutWindowSeconds" | "passwordResetTokenTtlSeconds";
+            /** @enum {string} */
+            group: "operations" | "sign-in";
+            label: string;
+            description: string;
+            /** @enum {string} */
+            kind: "emailList" | "text" | "email" | "timezone" | "duration" | "count";
+            /** @enum {string} */
+            unit?: "minutes" | "hours" | "days";
+            /** @description Seconds for a duration. */
+            min?: number;
+            /** @description Seconds for a duration. */
+            max?: number;
+            /** @description The value in effect. */
+            value: string | number | string[];
+            /** @description The env file value. */
+            defaultValue: string | number | string[];
+            /** @description True when changed from the env value. */
+            overridden: boolean;
+            /** @description The env variable it overrides. */
+            envKey: string | null;
+            /** Format: date-time */
+            updatedAt: string | null;
+            updatedBy: string | null;
+        };
+        PlatformEnvironmentDto: {
+            releaseVersion: string;
+            /** @enum {string} */
+            emailTransport: "ses" | "smtp" | "console";
+        };
+        PlatformSettingsResponseDto: {
+            settings: components["schemas"]["PlatformSettingDto"][];
+            environment: components["schemas"]["PlatformEnvironmentDto"];
+        };
+        PlatformSettingChangeDto: {
+            /** @enum {string} */
+            key: "opsAlertEmails" | "emailSenderName" | "emailSenderAddress" | "defaultSchoolTimezone" | "platformSessionTtlSeconds" | "platformSessionIdleTimeoutSeconds" | "schoolSessionTtlSeconds" | "authLockoutMaxAttempts" | "authLockoutWindowSeconds" | "passwordResetTokenTtlSeconds";
+            /** @description The new value (seconds for a duration), or null to return to the default. */
+            value: (string | number | string[]) | null;
+        };
+        UpdatePlatformSettingsDto: {
+            changes: components["schemas"]["PlatformSettingChangeDto"][];
+            reason: string;
+        };
+        TestEmailResponseDto: {
+            /** @description Where the test email went. */
+            sentTo: string;
         };
         SchoolListItemDto: {
             id: string;
@@ -6590,6 +6745,29 @@ export interface operations {
             };
         };
     };
+    PlatformAuthController_regenerateRecoveryCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCodeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrolmentConfirmResponseDto"];
+                };
+            };
+        };
+    };
     PlatformAuthController_resetMfa: {
         parameters: {
             query?: never;
@@ -6609,6 +6787,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_sessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSessionListResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformAuthController_signOutOthers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignOutOtherSessionsResponseDto"];
                 };
             };
         };
@@ -6708,6 +6924,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformAdminListResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformSettingsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingsResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlatformSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingsResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformSettingsController_sendTestEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestEmailResponseDto"];
                 };
             };
         };

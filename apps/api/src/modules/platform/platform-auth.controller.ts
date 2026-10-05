@@ -22,6 +22,8 @@ import {
   MfaStatusResponseDto,
   MfaVerifyDto,
   PlatformLoginResponseDto,
+  PlatformSessionListResponseDto,
+  SignOutOtherSessionsResponseDto,
 } from './mfa/mfa.dto.js';
 import { RateLimitClass } from '../../security/rate-limit.js';
 
@@ -152,6 +154,22 @@ export class PlatformAuthController {
     return { status: 'ok' as const };
   }
 
+  @Post('mfa/recovery-codes')
+  @HttpCode(HttpStatus.OK)
+  @RateLimitClass('auth')
+  @AuthorizedPlatform('identity.mfa.manage')
+  @ApiOperation({
+    summary:
+      'Replace all own recovery codes — requires a current code; the new codes are shown once.',
+  })
+  @ApiOkResponse({ type: MfaEnrolmentConfirmResponseDto })
+  async regenerateRecoveryCodes(
+    @Req() req: FastifyRequest,
+    @Body() body: MfaCodeDto,
+  ): Promise<MfaEnrolmentConfirmResponseDto> {
+    return this.mfa.regenerateRecoveryCodes(currentPlatformUser(req).userId, body.otp);
+  }
+
   @Post('mfa/reset')
   @HttpCode(HttpStatus.OK)
   @AuthorizedPlatform('platform.admin.resetMfa')
@@ -166,6 +184,34 @@ export class PlatformAuthController {
   ): Promise<StatusResponseDto> {
     await this.mfa.resetForAdmin(currentPlatformUser(req).userId, body.userId, body.reason);
     return { status: 'ok' as const };
+  }
+
+  @Get('sessions')
+  @AuthorizedPlatform('identity.session.manage')
+  @ApiOperation({ summary: "The current Software Admin's own live sessions." })
+  @ApiOkResponse({ type: PlatformSessionListResponseDto })
+  async sessions(@Req() req: FastifyRequest): Promise<PlatformSessionListResponseDto> {
+    const user = currentPlatformUser(req);
+    const sessions = await this.platformAuth.listSessions(user.userId, user.sessionId);
+    return {
+      sessions: sessions.map((s) => ({
+        ...s,
+        createdAt: s.createdAt.toISOString(),
+        lastSeenAt: s.lastSeenAt.toISOString(),
+      })),
+    };
+  }
+
+  @Post('sessions/sign-out-others')
+  @HttpCode(HttpStatus.OK)
+  @AuthorizedPlatform('identity.session.manage')
+  @ApiOperation({ summary: 'End every own session except this one (audited).' })
+  @ApiOkResponse({ type: SignOutOtherSessionsResponseDto })
+  async signOutOthers(@Req() req: FastifyRequest): Promise<SignOutOtherSessionsResponseDto> {
+    const user = currentPlatformUser(req);
+    return {
+      signedOut: await this.platformAuth.signOutOtherSessions(user.userId, user.sessionId),
+    };
   }
 
   @Post('password/change')

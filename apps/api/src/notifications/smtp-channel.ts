@@ -49,14 +49,17 @@ export function smtpSender(settings: SmtpSettings): SendMail {
 export class SmtpNotificationChannel implements NotificationChannel {
   constructor(
     private readonly templates: TemplateRegistry,
-    private readonly from: string,
+    /** ADR-0036: resolved per message, so a System Configuration change
+     * to the sender applies without a restart. */
+    private readonly from: string | (() => Promise<string>),
     private readonly sendMail: SendMail,
   ) {}
 
   async send(message: NotificationMessage): Promise<void> {
     const rendered = this.templates.render(message.template, message.variables ?? {});
+    const from = typeof this.from === 'string' ? this.from : await this.from();
     await this.sendMail({
-      from: this.from,
+      from: from,
       to: message.to,
       subject: rendered.subject,
       text: rendered.text,

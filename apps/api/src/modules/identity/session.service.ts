@@ -6,6 +6,7 @@ import { parseCookie, stringifySetCookie } from 'cookie';
 import { sign, unsign } from 'cookie-signature';
 import { prisma, withTenant } from '@atlas/db';
 import type { Env } from '@atlas/config';
+import { PlatformSettingsService } from '../../platform-settings/platform-settings.service.js';
 
 export const SESSION_COOKIE_NAME = 'atlas_session';
 
@@ -38,7 +39,10 @@ function hashToken(rawToken: string): string {
  */
 @Injectable()
 export class SessionService {
-  constructor(private readonly config: ConfigService<Env, true>) {}
+  constructor(
+    private readonly config: ConfigService<Env, true>,
+    private readonly settings: PlatformSettingsService,
+  ) {}
 
   /** Creates a new session row and sets its cookie on `res`. */
   async issue(
@@ -47,7 +51,8 @@ export class SessionService {
   ): Promise<AuthenticatedSession> {
     const rawToken = randomBytes(32).toString('base64url');
     const tokenHash = hashToken(rawToken);
-    const ttlSeconds = this.config.get('SESSION_TTL_SECONDS', { infer: true });
+    // ADR-0036: System Configuration's school session length.
+    const ttlSeconds = (await this.settings.current()).schoolSessionTtlSeconds;
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
     const userAgent = params.req?.headers['user-agent']?.toString().slice(0, 512);

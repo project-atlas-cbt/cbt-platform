@@ -38,13 +38,16 @@ export type NotificationTransportEnv = Pick<
 export function createNotificationChannel(
   env: NotificationTransportEnv,
   templates: TemplateRegistry,
+  /** ADR-0036: the API passes System Configuration's sender; the ops CLIs
+   * leave it out and send from the env address. */
+  sender?: () => Promise<string>,
 ): NotificationChannel {
   switch (env.NOTIFICATION_TRANSPORT) {
     case 'ses':
       return new SkipReservedRecipients(
         new SesNotificationChannel(
           templates,
-          env.SES_FROM_ADDRESS,
+          sender ?? env.SES_FROM_ADDRESS,
           sesSender(env.SES_REGION || undefined),
         ),
       );
@@ -52,7 +55,7 @@ export function createNotificationChannel(
       return new SkipReservedRecipients(
         new SmtpNotificationChannel(
           templates,
-          env.SMTP_FROM_ADDRESS,
+          sender ?? env.SMTP_FROM_ADDRESS,
           smtpSender({
             host: env.SMTP_HOST,
             port: env.SMTP_PORT,

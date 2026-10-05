@@ -113,16 +113,13 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
         icon: KeyRound,
         match: ['identity.mfa.'],
       },
-      // No PERMISSION_TABLE row backs platform system configuration yet
-      // (no phase has scoped it) — always-visible like Dashboard rather
-      // than silently hidden, consistent with 04 §5 naming it as primary
-      // nav; the destination is a placeholder until a phase claims it.
+      // ADR-0036: the editable platform settings (04 §5).
       {
         id: 'system-configuration',
         label: 'System Configuration',
         href: 'settings',
         icon: SlidersHorizontal,
-        match: 'always',
+        match: ['platform.settings.'],
       },
     ],
   },

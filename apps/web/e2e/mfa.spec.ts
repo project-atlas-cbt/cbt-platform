@@ -115,9 +115,28 @@ test('Software Admin workspace passes the axe scan', async ({ page }) => {
     '/admin/audit',
     '/admin/analytics',
     '/admin/security',
+    '/admin/settings',
   ]) {
     await page.goto(adminUrl(pathname));
     await settle(page);
     await expectNoAxeViolations(page, pathname);
   }
+});
+
+test('System Configuration loads its settings and sends a test email', async ({ page }) => {
+  await passwordStep(page);
+  await page.getByLabel('Authentication code').fill(totp(secret, await nextStep(page)));
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await page.waitForURL((url) => !url.pathname.startsWith('/admin/login'));
+
+  await page.goto(adminUrl('/admin/settings'));
+  await expect(page.getByRole('heading', { name: 'System Configuration' })).toBeVisible();
+  await expect(page.getByLabel('Failed sign-ins before lockout')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Send test email' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Sent to' })).toBeVisible();
+
+  await page.goto(adminUrl('/admin/security'));
+  await expect(page.getByRole('table', { name: 'Your sessions' })).toBeVisible();
+  await expect(page.getByText('This device')).toBeVisible();
 });

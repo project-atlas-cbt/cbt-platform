@@ -190,6 +190,7 @@ the dump.
 
 - `docker compose ps` and `docker compose logs -f api worker` (JSON logs, redacted by
   `@atlas/observability`).
-- Exam Health Monitor alerts reach `OPS_ALERT_EMAILS` through SMTP.
+- Exam Health Monitor alerts reach `OPS_ALERT_EMAILS` through SMTP (or the recipients set in System
+  Configuration, ADR-0036, which override it).
 - `backups/backup.log` after each night; an empty off-site setting prints a warning there.
 - An external uptime check (any free service) on `https://api.<root>/v1/health`.

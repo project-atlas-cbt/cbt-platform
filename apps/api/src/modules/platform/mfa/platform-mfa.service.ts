@@ -1,14 +1,17 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Redis } from 'ioredis';
 import { prisma } from '@atlas/db';
 import { getProductName, type Env } from '@atlas/config';
+import type { NotificationChannel } from '@atlas/notifications';
+import { NOTIFICATION_CHANNEL } from '../../../notifications/notifications.module.js';
 import { AppHttpException } from '../../../common/app-http-exception.js';
 import { REDIS_CLIENT } from '../../../redis/redis.module.js';
 import { AuditService } from '../../operations/audit-event.service.js';
 import { PlatformSessionService } from '../platform-session.service.js';
 import { openSecret, sealSecret } from './secret-box.js';
+import { PLATFORM_SECURITY_ALERT_TEMPLATE_NAME } from '../admin-templates.js';
 import { generateTotpSecret, otpauthUri, verifyTotp } from './totp.js';
 
 /** B20 platform-level audit actions (school_id NULL rows). */
@@ -17,6 +20,8 @@ export const PLATFORM_MFA_AUDIT_ACTIONS = {
   disabled: 'PLATFORM_MFA_DISABLED',
   reset: 'PLATFORM_MFA_RESET',
   recoveryCodeUsed: 'PLATFORM_MFA_RECOVERY_CODE_USED',
+  recoveryCodesRegenerated: 'PLATFORM_MFA_RECOVERY_CODES_REGENERATED',
+  otherSessionsSignedOut: 'PLATFORM_OTHER_SESSIONS_SIGNED_OUT',
   signedIn: 'PLATFORM_SIGNED_IN',
 } as const;
 
@@ -41,6 +46,19 @@ function generateRecoveryCode(): string {
 
 const normaliseRecoveryCode = (code: string) => code.trim().toLowerCase().replace(/\s+/gu, '');
 
+/** `2026-10-05 21:30 UTC` — platform-level events have no school timezone. */
+const formatUtc = (d: Date) => `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+
+const SECURITY_ALERT_CHANGES = {
+  enrolled:
+    'Two-step sign-in was turned on for your account, and your other sessions were signed out.',
+  disabled: 'Two-step sign-in was turned off for your account.',
+  reset:
+    'Another Software Admin reset your two-step sign-in. All your sessions were signed out, and you will set it up again the next time you sign in.',
+  recoveryCodesRegenerated:
+    'New recovery codes were created for your account. Your old recovery codes no longer work.',
+} as const;
+
 interface ChallengeState {
   userId: string;
   attempts: number;
@@ -60,12 +78,41 @@ const invalidCode = () =>
  */
 @Injectable()
 export class PlatformMfaService {
+  private readonly logger = new Logger(PlatformMfaService.name);
+
   constructor(
     private readonly config: ConfigService<Env, true>,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly audit: AuditService,
     private readonly sessions: PlatformSessionService,
+    @Inject(NOTIFICATION_CHANNEL) private readonly notifications: NotificationChannel,
   ) {}
+
+  /** Best-effort "was this you?" email: the change has already committed
+   * and been audited, so a mail failure is logged, never thrown. */
+  private async sendSecurityAlert(
+    userId: string,
+    change: keyof typeof SECURITY_ALERT_CHANGES,
+  ): Promise<void> {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, displayName: true },
+      });
+      if (!user?.email) return;
+      await this.notifications.send({
+        to: user.email,
+        template: PLATFORM_SECURITY_ALERT_TEMPLATE_NAME,
+        variables: {
+          displayName: user.displayName,
+          change: SECURITY_ALERT_CHANGES[change],
+          occurredAt: formatUtc(new Date()),
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to send the platform security alert (${change}): ${String(error)}`);
+    }
+  }
 
   private key(): string {
     return this.config.get('MFA_ENCRYPTION_KEY', { infer: true }) ?? DEV_FALLBACK_KEY;
@@ -171,6 +218,44 @@ export class PlatformMfaService {
       entityId: userId,
       metadata: { otherSessionsRevoked: revoked },
     });
+    await this.sendSecurityAlert(userId, 'enrolled');
+    return { recoveryCodes };
+  }
+
+  /** Replaces every recovery code (used or not) with a fresh set — needs a
+   * current code, which it spends, so neither a hijacked session nor a
+   * replayed code can mint new ones. Returned once, never retrievable. */
+  async regenerateRecoveryCodes(userId: string, otp: string): Promise<{ recoveryCodes: string[] }> {
+    const credential = await prisma.platformMfaCredential.findUnique({ where: { userId } });
+    if (!credential?.confirmedAt) {
+      throw new AppHttpException({ code: 'NOT_FOUND', message: 'No second factor is enrolled.' });
+    }
+    const ok = await this.acceptTotp(
+      credential.id,
+      credential.secretCiphertext,
+      credential.lastUsedStep,
+      otp,
+    );
+    if (!ok) throw invalidCode();
+
+    const recoveryCodes = Array.from({ length: RECOVERY_CODE_COUNT }, generateRecoveryCode);
+    await prisma.$transaction([
+      prisma.platformMfaRecoveryCode.deleteMany({ where: { credentialId: credential.id } }),
+      prisma.platformMfaRecoveryCode.createMany({
+        data: recoveryCodes.map((c) => ({
+          credentialId: credential.id,
+          codeHash: sha256(normaliseRecoveryCode(c)),
+        })),
+      }),
+    ]);
+    await this.audit.recordPlatform({
+      actorUserId: userId,
+      actorRole: 'SOFTWARE_ADMIN',
+      action: PLATFORM_MFA_AUDIT_ACTIONS.recoveryCodesRegenerated,
+      entityType: 'User',
+      entityId: userId,
+    });
+    await this.sendSecurityAlert(userId, 'recoveryCodesRegenerated');
     return { recoveryCodes };
   }
 
@@ -195,6 +280,7 @@ export class PlatformMfaService {
       entityId: userId,
       metadata: { otherSessionsRevoked: revoked },
     });
+    await this.sendSecurityAlert(userId, 'disabled');
   }
 
   /** Another Software Admin clears a lost factor. Never for oneself (that's
@@ -229,6 +315,7 @@ export class PlatformMfaService {
       reason,
       metadata: { credentialRemoved: count > 0, sessionsRevoked: revoked },
     });
+    await this.sendSecurityAlert(targetUserId, 'reset');
   }
 
   // ---- login step 2 ------------------------------------------------------

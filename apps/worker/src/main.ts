@@ -1,7 +1,7 @@
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { loadEnv, loadRootEnv, redisConnectionFromUrl } from '@atlas/config';
-import { prisma } from '@atlas/db';
+import { createPlatformSettingsReader, prisma } from '@atlas/db';
 import {
   FAILED_JOB_RETENTION,
   ATTEMPT_MARKING_QUEUE_NAME,
@@ -13,7 +13,6 @@ import {
   NOTIFICATION_DISPATCH_QUEUE_NAME,
   OPERATIONAL_ALERT_TEMPLATE,
   operationalAlertVariables,
-  parseOpsAlertRecipients,
   type NotificationDispatchJobPayload,
   type OperationalAlert,
 } from '@atlas/notifications';
@@ -284,9 +283,13 @@ async function main() {
   );
 
   // B20: operational/security alerts — structured log + Sentry + an email
-  // per OPS_ALERT_EMAILS operator, rendered by apps/api from the shared
+  // per operations alert recipient, rendered by apps/api from the shared
   // dispatch queue (this process registers no templates of its own).
-  const opsRecipients = parseOpsAlertRecipients(env.OPS_ALERT_EMAILS);
+  // ADR-0036: recipients come from System Configuration (OPS_ALERT_EMAILS
+  // by default), re-read at most every 30 seconds.
+  const platformSettings = createPlatformSettingsReader(prisma, env, {
+    onError: (err) => logger.warn({ err }, 'Platform settings unreadable; using env values'),
+  });
   const dispatchAlert = async (alert: OperationalAlert): Promise<void> => {
     const level = alert.severity === 'critical' ? 'error' : 'warn';
     logger[level]({ alert }, 'Operational alert');
@@ -295,7 +298,8 @@ async function main() {
       transition: alert.transition,
     });
     const variables = operationalAlertVariables(alert);
-    for (const to of opsRecipients) {
+    const { opsAlertEmails } = (await platformSettings.get()).values;
+    for (const to of opsAlertEmails) {
       await enqueueDispatch({ to, template: OPERATIONAL_ALERT_TEMPLATE.name, variables });
     }
   };
