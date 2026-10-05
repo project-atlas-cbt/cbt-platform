@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Container, PageHeader, Tick } from '@/components/ui';
 import { interestOptions, roleOptions, studentRanges } from '@/lib/lead';
-import { site, whatsappLink } from '@/lib/site';
+import { site, telHref, whatsappLink } from '@/lib/site';
 import { nigerianStates } from '@/lib/states';
 
 export const metadata: Metadata = {
@@ -234,7 +234,7 @@ export default function RequestDemoPage() {
                 ) : null}
                 {site.phone ? (
                   <li>
-                    <a href={`tel:${site.phone.replace(/\s/g, '')}`} className="hover:text-ink">
+                    <a href={telHref(site.phone)} className="hover:text-ink">
                       {site.phone}
                     </a>
                   </li>

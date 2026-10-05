@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { securityHeaders } from './security-headers';
-import { formatNaira, readSiteConfig, whatsappLink } from './site';
+import { formatNaira, readSiteConfig, telHref, whatsappLink } from './site';
 
 describe('readSiteConfig', () => {
   it('takes the name and domain from the environment', () => {
@@ -26,9 +26,17 @@ describe('readSiteConfig', () => {
     expect(whatsappLink(config)).toBeUndefined();
   });
 
-  it('normalises a WhatsApp number to digits', () => {
+  it('normalises a WhatsApp number to international digits', () => {
     const config = readSiteConfig({ MARKETING_WHATSAPP: '+234 803 123 4567' });
     expect(whatsappLink(config, 'Hi')).toBe('https://wa.me/2348031234567?text=Hi');
+    expect(whatsappLink(readSiteConfig({ MARKETING_WHATSAPP: '0803 123 4567' }))).toBe(
+      'https://wa.me/2348031234567',
+    );
+  });
+
+  it('dials a local phone number in international form', () => {
+    expect(telHref('0815 101 7391')).toBe('tel:+2348151017391');
+    expect(telHref('+234 815 101 7391')).toBe('tel:+2348151017391');
   });
 });
 

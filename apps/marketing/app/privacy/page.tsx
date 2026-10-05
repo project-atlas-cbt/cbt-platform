@@ -17,6 +17,12 @@ export default function PrivacyPage() {
         platform handles the data schools put into it. It is written to meet the Nigeria Data
         Protection Act 2023.
       </p>
+      {site.company ? (
+        <p>
+          {site.name} is operated by {site.company}
+          {site.address ? `, ${site.address}` : ''}. In this notice, “we” means {site.company}.
+        </p>
+      ) : null}
 
       <h2>This website</h2>
       <h3>What we collect</h3>

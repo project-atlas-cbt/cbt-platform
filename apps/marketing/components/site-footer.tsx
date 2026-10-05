@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { footerNav } from '@/lib/nav';
-import { site, whatsappLink } from '@/lib/site';
+import { site, telHref, whatsappLink } from '@/lib/site';
 import { Container } from './ui';
 import { Wordmark } from './wordmark';
 
@@ -15,7 +15,7 @@ export function SiteFooter() {
             Computer-based testing for secondary schools, built for Nigerian labs, power and
             connections.
           </p>
-          {site.email || site.phone || whatsapp ? (
+          {site.email || site.phone || whatsapp || site.address ? (
             <ul className="mt-5 space-y-1.5 text-sm text-ink-2">
               {site.email ? (
                 <li>
@@ -26,7 +26,7 @@ export function SiteFooter() {
               ) : null}
               {site.phone ? (
                 <li>
-                  <a href={`tel:${site.phone.replace(/\s/g, '')}`} className="hover:text-ink">
+                  <a href={telHref(site.phone)} className="hover:text-ink">
                     {site.phone}
                   </a>
                 </li>
@@ -38,6 +38,7 @@ export function SiteFooter() {
                   </a>
                 </li>
               ) : null}
+              {site.address ? <li className="pt-2 text-ink-muted">{site.address}</li> : null}
             </ul>
           ) : null}
         </div>
@@ -58,7 +59,8 @@ export function SiteFooter() {
       </Container>
       <Container>
         <p className="border-t border-rule py-6 text-sm text-ink-muted">
-          © {new Date().getFullYear()} {site.name}. All rights reserved.
+          © {new Date().getFullYear()} {site.company ?? site.name}. All rights reserved.
+          {site.company ? ` ${site.name} is a product of ${site.company}.` : null}
         </p>
       </Container>
     </footer>

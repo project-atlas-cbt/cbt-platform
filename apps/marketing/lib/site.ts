@@ -15,11 +15,19 @@ export interface SiteConfig {
   url: string;
   email?: string | undefined;
   phone?: string | undefined;
-  /** Digits only, international format without "+", e.g. 2348012345678. */
+  /** International digits without "+", e.g. 2348012345678; a local 0803… number is converted. */
   whatsapp?: string | undefined;
   address?: string | undefined;
+  /** The company that owns and sells the product (copyright, About, privacy). */
+  company?: string | undefined;
   /** Starting price per student per year, in naira. */
   priceFromNgn?: number | undefined;
+}
+
+/** A Nigerian local number (0803…) in international digits (234803…). */
+function internationalDigits(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 11 && digits.startsWith('0') ? `234${digits.slice(1)}` : digits;
 }
 
 function optional(value: string | undefined): string | undefined {
@@ -33,7 +41,7 @@ export function readSiteConfig(env: Record<string, string | undefined> = process
   const local = rootDomain === 'localtest.me' || rootDomain === 'localhost';
   const url =
     optional(env.MARKETING_SITE_URL) ?? (local ? 'http://localhost:3100' : `https://${rootDomain}`);
-  const whatsapp = optional(env.MARKETING_WHATSAPP)?.replace(/\D/g, '');
+  const whatsapp = internationalDigits(optional(env.MARKETING_WHATSAPP) ?? '');
   const price = Number(optional(env.MARKETING_PRICE_FROM_NGN));
 
   return {
@@ -44,6 +52,7 @@ export function readSiteConfig(env: Record<string, string | undefined> = process
     phone: optional(env.MARKETING_CONTACT_PHONE),
     whatsapp: whatsapp || undefined,
     address: optional(env.MARKETING_CONTACT_ADDRESS),
+    company: optional(env.MARKETING_COMPANY_NAME),
     priceFromNgn: Number.isFinite(price) && price > 0 ? price : undefined,
   };
 }
@@ -54,6 +63,11 @@ export function whatsappLink(config: SiteConfig, text?: string): string | undefi
   if (!config.whatsapp) return undefined;
   const query = text ? `?text=${encodeURIComponent(text)}` : '';
   return `https://wa.me/${config.whatsapp}${query}`;
+}
+
+/** A `tel:` link that dials from outside Nigeria too. */
+export function telHref(phone: string): string {
+  return `tel:+${internationalDigits(phone)}`;
 }
 
 export function formatNaira(amount: number): string {

@@ -14,7 +14,8 @@
         "MARKETING_CONTACT_PHONE",
         "MARKETING_CONTACT_ADDRESS",
         "MARKETING_WHATSAPP",
-        "MARKETING_PRICE_FROM_NGN"
+        "MARKETING_PRICE_FROM_NGN",
+        "MARKETING_COMPANY_NAME"
       ],
       // Read at request time by the demo form, never baked into pages.
       "passThroughEnv": [

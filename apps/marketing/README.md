@@ -19,22 +19,24 @@ Browser checks use Playwright's Chromium; set `E2E_CHROMIUM_EXECUTABLE` to use a
 
 ## Configuration
 
-Read from the environment (the root `.env` locally). Values marked _build_ are baked into the
+Read from the environment (the root `.env` locally). The live business details are committed in
+`.env.production`, which Next.js loads for production builds; the host's own variables override it. Values marked _build_ are baked into the
 static pages, so changing one needs a rebuild.
 
-| Variable                            | When    | Purpose                                                                   |
-| ----------------------------------- | ------- | ------------------------------------------------------------------------- |
-| `PRODUCT_NAME`                      | build   | The product's name everywhere on the site                                 |
-| `PLATFORM_ROOT_DOMAIN`              | build   | Root domain; school addresses are `<school>.<root>`                       |
-| `MARKETING_SITE_URL`                | build   | Canonical URL, used in metadata, sitemap and Open Graph                   |
-| `MARKETING_CONTACT_EMAIL`           | build   | Shown in the footer and contact points                                    |
-| `MARKETING_CONTACT_PHONE`           | build   | As above                                                                  |
-| `MARKETING_CONTACT_ADDRESS`         | build   | As above                                                                  |
-| `MARKETING_WHATSAPP`                | build   | International number, digits only; adds the WhatsApp buttons              |
-| `MARKETING_PRICE_FROM_NGN`          | build   | Starting price per student per year; without it Pricing asks for a quote  |
-| `MARKETING_LEAD_EMAIL_PROVIDER`     | runtime | `resend` or `brevo`; unset means the form tells visitors to contact us    |
-| `MARKETING_LEAD_EMAIL_API_KEY`      | runtime | The provider's API key                                                    |
-| `MARKETING_LEAD_EMAIL_FROM` / `_TO` | runtime | Sender (a verified domain address) and the inbox that receives demo leads |
+| Variable                            | When    | Purpose                                                                      |
+| ----------------------------------- | ------- | ---------------------------------------------------------------------------- |
+| `PRODUCT_NAME`                      | build   | The product's name everywhere on the site                                    |
+| `PLATFORM_ROOT_DOMAIN`              | build   | Root domain; school addresses are `<school>.<root>`                          |
+| `MARKETING_SITE_URL`                | build   | Canonical URL, used in metadata, sitemap and Open Graph                      |
+| `MARKETING_CONTACT_EMAIL`           | build   | Shown in the footer and contact points                                       |
+| `MARKETING_CONTACT_PHONE`           | build   | As above                                                                     |
+| `MARKETING_CONTACT_ADDRESS`         | build   | As above                                                                     |
+| `MARKETING_WHATSAPP`                | build   | WhatsApp number, local (0803…) or international; adds the WhatsApp buttons   |
+| `MARKETING_COMPANY_NAME`            | build   | The company behind the product: copyright line, About and the privacy notice |
+| `MARKETING_PRICE_FROM_NGN`          | build   | Starting price per student per year; without it Pricing asks for a quote     |
+| `MARKETING_LEAD_EMAIL_PROVIDER`     | runtime | `resend` or `brevo`; unset means the form tells visitors to contact us       |
+| `MARKETING_LEAD_EMAIL_API_KEY`      | runtime | The provider's API key                                                       |
+| `MARKETING_LEAD_EMAIL_FROM` / `_TO` | runtime | Sender (a verified domain address) and the inbox that receives demo leads    |
 
 An unset contact detail or price is hidden, never replaced with a placeholder. Leads are emailed
 and never stored or logged.

@@ -67,6 +67,26 @@ export default function AboutPage() {
         </Container>
       </section>
 
+      {site.company ? (
+        <section aria-labelledby="who-title" className="border-t border-rule py-20 sm:py-24">
+          <Container className="grid gap-12 lg:grid-cols-2">
+            <SectionHeading
+              id="who-title"
+              eyebrow="Who we are"
+              title={`${site.name} is a product of ${site.company}`}
+            />
+            <div className="space-y-5 text-lg leading-relaxed text-ink-2">
+              <p>
+                We design, build and support {site.name} ourselves. Every school is set up by us
+                after it subscribes, and the people who answer your questions are the people who
+                build the platform.
+              </p>
+              {site.address ? <p className="text-base text-ink-muted">{site.address}</p> : null}
+            </div>
+          </Container>
+        </section>
+      ) : null}
+
       <section
         aria-labelledby="principles-title"
         className="border-y border-rule bg-surface py-20 sm:py-24"
