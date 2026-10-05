@@ -53,7 +53,7 @@ export function describeValue(setting: PlatformSetting, value: PlatformSetting['
     const n = toUnit(setting, value);
     return `${n} ${n === 1 ? setting.unit.slice(0, -1) : setting.unit}`;
   }
-  return String(value);
+  return value === '' ? 'Not set' : String(value);
 }
 
 /** The text a field starts from. */

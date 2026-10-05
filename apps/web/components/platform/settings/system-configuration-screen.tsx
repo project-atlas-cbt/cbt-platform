@@ -332,7 +332,7 @@ export function SystemConfigurationScreen() {
           </section>
         ))}
 
-        <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-border bg-surface py-4">
+        <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-border bg-background py-4">
           <Button type="submit" disabled={dirty.length === 0}>
             Save changes
           </Button>
