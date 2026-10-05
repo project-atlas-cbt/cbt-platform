@@ -45,7 +45,12 @@ echo "== migrations"
 docker compose --profile ops run --rm ops
 
 echo "== application"
-docker compose up -d --wait --remove-orphans caddy web api worker
+if ! docker compose up -d --wait --wait-timeout 180 --remove-orphans caddy web api worker; then
+  docker compose ps -a
+  docker compose logs --tail 80 api worker web
+  echo "application did not become healthy for $RELEASE. Roll back with: bin/deploy.sh $(tail -n 1 releases.log 2>/dev/null || echo '<previous ref>')" >&2
+  exit 1
+fi
 
 echo "== smoke"
 ready=""

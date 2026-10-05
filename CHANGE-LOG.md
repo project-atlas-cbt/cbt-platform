@@ -44,6 +44,11 @@ configuration; nothing new is rented and the golden path never touches the live 
   endpoints declare their real response types. The print footer no longer hardcodes the product
   name or a fixed "Page 1 of 1", and the context switcher's fallback name comes from the
   environment too.
+- **The server's first deploy would have failed** (found by the `pilot-stack` job's first run):
+  the API and worker image declares `HEALTHCHECK NONE`, which `docker compose up --wait` in
+  `bin/deploy.sh` rejects as "no healthcheck configured". `compose.yml` now gives the API a
+  liveness check and the worker a process check, and `deploy.sh` prints the containers' state
+  and logs with the rollback command when the application does not become healthy.
 - **`.dockerignore`** now excludes `infra/vps`'s live `.env`, `app.env`, CA key, certificates and
   backups. The server builds images with the repository as context, so these would otherwise have
   been copied into image layers.
