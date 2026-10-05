@@ -43,6 +43,20 @@ describe('PrintLayout', () => {
     expect(screen.getByText(/Principal \/ Exam Officer Stamp/i)).toBeInTheDocument();
   });
 
+  it('never hardcodes the product name or a fixed page count in the footer', () => {
+    render(
+      <PrintLayout title="Exam Report">
+        <div>Content</div>
+      </PrintLayout>,
+    );
+
+    expect(
+      screen.getByText(process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Project Atlas/i)).toBeNull();
+    expect(screen.queryByText(/Page \d+ of \d+/i)).toBeNull();
+  });
+
   it('triggers window.print() on Print button click', async () => {
     const user = userEvent.setup();
     render(

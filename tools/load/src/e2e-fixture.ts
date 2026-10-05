@@ -31,7 +31,9 @@ async function main() {
   const target = parseTargets(process.env.E2E_API_TARGET ?? 'http://127.0.0.1:3001/v1')[0]!;
   const manifest = await provision({
     name: `e2e-${randomUUID().slice(0, 4)}`,
-    schools: 1,
+    // The second school is F19's: a session with no exams, ready to close
+    // and roll over without touching the first school's open exams.
+    schools: 2,
     studentsPerSchool: 16,
     studentsPerArm: 40,
     questions: 4,
@@ -90,6 +92,50 @@ async function main() {
   }
   exam.teacher.close();
 
+  // F16: a second exam whose session the teacher closes and ends in the
+  // browser; one student's absence then gets makeup access.
+  const makeupExam = await prepareExam(manifest, school, target, recorder, {
+    durationSeconds: 2400,
+    randomize: false,
+  });
+  makeupExam.teacher.close();
+
+  // F19: the next academic session, empty and with a term, for the rollover.
+  const rollover = manifest.schools[1]!;
+  const rolloverAdmin = new Client(target, rollover.host, '10.230.0.2', recorder, randomUUID());
+  const rolloverLogin = await rolloverAdmin.login(rollover.admin.identifier, manifest.password);
+  if (rolloverLogin.status !== 200) throw new Error(`rollover admin login ${rolloverLogin.status}`);
+  const current = await rolloverAdmin.request<{ endDate: string }>(
+    'GET',
+    `/academics/sessions/${rollover.academicSessionId}`,
+    { label: 'e2e' },
+  );
+  if (current.status !== 200) throw new Error(`read session ${current.status}: ${current.raw}`);
+  const day = 86_400_000;
+  const nextStart = new Date(Date.parse(current.body.endDate) + day);
+  const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+  const nextSessionName = `Next ${randomUUID().slice(0, 4)}`;
+  const next = await rolloverAdmin.request<{ id: string }>('POST', '/academics/sessions', {
+    label: 'e2e',
+    body: {
+      name: nextSessionName,
+      startDate: isoDay(nextStart),
+      endDate: isoDay(new Date(nextStart.getTime() + 300 * day)),
+    },
+  });
+  if (next.status !== 201) throw new Error(`create next session ${next.status}: ${next.raw}`);
+  const term = await rolloverAdmin.request('POST', `/academics/sessions/${next.body.id}/terms`, {
+    label: 'e2e',
+    body: {
+      name: 'First Term',
+      sequence: 1,
+      startDate: isoDay(nextStart),
+      endDate: isoDay(new Date(nextStart.getTime() + 90 * day)),
+    },
+  });
+  if (term.status !== 201) throw new Error(`create next term ${term.status}: ${term.raw}`);
+  rolloverAdmin.close();
+
   // A Software Admin (operator-provisioned, so through the owner connection).
   const adminEmail = `e2e-admin-${randomUUID().slice(0, 6)}@e2e.invalid`;
   const owner = ownerDb();
@@ -125,6 +171,14 @@ async function main() {
     accommodatedStudent: accommodated.identifier,
     examId: exam.examId,
     examSessionId: exam.examSessionId,
+    examTitle: exam.examTitle,
+    makeupExamId: makeupExam.examId,
+    rollover: {
+      schoolHost: rollover.host,
+      schoolAdmin: rollover.admin.identifier,
+      sessionId: rollover.academicSessionId,
+      nextSessionName,
+    },
     questionCount: manifest.questionCount,
   };
   await mkdir(path.dirname(OUT), { recursive: true });

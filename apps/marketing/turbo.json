@@ -1,0 +1,29 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    // Every page is prerendered at build time, so these settings are baked
+    // into the output and must be part of the build's cache key (`env`, not
+    // pass-through): a changed phone number must never replay an old build.
+    "build": {
+      "env": [
+        "PRODUCT_NAME",
+        "PLATFORM_ROOT_DOMAIN",
+        "MARKETING_SITE_URL",
+        "MARKETING_CONTACT_EMAIL",
+        "MARKETING_CONTACT_PHONE",
+        "MARKETING_CONTACT_ADDRESS",
+        "MARKETING_WHATSAPP",
+        "MARKETING_PRICE_FROM_NGN",
+        "MARKETING_COMPANY_NAME"
+      ],
+      // Read at request time by the demo form, never baked into pages.
+      "passThroughEnv": [
+        "MARKETING_LEAD_EMAIL_PROVIDER",
+        "MARKETING_LEAD_EMAIL_API_KEY",
+        "MARKETING_LEAD_EMAIL_TO",
+        "MARKETING_LEAD_EMAIL_FROM"
+      ]
+    }
+  }
+}

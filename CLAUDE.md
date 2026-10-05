@@ -15,7 +15,7 @@ Agent working rules (imported so they load every session): @AGENTS.md
 
 **Current Stage:** Implementation, in progress. Specification audit, roadmaps, and all 33
 architecture decisions were completed first (see below); backend phases `B0`–`B22` and every
-frontend phase through `F20` are now implemented. `CHANGE-LOG.md` holds the dated record of what
+frontend phase through `F21` are now implemented. `CHANGE-LOG.md` holds the dated record of what
 shipped; "Current Phase" below is a short summary that points to it.
 
 The planning phase completed:
@@ -223,21 +223,24 @@ screens against them). Why these two, and which skills were considered and rejec
 
 ### Current Phase
 
-Backend `B0`–`B22` and frontend `F0`–`F20` are implemented (B19's own roadmap section is still
+Backend `B0`–`B22` and frontend `F0`–`F21` are implemented (B19's own roadmap section is still
 open). **B23** (production readiness) is **IN PROGRESS** (2026-10-04). Its repository work is done:
 CDK infrastructure in `af-south-1`, the deploy and rollback pipeline, migration safety, the golden
 path and smoke checks, SES email, invigilator signals, and the operations docs. Provisioning,
 staging measurements, the legal review and the pilot remain, all tracked in
 `docs/operations/launch-checklist.md`. **The pilot runs on a single VPS** (owner decision
 2026-10-04, ADR-0032 amendment; `docs/operations/vps-pilot.md`, `infra/vps`), with SMTP email; the
-AWS design waits until the platform outgrows one server. **F21** pairs with it next. Each phase's DoD outcome,
+AWS design waits until the platform outgrows one server. **F21** (its frontend pair) is
+**IMPLEMENTED — PILOT PENDING** (2026-10-05): every PR runs the pilot's Compose stack in CI in
+place of previews and staging (owner decision), service-worker updates wait for open exams, and
+user guides are in `docs/user-guides/`. B23 and F21 both close with the pilot exam. Each phase's DoD outcome,
 partial items and design reasoning are in its dated `CHANGE-LOG.md` entry and its roadmap section;
 read those before resuming related work.
 
 Open items carried forward:
 
-- Browser suites exist now (`apps/web/e2e`, CI job `web-e2e`), but `F16`, `F18` and `F19` flows are
-  not yet covered by them. The `web-e2e` job first runs on F20's pull request.
+- F21's pilot findings (the export dialog asks for raw IDs, staff invitations last one hour, print
+  gaps) are Candidate/Deferred in its roadmap Implementation notes.
 - `F12` operational alerts (DoD item 10) stay deferred; the disconnected flag and signal counts now
   show in the live table (B23).
 - Excused absence is intentionally deferred (`F16`).
@@ -247,6 +250,9 @@ Open items carried forward:
   proxy pinning, failover and PITR timing) wait for the AWS design. Full list:
   `docs/operations/launch-checklist.md`. Audit BLOCKER/HIGH: 57/58 closed, R-03 waits on staging
   (`docs/audit/blocker-high-closure.md`).
+- Product name decided: **ExamKeep** (still read from `PRODUCT_NAME`). Its public marketing site is
+  `apps/marketing` on the root domain (ADR-0034); real screenshots wait on a visual-only polish of
+  the showcase screens, and site claims must stay true of the product (`lib/content.ts`).
 - Local and CI object storage is Chainguard's MinIO build pinned by digest (MinIO withdrew its
   public images, 2026-10-02 CI repair entry).
 
@@ -289,6 +295,10 @@ Engineering facts every session needs:
   new external origins must be added in `lib/security/csp.ts`. API requests must never be cached by
   the service worker (`app/sw.ts` bypasses them). Build the web app with `NEXT_PUBLIC_MEDIA_ORIGIN`
   set; browser suites need production builds (`apps/web/e2e/README.md`).
+- F21 web: the service worker never activates itself. Pages ask it to, and it refuses while any tab
+  holds an open-attempt heartbeat mark in Cache Storage (`lib/pwa/update-policy.ts`; `Client.url`
+  does not follow client-side navigation, so never gate on URLs). `e2e/deployment.spec.ts` proves
+  a mid-exam deploy. No browser source maps ship; the post-deploy smoke checks it.
 
 ---
 

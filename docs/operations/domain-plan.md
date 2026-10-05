@@ -17,6 +17,7 @@ Final commercial domain is **TBD** (`PROJECT.md`). Everywhere below, `<root>` st
 admin.<root>                  → platform web (Software Admin), per 04 §2 / ADR-0005
 admin.api.<root>              → API (AWS) for the platform host
 api.<root>                    → API (AWS) with no tenant: health checks and tools
+<root>, www.<root>            → public marketing site (apps/marketing), per ADR-0034
 ```
 
 **B23:** the API resolves the school from its own host, `<school>.api.<root>`, stripping the
@@ -43,7 +44,8 @@ plus `media.<root>` for object storage. `media` is therefore a reserved label to
   (B20 tightened this from "any subdomain"; nested names are refused) (see `apps/api/src/security/cors.ts`)
   — a single static origin can't express "every school's subdomain."
 - **Wildcard DNS/TLS**: `*.api.<root>` and `api.<root>` share one DNS-validated ACM certificate on
-  the load balancer (`infra/cdk`, B23); `*.<root>` for the web tier is Vercel's (F21).
+  the load balancer (`infra/cdk`, B23); `*.<root>` for the web tier is Vercel's. On the pilot, Caddy obtains a certificate per host
+  ([vps-pilot.md](vps-pilot.md)).
 
 ## Local development
 

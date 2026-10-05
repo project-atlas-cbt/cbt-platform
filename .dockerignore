@@ -13,3 +13,15 @@ node_modules
 # committed openapi-typescript output) is NOT covered by this — different
 # directory, plain generated TS, meant to be copied in as-is.
 packages/db/generated
+# F21: the single-server deployment builds with the repository as context
+# on the server itself, where infra/vps holds live secrets, the internal CA
+# key and nightly database dumps. None of it may enter an image layer.
+infra/vps/.env
+infra/vps/app.env
+infra/vps/Caddyfile
+infra/vps/certs
+infra/vps/backups
+infra/vps/releases.log
+infra/vps/maintenance/ON
+# The deployment browser suite's copy of the previous web build.
+.e2e-deploy

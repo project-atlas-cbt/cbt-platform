@@ -105,12 +105,38 @@ and run `bin/deploy.sh`. Caddy fetches the new certificates on start.
 
 ## Deploying and rolling back
 
-- **Deploy:** `bin/deploy.sh <ref>` checks out a tag or commit, then deploys it. Each deployed
+- **Deploy:** `bin/deploy.sh <ref>` checks out a tag or commit, then deploys it. After the
+  readiness check it runs the post-deploy smoke (`tools/load/src/smoke.ts` through the `ops`
+  service, against Caddy): API readiness and host shapes, then every critical web route, the 404
+  page, the nonce CSP, the service worker's caching headers, immutable hashed assets and no
+  published source maps. A failed smoke prints the rollback command and stops; only a passing
   release is appended to `releases.log`.
 - **Roll back:** `bin/deploy.sh <previous ref>`. Migrations are expand-only, so the previous
   release runs against the newer schema; never roll a migration back by hand.
 - **Never during a sitting.** Deploying restarts API and worker; attempts tolerate it (offline
   queue, server-side timers), but do not deploy while an exam is running.
+
+## Maintenance page
+
+`bin/maintenance.sh on` makes Caddy answer every school and admin page with a static "briefly
+unavailable" page (503, `Retry-After`, refreshes itself every minute) and every API request with
+the canonical error envelope (`SERVICE_UNAVAILABLE`, `retryable: true`), which the exam client
+already retries. `bin/maintenance.sh off` lifts it; `status` reports it. Caddy serves the same
+page and envelope by itself whenever the web or API container is down (502–504), so a restart or a
+crash shows the page rather than a raw proxy error. The page is `infra/vps/maintenance/index.html`:
+no script, no product name, no external requests.
+
+## The CI copy of this stack
+
+Every pull request runs this same Compose stack in CI (`pilot-stack` job, `infra/vps/ci/stack.sh`)
+in place of preview deployments and a staging server (F21 owner decision, 2026-10-04): production
+images, `CADDY_LOCAL_CA=1` with a CI-only root CA (`ci/compose.ci.yml`), Mailpit as the SMTP
+server, the hosts `*.atlas.test` mapped to the runner. It runs `bin/deploy.sh` (readiness and
+smoke), the golden path against that throwaway database, and the browser checks in
+`apps/web/e2e/stack` (sign-in page under the real CSP and HSTS, the service worker, the error
+pages, maintenance on and off). Screenshots are uploaded as the `stack-preview` artifact.
+`stack.sh down` removes the stack, its volumes and every generated secret. It never touches a
+real server, and refuses to run where `.env` belongs to another domain.
 
 ## Restore
 

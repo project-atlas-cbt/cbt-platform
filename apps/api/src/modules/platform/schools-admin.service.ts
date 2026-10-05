@@ -6,6 +6,7 @@ import type { Env } from '@atlas/config';
 import type { PlatformOverride, SchoolStatus } from '@atlas/domain';
 import type { NotificationChannel } from '@atlas/notifications';
 import { AppHttpException } from '../../common/app-http-exception.js';
+import { buildSchoolUrl } from '../../common/school-url.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { EXAM_LIST_INCLUDE, toExamListItemResponseDto } from '../exams/exam-mappers.js';
@@ -92,23 +93,14 @@ export class SchoolsAdminService {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
-  /**
-   * Builds a school-subdomain URL for a link sent by email — never a
-   * hardcoded domain (no commercial product domain is decided yet; see
-   * PROJECT.md's "Project Atlas" codename note and CLAUDE.md). Reuses the
-   * same two env vars ADR-0005/ADR-0022 already established for exactly
-   * this purpose: `PLATFORM_ROOT_DOMAIN` for the subdomain-bearing root
-   * (the same value TenancyMiddleware resolves Host headers against), and
-   * `WEB_ORIGIN` only for its scheme/port — `WEB_ORIGIN` itself is a
-   * single fixed origin (a local-dev CORS escape hatch per
-   * `security/cors.ts`'s own doc comment) and is never subdomain-aware, so
-   * only its scheme/port are reused, never its host.
-   */
+  /** A link to the school's own web host (`common/school-url.ts`). */
   private buildSchoolUrl(subdomain: string, path: string): string {
-    const webOrigin = new URL(this.config.get('WEB_ORIGIN', { infer: true }));
-    const rootDomain = this.config.get('PLATFORM_ROOT_DOMAIN', { infer: true });
-    const port = webOrigin.port ? `:${webOrigin.port}` : '';
-    return `${webOrigin.protocol}//${subdomain}.${rootDomain}${port}${path}`;
+    return buildSchoolUrl(
+      this.config.get('WEB_ORIGIN', { infer: true }),
+      this.config.get('PLATFORM_ROOT_DOMAIN', { infer: true }),
+      subdomain,
+      path,
+    );
   }
 
   /**

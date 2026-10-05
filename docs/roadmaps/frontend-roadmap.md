@@ -69,12 +69,12 @@ The student exam route runs its own client-side runtime inside the shared shell 
 | F13 | Student CBT Client                     | B13, B14       | **Offline engine yes**                       | COMPLETE                     |
 | F14 | Student Results & Profile              | B15            | No                                           | COMPLETE                     |
 | F15 | Staff Results & Publication            | B15            | No                                           | COMPLETE                     |
-| F16 | Participation, Absence & Makeup        | B16            | No                                           | IMPLEMENTED — E2E PENDING    |
+| F16 | Participation, Absence & Makeup        | B16            | No                                           | COMPLETE                     |
 | F17 | Dashboards & Analytics                 | B17            | Layout yes                                   | COMPLETE                     |
-| F18 | Reporting, Export & Search             | B18            | No                                           | IMPLEMENTED — E2E PENDING    |
-| F19 | Session Rollover UI                    | B19            | No                                           | IMPLEMENTED — E2E PENDING    |
+| F18 | Reporting, Export & Search             | B18            | No                                           | COMPLETE                     |
+| F19 | Session Rollover UI                    | B19            | No                                           | COMPLETE                     |
 | F20 | Accessibility, Performance & Hardening | B20, B21       | Partially                                    | IMPLEMENTED — MANUAL PENDING |
-| F21 | Production Readiness                   | B23            | No                                           | NOT STARTED                  |
+| F21 | Production Readiness                   | B23            | No                                           | IMPLEMENTED — PILOT PENDING  |
 
 ---
 
@@ -2787,7 +2787,7 @@ Pairs with F14. Depends on F17 for statistics.
 
 # F16 — Participation, Absence & Makeup
 
-**Status:** IMPLEMENTED — E2E PENDING · **Backend pair:** B16
+**Status:** COMPLETE (browser E2E added by F21, 2026-10-05: `apps/web/e2e/exam-operations.spec.ts`) · **Backend pair:** B16
 
 ## Objective
 
@@ -3002,7 +3002,7 @@ Depends on B17. Statistics are reused by F15.
 
 # F18 — Reporting, Export & Search
 
-**Status:** IMPLEMENTED — E2E PENDING (2026-09-19) · **Backend pair:** B18
+**Status:** COMPLETE (browser E2E added by F21, 2026-10-05: `apps/web/e2e/reports.spec.ts`; it found the four print views reading response shapes the API never returned, fixed in the same PR) · **Backend pair:** B18
 
 ## Objective
 
@@ -3110,7 +3110,7 @@ satisfying DoD item 6. `SearchDialog` groups results by the per-role corpora de
 
 # F19 — Session Rollover UI
 
-**Status:** IMPLEMENTED — E2E PENDING · **Backend pair:** B19
+**Status:** COMPLETE (browser E2E added by F21, 2026-10-05: `apps/web/e2e/rollover.spec.ts`) · **Backend pair:** B19
 
 ## Objective
 
@@ -3398,7 +3398,7 @@ the MFA enrolment gate unmounted the one-time recovery codes on confirm; a CSRF 
 
 # F21 — Production Readiness
 
-**Status:** NOT STARTED · **Backend pair:** B23
+**Status:** IMPLEMENTED — PILOT PENDING (2026-10-05; see Implementation notes) · **Backend pair:** B23
 
 > **Hosting changed before this phase started (2026-10-04, ADR-0032 amendment).** The pilot runs
 > the web app with `next start` on the same VPS as the API, behind Caddy (`infra/vps`,
@@ -3492,6 +3492,61 @@ Requires B23. Final integration gate for the frontend.
 - Native mobile applications (`01 §53`).
 - Marketing site — outside product scope.
 
+## Implementation notes (2026-10-04 → 2026-10-05)
+
+**Owner decision (plan, 2026-10-04):** the **CI stack** replaces per-PR preview deployments (DoD 2)
+and staging (DoD 9). Every pull request runs the pilot's own Compose stack (`infra/vps`) in CI with
+production images and configuration, a CI-only root CA and Mailpit (`pilot-stack` job,
+`infra/vps/ci/stack.sh`), then `bin/deploy.sh` (readiness and smoke), the golden path against that
+throwaway database, and the browser checks in `apps/web/e2e/stack`. Screenshots are the
+`stack-preview` artifact. The golden path never touches the pilot's live database.
+
+DoD outcome:
+
+1. **Production deployment** — the VPS `web` container (B23) plus F21's post-deploy smoke and
+   maintenance mode; reproduced on every PR by the CI stack. Done.
+2. **Previews** — replaced by the CI stack and its screenshots (owner decision). Done.
+3. **Builds and source maps** — no browser source maps (`productionBrowserSourceMaps: false`, the
+   smoke checks a `.map` is 404); bundle budgets from F20 stay in CI. Done.
+4. **Error pages** — 404 (`app/not-found.tsx`), 500 (`app/error.tsx`, `global-error.tsx`, F20),
+   unsupported browser (`/unsupported-browser`, linked from the compatibility notice), and a static
+   maintenance page Caddy serves for `bin/maintenance.sh on` and for any 502–504 (the API gets the
+   canonical `SERVICE_UNAVAILABLE` envelope, `retryable: true`). Done.
+5. **Service-worker versioning, no disruption** — the worker no longer calls `skipWaiting` on
+   install. Pages ask it to activate; it refuses while any tab of the browser has an attempt open,
+   tracked by heartbeat marks in Cache Storage (a tab's `Client.url` does not follow client-side
+   navigation, so URLs cannot be used). A reload mid-exam keeps the attempt and its answers.
+   `e2e/deployment.spec.ts` deploys a second build mid-exam. Done.
+6. **Cache-busting** — the same suite checks the precache holds only the new build after
+   submission and that a fresh visit runs it. Done.
+7. **User documentation** — `docs/user-guides/` (teacher, invigilator, student);
+   `school-onboarding.md` gains the invitation-link and credential-sheet handling ADR-0019 assigned
+   here. Done.
+8. **Lab preparation** — B23's `lab-preparation.md` plus how updates behave in a lab. Done.
+9. **Golden path against "staging"** — the CI stack's golden path. Done once the `pilot-stack` job
+   is green on the PR (its first run is CI: images cannot be built in the authoring sandbox).
+10. **Post-deploy smoke** — `deploy.sh` runs `tools/load/src/smoke.ts` with the web checks. Done.
+11. **Pilot exam** — pending a real school (launch checklist section 6).
+
+Also in this phase: password-reset and staff-invitation links go to the school's own host (launch
+checklist 5.4); browser suites for F16, F18 and F19 (5.2), which found the four print views reading
+response shapes the API never returned (fixed, now typed from the contract); `.dockerignore` keeps
+the server's live secrets, CA key and database dumps out of image layers; the assessment preview
+says what happens when the connection drops (ADR-0003's grace window).
+
+**Candidate / deferred (pilot findings, not built):**
+
+- The export dialog asks for raw IDs (Exam ID, Subject ID, Class ID, Department ID) instead of
+  pickers.
+- The Student Directory export has no Student ID column, and Admission Number is often empty.
+- A staff invitation link lasts one hour (it shares `PASSWORD_RESET_TOKEN_TTL_SECONDS`), and
+  "Forgot password" does not work until it is used; the workaround is documented (Reset
+  credentials). A longer, separate invitation lifetime is a candidate.
+- Printed reports: a student report printed by someone without `users.student.view` has no name;
+  the broadsheet is not marked provisional before publication; results print caps at 500 rows.
+- The search button shows ⌘K on Windows; the rollover "Select all visible" toggle has no pressed
+  state for screen readers.
+
 ---
 
 ## Cross-Phase Requirements
@@ -3514,27 +3569,27 @@ Applies to **every** frontend phase and forms part of every Definition of Done.
 
 ## Phase Completion Tracking
 
-| Phase | Status                       | Backend pair   | Started    | Completed  | Notes                                                                                                                                                                                                                                                  |
-| ----- | ---------------------------- | -------------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| F0    | COMPLETE                     | B0             | 2026-08-25 | 2026-08-25 | Status corrected 2026-09-24 — this table still read NOT STARTED after F0 shipped, the same staleness row F14 already flags below                                                                                                                       |
-| F1    | COMPLETE                     | B1             | 2026-08-26 | 2026-08-26 | Status corrected 2026-09-24 (same pre-existing table staleness)                                                                                                                                                                                        |
-| F2    | COMPLETE                     | B2, B10        | 2026-08-26 | 2026-08-26 | Status corrected 2026-09-24 (same pre-existing table staleness)                                                                                                                                                                                        |
-| F3    | COMPLETE                     | B3             | 2026-08-27 | 2026-08-27 | Status corrected 2026-09-24 (same pre-existing table staleness). Post-completion gap closure (2026-09-24): real Usage counts + Users/Exams tabs on School Detail — see this section                                                                    |
-| F4    | COMPLETE                     | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts`                                                                                                                              |
-| F5    | COMPLETE                     | B4             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (ADR-0010's own B3/B5 assignment, neither built it)                                                                                                     |
-| F6    | COMPLETE                     | B5             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `GET /v1/classes/:id/teachers`                                                                                                                                                                                              |
-| F7    | COMPLETE                     | B6             | 2026-08-28 | 2026-08-28 | Three small backend gap-closures — see B6's "Post-completion gap closure (during F7)" note                                                                                                                                                             |
-| F8    | COMPLETE                     | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                                                                                                                                                            |
-| F9    | COMPLETE                     | B8             | 2026-08-29 | 2026-08-29 | Editor shell + full workspace; honestly partial on the one DoD item gated on B9                                                                                                                                                                        |
-| F10   | COMPLETE                     | B9             | 2026-09-03 | 2026-09-03 | Two real pre-existing F9 bugs found and fixed (hardcoded, non-`basePath`-relative links)                                                                                                                                                               |
-| F11   | COMPLETE                     | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note                                                                                                    |
-| F12   | COMPLETE                     | B12            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (Control Center for all four school-side roles); two small backend gap-closures — see B12's "Post-completion gap closure" note. Post-completion B13 gap closure (2026-09-23): live attempt table built for real (DoD item 2) |
-| F13   | COMPLETE                     | B13, B14       | 2026-09-05 | 2026-09-05 | Confirmed decisions: force-switch-after-timeout tab handoff; offline media eviction never blocks answering. No backend gap-closure needed.                                                                                                             |
-| F14   | COMPLETE                     | B15            | 2026-09-10 | 2026-09-10 | Status corrected 2026-09-15 — the Phase Map and this row both still read `NOT STARTED` after F14 shipped                                                                                                                                               |
-| F15   | COMPLETE                     | B15            | 2026-09-15 | 2026-09-15 | `/moderator/results` added per this phase's own Scope line; withhold/release built here per ADR-0010; no backend gap-closure needed                                                                                                                    |
-| F16   | IMPLEMENTED — E2E PENDING    | B16            | 2026-09-17 | 2026-09-17 | Shared staff participation/makeup workspace implemented; browser E2E/manual visual validation remains pending because no browser harness is configured.                                                                                                |
-| F17   | COMPLETE                     | B17            | 2026-09-18 | 2026-09-18 | Role-scoped dashboards and analytics views implemented and unit-tested (22/22 tests passing across 11 test files). Consumes B17 analytics.v1 directly.                                                                                                 |
-| F18   | IMPLEMENTED — E2E PENDING    | B18            | 2026-09-19 | 2026-09-19 | Export dialog/progress/download, all four print views, global search (role-aware, students excluded); typecheck and lint both exit 0. E2E pending — no browser harness configured.                                                                     |
-| F19   | IMPLEMENTED — E2E PENDING    | B19            | 2026-09-20 | 2026-09-20 | Full rollover workflow (close readiness, plan review, per-student decisions with override, final commit); typecheck, lint, 16 unit/integration tests passing. E2E pending — no browser harness configured.                                             |
-| F20   | IMPLEMENTED — MANUAL PENDING | B20, B21       | 2026-10-03 | 2026-10-04 | Browser suites (axe, keyboard, MFA, network, pre-cache, low-end, matrix), bundle budgets, CSP, MFA UI, encrypted media pre-cache, accommodations, Sentry. Manual: NVDA pass, oldest browsers, a real low-end PC. See the F20 Implementation notes.     |
-| F21   | NOT STARTED                  | B23            | —          | —          |                                                                                                                                                                                                                                                        |
+| Phase | Status                       | Backend pair   | Started    | Completed  | Notes                                                                                                                                                                                                                                                                      |
+| ----- | ---------------------------- | -------------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F0    | COMPLETE                     | B0             | 2026-08-25 | 2026-08-25 | Status corrected 2026-09-24 — this table still read NOT STARTED after F0 shipped, the same staleness row F14 already flags below                                                                                                                                           |
+| F1    | COMPLETE                     | B1             | 2026-08-26 | 2026-08-26 | Status corrected 2026-09-24 (same pre-existing table staleness)                                                                                                                                                                                                            |
+| F2    | COMPLETE                     | B2, B10        | 2026-08-26 | 2026-08-26 | Status corrected 2026-09-24 (same pre-existing table staleness)                                                                                                                                                                                                            |
+| F3    | COMPLETE                     | B3             | 2026-08-27 | 2026-08-27 | Status corrected 2026-09-24 (same pre-existing table staleness). Post-completion gap closure (2026-09-24): real Usage counts + Users/Exams tabs on School Detail — see this section                                                                                        |
+| F4    | COMPLETE                     | B3, B4, B5, B6 | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.onboardingCompletedAt`/`onboardingState` + `school-onboarding.{controller,service}.ts`                                                                                                                                                  |
+| F5    | COMPLETE                     | B4             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `School.resultPolicy`/`resultDetailVisibility`/`resultPolicyLocked` (ADR-0010's own B3/B5 assignment, neither built it)                                                                                                                         |
+| F6    | COMPLETE                     | B5             | 2026-08-28 | 2026-08-28 | Small backend gap-closure: `GET /v1/classes/:id/teachers`                                                                                                                                                                                                                  |
+| F7    | COMPLETE                     | B6             | 2026-08-28 | 2026-08-28 | Three small backend gap-closures — see B6's "Post-completion gap closure (during F7)" note                                                                                                                                                                                 |
+| F8    | COMPLETE                     | B7 (+B8)       | —          | —          | Also closes F4's DoD item 7                                                                                                                                                                                                                                                |
+| F9    | COMPLETE                     | B8             | 2026-08-29 | 2026-08-29 | Editor shell + full workspace; honestly partial on the one DoD item gated on B9                                                                                                                                                                                            |
+| F10   | COMPLETE                     | B9             | 2026-09-03 | 2026-09-03 | Two real pre-existing F9 bugs found and fixed (hardcoded, non-`basePath`-relative links)                                                                                                                                                                                   |
+| F11   | COMPLETE                     | B11            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (oversight for School Admin/Moderator/HOD); two small backend gap-closures — see B11's "Post-completion gap closure" note                                                                                                                        |
+| F12   | COMPLETE                     | B12            | 2026-09-04 | 2026-09-04 | Confirmed scope extension (Control Center for all four school-side roles); two small backend gap-closures — see B12's "Post-completion gap closure" note. Post-completion B13 gap closure (2026-09-23): live attempt table built for real (DoD item 2)                     |
+| F13   | COMPLETE                     | B13, B14       | 2026-09-05 | 2026-09-05 | Confirmed decisions: force-switch-after-timeout tab handoff; offline media eviction never blocks answering. No backend gap-closure needed.                                                                                                                                 |
+| F14   | COMPLETE                     | B15            | 2026-09-10 | 2026-09-10 | Status corrected 2026-09-15 — the Phase Map and this row both still read `NOT STARTED` after F14 shipped                                                                                                                                                                   |
+| F15   | COMPLETE                     | B15            | 2026-09-15 | 2026-09-15 | `/moderator/results` added per this phase's own Scope line; withhold/release built here per ADR-0010; no backend gap-closure needed                                                                                                                                        |
+| F16   | COMPLETE                     | B16            | 2026-09-17 | 2026-09-17 | Shared staff participation/makeup workspace implemented; browser E2E added by F21 (2026-10-05).                                                                                                                                                                            |
+| F17   | COMPLETE                     | B17            | 2026-09-18 | 2026-09-18 | Role-scoped dashboards and analytics views implemented and unit-tested (22/22 tests passing across 11 test files). Consumes B17 analytics.v1 directly.                                                                                                                     |
+| F18   | COMPLETE                     | B18            | 2026-09-19 | 2026-09-19 | Export dialog/progress/download, all four print views, global search (role-aware, students excluded); typecheck and lint both exit 0. Browser E2E added by F21 (2026-10-05); it found and fixed the print views reading the wrong response shapes.                         |
+| F19   | COMPLETE                     | B19            | 2026-09-20 | 2026-09-20 | Full rollover workflow (close readiness, plan review, per-student decisions with override, final commit); typecheck, lint, 16 unit/integration tests passing. Browser E2E added by F21 (2026-10-05).                                                                       |
+| F20   | IMPLEMENTED — MANUAL PENDING | B20, B21       | 2026-10-03 | 2026-10-04 | Browser suites (axe, keyboard, MFA, network, pre-cache, low-end, matrix), bundle budgets, CSP, MFA UI, encrypted media pre-cache, accommodations, Sentry. Manual: NVDA pass, oldest browsers, a real low-end PC. See the F20 Implementation notes.                         |
+| F21   | IMPLEMENTED — PILOT PENDING  | B23            | 2026-10-04 | 2026-10-05 | CI stack replaces previews and staging (owner decision); exam-safe service-worker updates; error and maintenance pages; post-deploy smoke; school-host links; user guides; F16/F18/F19 browser suites. Pending: the pilot exam (DoD 11). See the F21 Implementation notes. |

@@ -7,6 +7,7 @@ import type { Env } from '@atlas/config';
 import type { NotificationChannel } from '@atlas/notifications';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
+import { buildSchoolUrl } from '../../common/school-url.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
 import { AccessGateService } from '../platform/access-gate.service.js';
 import { PasswordService } from './password.service.js';
@@ -367,10 +368,7 @@ export class IdentityService {
       }),
     );
 
-    const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
-    // Placeholder route — F1 owns the actual reset-password screen this
-    // points at; only the query contract (a `token` param) is fixed here.
-    const resetUrl = `${webOrigin}/reset-password?token=${rawToken}`;
+    const resetUrl = await this.schoolResetUrl(schoolId, rawToken);
     await this.notifications.send({
       to: user.email,
       template: PASSWORD_RESET_TEMPLATE_NAME,
@@ -416,13 +414,30 @@ export class IdentityService {
       }),
     );
 
-    const webOrigin = this.config.get('WEB_ORIGIN', { infer: true });
-    const resetUrl = `${webOrigin}/reset-password?token=${rawToken}`;
+    const resetUrl = await this.schoolResetUrl(schoolId, rawToken);
     await this.notifications.send({
       to: user.email,
       template: PASSWORD_RESET_TEMPLATE_NAME,
       variables: { displayName: user.displayName, resetUrl },
     });
+  }
+
+  /**
+   * F21 (launch checklist 5.4): the link opens on the school's own host. On
+   * the bare `WEB_ORIGIN` the reset page has no tenant (ADR-0005), so the
+   * token could not be redeemed there.
+   */
+  private async schoolResetUrl(schoolId: string, rawToken: string): Promise<string> {
+    const school = await prisma.school.findUniqueOrThrow({
+      where: { id: schoolId },
+      select: { subdomain: true },
+    });
+    return buildSchoolUrl(
+      this.config.get('WEB_ORIGIN', { infer: true }),
+      this.config.get('PLATFORM_ROOT_DOMAIN', { infer: true }),
+      school.subdomain,
+      `/reset-password?token=${rawToken}`,
+    );
   }
 
   async confirmPasswordReset(

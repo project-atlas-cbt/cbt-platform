@@ -2,7 +2,8 @@
 
 **Status:** B23 (2026-10-04). The AWS side of the platform is code: `infra/cdk` (AWS CDK,
 TypeScript, owner decision). Staging and production are the same code with different sizes
-(`infra/cdk/src/config.ts`). The web tier is on Vercel and is F21's. Deploying is
+(`infra/cdk/src/config.ts`). In this design the web tier is on Vercel; F21 shipped
+the pilot's web tier on the VPS instead. Deploying is
 [deploy-and-rollback.md](deploy-and-rollback.md); migrations are [migrations.md](migrations.md).
 
 > **Pilot (2026-10-04):** the pilot runs on a single VPS instead

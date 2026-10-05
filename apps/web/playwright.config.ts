@@ -41,6 +41,8 @@ const apiEnv: Record<string, string> = {
 
 export default defineConfig({
   testDir: './e2e',
+  // e2e/stack runs against the CI stack instead (playwright.stack.config.ts).
+  testIgnore: 'stack/**',
   timeout: 90_000,
   // A hard ceiling for the whole run, so a hang fails with a report instead
   // of holding a CI runner for hours.

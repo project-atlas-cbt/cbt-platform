@@ -5,3 +5,4 @@ Caddyfile
 certs/
 backups/
 releases.log
+maintenance/ON

@@ -1,6 +1,7 @@
 import { defaultCache } from '@serwist/next/worker';
 import { CacheFirst, Serwist } from 'serwist';
 import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist';
+import { ACTIVATE_UPDATE_MESSAGE, hasOpenAttempt } from '@/lib/pwa/update-policy';
 
 // F0 scope: app-shell precaching only (doctrine defers exam-asset runtime
 // caching rules to F13's offline engine — this is deliberately the
@@ -13,8 +14,10 @@ import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist';
 declare const self: SerwistGlobalConfig & {
   __SW_MANIFEST: (PrecacheEntry | string)[] | undefined;
   location: Location;
+  skipWaiting(): Promise<void>;
   addEventListener(type: 'fetch', listener: (event: FetchEvent) => void): void;
   addEventListener(type: 'activate', listener: (event: ExtendableEvent) => void): void;
+  addEventListener(type: 'message', listener: (event: ExtendableMessageEvent) => void): void;
 };
 // Minimal shapes of the service-worker events used below (the `webworker`
 // lib that defines them conflicts with this project's `dom` lib — see above).
@@ -23,6 +26,9 @@ interface ExtendableEvent extends Event {
 }
 interface FetchEvent extends ExtendableEvent {
   readonly request: Request;
+}
+interface ExtendableMessageEvent extends ExtendableEvent {
+  readonly data: unknown;
 }
 
 // Read exactly once: Serwist's build-time injector textually replaces a
@@ -77,11 +83,27 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
   event.waitUntil(Promise.all(LEAKY_CACHES.map((name) => caches.delete(name))));
 });
 
+/**
+ * F21 (DoD 5): a new build's worker waits instead of taking over at once
+ * (`skipWaiting: false` below). Taking over deletes the previous build's
+ * precache, which a running exam page may still load chunks from. A page
+ * asks it to take over once that page is not an exam
+ * (components/pwa/service-worker-updates.tsx), and it agrees only if no
+ * open window is running an exam, which it learns from the exam pages'
+ * heartbeat marks (lib/pwa/update-policy.ts). The browser
+ * also activates it on its own once every tab of the site is closed.
+ */
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  const data = event.data as { type?: unknown } | null;
+  if (data?.type !== ACTIVATE_UPDATE_MESSAGE) return;
+  event.waitUntil(hasOpenAttempt().then((examOpen) => (examOpen ? undefined : self.skipWaiting())));
+});
+
 const serwist = new Serwist({
   // exactOptionalPropertyTypes: the manifest global can genuinely be
   // undefined outside a real Next build, so this is only included when set.
   ...(manifest ? { precacheEntries: manifest } : {}),
-  skipWaiting: true,
+  skipWaiting: false,
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: [

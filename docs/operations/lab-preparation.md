@@ -33,6 +33,20 @@ For the lab:
 - **Filtering**: allow `*.<root>`, `*.api.<root>` and the media bucket host over HTTPS (443). Do
   not intercept TLS for these hosts.
 
+## Updates
+
+The platform is updated on the server; the lab's computers fetch the new version on their own.
+
+- A computer with an exam open keeps the version it started with until every exam on it is
+  submitted, even if an update arrives mid-exam or the page is reloaded. Nothing in the exam
+  changes and no answers are lost (F21, `apps/web/e2e/deployment.spec.ts`).
+- On other pages a small notice says "A new version is ready" with a **Reload** button. Reloading
+  is safe, but nobody has to: the next visit uses the new version.
+- Updates are not scheduled during announced exam hours. If the platform is briefly unavailable
+  (an update, a fault), students see a short "The service is briefly unavailable" page that retries
+  by itself; a student already in an exam keeps answering and their answers are sent once it is
+  back.
+
 ## Practice sitting
 
 Run a 10-minute practice exam with a real class at least a few days before the first real one:
