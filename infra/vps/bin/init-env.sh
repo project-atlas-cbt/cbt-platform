@@ -29,7 +29,7 @@ DATABASE_AUDIT_READER_PASSWORD=$(secret)
 REDIS_PASSWORD=$(secret)
 MINIO_ROOT_PASSWORD=$(secret)
 MINIO_APP_PASSWORD=$(secret)
-# Demo-request emails from the marketing site (resend or brevo; see
+# Demo-request emails from the marketing site (zeptomail, resend or brevo; see
 # apps/marketing/README.md). Empty = the form shows an error instead.
 MARKETING_LEAD_EMAIL_PROVIDER=
 MARKETING_LEAD_EMAIL_API_KEY=

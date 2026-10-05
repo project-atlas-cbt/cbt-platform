@@ -102,6 +102,17 @@ describe('readMailSettings', () => {
     });
   });
 
+  it('accepts ZeptoMail', () => {
+    expect(
+      readMailSettings({
+        MARKETING_LEAD_EMAIL_PROVIDER: 'zeptomail',
+        MARKETING_LEAD_EMAIL_API_KEY: 'k',
+        MARKETING_LEAD_EMAIL_TO: 'info@example.com',
+        MARKETING_LEAD_EMAIL_FROM: 'no-reply@example.com',
+      })?.provider,
+    ).toBe('zeptomail');
+  });
+
   it('never accepts the log provider in production', () => {
     expect(
       readMailSettings({ MARKETING_LEAD_EMAIL_PROVIDER: 'log', NODE_ENV: 'production' }),
@@ -129,6 +140,27 @@ describe('sendLead', () => {
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
       to: ['sales@example.com'],
       reply_to: 'officer@example.com',
+    });
+  });
+
+  it('posts to ZeptoMail with the Send Mail token', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 201 }));
+    const zepto = { ...settings, provider: 'zeptomail' as const, apiKey: 'tok' };
+    await expect(sendLead(lead, zepto, 'ExamKeep', fetchImpl)).resolves.toBe(true);
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe('https://api.zeptomail.com/v1.1/email');
+    expect((init as RequestInit).headers).toMatchObject({
+      Authorization: 'Zoho-enczapikey tok',
+    });
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
+      from: { address: 'site@example.com' },
+      to: [{ email_address: { address: 'sales@example.com' } }],
+      reply_to: [{ address: 'officer@example.com' }],
+    });
+    // A token pasted with its prefix, as ZeptoMail's API tab shows it, is not doubled.
+    await sendLead(lead, { ...zepto, apiKey: 'Zoho-enczapikey tok' }, 'ExamKeep', fetchImpl);
+    expect((fetchImpl.mock.calls[1]![1] as RequestInit).headers).toMatchObject({
+      Authorization: 'Zoho-enczapikey tok',
     });
   });
 
