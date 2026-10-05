@@ -20,7 +20,7 @@ if [ "$(id -u)" = 0 ]; then bin/internal-tls.sh; else sudo "$PWD/bin/internal-tl
 bin/render-caddyfile.sh
 
 echo "== building $RELEASE"
-docker compose build web api ops
+docker compose build marketing web api ops
 
 echo "== data services"
 docker compose up -d --wait postgres redis minio
@@ -45,9 +45,9 @@ echo "== migrations"
 docker compose --profile ops run --rm ops
 
 echo "== application"
-if ! docker compose up -d --wait --wait-timeout 180 --remove-orphans caddy web api worker; then
+if ! docker compose up -d --wait --wait-timeout 180 --remove-orphans caddy marketing web api worker; then
   docker compose ps -a
-  docker compose logs --tail 80 api worker web
+  docker compose logs --tail 80 api worker web marketing
   echo "application did not become healthy for $RELEASE. Roll back with: bin/deploy.sh $(tail -n 1 releases.log 2>/dev/null || echo '<previous ref>')" >&2
   exit 1
 fi
@@ -72,7 +72,7 @@ esac
 echo "== post-deploy smoke"
 first_school=${SCHOOLS%%,*}
 if ! docker compose --profile ops run --rm --no-deps \
-  -e SMOKE_ROOT="$ROOT_DOMAIN" -e SMOKE_SCHOOL="${first_school}" -e SMOKE_WEB=true \
+  -e SMOKE_ROOT="$ROOT_DOMAIN" -e SMOKE_SCHOOL="${first_school}" -e SMOKE_WEB=true -e SMOKE_MARKETING=true \
   -e SMOKE_API=https://caddy/v1 -e SMOKE_WEB_URL=https://caddy \
   ops pnpm --filter @atlas/load smoke; then
   echo "smoke FAILED for $RELEASE; it is running. Roll back with: bin/deploy.sh $(tail -n 1 releases.log 2>/dev/null || echo '<previous ref>')" >&2

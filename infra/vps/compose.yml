@@ -1,6 +1,6 @@
 # Single-server deployment for the pilot (docs/operations/vps-pilot.md,
 # ADR-0032 amendment 2026-10-04). Everything runs on one VPS: Caddy (TLS),
-# web, API, worker, PostgreSQL, Redis and MinIO. Only Caddy publishes ports.
+# the marketing site, web, API, worker, PostgreSQL, Redis and MinIO. Only Caddy publishes ports.
 #
 # Run through infra/vps/bin/deploy.sh, never by hand: it renders the
 # Caddyfile, builds the images, migrates, then starts the services.
@@ -89,6 +89,29 @@ services:
     restart: unless-stopped
     environment:
       PRODUCT_NAME: ${PRODUCT_NAME}
+    networks: [internal]
+
+  # The public marketing site on <root> and www.<root> (ADR-0034). Fully
+  # separate from the platform: no database, API or cookies. Its business
+  # details are baked in from apps/marketing/.env.production; only the
+  # demo-request email settings are read at run time.
+  marketing:
+    image: atlas-marketing:${RELEASE:-unset}
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.prod
+      target: marketing
+      args:
+        PRODUCT_NAME: ${PRODUCT_NAME}
+        PLATFORM_ROOT_DOMAIN: ${ROOT_DOMAIN}
+    restart: unless-stopped
+    environment:
+      PRODUCT_NAME: ${PRODUCT_NAME}
+      PLATFORM_ROOT_DOMAIN: ${ROOT_DOMAIN}
+      MARKETING_LEAD_EMAIL_PROVIDER: ${MARKETING_LEAD_EMAIL_PROVIDER:-}
+      MARKETING_LEAD_EMAIL_API_KEY: ${MARKETING_LEAD_EMAIL_API_KEY:-}
+      MARKETING_LEAD_EMAIL_TO: ${MARKETING_LEAD_EMAIL_TO:-}
+      MARKETING_LEAD_EMAIL_FROM: ${MARKETING_LEAD_EMAIL_FROM:-}
     networks: [internal]
 
   api:

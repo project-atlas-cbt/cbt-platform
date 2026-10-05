@@ -29,6 +29,12 @@ DATABASE_AUDIT_READER_PASSWORD=$(secret)
 REDIS_PASSWORD=$(secret)
 MINIO_ROOT_PASSWORD=$(secret)
 MINIO_APP_PASSWORD=$(secret)
+# Demo-request emails from the marketing site (resend or brevo; see
+# apps/marketing/README.md). Empty = the form shows an error instead.
+MARKETING_LEAD_EMAIL_PROVIDER=
+MARKETING_LEAD_EMAIL_API_KEY=
+MARKETING_LEAD_EMAIL_TO=
+MARKETING_LEAD_EMAIL_FROM=
 # Off-site backups (S3-compatible, e.g. Backblaze B2). Empty = local only.
 BACKUP_S3_ENDPOINT=
 BACKUP_S3_BUCKET=

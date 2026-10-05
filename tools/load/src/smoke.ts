@@ -19,6 +19,8 @@ import https from 'node:https';
  *   (optional; without it only the unknown-school path is checked).
  * SMOKE_WEB: `true` to check the web tier too (F21: its critical pages, the
  *   404 page, service-worker freshness and static asset caching).
+ * SMOKE_MARKETING: `true` (with SMOKE_WEB) when the root domain serves the
+ *   marketing site and www redirects to it, as on the pilot VPS (ADR-0034).
  * SMOKE_WEB_URL: `https://{host}` by default; a fixed URL sends every web
  *   request there with that Host (like SMOKE_API).
  * SMOKE_PRODUCTION: `false` to skip production-only header checks (local).
@@ -165,7 +167,9 @@ await check('CORS admits a school origin with credentials, refuses a foreign one
 if (checkWeb) {
   // F21 (DoD 10): every page a school or operator opens first, the service
   // worker and its update path, the 404 page and a hashed static asset.
-  const webHost = school ? `${school}.${root}` : root;
+  // The root domain is the marketing site (ADR-0034), so without a school
+  // the platform pages are checked on the admin host.
+  const webHost = school ? `${school}.${root}` : `admin.${root}`;
   const page = (host: string, path: string) =>
     request(new URL(`${webSpec.replace('{host}', host)}${path}`), host, 'GET', {
       accept: 'text/html',
@@ -237,6 +241,20 @@ if (checkWeb) {
     const map = await page(webHost, `${asset}.map`);
     expect(map.status === 404, `HTTP ${map.status} for ${asset}.map (source maps must not ship)`);
   });
+
+  if (process.env.SMOKE_MARKETING === 'true') {
+    await check('the root domain serves the marketing site, www redirects to it', async () => {
+      const home = await page(root, '/');
+      expect(home.status === 200, `HTTP ${home.status}`);
+      expect(home.body.includes('/request-a-demo'), 'not the marketing home page');
+      const www = await page(`www.${root}`, '/pricing');
+      expect(www.status === 301 || www.status === 308, `HTTP ${www.status}`);
+      expect(
+        www.headers.location === `https://${root}/pricing`,
+        `location: ${www.headers.location}`,
+      );
+    });
+  }
 
   await check('web manifest is served', async () => {
     const r = await page(webHost, '/manifest.webmanifest');

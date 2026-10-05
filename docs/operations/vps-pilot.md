@@ -11,14 +11,16 @@ the server.
 Everything is on one machine, in Docker Compose (`infra/vps/compose.yml`). Only Caddy publishes
 ports (80, 443).
 
-| Host                                   | Service                        |
-| -------------------------------------- | ------------------------------ |
-| `<root>`, `www.<root>`, `admin.<root>` | web (`next start`)             |
-| `<school>.<root>`                      | web, for each school           |
-| `api.<root>`, `admin.api.<root>`       | API                            |
-| `<school>.api.<root>`                  | API, resolving that school     |
-| `media.<root>`                         | MinIO (S3 API), presigned only |
-| (no host)                              | worker, PostgreSQL 18, Redis 8 |
+| Host                             | Service                        |
+| -------------------------------- | ------------------------------ |
+| `<root>`                         | marketing site (ADR-0034)      |
+| `www.<root>`                     | redirect to `<root>`           |
+| `admin.<root>`                   | web (`next start`)             |
+| `<school>.<root>`                | web, for each school           |
+| `api.<root>`, `admin.api.<root>` | API                            |
+| `<school>.api.<root>`            | API, resolving that school     |
+| `media.<root>`                   | MinIO (S3 API), presigned only |
+| (no host)                        | worker, PostgreSQL 18, Redis 8 |
 
 The tenant still comes from the host name (ADR-0005), the API keeps its own hosts (ADR-0022
 amendment), and cookies are same-site under `<root>`. The web app calls `<school>.api.<root>`
@@ -62,7 +64,9 @@ What stays the same:
    firewall, turns on unattended security updates, adds swap, creates the `atlas` user with
    key-only SSH, and installs the nightly backup cron entry (01:30 UTC).
 
-2. **DNS.** Point these A records at the server's IP: `<root>`, `*.<root>` and `*.api.<root>`.
+2. **DNS.** Point these A records at the server's IP: `<root>`, `www.<root>`, `*.<root>` and
+   `*.api.<root>`. With Cloudflare, every one must be **DNS only** (grey cloud): Caddy answers the
+   HTTP-01 challenge itself.
    Caddy obtains one certificate per host from Let's Encrypt over HTTP, so no DNS API access is
    needed, but every host must resolve before its first request.
 
@@ -78,11 +82,14 @@ What stays the same:
    secrets), each with fresh random secrets and mode 600. Then fill in:
    - `.env`: `SCHOOLS` (comma-separated school labels), `ACME_EMAIL`, and the `BACKUP_S3_*` values.
      `SUPPORT_EMAIL` and `SUPPORT_WHATSAPP` set the contacts on staff Help screens (ADR-0035); they
-     are built into the web image, so changing them needs a rebuild.
+     are built into the web image, so changing them needs a rebuild. `MARKETING_LEAD_EMAIL_*`
+     send the marketing site's demo requests (`apps/marketing/README.md`); left empty, the form
+     says it cannot send. The site's contact details and price are built in from
+     `apps/marketing/.env.production`.
    - `app.env`: `OPS_ALERT_EMAILS` and the `SMTP_*` values from the email provider. The sender
      domain must be verified with that provider (SPF and DKIM records).
 
-4. **Deploy:** `bin/deploy.sh`. It builds the images, starts PostgreSQL, Redis and MinIO,
+4. **Deploy:** `bin/deploy.sh`. It builds the images (marketing site included), starts PostgreSQL, Redis and MinIO,
    creates the media bucket (versioned) and the application's storage user, runs migrations, starts
    Caddy, web, API and worker, and fails unless `/v1/health/ready` reports every dependency up.
 
@@ -107,7 +114,8 @@ and run `bin/deploy.sh`. Caddy fetches the new certificates on start.
 
 - **Deploy:** `bin/deploy.sh <ref>` checks out a tag or commit, then deploys it. After the
   readiness check it runs the post-deploy smoke (`tools/load/src/smoke.ts` through the `ops`
-  service, against Caddy): API readiness and host shapes, then every critical web route, the 404
+  service, against Caddy): API readiness and host shapes, the marketing site on `<root>` and the
+  `www` redirect, then every critical web route, the 404
   page, the nonce CSP, the service worker's caching headers, immutable hashed assets and no
   published source maps. A failed smoke prints the rollback command and stops; only a passing
   release is appended to `releases.log`.
@@ -118,7 +126,8 @@ and run `bin/deploy.sh`. Caddy fetches the new certificates on start.
 
 ## Maintenance page
 
-`bin/maintenance.sh on` makes Caddy answer every school and admin page with a static "briefly
+`bin/maintenance.sh on` makes Caddy answer every school and admin page (not the marketing site,
+which stays up) with a static "briefly
 unavailable" page (503, `Retry-After`, refreshes itself every minute) and every API request with
 the canonical error envelope (`SERVICE_UNAVAILABLE`, `retryable: true`), which the exam client
 already retries. `bin/maintenance.sh off` lifts it; `status` reports it. Caddy serves the same

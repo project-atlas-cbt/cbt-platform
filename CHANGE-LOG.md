@@ -2,6 +2,25 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-05 — Marketing site hosted on the pilot VPS (ADR-0034 amendment)
+
+**Owner decision:** the marketing site runs on the pilot server, not Vercel (Vercel's free plan is
+non-commercial; the server has room).
+
+- `infra/vps`: a `marketing` service (new `marketing` target in `Dockerfile.prod`), Caddy routes
+  `<root>` to it and redirects `www.<root>` to `<root>`; `admin.<root>` and school hosts stay on
+  `web`. Platform maintenance mode leaves the marketing site up. `init-env.sh` adds the
+  `MARKETING_LEAD_EMAIL_*` settings; `deploy.sh` builds and starts the service.
+- Post-deploy smoke (`SMOKE_MARKETING=true` from `deploy.sh`) checks the apex and the redirect; with
+  no school yet it checks platform pages on `admin.<root>`. The CI stack's browser checks do the
+  same.
+- Docs: `vps-pilot.md` (hosts, DNS records, settings), ADR-0034, `apps/marketing/README.md`.
+
+**Tested:** the rendered Caddyfile adapted and served by Caddy 2.10.2 locally (apex to marketing,
+admin and wildcard hosts to web, `www` 301 to the apex); marketing production build; smoke and
+stack-spec typecheck and lint. The image build and the CI stack run in CI (`pilot-stack`), which is
+blocked by Actions billing.
+
 ### 2026-10-05 — In-app Help centre for staff (ADR-0035)
 
 **Owner decisions:** role-tailored help docs first, no AI assistant for now (students never get
