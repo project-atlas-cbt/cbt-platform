@@ -17,6 +17,7 @@ import {
 import { useReviewQueue } from '@/lib/question-review/queries';
 import { formatQueueAge } from '@/lib/question-review/queue-order';
 import { stripHtmlToText } from '@/lib/questions/sanitize-html';
+import { HelpLink } from '@/components/help/help-link';
 import { formatDate } from '@/lib/format/date';
 
 /**
@@ -58,6 +59,7 @@ export function ReviewQueue() {
         <p className="text-sm text-text-secondary">
           {totalPending} question{totalPending === 1 ? '' : 's'} awaiting review
         </p>
+        <HelpLink context="questionReview" className="mt-1" />
       </div>
 
       {subjects.map((group) => (

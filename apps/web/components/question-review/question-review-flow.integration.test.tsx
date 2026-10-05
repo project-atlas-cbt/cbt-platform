@@ -7,7 +7,7 @@ import { ReviewQueue } from './review-queue-screen';
 import { ReviewWorkspace } from './review-workspace-screen';
 
 const push = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/', useRouter: () => ({ push }) }));
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');

@@ -21,6 +21,7 @@ import { useCloseSession, useCreateRolloverPlan } from '@/lib/academics/mutation
 import { useHasPermission } from '@/lib/nav';
 import { ConfirmActionDialog } from '../confirm-action-dialog';
 import { RolloverStepper } from './rollover-stepper';
+import { HelpLink } from '@/components/help/help-link';
 
 interface CloseReadinessScreenProps {
   sessionId: string;
@@ -119,6 +120,7 @@ export function CloseReadinessScreen({ sessionId, basePath }: CloseReadinessScre
               <Badge status={isCurrent ? 'info' : isClosed ? 'warning' : 'neutral'}>
                 {session.status}
               </Badge>
+              <HelpLink context="rollover" />
             </div>
             <p className="text-sm text-text-secondary mt-1">
               {session.startDate} – {session.endDate}

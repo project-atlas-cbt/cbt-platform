@@ -2,6 +2,49 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-05 — In-app Help centre for staff (ADR-0035)
+
+**Owner decisions:** role-tailored help docs first, no AI assistant for now (students never get
+one); support contact shows both email and WhatsApp; guides are screen only; no usage tracking or
+Software Admin support view; no student Help page; the in-app guides and F21's `docs/user-guides/`
+are both maintained.
+
+**Shipped**
+
+- A **Help** item at the end of every staff workspace's navigation (School Admin, Moderator, HOD,
+  Teacher; amends `04 §68`). The Help screen lists task guides grouped by area, searchable in the
+  browser, with a "Still stuck?" block.
+- 79 guides across the four roles (school admin 27, moderator 22, HOD 14, teacher 16; shared ones counted in each role) (`apps/web/lib/help/guides/`), written against the current
+  screens: each names the real buttons, lists the permissions it needs, and links to its screen.
+  Guides show only when the user holds one of those permissions; shared exam-day guides read
+  "Exam Control" or "Exam Operations" by role.
+- Small "Help" links on the exam builder, question editor, imports, question review, Control
+  Center, makeup access, results and rollover screens (`CONTEXTUAL_GUIDES`).
+- Config: `NEXT_PUBLIC_SUPPORT_EMAIL` / `NEXT_PUBLIC_SUPPORT_WHATSAPP` (`.env.example`,
+  `next.config.ts`, `Dockerfile.prod`); on the VPS `SUPPORT_EMAIL` / `SUPPORT_WHATSAPP` in
+  `infra/vps/.env` (`init-env.sh`, `compose.yml`, `vps-pilot.md`).
+- Docs: ADR-0035, decisions README, `04 §68` note, F21 roadmap note, school-onboarding hand-over.
+
+**Tested:** guide integrity tests (every linked route exists in the app tree, every required
+permission is granted to that role, related guides exist, no literal product name, contextual
+links resolve, each role's Help pages import only its own guides); filter, search and contact
+unit tests; Help screen, guide, contact and link component tests. Web typecheck, lint and the full
+web suite (1,052 tests) pass. The F20 axe scan now covers each role's Help screen and one guide
+and passes against production builds; screenshots reviewed at desktop and phone width.
+
+**Candidate / deferred (found while writing guides, not changed):**
+
+- Grading bands cannot be set in the UI (School Settings → Results says it waits on B15), though
+  `school-onboarding.md` step 5 says to set the grading scale.
+- `/exam-operations/makeup-access` had no navigation entry; the makeup guide now links to it.
+  Teachers and HODs have no way back to a completed exam's makeup screen once it leaves the Exam
+  Control list.
+- The teacher's question analytics page (`/teacher/results/[examId]/analytics`) has no link to it.
+- The Reports export dialog asks for raw IDs (exam, subject, class); the guides send people to the
+  Results page's **Export CSV** instead where they can.
+- The Dashboard nav item shows as active on every page of a workspace (pre-existing).
+- The staff shell is not laid out for phone width (pre-existing; lab hardware is the target).
+
 ### 2026-10-05 — Showcase polish, real screenshots and teaser
 
 Owner request: polish the screens the marketing site shows, visually only, then replace its

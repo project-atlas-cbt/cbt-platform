@@ -35,6 +35,9 @@ const nextConfig: NextConfig = {
     // Sentry never loads.
     NEXT_PUBLIC_MEDIA_ORIGIN: process.env.NEXT_PUBLIC_MEDIA_ORIGIN,
     NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+    // ADR-0035 — support contacts on the staff Help screens; either may be unset.
+    NEXT_PUBLIC_SUPPORT_EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
+    NEXT_PUBLIC_SUPPORT_WHATSAPP: process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP,
   },
   // @atlas/contracts and @atlas/validation (workspace packages this app
   // imports) build to real dist/*.js — Turbopack cannot remap a

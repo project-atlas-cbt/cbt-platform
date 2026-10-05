@@ -20,6 +20,9 @@ SCHOOLS=
 # Email for Let's Encrypt expiry notices.
 ACME_EMAIL=
 SENTRY_DSN=
+# Support contacts on staff Help screens (ADR-0035). Empty = not shown.
+SUPPORT_EMAIL=
+SUPPORT_WHATSAPP=
 POSTGRES_PASSWORD=$(secret)
 DATABASE_APP_PASSWORD=$(secret)
 DATABASE_AUDIT_READER_PASSWORD=$(secret)

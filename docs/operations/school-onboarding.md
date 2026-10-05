@@ -70,6 +70,8 @@ of working passwords for a whole class, and the school must treat it that way:
 
 - The user guides for each role: [docs/user-guides](../user-guides/README.md) (teachers,
   invigilators, students).
+- The **Help** screen in each staff workspace (ADR-0035): task guides for that role and the support
+  contact. Show it during training, so staff know where to look once they forget a step.
 - The invigilator card: [lab-preparation.md §On the day](lab-preparation.md#on-the-day).
 - The support address and the escalation promise for exam hours
   ([on-call-and-incident-response.md](on-call-and-incident-response.md)).

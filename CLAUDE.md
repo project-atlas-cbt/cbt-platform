@@ -289,6 +289,9 @@ Engineering facts every session needs:
   `deploy.yml` runs only by hand. Never run the golden path (which writes test data) against
   production. Migrations must be expand-only (`pnpm lint:migrations`,
   `docs/operations/migrations.md`). Schools reach the API at `<school>.api.<root>`.
+- Help (ADR-0035): staff task guides live in `apps/web/lib/help/guides/` and in
+  `docs/user-guides/`; a change to a screen a guide names updates both. No AI assistant for staff
+  without a new owner decision, and never one for students.
 - F20 web: every page carries a per-request nonce CSP (`apps/web/proxy.ts`) — no inline script, and
   new external origins must be added in `lib/security/csp.ts`. API requests must never be cached by
   the service worker (`app/sw.ts` bypasses them). Build the web app with `NEXT_PUBLIC_MEDIA_ORIGIN`

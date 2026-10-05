@@ -7,6 +7,7 @@ import { Lock } from 'lucide-react';
 import type { ApiComponents } from '@atlas/contracts';
 import { cn } from '@/lib/utils';
 import { examStepPath, type ExamWizardStep } from '@/lib/exams/navigation';
+import { HelpLink } from '@/components/help/help-link';
 
 type Exam = ApiComponents['schemas']['ExamResponseDto'];
 
@@ -43,31 +44,37 @@ export function ExamWizardShell({
 
   return (
     <div className="space-y-6">
-      <nav aria-label="Exam builder steps" className="flex flex-wrap gap-1">
-        {STEPS.map(({ step, label }) => {
-          const href = examId ? examStepPath(basePath, examId, step) : undefined;
-          const isActive = href ? pathname === href : false;
-          const disabled = !href;
-          return disabled ? (
-            <span key={step} className="rounded-md px-3 py-1.5 text-sm font-medium text-text-muted">
-              {label}
-            </span>
-          ) : (
-            <Link
-              key={step}
-              href={href}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-brand-primary text-brand-primary-foreground'
-                  : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
-              )}
-            >
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav aria-label="Exam builder steps" className="flex flex-wrap gap-1">
+          {STEPS.map(({ step, label }) => {
+            const href = examId ? examStepPath(basePath, examId, step) : undefined;
+            const isActive = href ? pathname === href : false;
+            const disabled = !href;
+            return disabled ? (
+              <span
+                key={step}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-text-muted"
+              >
+                {label}
+              </span>
+            ) : (
+              <Link
+                key={step}
+                href={href}
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-brand-primary text-brand-primary-foreground'
+                    : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
+                )}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <HelpLink context="examBuilder" />
+      </div>
 
       {readOnly ? (
         <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-subtle px-3 py-2 text-sm text-warning-subtle-foreground">
