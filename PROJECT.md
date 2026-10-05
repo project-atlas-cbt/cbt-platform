@@ -1,17 +1,19 @@
 Project Name:
-Project Atlas - (Subjected to change any time. The real project name is not yet decided/finalized, so all project name must not be hardcoded anywhere in the codebase, but fetched from environmental variable.)
+ExamKeep (decided 2026-10-04). "Project Atlas" was the temporary codename and survives only in internal identifiers (`@atlas/*` packages, `atlas_*` database roles, the repository name), which stay as they are.
+
+The product name is never hardcoded anywhere in the codebase. It is read from the `PRODUCT_NAME` environment variable (`NEXT_PUBLIC_PRODUCT_NAME` in the browser), so a lint rule rejects a literal product name in code.
 
 Commercial Name:
-TBD
+ExamKeep
 
 Owner:
-Company
+MushakTech Ventures
 
 Repository:
-github.com/company/cbt-platform
+github.com/project-atlas-cbt/cbt-platform
 
 Domain:
-TBD
+examkeep.com (marketing site on the root domain, one subdomain per school)
 
 Purpose:
 Multi-tenant CBT platform for secondary schools in Nigeria.

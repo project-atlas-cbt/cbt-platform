@@ -94,7 +94,7 @@ describe('loadEnv — B20 production hardening', () => {
     MEDIA_PRECACHE_SECRET: strong('Wn5r'),
     COOKIE_DOMAIN: 'school.example.ng',
     NOTIFICATION_TRANSPORT: 'ses',
-    SES_FROM_ADDRESS: 'Atlas <no-reply@example.ng>',
+    SES_FROM_ADDRESS: 'ExamKeep <no-reply@example.ng>',
   };
 
   it('accepts a production API/worker task that is never given the schema owner URL (B23)', () => {
@@ -138,7 +138,7 @@ describe('loadEnv — B20 production hardening', () => {
     SMTP_HOST: 'smtp-relay.example.com',
     SMTP_USER: 'relay-user',
     SMTP_PASSWORD: 'relay-password',
-    SMTP_FROM_ADDRESS: 'Atlas <no-reply@example.ng>',
+    SMTP_FROM_ADDRESS: 'ExamKeep <no-reply@example.ng>',
   };
 
   it('accepts production email over SMTP (VPS pilot, ADR-0019 amendment)', () => {

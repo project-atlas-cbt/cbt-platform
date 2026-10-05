@@ -1,5 +1,5 @@
 #!/bin/bash
-# Claude Code cloud (web) session bootstrap for Project Atlas.
+# Claude Code cloud (web) session bootstrap for ExamKeep.
 #
 # Docker-based local dev (README.md's "Quick start", docker-compose.yml) is
 # untouched and remains the primary, documented workflow — this script only

@@ -1,4 +1,4 @@
-// Project Atlas — Prisma schema.
+// ExamKeep — Prisma schema.
 //
 // B0 delivered the tenancy CONVENTION (School + the TenancyProbe scaffolding
 // that proved it). B1 delivers the first real domain — Identity & Auth

@@ -21,7 +21,7 @@ describe('SesNotificationChannel (B23, ADR-0019)', () => {
     );
     const channel = new SesNotificationChannel(
       registry(),
-      'Atlas <no-reply@example.ng>',
+      'ExamKeep <no-reply@example.ng>',
       sendEmail,
     );
     await channel.send({
@@ -30,7 +30,7 @@ describe('SesNotificationChannel (B23, ADR-0019)', () => {
       variables: { school: 'Kings', link: 'https://kings.example.ng/r/abc' },
     });
     expect(sendEmail).toHaveBeenCalledWith({
-      FromEmailAddress: 'Atlas <no-reply@example.ng>',
+      FromEmailAddress: 'ExamKeep <no-reply@example.ng>',
       Destination: { ToAddresses: ['admin@school.ng'] },
       Content: {
         Simple: {

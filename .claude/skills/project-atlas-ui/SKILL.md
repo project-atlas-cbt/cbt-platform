@@ -1,15 +1,15 @@
 ---
 name: project-atlas-ui
-description: Project Atlas's own UI/UX doctrine — product character, per-role design priorities, branding/token architecture, and anti-patterns for this CBT platform. Use for any frontend/UI work in this repository (apps/web), alongside the frontend-design and web-design-guidelines skills. Specializes those generic skills for a serious school examination product; does not replace them.
+description: ExamKeep's own UI/UX doctrine — product character, per-role design priorities, branding/token architecture, and anti-patterns for this CBT platform. Use for any frontend/UI work in this repository (apps/web), alongside the frontend-design and web-design-guidelines skills. Specializes those generic skills for a serious school examination product; does not replace them.
 metadata:
   type: project
 ---
 
-# Project Atlas UI/UX Doctrine
+# ExamKeep UI/UX Doctrine
 
 This skill specializes the generic **frontend-design** skill (aesthetic direction, typography,
-motion) and **web-design-guidelines** skill (accessibility/UX compliance review) for Project
-Atlas specifically. Use all three together:
+motion) and **web-design-guidelines** skill (accessibility/UX compliance review) for ExamKeep
+specifically. Use all three together:
 
 1. **frontend-design** — how to make deliberate, non-templated visual choices.
 2. **web-design-guidelines** — fetch-and-check compliance against the Web Interface Guidelines.
@@ -24,7 +24,7 @@ rationale. This file is the operational instruction set; that file is the refere
 
 ## 1. Product character
 
-Project Atlas is a **commercial, multi-tenant school examination platform** — not an LMS, not a
+ExamKeep is a **commercial, multi-tenant school examination platform** — not an LMS, not a
 generic SaaS dashboard, not a startup marketing site. Every screen should read as:
 
 - **Professional** — a school's paying administrators and inspectors will judge the institution
@@ -43,7 +43,7 @@ generic SaaS dashboard, not a startup marketing site. Every screen should read a
   _discipline_, not ornamentation.
 
 Apply `frontend-design`'s instruction to "take one real aesthetic risk you can justify" — but the
-justified risk in Project Atlas is almost never decorative. It shows up as: a genuinely well-
+justified risk in ExamKeep is almost never decorative. It shows up as: a genuinely well-
 designed Exam Control Center that makes 40 students' live status legible at a glance; a Question
 Review queue fast enough to process 27 questions without friction; an exam runtime so quiet it
 disappears and lets the student focus. **Spend the boldness on operational clarity, not visual
@@ -53,7 +53,7 @@ flourish.**
 
 ## 2. Explicitly avoid generic AI aesthetics
 
-Project Atlas must not look like a generated admin template. Do not default to:
+ExamKeep must not look like a generated admin template. Do not default to:
 
 - Generic AI dashboard layouts (metric-card grid + sidebar + line chart, repeated on every screen).
 - Rounded cards on every surface, everywhere, as the default container.
@@ -168,7 +168,7 @@ teacher standing in a lab with 40 students and 20 computers. Design priorities, 
 
 ## 7. Design-system principles
 
-These are defaults for Project Atlas; deviate only with a stated reason.
+These are defaults for ExamKeep; deviate only with a stated reason.
 
 **Typography.** One type family for UI (a workhorse grotesk/humanist sans with excellent
 legibility at small sizes and strong number/tabular-figure support — exam timers, scores, and
@@ -339,7 +339,7 @@ token-driven, per-tenant-branded design system needs — full control over how e
 consumes the semantic tokens in §9.
 
 > **Component library = implementation foundation.**
-> **Project Atlas design doctrine (this document) = visual identity and UX judgment.**
+> **ExamKeep design doctrine (this document) = visual identity and UX judgment.**
 
 Concretely: use shadcn/ui primitives (button, dialog, table, form, etc.) as the accessible,
 behaviorally-correct base, then restyle them to consume this doctrine's tokens and satisfy the

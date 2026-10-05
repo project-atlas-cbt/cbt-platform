@@ -52,7 +52,7 @@ const envObject = z.object({
   WEB_ORIGIN: z.url(),
 
   // ADR-0005 / ADR-0022: the registrable parent domain school subdomains,
-  // the API, and the platform-admin host all sit under — e.g. "atlas.app"
+  // the API, and the platform-admin host all sit under — e.g. "examkeep.com"
   // in production, "localtest.me" for local dev (a public domain whose
   // wildcard record already resolves every subdomain to 127.0.0.1, so
   // subdomain-aware tenant resolution works in a browser with no local DNS
@@ -66,7 +66,7 @@ const envObject = z.object({
   // cookie — correct for local dev, where the browser never crosses
   // subdomains for cookie purposes even when PLATFORM_ROOT_DOMAIN is set
   // for tenant-resolution testing. Set to the shared parent domain (e.g.
-  // ".atlas.app") once B23 provisions production DNS.
+  // ".examkeep.com") once B23 provisions production DNS.
   COOKIE_DOMAIN: z.string().optional(),
 
   DEFAULT_SCHOOL_TIMEZONE: z.string().min(1).default('Africa/Lagos'),
@@ -299,7 +299,7 @@ const envObject = z.object({
    * requires `ses` or `smtp`. */
   NOTIFICATION_TRANSPORT: z.enum(['console', 'ses', 'smtp']).default('console'),
   /** Sender address for SES, on the domain's verified SES identity
-   * (e.g. `"Atlas" <no-reply@example.ng>`). */
+   * (e.g. `"ExamKeep" <no-reply@example.ng>`). */
   SES_FROM_ADDRESS: z.string().optional().default(''),
   /** Region of the SES identity; defaults to the deployment's own region. */
   SES_REGION: z.string().optional().default(''),

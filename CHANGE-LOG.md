@@ -2,6 +2,40 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-05 — Product renamed ExamKeep in what users see and in the project docs
+
+**Owner decision (2026-10-04):** the commercial name is **ExamKeep** (examkeep.com); "Project Atlas"
+was the temporary codename. The name still comes only from `PRODUCT_NAME`, never from a literal.
+
+- **Users and visitors:** pages, the PWA manifest, printed reports, Help, platform emails, the MFA
+  issuer, the OpenAPI title and the marketing site already read `PRODUCT_NAME`. The last literal on
+  screen, the dev-only component workbench heading, now reads it too. The committed
+  `apps/api/openapi.json` is regenerated (title "ExamKeep API"). The Software Admin invitation now
+  reads "A Software Admin account on {product} has been created", so it reads right for any name.
+- **Defaults:** `PRODUCT_NAME` is `ExamKeep` in `.env.example`, every CI job, the DR drill and the
+  CI stack fallback (`infra/vps/ci/stack.sh`). Example domains and senders use examkeep.com /
+  ExamKeep.
+- **Guard:** the "no hardcoded product name" lint rule (`scripts/eslint-product-name.mjs`) now
+  rejects "ExamKeep" as well as "Project Atlas", in strings, template literals and JSX text, and
+  now also covers `apps/web` and `apps/marketing`, which it did not before (that is how the
+  workbench literal slipped through). Domains and logo file names (`examkeep.com`,
+  `examkeep-horizontal-*.svg`) stay allowed; test files are exempt so they can set the real name.
+- **Docs:** README, PROJECT.md (name, owner, repository, domain), CLAUDE.md, AGENTS.md, the UI/UX
+  principles, the `project-atlas-ui` skill text and the roadmap titles say ExamKeep, with one line
+  on the old codename. History is untouched: the audit, earlier CHANGE-LOG entries, ADRs and phase
+  IDs stay as written.
+- **Not renamed (internal):** `@atlas/*` packages, `atlas_*` database roles, buckets, the Compose
+  project and server user, image and CDK stack names, cookie, queue, metric and browser-storage
+  names, env var names, the `project-atlas-ui` skill name and the repository. Renaming them would
+  break deploys, grants or exam data cached on lab machines, with nothing visible to gain.
+
+**Tested (locally; GitHub Actions is blocked by billing):** `pnpm lint`, `pnpm typecheck`,
+`pnpm test` (all 21 tasks) and `prettier --check` with `PRODUCT_NAME=ExamKeep`; new unit tests for
+the platform email subjects and bodies, the OpenAPI title and the web manifest; the lint rule
+checked against a probe file (literal, template and JSX hits fail; domains and logo paths pass). A
+production web build with `PRODUCT_NAME=ExamKeep` served `<title>ExamKeep</title>` and an ExamKeep
+manifest, and no "Project Atlas" appears anywhere in its output.
+
 ### 2026-10-05 — Marketing site hosted on the pilot VPS (ADR-0034 amendment)
 
 **Owner decision:** the marketing site runs on the pilot server, not Vercel (Vercel's free plan is

@@ -272,7 +272,7 @@ Do not report a feature as complete if known gaps remain.
 
 ## 18. Frontend / UI Work
 
-Project Atlas has a project-specific design doctrine. It lives in two places:
+ExamKeep has a project-specific design doctrine. It lives in two places:
 
 - [`docs/design/ui-ux-principles.md`](docs/design/ui-ux-principles.md) — the human-readable
   design specification and rationale.
@@ -288,7 +288,7 @@ Do not duplicate that doctrine here — read it, don't restate it.
 2. Read the relevant roadmap phase (`docs/roadmaps/frontend-roadmap.md`).
 3. Consult the `project-atlas-ui` skill for this screen's role and context (it defines different
    priorities for CBT runtime, Exam Control Center, HOD review, and each administrative role).
-4. Use the approved component/design system (shadcn/ui restyled to Project Atlas's tokens) rather
+4. Use the approved component/design system (shadcn/ui restyled to ExamKeep's tokens) rather
    than inventing new primitives.
 5. Make deliberate visual decisions rather than defaulting to generic AI-dashboard templates —
    see the doctrine's anti-pattern list before assuming a layout.
@@ -300,7 +300,7 @@ Do not duplicate that doctrine here — read it, don't restate it.
 - Verify accessibility (keyboard operability, visible focus, contrast, labeled inputs) — run the
   `web-design-guidelines` skill's compliance check.
 - Visually inspect the implemented screen.
-- Verify consistency with existing Project Atlas UI — no second visual language introduced for a
+- Verify consistency with existing ExamKeep UI — no second visual language introduced for a
   workspace that already has an established one.
 
 ---

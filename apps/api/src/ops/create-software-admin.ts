@@ -33,7 +33,7 @@ export const SOFTWARE_ADMIN_INVITATION_TEMPLATE = {
   name: 'platform.software-admin-invitation',
   subject: 'Your {{productName}} platform account',
   text: [
-    'A {{productName}} Software Admin account has been created for this address.',
+    'A Software Admin account on {{productName}} has been created for this address.',
     '',
     'Sign in at {{signInUrl}} with this email address and the temporary password below.',
     'You will set up two-factor authentication before you can do anything else.',

@@ -11,6 +11,7 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
+import { productNameSelectors, productNameTestFiles } from '../../scripts/eslint-product-name.mjs';
 
 export default tseslint.config(
   {
@@ -52,7 +53,14 @@ export default tseslint.config(
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      // Product name must come from environment, never be hardcoded (PROJECT.md).
+      'no-restricted-syntax': ['error', ...productNameSelectors],
     },
+  },
+  {
+    // Tests set PRODUCT_NAME to the real name to prove what users see.
+    files: productNameTestFiles,
+    rules: { 'no-restricted-syntax': 'off' },
   },
   eslintConfigPrettier,
 );
