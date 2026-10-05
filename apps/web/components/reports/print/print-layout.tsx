@@ -7,6 +7,10 @@ import { Button } from '@/components/ui/button';
 import { useTenant } from '@/lib/tenant';
 import { useAuth } from '@/lib/auth';
 
+// Same source as app-shell.tsx: the product name is configuration, never
+// hardcoded (the internal codename is not a commercial name).
+const PRODUCT_NAME = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
+
 export interface PrintLayoutProps {
   title: string;
   subtitle?: string;
@@ -127,8 +131,8 @@ export function PrintLayout({ title, subtitle, children }: PrintLayoutProps) {
             </div>
 
             <div className="flex items-center justify-between text-[11px] text-black/60 border-t border-black/10 pt-3">
-              <span>Project Atlas CBT Platform — High-Integrity Assessment System</span>
-              <span>Official Academic Record — Page 1 of 1</span>
+              <span>{PRODUCT_NAME}</span>
+              <span>Official Academic Record</span>
             </div>
           </div>
         </div>

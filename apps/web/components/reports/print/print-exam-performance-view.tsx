@@ -1,6 +1,8 @@
 'use client';
 
 import { usePrintExamPerformance } from '@/lib/reports/queries';
+import { useExam } from '@/lib/exams/queries';
+import { stripHtmlToText } from '@/lib/questions/sanitize-html';
 import { PrintLayout } from './print-layout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
@@ -11,8 +13,12 @@ export interface PrintExamPerformanceViewProps {
 
 export function PrintExamPerformanceView({ examId }: PrintExamPerformanceViewProps) {
   const { data, isLoading, error, refetch } = usePrintExamPerformance(examId);
+  // Analytics carry no exam header or per-question authoring detail (marks,
+  // difficulty, text); those come from the exam itself, joined on the
+  // ExamQuestion id. If that read fails the report still prints without them.
+  const examQuery = useExam(examId);
 
-  if (isLoading) {
+  if (isLoading || examQuery.isLoading) {
     return (
       <PrintLayout title="Exam & Question Analysis Report" subtitle="Loading performance data...">
         <div className="space-y-4 py-8">
@@ -38,58 +44,44 @@ export function PrintExamPerformanceView({ examId }: PrintExamPerformanceViewPro
     );
   }
 
-  const { summary = {}, questions = [] } = data as {
-    summary?: {
-      examTitle?: string;
-      subjectName?: string;
-      totalCandidates?: number;
-      averagePercentage?: number;
-      passRate?: number;
-      highestPercentage?: number;
-      lowestPercentage?: number;
-    };
-    questions?: Array<{
-      questionId?: string;
-      sequenceNumber?: number;
-      textSnippet?: string;
-      topicName?: string | null;
-      difficulty?: string;
-      marks?: number;
-      totalAnswers?: number;
-      correctAnswers?: number;
-      successRate?: number;
-    }>;
-  };
+  const { summary, questions } = data;
+  const exam = examQuery.data;
+  const examQuestions = new Map(
+    (exam?.sections ?? []).flatMap((section) =>
+      section.questions.map((question) => [question.id, question] as const),
+    ),
+  );
+  const percent = (value: number | null) => (value != null ? `${value}%` : '—');
 
   return (
     <PrintLayout
       title="Examination Performance & Item Analysis"
-      subtitle={`${summary.examTitle ?? 'Assessment'} — Item Diagnostics`}
+      subtitle={`${exam?.title ?? 'Assessment'}${exam ? ` — ${exam.subjectName}` : ''} — Item Diagnostics`}
     >
       <div className="space-y-6" data-testid="print-exam-performance">
         {/* Metric Summary Panel */}
         <div className="border border-black/20 p-4 rounded text-xs grid grid-cols-4 gap-4 text-center">
           <div className="border-r border-black/10 pr-2">
             <p className="text-black/70">Candidates Tested</p>
-            <p className="text-lg font-bold text-black mt-0.5">{summary.totalCandidates ?? '—'}</p>
+            <p className="text-lg font-bold text-black mt-0.5">
+              {summary.participation.attendedCount} / {summary.participation.expectedStudentCount}
+            </p>
+            <p className="text-[11px] text-black/60">Absent: {summary.participation.absentCount}</p>
           </div>
           <div className="border-r border-black/10 pr-2">
             <p className="text-black/70">Average Performance</p>
             <p className="text-lg font-bold text-black mt-0.5">
-              {summary.averagePercentage != null ? `${summary.averagePercentage}%` : '—'}
+              {percent(summary.averagePercentage)}
             </p>
           </div>
           <div className="border-r border-black/10 pr-2">
             <p className="text-black/70">Overall Pass Rate</p>
-            <p className="text-lg font-bold text-black mt-0.5">
-              {summary.passRate != null ? `${summary.passRate}%` : '—'}
-            </p>
+            <p className="text-lg font-bold text-black mt-0.5">{percent(summary.passRate)}</p>
           </div>
           <div>
             <p className="text-black/70">Score Range (Min - Max)</p>
             <p className="text-lg font-bold text-black mt-0.5">
-              {summary.lowestPercentage != null ? `${summary.lowestPercentage}%` : '0%'} –{' '}
-              {summary.highestPercentage != null ? `${summary.highestPercentage}%` : '100%'}
+              {percent(summary.lowestPercentage)} – {percent(summary.highestPercentage)}
             </p>
           </div>
         </div>
@@ -118,46 +110,53 @@ export function PrintExamPerformanceView({ examId }: PrintExamPerformanceViewPro
               </tr>
             </thead>
             <tbody>
-              {questions.length === 0 ? (
+              {questions.items.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-4 text-center text-text-muted">
                     No question performance data recorded for this exam.
                   </td>
                 </tr>
               ) : (
-                questions.map((q, idx) => (
-                  <tr
-                    key={q.questionId || idx}
-                    className="border-b border-black/20 even:bg-black/[0.02] text-black"
-                  >
-                    <td className="p-2 border-r border-black/20 text-center font-mono font-medium">
-                      {q.sequenceNumber ?? idx + 1}
-                    </td>
-                    <td className="p-2 border-r border-black/20">
-                      <p className="font-medium">{q.topicName ?? 'General Topic'}</p>
-                      {q.textSnippet && (
-                        <p className="text-[11px] text-text-muted truncate max-w-md">
-                          {q.textSnippet}
-                        </p>
-                      )}
-                    </td>
-                    <td className="p-2 border-r border-black/20 text-center capitalize">
-                      {q.difficulty?.toLowerCase() ?? 'medium'}
-                    </td>
-                    <td className="p-2 border-r border-black/20 text-right font-mono">
-                      {q.marks ?? 1}
-                    </td>
-                    <td className="p-2 border-r border-black/20 text-right font-mono">
-                      {q.totalAnswers ?? '—'}
-                    </td>
-                    <td className="p-2 border-r border-black/20 text-right font-mono">
-                      {q.correctAnswers ?? '—'}
-                    </td>
-                    <td className="p-2 text-right font-mono font-bold">
-                      {q.successRate != null ? `${q.successRate}%` : '—'}
-                    </td>
-                  </tr>
-                ))
+                questions.items.map((q) => {
+                  const authored = examQuestions.get(q.examQuestionId);
+                  const snippet = authored ? stripHtmlToText(authored.content) : '';
+                  return (
+                    <tr
+                      key={q.examQuestionId}
+                      className="border-b border-black/20 even:bg-black/[0.02] text-black"
+                    >
+                      <td className="p-2 border-r border-black/20 text-center font-mono font-medium">
+                        {q.sequence}
+                      </td>
+                      <td className="p-2 border-r border-black/20">
+                        <p className="font-medium">{q.topicName ?? 'General Topic'}</p>
+                        {snippet && (
+                          <p className="text-[11px] text-text-muted truncate max-w-md">{snippet}</p>
+                        )}
+                        {q.voidedForScoring && (
+                          <p className="text-[11px] font-semibold text-black/70">
+                            Voided for scoring
+                          </p>
+                        )}
+                      </td>
+                      <td className="p-2 border-r border-black/20 text-center capitalize">
+                        {authored?.difficulty.toLowerCase() ?? '—'}
+                      </td>
+                      <td className="p-2 border-r border-black/20 text-right font-mono">
+                        {authored?.marks ?? '—'}
+                      </td>
+                      <td className="p-2 border-r border-black/20 text-right font-mono">
+                        {q.exposureCount}
+                      </td>
+                      <td className="p-2 border-r border-black/20 text-right font-mono">
+                        {q.correctCount}
+                      </td>
+                      <td className="p-2 text-right font-mono font-bold">
+                        {q.exposureCount > 0 ? `${q.correctRate}%` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -27,7 +27,7 @@ test('a School Admin exports the student directory as CSV', async ({ page }) => 
   await expect(downloadButton).toBeVisible({ timeout: 60_000 });
   const [download] = await Promise.all([page.waitForEvent('download'), downloadButton.click()]);
   expect(download.suggestedFilename()).toMatch(/\.csv$/);
-  const csv = await readFile((await download.path()), 'utf8');
+  const csv = await readFile(await download.path(), 'utf8');
   const lines = csv.trim().split(/\r?\n/);
   // A header and one row per provisioned student ("Student L<n>").
   expect(lines[0]).toContain('First Name');
@@ -55,7 +55,7 @@ test('the results print view renders for paper', async ({ page }) => {
   await signIn(page, fixture().users.teacher);
   await page.emulateMedia({ media: 'print' });
   await page.goto(schoolUrl(`/print/exams/${examId}/results`));
-  await expect(page.getByText(examTitle).first()).toBeVisible();
+  await expect(page.getByText(examTitle).filter({ visible: true }).first()).toBeVisible();
   // Screen-only chrome (navigation, the print button) stays off the page.
   await expect(page.getByRole('navigation')).toHaveCount(0);
 });

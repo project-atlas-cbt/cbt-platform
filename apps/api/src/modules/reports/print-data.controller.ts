@@ -1,15 +1,25 @@
 import { Controller, Get, Param, Query, Req } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExtraModels,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  getSchemaPath,
+} from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import type { AuthenticatedUser } from '../identity/auth.guard.js';
 import { AnalyticsService } from '../analytics/analytics.service.js';
 import { ResultQueryService } from '../results/result-query.service.js';
-import { ListExamResultsQueryDto } from '../results/dto/result.dto.js';
+import { ExamResultsResponseDto, ListExamResultsQueryDto } from '../results/dto/result.dto.js';
 import {
   AnalyticsContextQueryDto,
   ClassAnalyticsQueryDto,
+  ClassAnalyticsResponseDto,
+  ExamAnalyticsResponseDto,
+  QuestionAnalyticsResponseDto,
+  StudentAnalyticsResponseDto,
 } from '../analytics/dto/analytics.dto.js';
 
 /** Data-only endpoints for F18's ADR-0030 browser print routes. */
@@ -23,7 +33,7 @@ export class PrintDataController {
   @Get('exams/:id/results')
   @Authorized('reporting.generatePrintableReports')
   @ApiOperation({ summary: 'Print-ready scoped exam result dataset.' })
-  @ApiOkResponse({ type: Object })
+  @ApiOkResponse({ type: ExamResultsResponseDto })
   examResults(
     @Req() req: FastifyRequest,
     @Param('id') id: string,
@@ -39,7 +49,17 @@ export class PrintDataController {
   @Get('exams/:id/performance')
   @Authorized('reporting.generatePrintableReports')
   @ApiOperation({ summary: 'Print-ready scoped exam and question performance.' })
-  @ApiOkResponse({ type: Object })
+  @ApiExtraModels(ExamAnalyticsResponseDto, QuestionAnalyticsResponseDto)
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      required: ['summary', 'questions'],
+      properties: {
+        summary: { $ref: getSchemaPath(ExamAnalyticsResponseDto) },
+        questions: { $ref: getSchemaPath(QuestionAnalyticsResponseDto) },
+      },
+    },
+  })
   async examPerformance(@Req() req: FastifyRequest, @Param('id') id: string) {
     const user = req.user as AuthenticatedUser;
     const actor = actorFromAuthenticatedUser(user);
@@ -54,7 +74,7 @@ export class PrintDataController {
   @Get('classes/:id/performance')
   @Authorized('reporting.generatePrintableReports')
   @ApiOperation({ summary: 'Print-ready scoped class performance dataset.' })
-  @ApiOkResponse({ type: Object })
+  @ApiOkResponse({ type: ClassAnalyticsResponseDto })
   classPerformance(
     @Req() req: FastifyRequest,
     @Param('id') id: string,
@@ -67,7 +87,7 @@ export class PrintDataController {
   @Get('students/:id/performance')
   @Authorized('reporting.generatePrintableReports')
   @ApiOperation({ summary: 'Print-ready scoped student performance dataset.' })
-  @ApiOkResponse({ type: Object })
+  @ApiOkResponse({ type: StudentAnalyticsResponseDto })
   studentPerformance(
     @Req() req: FastifyRequest,
     @Param('id') id: string,
@@ -80,7 +100,7 @@ export class PrintDataController {
   @Get('exams/:id/questions/performance')
   @Authorized('reporting.generatePrintableReports')
   @ApiOperation({ summary: 'Print-ready scoped question-performance dataset.' })
-  @ApiOkResponse({ type: Object })
+  @ApiOkResponse({ type: QuestionAnalyticsResponseDto })
   questionPerformance(@Req() req: FastifyRequest, @Param('id') id: string) {
     const user = req.user as AuthenticatedUser;
     return this.analytics.questions(user.schoolId, actorFromAuthenticatedUser(user), id);

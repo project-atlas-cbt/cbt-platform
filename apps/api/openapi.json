@@ -5792,7 +5792,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExamResultsResponseDto"
                 }
               }
             }
@@ -5823,7 +5823,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "required": [
+                    "summary",
+                    "questions"
+                  ],
+                  "properties": {
+                    "summary": {
+                      "$ref": "#/components/schemas/ExamAnalyticsResponseDto"
+                    },
+                    "questions": {
+                      "$ref": "#/components/schemas/QuestionAnalyticsResponseDto"
+                    }
+                  }
                 }
               }
             }
@@ -5881,7 +5893,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClassAnalyticsResponseDto"
                 }
               }
             }
@@ -5939,7 +5951,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/StudentAnalyticsResponseDto"
                 }
               }
             }
@@ -5970,7 +5982,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/QuestionAnalyticsResponseDto"
                 }
               }
             }

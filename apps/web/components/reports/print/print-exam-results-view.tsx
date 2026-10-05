@@ -1,9 +1,18 @@
 'use client';
 
 import { usePrintExamResults } from '@/lib/reports/queries';
+import { useExam } from '@/lib/exams/queries';
+import type { PrintExamResultItem } from '@/lib/reports/types';
 import { PrintLayout } from './print-layout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
+
+const RESULT_STATE_LABELS: Record<PrintExamResultItem['state'], string> = {
+  PROCESSING: 'Processing',
+  FINAL: 'Final',
+  ADJUSTED: 'Adjusted',
+  VOIDED: 'Voided',
+};
 
 export interface PrintExamResultsViewProps {
   examId: string;
@@ -11,8 +20,12 @@ export interface PrintExamResultsViewProps {
 
 export function PrintExamResultsView({ examId }: PrintExamResultsViewProps) {
   const { data, isLoading, error, refetch } = usePrintExamResults(examId);
+  // The results dataset carries no exam header (title, subject, marks); it
+  // comes from the exam itself. If that read is refused or fails the sheet
+  // still prints, with the header shown as unknown rather than invented.
+  const examQuery = useExam(examId);
 
-  if (isLoading) {
+  if (isLoading || examQuery.isLoading) {
     return (
       <PrintLayout title="Exam Results Sheet" subtitle="Loading exam records...">
         <div className="space-y-4 py-8">
@@ -38,65 +51,51 @@ export function PrintExamResultsView({ examId }: PrintExamResultsViewProps) {
     );
   }
 
-  const {
-    exam,
-    results = [],
-    summary,
-  } = data as {
-    exam?: { title?: string; subject?: { name?: string; code?: string }; totalMarks?: number };
-    results?: Array<{
-      id: string;
-      studentId: string;
-      studentName: string;
-      className?: string;
-      earnedMarks?: number;
-      totalMarks?: number;
-      percentage?: number;
-      grade?: string | null;
-      state?: string;
-    }>;
-    summary?: {
-      totalCandidates?: number;
-      presentCount?: number;
-      absentCount?: number;
-      averagePercentage?: number;
-      passRate?: number;
-    };
-  };
-
-  const totalCandidates = summary?.totalCandidates ?? results.length;
-  const presentCount =
-    summary?.presentCount ??
-    results.filter((r) => r.state !== 'ABSENT' && r.state !== 'NOT ATTEMPTED').length;
-  const absentCount = summary?.absentCount ?? totalCandidates - presentCount;
+  const exam = examQuery.data;
+  const { items, summary, total } = data;
+  const examTotalMarks = exam?.sections.length
+    ? exam.sections.reduce((sum, section) => sum + section.marks, 0)
+    : null;
 
   return (
     <PrintLayout
       title="Examination Broadsheet / Results Summary"
-      subtitle={`${exam?.title ?? 'Assessment'} — Subject: ${exam?.subject?.name ?? 'All Subjects'}`}
+      subtitle={`${exam?.title ?? 'Assessment'} — Subject: ${exam?.subjectName ?? '—'}`}
     >
       <div className="space-y-6" data-testid="print-exam-results">
         {/* Exam Metadata & Summary Metrics */}
         <div className="grid grid-cols-2 gap-4 border border-black/20 p-4 rounded text-xs">
           <div>
             <p>
-              <span className="font-semibold text-black">Subject:</span>{' '}
-              {exam?.subject?.name ?? '—'}
+              <span className="font-semibold text-black">Subject:</span> {exam?.subjectName ?? '—'}
             </p>
             <p className="mt-1">
-              <span className="font-semibold text-black">Total Marks:</span>{' '}
-              {exam?.totalMarks ?? 100}
+              <span className="font-semibold text-black">Total Marks:</span> {examTotalMarks ?? '—'}
             </p>
+            {exam && (
+              <p className="mt-1">
+                <span className="font-semibold text-black">Session / Term:</span> {exam.sessionName}{' '}
+                — {exam.termName}
+              </p>
+            )}
           </div>
           <div className="text-right">
             <p>
-              <span className="font-semibold text-black">Candidates Enrolled:</span>{' '}
-              {totalCandidates}
+              <span className="font-semibold text-black">Expected Candidates:</span>{' '}
+              {summary.expectedStudentCount}
             </p>
             <p className="mt-1">
-              <span className="font-semibold text-black">Present:</span> {presentCount}{' '}
-              &nbsp;|&nbsp; <span className="font-semibold text-black">Absent:</span> {absentCount}
+              <span className="font-semibold text-black">Results:</span> {summary.resultCount}{' '}
+              &nbsp;|&nbsp; <span className="font-semibold text-black">Absent:</span>{' '}
+              {summary.absentCount}
             </p>
+            {(summary.pendingCount > 0 || summary.voidedCount > 0) && (
+              <p className="mt-1">
+                <span className="font-semibold text-black">Pending Marking:</span>{' '}
+                {summary.pendingCount} &nbsp;|&nbsp;{' '}
+                <span className="font-semibold text-black">Voided:</span> {summary.voidedCount}
+              </p>
+            )}
           </div>
         </div>
 
@@ -116,27 +115,30 @@ export function PrintExamResultsView({ examId }: PrintExamResultsViewProps) {
               </tr>
             </thead>
             <tbody>
-              {results.length === 0 ? (
+              {items.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-4 text-center text-text-muted">
                     No student results recorded for this examination.
                   </td>
                 </tr>
               ) : (
-                results.map((row, idx) => {
-                  const isAbsentOrNotAttempted =
-                    row.state === 'ABSENT' || row.state === 'NOT ATTEMPTED';
+                items.map((row, idx) => {
+                  // A voided result is excluded from every aggregate (ADR-0025)
+                  // and a PROCESSING one is not finished marking: neither has
+                  // a score to print. Absent students have no result row at
+                  // all — absence is participation, counted in the summary.
+                  const hasScore = row.state === 'FINAL' || row.state === 'ADJUSTED';
 
                   return (
                     <tr
-                      key={row.id || idx}
+                      key={row.id}
                       className="border-b border-black/20 even:bg-black/[0.02] text-black"
                     >
                       <td className="p-2 border-r border-black/20 text-center font-mono">
                         {idx + 1}
                       </td>
                       <td className="p-2 border-r border-black/20 font-mono font-medium">
-                        {row.studentId}
+                        {row.studentIdentifier}
                       </td>
                       <td className="p-2 border-r border-black/20 font-medium">
                         {row.studentName}
@@ -145,30 +147,34 @@ export function PrintExamResultsView({ examId }: PrintExamResultsViewProps) {
                         {row.className ?? '—'}
                       </td>
                       <td className="p-2 border-r border-black/20 text-right font-mono">
-                        {isAbsentOrNotAttempted
-                          ? '—'
-                          : `${row.earnedMarks ?? 0}/${row.totalMarks ?? 100}`}
+                        {hasScore ? `${row.earnedMarks}/${row.totalMarks}` : '—'}
                       </td>
                       <td className="p-2 border-r border-black/20 text-right font-mono">
-                        {isAbsentOrNotAttempted ? '—' : `${row.percentage ?? 0}%`}
+                        {hasScore ? `${row.percentage}%` : '—'}
                       </td>
                       <td className="p-2 border-r border-black/20 text-center font-bold">
-                        {isAbsentOrNotAttempted ? '—' : (row.grade ?? '—')}
+                        {hasScore ? (row.grade ?? '—') : '—'}
                       </td>
                       <td className="p-2 text-center font-medium">
                         <span
                           className={`inline-block px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider ${
-                            row.state === 'ABSENT'
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
-                              : row.state === 'AUTO_SUBMITTED'
-                                ? 'bg-blue-100 text-blue-900 border border-blue-300'
-                                : row.state === 'VOIDED'
-                                  ? 'bg-red-100 text-red-900 border border-red-300'
+                            row.state === 'VOIDED'
+                              ? 'bg-red-100 text-red-900 border border-red-300'
+                              : row.state === 'PROCESSING'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
+                                : row.attemptState === 'AUTO_SUBMITTED'
+                                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
                                   : 'text-black'
                           }`}
                         >
-                          {row.state ? row.state.replace('_', '-') : 'COMPLETED'}
+                          {RESULT_STATE_LABELS[row.state]}
                         </span>
+                        {row.attemptState === 'AUTO_SUBMITTED' && (
+                          <p className="mt-0.5 text-[10px] text-black/60">Auto-submitted</p>
+                        )}
+                        {row.withheld && (
+                          <p className="mt-0.5 text-[10px] text-black/60">Withheld</p>
+                        )}
                       </td>
                     </tr>
                   );
@@ -176,6 +182,11 @@ export function PrintExamResultsView({ examId }: PrintExamResultsViewProps) {
               )}
             </tbody>
           </table>
+          {total > items.length && (
+            <p className="mt-2 text-[11px] text-black/60">
+              Showing the first {items.length} of {total} results.
+            </p>
+          )}
         </div>
       </div>
     </PrintLayout>
