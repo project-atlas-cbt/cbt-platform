@@ -40,6 +40,7 @@ const EXEMPT_MODELS = new Set([
   'PlatformSession',
   'PlatformMfaCredential',
   'PlatformMfaRecoveryCode',
+  'PlatformSetting',
 ]);
 
 const schema = readFileSync(schemaPath, 'utf-8');

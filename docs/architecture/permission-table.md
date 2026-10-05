@@ -29,6 +29,8 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | View subscription status                                                                    | PLATFORM       | SCHOOL ⚠️    | —         | —             | —        | —       |          |
 | View school metrics                                                                         | PLATFORM ⚠️    | SCHOOL       | SCHOOL ⚠️ | DEPARTMENT    | ASSIGNED | SELF    |          |
 | Platform audit/logs                                                                         | PLATFORM       | SCHOOL ⚠️    | SCHOOL ⚠️ | DEPARTMENT ⚠️ | SELF ⚠️  | —       |          |
+| View platform System Configuration (ADR-0036)                                               | PLATFORM       | —            | —         | —             | —        | —       |          |
+| Change platform System Configuration — reason required, audited (ADR-0036)                  | PLATFORM       | —            | —         | —             | —        | —       |          |
 | View orphan-media report (B4)                                                               | PLATFORM       | —            | —         | —             | —        | —       |          |
 
 <details><summary>Notes</summary>

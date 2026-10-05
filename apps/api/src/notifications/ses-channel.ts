@@ -25,14 +25,17 @@ export function sesSender(region: string | undefined): SendEmail {
 export class SesNotificationChannel implements NotificationChannel {
   constructor(
     private readonly templates: TemplateRegistry,
-    private readonly from: string,
+    /** ADR-0036: resolved per message, so a System Configuration change
+     * to the sender applies without a restart. */
+    private readonly from: string | (() => Promise<string>),
     private readonly sendEmail: SendEmail,
   ) {}
 
   async send(message: NotificationMessage): Promise<void> {
     const rendered = this.templates.render(message.template, message.variables ?? {});
+    const from = typeof this.from === 'string' ? this.from : await this.from();
     await this.sendEmail({
-      FromEmailAddress: this.from,
+      FromEmailAddress: from,
       Destination: { ToAddresses: [message.to] },
       Content: {
         Simple: {

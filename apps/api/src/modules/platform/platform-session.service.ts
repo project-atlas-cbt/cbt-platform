@@ -6,6 +6,7 @@ import { parseCookie, stringifySetCookie } from 'cookie';
 import { sign, unsign } from 'cookie-signature';
 import { prisma } from '@atlas/db';
 import type { Env } from '@atlas/config';
+import { PlatformSettingsService } from '../../platform-settings/platform-settings.service.js';
 
 export const PLATFORM_SESSION_COOKIE_NAME = 'atlas_platform_session';
 
@@ -34,7 +35,10 @@ function hashToken(rawToken: string): string {
  */
 @Injectable()
 export class PlatformSessionService {
-  constructor(private readonly config: ConfigService<Env, true>) {}
+  constructor(
+    private readonly config: ConfigService<Env, true>,
+    private readonly settings: PlatformSettingsService,
+  ) {}
 
   async issue(
     res: FastifyReply,
@@ -45,7 +49,7 @@ export class PlatformSessionService {
     // B20: Software Admin sessions get their own, much shorter absolute
     // lifetime (default 8h vs a school session's 7 days) — 08 §16's
     // "stronger controls" for administrative operations.
-    const ttlSeconds = this.config.get('PLATFORM_SESSION_TTL_SECONDS', { infer: true });
+    const ttlSeconds = (await this.settings.current()).platformSessionTtlSeconds;
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
     const userAgent = params.req?.headers['user-agent']?.toString().slice(0, 512);
@@ -87,7 +91,8 @@ export class PlatformSessionService {
 
     // B20 idle timeout: an unattended admin browser stops being a live
     // credential after PLATFORM_SESSION_IDLE_TIMEOUT_SECONDS of inactivity.
-    const idleMs = this.config.get('PLATFORM_SESSION_IDLE_TIMEOUT_SECONDS', { infer: true }) * 1000;
+    // ADR-0036: editable in System Configuration.
+    const idleMs = (await this.settings.current()).platformSessionIdleTimeoutSeconds * 1000;
     const lastSeen = session.lastSeenAt ?? session.createdAt;
     if (now.getTime() - lastSeen.getTime() > idleMs) {
       await this.revoke(session.id);
@@ -117,7 +122,8 @@ export class PlatformSessionService {
     }[]
   > {
     const now = Date.now();
-    const idleMs = this.config.get('PLATFORM_SESSION_IDLE_TIMEOUT_SECONDS', { infer: true }) * 1000;
+    // ADR-0036: editable in System Configuration.
+    const idleMs = (await this.settings.current()).platformSessionIdleTimeoutSeconds * 1000;
     const rows = await prisma.platformSession.findMany({
       where: { userId, revokedAt: null, expiresAt: { gt: new Date(now) } },
       select: { id: true, createdAt: true, lastSeenAt: true, userAgent: true, ipAddress: true },

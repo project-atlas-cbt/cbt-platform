@@ -27,7 +27,7 @@ import { SchoolResultPolicyController } from './school-result-policy.controller.
 import { SchoolOnboardingService } from './school-onboarding.service.js';
 import { SchoolOnboardingController } from './school-onboarding.controller.js';
 import { registerPlatformTemplates } from './templates.js';
-import { registerPlatformSecurityTemplates } from './mfa/security-alert-template.js';
+import { registerPlatformAdminTemplates } from './admin-templates.js';
 import { PlatformAuditActionRegistrationProvider } from './audit-action-registration.provider.js';
 // B10: GET /v1/platform/audit lives here, not in OperationsModule — it
 // needs PlatformAuthGuard's own DI graph (an unexported, PlatformModule-
@@ -45,6 +45,8 @@ import { PlatformSearchController } from './platform-search.controller.js';
 import { PlatformExportController } from './platform-export.controller.js';
 import { ReportsModule } from '../reports/reports.module.js';
 import { PlatformAdminsController } from './platform-admins.controller.js';
+import { PlatformSettingsController } from './platform-settings.controller.js';
+import { PlatformSettingsAdminService } from './platform-settings-admin.service.js';
 
 /**
  * Bounded domain per 08 §5: "Platform — Software Admin, schools,
@@ -76,6 +78,7 @@ import { PlatformAdminsController } from './platform-admins.controller.js';
   controllers: [
     PlatformAuthController,
     PlatformAdminsController,
+    PlatformSettingsController,
     SchoolsAdminController,
     PlatformMetricsController,
     ActivationController,
@@ -103,6 +106,7 @@ import { PlatformAdminsController } from './platform-admins.controller.js';
     SchoolOnboardingService,
     PlatformAuditActionRegistrationProvider,
     PlatformAuditReaderService,
+    PlatformSettingsAdminService,
   ],
 })
 export class PlatformModule implements OnModuleInit {
@@ -116,6 +120,6 @@ export class PlatformModule implements OnModuleInit {
       PRODUCT_NAME: this.config.get('PRODUCT_NAME', { infer: true }),
     });
     registerPlatformTemplates(this.templates, productName);
-    registerPlatformSecurityTemplates(this.templates, productName);
+    registerPlatformAdminTemplates(this.templates, productName);
   }
 }

@@ -10,6 +10,7 @@ import { IdempotencyInterceptor } from './common/idempotency.interceptor.js';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { UuidRouteParamPipe } from './common/uuid-route-param.pipe.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { PlatformSettingsModule } from './platform-settings/platform-settings.service.js';
 import { SecurityModule } from './security/security.module.js';
 import { PlatformModule } from './modules/platform/platform.module.js';
 import { AccessGateModule } from './modules/platform/access-gate.module.js';
@@ -41,6 +42,7 @@ import { InFlightMiddleware } from './load/load-shedding.middleware.js';
     TenancyModule,
     SecurityModule,
     AuthorizationModule,
+    PlatformSettingsModule,
     NotificationsModule,
     AccessGateModule,
     HealthModule,

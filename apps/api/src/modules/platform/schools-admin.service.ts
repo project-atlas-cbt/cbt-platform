@@ -8,6 +8,7 @@ import type { NotificationChannel } from '@atlas/notifications';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { buildSchoolUrl } from '../../common/school-url.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
+import { PlatformSettingsService } from '../../platform-settings/platform-settings.service.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { EXAM_LIST_INCLUDE, toExamListItemResponseDto } from '../exams/exam-mappers.js';
 import type { ExamListResponseDto, ListExamsQueryDto } from '../exams/dto/exam.dto.js';
@@ -91,6 +92,7 @@ export class SchoolsAdminService {
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_CHANNEL) private readonly notifications: NotificationChannel,
     private readonly config: ConfigService<Env, true>,
+    private readonly settings: PlatformSettingsService,
   ) {}
 
   /** A link to the school's own web host (`common/school-url.ts`). */
@@ -195,9 +197,13 @@ export class SchoolsAdminService {
 
     const rawKey = generateActivationKey();
     const now = new Date();
+    const { defaultSchoolTimezone: defaultTimezone } = await this.settings.current();
 
     const result = await prisma.$transaction(async (tx) => {
-      const school = await tx.school.create({ data: { name: dto.name, subdomain } });
+      const school = await tx.school.create({
+        // ADR-0036: System Configuration's default timezone for new schools.
+        data: { name: dto.name, subdomain, timezone: defaultTimezone },
+      });
 
       await tx.$executeRaw`SELECT set_config(${TENANT_SESSION_VARIABLE}, ${school.id}, true)`;
 

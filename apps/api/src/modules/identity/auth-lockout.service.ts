@@ -5,6 +5,7 @@ import type { Env } from '@atlas/config';
 import { recordHealthCounter } from '@atlas/observability';
 import { DependencyHealth } from '../../common/dependency-health.js';
 import { REDIS_CLIENT } from '../../redis/redis.module.js';
+import { PlatformSettingsService } from '../../platform-settings/platform-settings.service.js';
 
 const KEY_PREFIX = 'atlas:auth:lockout:';
 
@@ -31,38 +32,41 @@ export class AuthLockoutService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly config: ConfigService<Env, true>,
     private readonly health: DependencyHealth,
+    private readonly settings: PlatformSettingsService,
   ) {}
 
   private key(schoolId: string, loginIdentifier: string): string {
     return `${KEY_PREFIX}${schoolId}:${loginIdentifier.toLowerCase()}`;
   }
 
-  private get max(): number {
-    return this.config.get('AUTH_LOCKOUT_MAX_ATTEMPTS', { infer: true });
+  /** ADR-0036: editable in System Configuration. */
+  private async max(): Promise<number> {
+    return (await this.settings.current()).authLockoutMaxAttempts;
   }
 
   /** The per-process threshold used only while Redis is down. */
-  fallbackMax(): number {
+  async fallbackMax(): Promise<number> {
     const processes = this.config.get('RATE_LIMIT_FALLBACK_PROCESSES', { infer: true });
-    return Math.max(1, Math.floor(this.max / processes));
+    return Math.max(1, Math.floor((await this.max()) / processes));
   }
 
   async isLocked(schoolId: string, loginIdentifier: string): Promise<boolean> {
     const key = this.key(schoolId, loginIdentifier);
     if (!this.health.shouldTry('redis')) {
       this.health.skipped('redis', 'auth-lockout');
-      return this.memoryCount(key) >= this.fallbackMax();
+      return this.memoryCount(key) >= (await this.fallbackMax());
     }
     let count: string | null;
     try {
       count = await this.redis.get(key);
     } catch (err) {
       this.health.fellBack('redis', 'auth-lockout', err);
-      return this.memoryCount(key) >= this.fallbackMax();
+      return this.memoryCount(key) >= (await this.fallbackMax());
     }
     this.health.succeeded('redis');
     return (
-      (count !== null && Number(count) >= this.max) || this.memoryCount(key) >= this.fallbackMax()
+      (count !== null && Number(count) >= (await this.max())) ||
+      this.memoryCount(key) >= (await this.fallbackMax())
     );
   }
 
@@ -73,11 +77,11 @@ export class AuthLockoutService {
    * auth-failure counter (AUTH_FAILURE_SPIKE — credential stuffing). */
   async recordFailure(schoolId: string, loginIdentifier: string): Promise<{ lockedNow: boolean }> {
     const key = this.key(schoolId, loginIdentifier);
-    const windowSeconds = this.config.get('AUTH_LOCKOUT_WINDOW_SECONDS', { infer: true });
+    const windowSeconds = (await this.settings.current()).authLockoutWindowSeconds;
     if (!this.health.shouldTry('redis')) {
       this.health.skipped('redis', 'auth-lockout');
       const n = this.memoryIncrement(key, windowSeconds * 1000);
-      return { lockedNow: n === this.fallbackMax() };
+      return { lockedNow: n === (await this.fallbackMax()) };
     }
     let count: number;
     try {
@@ -91,11 +95,11 @@ export class AuthLockoutService {
     } catch (err) {
       this.health.fellBack('redis', 'auth-lockout', err);
       const n = this.memoryIncrement(key, windowSeconds * 1000);
-      return { lockedNow: n === this.fallbackMax() };
+      return { lockedNow: n === (await this.fallbackMax()) };
     }
     this.health.succeeded('redis');
     await recordHealthCounter(this.redis, 'auth_failure').catch(() => undefined);
-    return { lockedNow: count === this.max };
+    return { lockedNow: count === (await this.max()) };
   }
 
   async recordSuccess(schoolId: string, loginIdentifier: string): Promise<void> {

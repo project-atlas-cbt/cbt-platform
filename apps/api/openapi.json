@@ -852,6 +852,80 @@
         ]
       }
     },
+    "/platform/settings": {
+      "get": {
+        "operationId": "PlatformSettingsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSettingsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "ADR-0036: editable platform settings, their limits and sources.",
+        "tags": [
+          "platform"
+        ]
+      },
+      "patch": {
+        "operationId": "PlatformSettingsController_update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlatformSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformSettingsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "ADR-0036: change or reset platform settings (reason required; audited; other Software Admins emailed).",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/settings/test-email": {
+      "post": {
+        "operationId": "PlatformSettingsController_sendTestEmail",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestEmailResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "ADR-0036: email the signed-in admin using the settings in effect.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/platform/schools": {
       "get": {
         "operationId": "SchoolsAdminController_list",
@@ -10275,6 +10349,241 @@
         },
         "required": [
           "admins"
+        ]
+      },
+      "PlatformSettingDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "opsAlertEmails",
+              "emailSenderName",
+              "emailSenderAddress",
+              "defaultSchoolTimezone",
+              "platformSessionTtlSeconds",
+              "platformSessionIdleTimeoutSeconds",
+              "schoolSessionTtlSeconds",
+              "authLockoutMaxAttempts",
+              "authLockoutWindowSeconds",
+              "passwordResetTokenTtlSeconds"
+            ]
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "operations",
+              "sign-in"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "emailList",
+              "text",
+              "email",
+              "timezone",
+              "duration",
+              "count"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "minutes",
+              "hours",
+              "days"
+            ]
+          },
+          "min": {
+            "type": "number",
+            "description": "Seconds for a duration."
+          },
+          "max": {
+            "type": "number",
+            "description": "Seconds for a duration."
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "description": "The value in effect."
+          },
+          "defaultValue": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "description": "The env file value."
+          },
+          "overridden": {
+            "type": "boolean",
+            "description": "True when changed from the env value."
+          },
+          "envKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "The env variable it overrides."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updatedBy": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "key",
+          "group",
+          "label",
+          "description",
+          "kind",
+          "value",
+          "defaultValue",
+          "overridden",
+          "envKey",
+          "updatedAt",
+          "updatedBy"
+        ]
+      },
+      "PlatformEnvironmentDto": {
+        "type": "object",
+        "properties": {
+          "releaseVersion": {
+            "type": "string"
+          },
+          "emailTransport": {
+            "type": "string",
+            "enum": [
+              "ses",
+              "smtp",
+              "console"
+            ]
+          }
+        },
+        "required": [
+          "releaseVersion",
+          "emailTransport"
+        ]
+      },
+      "PlatformSettingsResponseDto": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformSettingDto"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/PlatformEnvironmentDto"
+          }
+        },
+        "required": [
+          "settings",
+          "environment"
+        ]
+      },
+      "PlatformSettingChangeDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "opsAlertEmails",
+              "emailSenderName",
+              "emailSenderAddress",
+              "defaultSchoolTimezone",
+              "platformSessionTtlSeconds",
+              "platformSessionIdleTimeoutSeconds",
+              "schoolSessionTtlSeconds",
+              "authLockoutMaxAttempts",
+              "authLockoutWindowSeconds",
+              "passwordResetTokenTtlSeconds"
+            ]
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "nullable": true,
+            "description": "The new value (seconds for a duration), or null to return to the default."
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ]
+      },
+      "UpdatePlatformSettingsDto": {
+        "type": "object",
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformSettingChangeDto"
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "changes",
+          "reason"
+        ]
+      },
+      "TestEmailResponseDto": {
+        "type": "object",
+        "properties": {
+          "sentTo": {
+            "type": "string",
+            "description": "Where the test email went."
+          }
+        },
+        "required": [
+          "sentTo"
         ]
       },
       "SchoolListItemDto": {

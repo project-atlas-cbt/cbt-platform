@@ -11,3 +11,4 @@ export {
   appRoleRevokeStatements,
   type ProtectedTable,
 } from './privileges.js';
+export { createPlatformSettingsReader, type PlatformSettingsReader } from './platform-settings.js';

@@ -279,6 +279,7 @@ model User {
   platformRoleAssignments PlatformRoleAssignment[]
   platformSessions        PlatformSession[]
   platformMfaCredential   PlatformMfaCredential?
+  platformSettingsChanged PlatformSetting[]
   issuedActivationGrants  ActivationGrant[]
   uploadedMediaAssets     MediaAsset[]
 
@@ -772,6 +773,23 @@ model PlatformMfaRecoveryCode {
 
   @@index([credentialId])
   @@map("platform_mfa_recovery_codes")
+}
+
+/// ADR-0036: a Software Admin's change to one editable platform setting
+/// (packages/config/src/platform-settings.ts lists them and their limits).
+/// No row means the env value applies; "reset to default" deletes the row.
+/// A platform table like PlatformSession — no school, no RLS (exempted in
+/// scripts/lint-schema-tenancy.mjs). History lives in the audit log
+/// (PLATFORM_SETTING_CHANGED), not here.
+model PlatformSetting {
+  key             String   @id @db.VarChar(64)
+  value           Json
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedByUserId String   @map("updated_by_user_id") @db.Uuid
+
+  updatedBy User @relation(fields: [updatedByUserId], references: [id])
+
+  @@map("platform_settings")
 }
 
 // ---------------------------------------------------------------------------

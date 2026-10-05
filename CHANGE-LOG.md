@@ -2,6 +2,35 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-05 — Software Admin: System Configuration built (ADR-0036); Sign-in Security gaps filled
+
+**Owner decisions (2026-10-05):** System Configuration holds **editable** settings, and the set is
+**operations and sign-in** (alert recipients, email sender name and address, default school
+timezone, admin and school session lengths, admin idle sign-out, lockout limit and window, reset
+link lifetime). Exam rules (ADR-0003, ADR-0015) stay where they are. Recorded as ADR-0036.
+
+- **System Configuration** (`/admin/settings`, was a "not built yet" placeholder): new
+  `platform_settings` table (platform-level, no RLS, expand-only migration), new permissions
+  `platform.settings.view` / `.manage`, `GET`/`PATCH /v1/platform/settings` and
+  `POST /v1/platform/settings/test-email`. The env file stays the default; stored values override
+  it within limits set in `packages/config/src/platform-settings.ts`. Each change needs a reason,
+  is audited per setting (`PLATFORM_SETTING_CHANGED`) and is emailed to the other Software Admins.
+  API and worker read the settings through a 30-second cache (`createPlatformSettingsReader`), so
+  changes apply without a restart; an unreadable table falls back to the env values.
+- Consumers now read those values from `PlatformSettingsService`, not `ConfigService`: school and
+  platform sessions, lockout, reset links, operational alerts (API and worker), the email sender
+  (per message) and new schools' timezone. Outgoing email now carries a sender name: the env
+  sender's own name, else `PRODUCT_NAME`.
+- **Sign-in Security** review found these missing, now built: new recovery codes on demand (needs a
+  current code, which it spends) with a low-codes warning; "Your sessions" with this device marked
+  and an audited "Sign out other sessions" (`GET /v1/platform/auth/sessions`,
+  `POST /v1/platform/auth/sessions/sign-out-others`); a "was this you?" email whenever a second
+  factor changes; and a fix to the garbled warning before turning two-step sign-in off. Password
+  change is another thread's work and was left alone.
+- Tested: config unit tests, API unit tests, the full API security suite (including two new
+  suites' cases for settings, recovery codes and sessions), web component tests, typecheck and
+  lint; browser suite `e2e/mfa.spec.ts` gains both pages in its axe scan.
+
 ### 2026-10-05 — Email transports skip reserved recipient names; demo school on the pilot server
 
 The pilot server is staging until the pilot and gets the fictional demo school. Its staff have

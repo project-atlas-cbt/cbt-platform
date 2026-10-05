@@ -11,7 +11,7 @@ import { REDIS_CLIENT } from '../../../redis/redis.module.js';
 import { AuditService } from '../../operations/audit-event.service.js';
 import { PlatformSessionService } from '../platform-session.service.js';
 import { openSecret, sealSecret } from './secret-box.js';
-import { PLATFORM_SECURITY_ALERT_TEMPLATE_NAME } from './security-alert-template.js';
+import { PLATFORM_SECURITY_ALERT_TEMPLATE_NAME } from '../admin-templates.js';
 import { generateTotpSecret, otpauthUri, verifyTotp } from './totp.js';
 
 /** B20 platform-level audit actions (school_id NULL rows). */

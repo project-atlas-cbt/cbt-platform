@@ -514,6 +514,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ADR-0036: editable platform settings, their limits and sources. */
+        get: operations["PlatformSettingsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** ADR-0036: change or reset platform settings (reason required; audited; other Software Admins emailed). */
+        patch: operations["PlatformSettingsController_update"];
+        trace?: never;
+    };
+    "/platform/settings/test-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** ADR-0036: email the signed-in admin using the settings in effect. */
+        post: operations["PlatformSettingsController_sendTestEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/schools": {
         parameters: {
             query?: never;
@@ -4008,6 +4043,56 @@ export interface components {
         PlatformAdminListResponseDto: {
             admins: components["schemas"]["PlatformAdminSummaryDto"][];
         };
+        PlatformSettingDto: {
+            /** @enum {string} */
+            key: "opsAlertEmails" | "emailSenderName" | "emailSenderAddress" | "defaultSchoolTimezone" | "platformSessionTtlSeconds" | "platformSessionIdleTimeoutSeconds" | "schoolSessionTtlSeconds" | "authLockoutMaxAttempts" | "authLockoutWindowSeconds" | "passwordResetTokenTtlSeconds";
+            /** @enum {string} */
+            group: "operations" | "sign-in";
+            label: string;
+            description: string;
+            /** @enum {string} */
+            kind: "emailList" | "text" | "email" | "timezone" | "duration" | "count";
+            /** @enum {string} */
+            unit?: "minutes" | "hours" | "days";
+            /** @description Seconds for a duration. */
+            min?: number;
+            /** @description Seconds for a duration. */
+            max?: number;
+            /** @description The value in effect. */
+            value: string | number | string[];
+            /** @description The env file value. */
+            defaultValue: string | number | string[];
+            /** @description True when changed from the env value. */
+            overridden: boolean;
+            /** @description The env variable it overrides. */
+            envKey: string | null;
+            /** Format: date-time */
+            updatedAt: string | null;
+            updatedBy: string | null;
+        };
+        PlatformEnvironmentDto: {
+            releaseVersion: string;
+            /** @enum {string} */
+            emailTransport: "ses" | "smtp" | "console";
+        };
+        PlatformSettingsResponseDto: {
+            settings: components["schemas"]["PlatformSettingDto"][];
+            environment: components["schemas"]["PlatformEnvironmentDto"];
+        };
+        PlatformSettingChangeDto: {
+            /** @enum {string} */
+            key: "opsAlertEmails" | "emailSenderName" | "emailSenderAddress" | "defaultSchoolTimezone" | "platformSessionTtlSeconds" | "platformSessionIdleTimeoutSeconds" | "schoolSessionTtlSeconds" | "authLockoutMaxAttempts" | "authLockoutWindowSeconds" | "passwordResetTokenTtlSeconds";
+            /** @description The new value (seconds for a duration), or null to return to the default. */
+            value: (string | number | string[]) | null;
+        };
+        UpdatePlatformSettingsDto: {
+            changes: components["schemas"]["PlatformSettingChangeDto"][];
+            reason: string;
+        };
+        TestEmailResponseDto: {
+            /** @description Where the test email went. */
+            sentTo: string;
+        };
         SchoolListItemDto: {
             id: string;
             name: string;
@@ -6793,6 +6878,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformAdminListResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformSettingsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingsResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlatformSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSettingsResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformSettingsController_sendTestEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestEmailResponseDto"];
                 };
             };
         };

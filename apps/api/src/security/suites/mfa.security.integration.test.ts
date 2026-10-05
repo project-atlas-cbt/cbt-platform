@@ -10,7 +10,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createPrismaClient, prisma } from '@atlas/db';
 import { timeStep, totpAt } from '../../modules/platform/mfa/totp.js';
 import { PlatformMfaService } from '../../modules/platform/mfa/platform-mfa.service.js';
-import { PLATFORM_SECURITY_ALERT_TEMPLATE_NAME } from '../../modules/platform/mfa/security-alert-template.js';
+import { PLATFORM_SECURITY_ALERT_TEMPLATE_NAME } from '../../modules/platform/admin-templates.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
 import {
   ADMIN_HOST,
