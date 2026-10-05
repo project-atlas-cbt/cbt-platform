@@ -17,6 +17,7 @@ import {
 import { useReviewQueue } from '@/lib/question-review/queries';
 import { formatQueueAge } from '@/lib/question-review/queue-order';
 import { stripHtmlToText } from '@/lib/questions/sanitize-html';
+import { formatDate } from '@/lib/format/date';
 
 /**
  * F10 — `ReviewQueue` (`QB-03`, `05 §16.1`, `04 §29`/`§70`). Grouped by
@@ -84,7 +85,7 @@ export function ReviewQueue() {
                   </TableCell>
                   <TableCell>{item.authorName}</TableCell>
                   <TableCell>{item.level}</TableCell>
-                  <TableCell>{new Date(item.submittedAt).toLocaleDateString()}</TableCell>
+                  <TableCell>{formatDate(item.submittedAt)}</TableCell>
                   <TableCell>{formatQueueAge(item.submittedAt)}</TableCell>
                   <TableCell>
                     <Button asChild size="sm">

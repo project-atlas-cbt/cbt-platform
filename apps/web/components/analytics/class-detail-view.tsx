@@ -43,7 +43,7 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
               {cls?.name || 'Class Details'}
             </h1>
             <p className="text-xs text-text-muted mt-0.5">
-              Class performance, exams, and enrolled students (04 §37)
+              Class performance, exams, and enrolled students
             </p>
           </div>
         </div>

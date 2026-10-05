@@ -204,7 +204,7 @@ export default function SchoolResultsSettingsPage() {
         <p className="text-sm text-text-muted">
           Grading-band configuration waits on B15 (Results &amp; Publication), which defines the
           versioned grading-scale entity these bands would populate. Deferred by design — raw marks
-          and percentages remain available regardless (05 §46).
+          and percentages remain available regardless.
         </p>
       </section>
     </div>

@@ -11,6 +11,7 @@ import { useExamControl } from '@/lib/exam-control/queries';
 import { examControlPath } from '@/lib/exam-control/navigation';
 import { formatDateTime } from '@/lib/format/date';
 import { ExamSessionStatusBadge } from './exam-session-status-badge';
+import { sessionTypeLabel } from '@/lib/format/labels';
 
 /** F12 — `/[examId]/history`. Reads the same `sessions[]` already embedded
  * in `useExamControl(examId)`'s cache — no cross-exam "list sessions"
@@ -28,7 +29,7 @@ export function SessionHistoryScreen({ basePath, examId }: { basePath: string; e
   const sessions = control.data.sessions;
 
   const columns: DataTableColumn<(typeof sessions)[number]>[] = [
-    { id: 'type', header: 'Type', cell: (row) => row.sessionType },
+    { id: 'type', header: 'Type', cell: (row) => sessionTypeLabel(row.sessionType) },
     {
       id: 'status',
       header: 'Status',

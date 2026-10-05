@@ -81,8 +81,7 @@ export function QuestionPerformanceTable({
             {examTitle ? `${examTitle} — Question Performance` : 'Question Performance'}
           </h3>
           <p className="text-xs text-text-muted mt-0.5">
-            Identify difficult questions, topic patterns, and student misconceptions (04 §50, 05
-            §52).
+            Identify difficult questions, topic patterns, and student misconceptions.
           </p>
         </div>
 

@@ -6,6 +6,8 @@ import { NotYetAvailable } from '@/components/platform/not-yet-available';
 import { sanitizeQuestionHtml } from '@/lib/questions/sanitize-html';
 import { sortRevisionsDescending } from '@/lib/questions/revision-order';
 import { QuestionStatusBadge } from './question-status-badge';
+import { difficultyLabel } from '@/lib/format/labels';
+import { formatDate } from '@/lib/format/date';
 
 export interface RevisionHistoryItem {
   id: string;
@@ -91,9 +93,7 @@ export function RevisionHistory({
                 </span>
                 <span className="flex items-center gap-3">
                   <QuestionStatusBadge value={revision.status} />
-                  <span className="text-xs text-text-muted">
-                    {new Date(revision.updatedAt).toLocaleDateString()}
-                  </span>
+                  <span className="text-xs text-text-muted">{formatDate(revision.updatedAt)}</span>
                 </span>
               </button>
               {isOpen ? (
@@ -121,7 +121,8 @@ export function RevisionHistory({
                     ))}
                   </ul>
                   <p className="text-xs text-text-muted">
-                    {revision.difficulty} · {revision.marks} mark{revision.marks === 1 ? '' : 's'}
+                    {difficultyLabel(revision.difficulty)} · {revision.marks} mark
+                    {revision.marks === 1 ? '' : 's'}
                   </p>
                   {decision ? (
                     <div className="rounded-md border border-border bg-surface-muted/40 p-2 text-sm">

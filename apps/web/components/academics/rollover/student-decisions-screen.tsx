@@ -212,7 +212,7 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
           <h2 className="text-xl font-bold text-text-primary">Promotion Decisions Review</h2>
           <p className="text-sm text-text-secondary mt-1">
             Review promotion candidates by level and arm. Override individual or batch outcomes with
-            a mandatory reason (03 §61–§62).
+            a mandatory reason.
           </p>
         </div>
 

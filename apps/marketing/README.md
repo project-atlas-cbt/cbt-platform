@@ -59,9 +59,10 @@ needs new logo files.
 Every product claim lives in `lib/content.ts` and must be true of the shipped platform. Check the
 code before adding one; the comment at the top of that file lists what must not be claimed yet.
 
-## Replacing the illustrations with screenshots
+## Product screenshots
 
-Product pictures are schematic SVGs from `components/product-shot.tsx`, captioned as
-illustrations. To use a real capture, save a 1366 × 768 image in `public/screens/` and pass its path
-as `src` to the `ProductShot` that shows that screen. Captures come from the
-real app with a fictional demo school, never from a retouched image.
+`components/product-shot.tsx` shows `public/screens/<kind>.png`: captures of the real app at
+1366 × 768 (device scale 2), never retouched. They are taken from a fictional demo school seeded
+through the API: `PLATFORM_ROOT_DOMAIN=localhost pnpm --filter @atlas/load demo-school seed --live`
+against a local stack, then `node scripts/capture-screens.mjs` (its header lists what it needs). When a pictured screen changes,
+capture it again; a caption must describe only what its picture shows.

@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { GraduationCap } from 'lucide-react';
 import type { Role } from '@atlas/domain';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { PlatformRouteGuard } from '@/components/auth/platform-route-guard';
@@ -17,6 +16,7 @@ import { NotificationPanel } from './notification-panel';
 import { ProfileMenu, type ProfileMenuIdentity } from './profile-menu';
 import { OfflineIndicator } from './offline-indicator';
 import { GlobalSearch } from '@/components/reports/search';
+import { ProductMark } from './product-mark';
 
 const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
 
@@ -84,9 +84,7 @@ function ShellChrome({
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-brand-primary text-brand-primary-foreground">
-            <GraduationCap className="size-4.5" aria-hidden />
-          </div>
+          <ProductMark className="size-8 shrink-0" />
           <span className="hidden shrink-0 text-sm font-semibold text-text-primary md:inline">
             {productName}
           </span>

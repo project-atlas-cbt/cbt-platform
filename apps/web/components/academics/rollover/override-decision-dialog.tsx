@@ -129,7 +129,7 @@ export function OverrideDecisionDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      setError('A reason is mandatory for any administrative decision override (03 §62).');
+      setError('A reason is mandatory for any administrative decision override.');
       return;
     }
     if (isContinuing && !targetDraftClassId) {
@@ -261,7 +261,7 @@ export function OverrideDecisionDialog({
             />
             <p className="text-xs text-text-muted">
               Every decision override is recorded in the permanent audit trail with actor and
-              timestamp (03 §62).
+              timestamp.
             </p>
           </div>
 

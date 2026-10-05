@@ -45,7 +45,7 @@ export function DepartmentAnalyticsView() {
               {department?.name || 'Department'} Analytics
             </h1>
             <p className="text-xs text-text-muted mt-0.5">
-              Subject comparisons, class performance, and historical trends (04 §34, 05 §55.2)
+              Subject comparisons, class performance, and historical trends
             </p>
           </div>
         </div>
@@ -101,7 +101,7 @@ export function DepartmentAnalyticsView() {
           <ComparisonChart
             items={analytics?.subjects ?? []}
             title="Subject Performance"
-            subtitle="Average scores across department subjects (04 §34)"
+            subtitle="Average scores across department subjects"
             metricLabel="Subject Avg"
             emptyMessage="No subject results recorded yet."
           />
@@ -111,7 +111,7 @@ export function DepartmentAnalyticsView() {
           <ComparisonChart
             items={analytics?.classes ?? []}
             title="Class Performance"
-            subtitle="Performance comparison across academic classes (04 §34)"
+            subtitle="Performance comparison across academic classes"
             metricLabel="Class Avg"
             emptyMessage="No class results recorded yet."
           />
