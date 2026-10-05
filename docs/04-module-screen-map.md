@@ -1843,6 +1843,10 @@ SCHOOL
     └── Profile
 ```
 
+> **Amended by ADR-0035 (2026-10-05):** every staff workspace (School Admin, Moderator, HOD,
+> Teacher) ends with a **Help** item: task guides for that role, filtered by permission, with
+> search and a support contact. Students and Software Admin have no Help item.
+
 ---
 
 # 69. The Most Important Screen in the Entire Product

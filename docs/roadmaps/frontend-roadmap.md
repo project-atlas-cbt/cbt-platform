@@ -3409,6 +3409,12 @@ the MFA enrolment gate unmounted the one-time recovery codes on confirm; a CSRF 
 > staging (DoD 9) without Vercel or an AWS staging account. The golden path never runs against the
 > pilot's live database.
 
+> **Scope added by ADR-0035 (2026-10-05):** user documentation also lives **in the app**. Every staff
+> workspace has a Help screen of role-tailored task guides (`apps/web/lib/help/guides/`), filtered by
+> permission, with search, contextual "Help" links and a configured support contact. It adds the
+> school admin, moderator and HOD guides DoD 7 did not list. `docs/user-guides/` stays and is kept in
+> step with the in-app guides.
+
 ## Objective
 
 Complete frontend production deployment, documentation, and launch verification.

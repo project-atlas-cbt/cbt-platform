@@ -77,6 +77,8 @@ What stays the same:
    This writes `.env` (Compose: domain and infrastructure passwords) and `app.env` (application
    secrets), each with fresh random secrets and mode 600. Then fill in:
    - `.env`: `SCHOOLS` (comma-separated school labels), `ACME_EMAIL`, and the `BACKUP_S3_*` values.
+     `SUPPORT_EMAIL` and `SUPPORT_WHATSAPP` set the contacts on staff Help screens (ADR-0035); they
+     are built into the web image, so changing them needs a rebuild.
    - `app.env`: `OPS_ALERT_EMAILS` and the `SMTP_*` values from the email provider. The sender
      domain must be verified with that provider (SPF and DKIM records).
 

@@ -46,6 +46,8 @@ session and at least one class (05 §5.2).
 ## What we hand the school
 
 - The user guides for each role (F21).
+- The **Help** screen in each staff workspace (ADR-0035): task guides for that role and the support
+  contact. Show it during training, so staff know where to look once they forget a step.
 - The invigilator card: [lab-preparation.md §On the day](lab-preparation.md#on-the-day).
 - The support address and the escalation promise for exam hours
   ([on-call-and-incident-response.md](on-call-and-incident-response.md)).
