@@ -48,6 +48,9 @@ Putting the pages inside `apps/web` was considered and rejected:
 - The marketing site deploys on its own: as a Node process behind Caddy on the pilot VPS, or on
   any Next.js host. Hosting is chosen with the pilot's DNS (Vercel's free plan is
   non-commercial).
+- **Amendment (2026-10-05, owner decision):** on the pilot it runs on the VPS, as the `marketing`
+  service behind Caddy (`infra/vps/compose.yml`, `docs/operations/vps-pilot.md`); `www.<root>`
+  redirects to `<root>`.
 - The new workspace package builds in CI's `pnpm build`; its browser checks run in their own
   job (`marketing-e2e`).
 - Claims on the site must stay true of the product. `apps/marketing/lib/content.ts` holds them

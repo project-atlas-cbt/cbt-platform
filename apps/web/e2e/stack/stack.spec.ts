@@ -13,6 +13,9 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 const ROOT = process.env.STACK_ROOT ?? 'atlas.test';
+// The root domain and www serve the marketing site (ADR-0034); every
+// platform page is checked on a platform host.
+const WEB = `admin.${ROOT}`;
 const PREVIEW_DIR = path.resolve(import.meta.dirname, '../../stack-preview');
 const MAINTENANCE = path.resolve(import.meta.dirname, '../../../../infra/vps/bin/maintenance.sh');
 
@@ -49,12 +52,12 @@ test('Software Admin sign-in renders under the nonce CSP and installs the servic
 });
 
 test('error pages: 404 and unsupported browser', async ({ page }) => {
-  const missing = await page.goto(`https://${ROOT}/no-such-page`);
+  const missing = await page.goto(`https://${WEB}/no-such-page`);
   expect(missing?.status()).toBe(404);
   await expect(page.getByRole('heading', { name: "This page doesn't exist" })).toBeVisible();
   await preview(page, 'not-found');
 
-  await page.goto(`https://${ROOT}/unsupported-browser`);
+  await page.goto(`https://${WEB}/unsupported-browser`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/cannot run/);
   await preview(page, 'unsupported-browser');
 });
@@ -64,7 +67,7 @@ test('maintenance mode answers the web with the maintenance page and the API wit
 }) => {
   execFileSync(MAINTENANCE, ['on']);
   try {
-    const response = await page.goto(`https://${ROOT}/login`);
+    const response = await page.goto(`https://${WEB}/login`);
     expect(response?.status()).toBe(503);
     expect(response?.headers()['retry-after']).toBeTruthy();
     await expect(page.getByRole('heading', { name: /briefly unavailable/ })).toBeVisible();
@@ -83,6 +86,18 @@ test('maintenance mode answers the web with the maintenance page and the API wit
   } finally {
     execFileSync(MAINTENANCE, ['off']);
   }
-  const back = await page.goto(`https://${ROOT}/login`);
+  const back = await page.goto(`https://${WEB}/login`);
   expect(back?.status()).toBe(200);
+});
+
+test('the root domain serves the marketing site and www redirects to it', async ({ page }) => {
+  const response = await page.goto(`https://${ROOT}/`);
+  expect(response?.status()).toBe(200);
+  // The marketing site's static headers, not the platform's nonce CSP.
+  expect(response!.headers()['content-security-policy']).not.toMatch(/'nonce-/);
+  await expect(page.getByRole('link', { name: /request a demo/i }).first()).toBeVisible();
+  await preview(page, 'marketing-home');
+
+  await page.goto(`https://www.${ROOT}/pricing`);
+  expect(page.url()).toBe(`https://${ROOT}/pricing`);
 });

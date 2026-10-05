@@ -13,6 +13,8 @@
 #            (docs/operations/vps-pilot.md). NEXT_PUBLIC_* values are
 #            inlined at build time, so they are build arguments; on Vercel
 #            (the AWS topology) this target is unused.
+#   marketing — apps/marketing (`next start`), the public site on the root
+#            domain (ADR-0034). Every page is prerendered at build time.
 #
 # The local/CI development image stays infra/docker/Dockerfile.node.
 # CI Trivy-scans both targets here (HIGH/CRITICAL blocks the merge), as B20
@@ -110,3 +112,21 @@ RUN pnpm turbo run build --filter=@atlas/web
 ENV NODE_ENV=production
 EXPOSE 3000
 CMD ["pnpm", "--filter", "@atlas/web", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
+
+# --- Marketing site (single-server deployment, ADR-0034) --------------------
+# Pages are prerendered, so the product name and domain are build arguments;
+# contact details and price come from apps/marketing/.env.production. The
+# demo-request email settings are read at run time and never baked in.
+FROM base AS marketing
+ARG PRODUCT_NAME
+ARG PLATFORM_ROOT_DOMAIN
+ENV PRODUCT_NAME=${PRODUCT_NAME} \
+    PLATFORM_ROOT_DOMAIN=${PLATFORM_ROOT_DOMAIN} \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --chown=node:node . .
+RUN --mount=type=cache,target=/home/node/.local/share/pnpm/store,uid=1000,gid=1000 \
+    pnpm install --frozen-lockfile
+RUN pnpm turbo run build --filter=@atlas/marketing
+ENV NODE_ENV=production
+EXPOSE 3100
+CMD ["pnpm", "--filter", "@atlas/marketing", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3100"]

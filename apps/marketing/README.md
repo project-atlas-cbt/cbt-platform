@@ -43,7 +43,9 @@ and never stored or logged.
 
 ## Deploy
 
-Any Next.js host works (Vercel, or `next start` behind Caddy on the pilot VPS). Point the apex and
+The pilot runs it on the VPS as the `marketing` service behind Caddy (owner decision 2026-10-05;
+`infra/vps/compose.yml`, `docs/operations/vps-pilot.md`), with `www` redirecting to the apex.
+Any other Next.js host also works. Point the apex and
 `www` at it; school subdomains stay on `apps/web` (`docs/operations/domain-plan.md`).
 
 ## Logo

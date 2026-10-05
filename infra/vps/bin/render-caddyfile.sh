@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
 : "${ROOT_DOMAIN:?ROOT_DOMAIN is not set in .env}"
 
-web_hosts="$ROOT_DOMAIN, www.$ROOT_DOMAIN, admin.$ROOT_DOMAIN"
+web_hosts="admin.$ROOT_DOMAIN"
 api_hosts="api.$ROOT_DOMAIN, admin.api.$ROOT_DOMAIN"
 for school in ${SCHOOLS//,/ }; do
   if ! [[ $school =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
@@ -124,6 +124,23 @@ $api_hosts {
 	}
 }
 
+# The public marketing site (ADR-0034) on the root domain; www redirects to
+# it. Not behind the maintenance flag: platform maintenance leaves it up.
+$ROOT_DOMAIN {
+	import common
+	handle {
+		reverse_proxy marketing:3100
+	}
+	handle_errors 502 503 504 {
+		import maintenance_page
+	}
+}
+
+www.$ROOT_DOMAIN {
+	import common
+	redir https://$ROOT_DOMAIN{uri} permanent
+}
+
 media.$ROOT_DOMAIN {
 	import common
 	request_body {
@@ -133,4 +150,4 @@ media.$ROOT_DOMAIN {
 }
 CADDY
 } > Caddyfile
-echo "Caddyfile written for: $web_hosts | $api_hosts | media.$ROOT_DOMAIN"
+echo "Caddyfile written for: $ROOT_DOMAIN, www.$ROOT_DOMAIN (marketing) | $web_hosts | $api_hosts | media.$ROOT_DOMAIN"
