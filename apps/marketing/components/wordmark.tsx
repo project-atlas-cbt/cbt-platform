@@ -1,22 +1,22 @@
+import Image from 'next/image';
 import { site } from '@/lib/site';
 
 /**
- * Placeholder wordmark until a logo is chosen: the product name in the
- * display face beside a filled answer circle. Swap this one component when
- * the real logo arrives.
+ * The ExamKeep logo (Margin E, horizontal full-colour lockup) from the brand
+ * pack in /mnt/project-files/branding/logo/examkeep-logo; its USAGE.md sets
+ * the 24 px minimum height and the clear space. The wordmark is drawn, not
+ * typed, so a different PRODUCT_NAME needs new logo files as well.
  */
 export function Wordmark() {
   return (
-    <span className="inline-flex items-center gap-2">
-      <span
-        aria-hidden="true"
-        className="relative inline-flex size-6 items-center justify-center rounded-full border-2 border-accent"
-      >
-        <span className="size-3 rounded-full bg-accent" />
-      </span>
-      <span className="font-display text-xl font-semibold tracking-tight text-ink">
-        {site.name}
-      </span>
-    </span>
+    <Image
+      src="/brand/examkeep-horizontal-colour.svg"
+      alt={site.name}
+      width={152}
+      height={28}
+      unoptimized
+      priority
+      className="h-7 w-auto"
+    />
   );
 }

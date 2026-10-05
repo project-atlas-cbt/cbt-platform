@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { ImageResponse } from 'next/og';
 import { site } from '@/lib/site';
 
@@ -6,7 +8,11 @@ export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
 // The link preview WhatsApp and Facebook show: the exercise-book page.
-export default function OpengraphImage() {
+export default async function OpengraphImage() {
+  const png = await readFile(
+    join(process.cwd(), 'public/brand/examkeep-horizontal-colour-1024.png'),
+  );
+  const logo = `data:image/png;base64,${png.toString('base64')}`;
   const lines = Array.from({ length: 13 }, (_, i) => i);
   return new ImageResponse(
     <div
@@ -42,22 +48,8 @@ export default function OpengraphImage() {
         }}
       />
       <div style={{ display: 'flex', flexDirection: 'column', padding: '86px 90px 0 160px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              border: '5px solid #1d4ed8',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <div style={{ width: 20, height: 20, borderRadius: 10, background: '#1d4ed8' }} />
-          </div>
-          <div style={{ fontSize: 44, fontWeight: 700, color: '#14161b' }}>{site.name}</div>
-        </div>
+        {/* The horizontal full-colour lockup from the brand pack (USAGE.md). */}
+        <img src={logo} alt="" width={325} height={60} />
         <div
           style={{
             marginTop: 56,

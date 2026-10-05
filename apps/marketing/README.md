@@ -46,6 +46,14 @@ and never stored or logged.
 Any Next.js host works (Vercel, or `next start` behind Caddy on the pilot VPS). Point the apex and
 `www` at it; school subdomains stay on `apps/web` (`docs/operations/domain-plan.md`).
 
+## Logo
+
+The header, footer, favicon (`app/icon.svg`, `app/favicon.ico`), Apple touch icon
+(`app/apple-icon.png`) and Open Graph image use the ExamKeep brand pack
+(`/mnt/project-files/branding/logo/examkeep-logo/`). Follow its `USAGE.md` for sizes, clear space
+and which colour version goes where. The wordmark is drawn, so a different `PRODUCT_NAME` also
+needs new logo files.
+
 ## What the site may claim
 
 Every product claim lives in `lib/content.ts` and must be true of the shipped platform. Check the

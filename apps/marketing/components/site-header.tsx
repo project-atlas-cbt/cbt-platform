@@ -7,7 +7,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-rule bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/85">
       <Container className="flex h-16 items-center justify-between gap-6">
-        <Link href="/" className="rounded-sm" aria-label="Home">
+        <Link href="/" className="rounded-sm">
           <Wordmark />
         </Link>
 

@@ -43,10 +43,11 @@ real app after a visual-only polish of the showcase screens, never retouched ima
   redirects, and the form's failure and consent paths.
 - Lighthouse (mobile, home): performance 96, accessibility 100, best practices 100, SEO 100.
 
-**Open:** real screenshots and the 60-second teaser (after the showcase-screen polish); the logo
-from the owner; legal review of Privacy and Terms; deploying it on the pilot VPS or Vercel. Contact
+**Open:** real screenshots and the 60-second teaser (after the showcase-screen polish); legal review of Privacy and Terms; deploying it on the pilot VPS or Vercel. Contact
 details, the starting price (₦2,000 per student per year, under discussion) and the owning company
-(MushakTech Ventures) were added on 2026-10-05 in `apps/marketing/.env.production`.
+(MushakTech Ventures) were added on 2026-10-05 in `apps/marketing/.env.production`. The Margin E logo
+(brand pack `/mnt/project-files/branding/logo/examkeep-logo/`, with its `USAGE.md`) replaced the
+placeholder wordmark, favicon, Apple touch icon and Open Graph mark the same day.
 
 ### 2026-10-04 — Pilot hosting on a single VPS (B23)
 
