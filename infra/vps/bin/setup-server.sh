@@ -42,5 +42,7 @@ echo 'atlas ALL=(root) NOPASSWD: /home/atlas/cbt-platform/infra/vps/bin/internal
 chmod 440 /etc/sudoers.d/atlas-tls
 
 cron_line='30 1 * * * cd /home/atlas/cbt-platform/infra/vps && bin/backup.sh >> backups/backup.log 2>&1'
-( crontab -u atlas -l 2>/dev/null | grep -vF 'bin/backup.sh'; echo "$cron_line" ) | crontab -u atlas -
+# grep -v exits 1 when it keeps no lines (a fresh server has no crontab), which
+# set -e inside the subshell would turn into a silent early exit.
+( crontab -u atlas -l 2>/dev/null | grep -vF 'bin/backup.sh' || true; echo "$cron_line" ) | crontab -u atlas -
 echo "server ready: sign in as atlas, clone the repository to ~/cbt-platform, then follow vps-pilot.md"
