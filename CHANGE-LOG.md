@@ -2,6 +2,21 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-05 — Email transports skip reserved recipient names; demo school on the pilot server
+
+The pilot server is staging until the pilot and gets the fictional demo school. Its staff have
+addresses such as `@oakridge.example`. Creating them through the API sends invitations, which a
+real transport would hand to ZeptoMail only to bounce, costing the new examkeep.com sending domain
+its reputation.
+
+- `apps/api/src/notifications/reserved-recipients.ts`: the SES and SMTP transports now drop mail
+  to names reserved by RFC 2606 / 6761 (`.example`, `.invalid`, `.test`, `.localhost`,
+  `example.com/.net/.org`). No such address can ever receive mail. The console transport is
+  unchanged.
+- `docs/operations/vps-pilot.md`: new "Demo school (staging only)" section with the seed command
+  for the server (straight to the API inside the network, then `SCHOOLS` and a redeploy).
+- Tested: new unit tests, the notifications unit and integration tests, API typecheck and lint.
+
 ### 2026-10-05 — First pilot VPS deploy: post-deploy smoke fixed for listed-only school hosts
 
 The first deploy to the pilot VPS (staging until the pilot, demo data only) built and started every
