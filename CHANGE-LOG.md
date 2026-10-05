@@ -45,6 +45,45 @@ and passes against production builds; screenshots reviewed at desktop and phone 
 - The Dashboard nav item shows as active on every page of a workspace (pre-existing).
 - The staff shell is not laid out for phone width (pre-existing; lab hardware is the target).
 
+### 2026-10-05 — Showcase polish, real screenshots and teaser
+
+Owner request: polish the screens the marketing site shows, visually only, then replace its
+schematic pictures with real captures and make a short teaser. No layout, behaviour or data
+changed.
+
+**Polish (`apps/web`)**
+
+- Specification citations such as "(04 §12, §67)" removed from on-screen text (dashboards,
+  analytics, rollover, results settings). The four role dashboards' subtitles, which read as design
+  questions, now say what the page holds.
+- Raw enum values shown in words: session type ("Standard", not `STANDARD`) and question
+  difficulty ("Easy"), via `lib/format/labels.ts`.
+- Question review: the back link uses the same icon link as the rest of the app; queue, history
+  and revision dates use `formatDate` instead of the browser's numeric short date (10/5/2026 reads
+  as 10 May in Nigeria).
+- The branding step's logo picker is styled instead of the bare browser control, with the accepted
+  formats under it.
+- The app header shows the ExamKeep symbol (`components/shell/product-mark.tsx`) in place of the
+  generic cap icon tinted with the school colour.
+
+**Demo school and captures**
+
+- `pnpm --filter @atlas/load demo-school seed [--live]` builds the fictional Oakridge College
+  through the API (staff, 36 students, 12 approved and 4 pending SS2 Mathematics questions, a
+  marked and ended Continuous Assessment, a live First Term Test with submitted, writing,
+  disconnected and waiting students) and Riverside Grammar School part-way through onboarding.
+  `--live` keeps the writing students heartbeating. The password stays in the git-ignored
+  `.state/`.
+- `apps/marketing/public/screens/` holds five captures at 1366 × 768; `ProductShot` now shows them
+  and the schematic SVGs are gone. One features caption was reworded to match its picture.
+- A 58-second captioned teaser recorded from the same data is in the project files
+  (`marketing-site/teaser/`), not the repository.
+
+**Tested:** web unit tests (226 files, 1,008 tests), lint and typecheck for web, marketing and
+load; web browser accessibility suite passes. `keyboard.spec.ts` times out on the preview link
+both with and without these changes in this container, so it is not caused by them; CI (still
+blocked by billing) has not run it. Marketing unit (38) and browser (46) tests pass.
+
 ### 2026-10-05 — F21 frontend production readiness (implemented, pilot pending)
 
 **Owner decision (2026-10-04):** a **CI stack** replaces per-PR preview deployments and staging.

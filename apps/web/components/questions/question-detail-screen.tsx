@@ -25,6 +25,7 @@ import { pickCurrentRevision } from '@/lib/questions/revision-order';
 import { QuestionStatusBadge } from './question-status-badge';
 import { MediaPreview } from './media-preview';
 import { RevisionHistory } from './revision-history';
+import { difficultyLabel } from '@/lib/format/labels';
 
 /**
  * F9 — read-only current-revision view + `RevisionHistory`, with
@@ -92,7 +93,7 @@ export function QuestionDetailScreen({ questionId }: { questionId: string }) {
         <div>
           <h1 className="text-lg font-semibold text-text-primary">{data.subjectName}</h1>
           <p className="text-sm text-text-secondary">
-            {data.level} · {current?.difficulty} · {current?.marks} mark
+            {data.level} · {difficultyLabel(current?.difficulty)} · {current?.marks} mark
             {current?.marks === 1 ? '' : 's'}
             {data.topicName ? ` · ${data.topicName}` : ''}
           </p>

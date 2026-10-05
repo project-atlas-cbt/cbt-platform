@@ -40,7 +40,7 @@ describe('SessionHistoryScreen', () => {
       refetch: vi.fn(),
     } as never);
     render(<SessionHistoryScreen basePath="/teacher/exam-control" examId="e1" />);
-    expect(screen.getByText('STANDARD')).toBeInTheDocument();
+    expect(screen.getByText('Standard')).toBeInTheDocument();
     expect(screen.getAllByText('Ade Ola')).toHaveLength(2);
   });
 

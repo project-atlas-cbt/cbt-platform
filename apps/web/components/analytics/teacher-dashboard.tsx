@@ -66,9 +66,7 @@ export function TeacherDashboard() {
           <h1 className="text-xl font-bold tracking-tight text-text-primary">
             Welcome back{teacherName}
           </h1>
-          <p className="text-xs text-text-muted mt-0.5">
-            Can I create, administer, and evaluate my assessments? (04 §36, §67)
-          </p>
+          <p className="text-xs text-text-muted mt-0.5">Your questions, exams and results.</p>
         </div>
 
         <div className="flex items-center gap-2">

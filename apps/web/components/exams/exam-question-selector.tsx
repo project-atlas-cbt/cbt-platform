@@ -26,6 +26,7 @@ import { useSetExamQuestions, type ExamQuestionInput } from '@/lib/exams/mutatio
 import { examStepPath } from '@/lib/exams/navigation';
 import { describeExamError } from '@/lib/exams/error-utils';
 import { ApiError } from '@/lib/api';
+import { difficultyLabel } from '@/lib/format/labels';
 
 const PAGE_SIZE = 20;
 const ALL_DIFFICULTIES = '__all__';
@@ -280,7 +281,7 @@ function ExamQuestionSelectorLoaded({
                 <li key={question.questionRevisionId} className="flex items-center gap-3 px-3 py-2">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-text-primary">
-                      {question.topicName ?? 'No topic'} · {question.difficulty}
+                      {question.topicName ?? 'No topic'} · {difficultyLabel(question.difficulty)}
                     </p>
                   </div>
                   <Input

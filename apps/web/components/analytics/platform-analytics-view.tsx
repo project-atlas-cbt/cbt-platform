@@ -16,8 +16,7 @@ export function PlatformAnalyticsView() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-text-primary">Platform Analytics</h1>
           <p className="text-xs text-text-muted mt-0.5">
-            System-wide commercial health, tenant activation, and examination volume (04 §9, 05
-            §55.4)
+            System-wide commercial health, tenant activation, and examination volume
           </p>
         </div>
 

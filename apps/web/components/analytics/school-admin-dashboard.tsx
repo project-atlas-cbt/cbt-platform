@@ -157,7 +157,7 @@ export function SchoolAdminDashboard() {
             {contextQuery.data?.schoolName || 'School'} Dashboard
           </h1>
           <p className="text-xs text-text-muted mt-0.5">
-            How is my school performing and is everything operational? (04 §12, §67)
+            Your school&apos;s operations, alerts and results this term.
           </p>
         </div>
 
@@ -249,7 +249,7 @@ export function SchoolAdminDashboard() {
               <div>
                 <h3 className="text-sm font-semibold text-text-primary">Assessment Overview</h3>
                 <p className="text-xs text-text-muted mt-0.5">
-                  Examination volume for current term (04 §12)
+                  Examination volume for current term
                 </p>
               </div>
               <Link

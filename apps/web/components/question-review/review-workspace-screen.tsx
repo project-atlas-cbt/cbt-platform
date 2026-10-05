@@ -16,6 +16,7 @@ import { QuestionStatusBadge } from '@/components/questions/question-status-badg
 import { MediaPreview } from '@/components/questions/media-preview';
 import { DecisionPanel } from './decision-panel';
 import { ReviewHistoryTimeline } from './review-history-timeline';
+import { difficultyLabel } from '@/lib/format/labels';
 
 const QUEUE_BASE_PATH = '/hod/question-review';
 
@@ -76,15 +77,16 @@ export function ReviewWorkspace({ questionId }: { questionId: string }) {
         <div>
           <Link
             href={QUEUE_BASE_PATH}
-            className="text-sm text-text-secondary hover:text-text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
           >
-            ← Back to queue
+            <ArrowLeft className="size-4" aria-hidden /> Back to queue
           </Link>
           <h1 className="mt-1 text-lg font-semibold text-text-primary">
             {data.subjectName} · {data.level}
           </h1>
           <p className="text-sm text-text-secondary">
-            {revision.difficulty} · {revision.marks} mark{revision.marks === 1 ? '' : 's'}
+            {difficultyLabel(revision.difficulty)} · {revision.marks} mark
+            {revision.marks === 1 ? '' : 's'}
             {revision.topicName ? ` · ${revision.topicName}` : ''}
           </p>
           <p className="mt-1 text-sm text-text-muted">By {data.authorName}</p>

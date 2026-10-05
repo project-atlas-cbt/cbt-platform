@@ -35,8 +35,7 @@ export function SchoolAnalyticsView() {
           <div>
             <h1 className="text-xl font-bold tracking-tight text-text-primary">School Analytics</h1>
             <p className="text-xs text-text-muted mt-0.5">
-              Comprehensive institutional performance, participation, and department trends (05
-              §55.3)
+              Comprehensive institutional performance, participation, and department trends
             </p>
           </div>
         </div>

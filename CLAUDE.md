@@ -251,8 +251,9 @@ Open items carried forward:
   `docs/operations/launch-checklist.md`. Audit BLOCKER/HIGH: 57/58 closed, R-03 waits on staging
   (`docs/audit/blocker-high-closure.md`).
 - Product name decided: **ExamKeep** (still read from `PRODUCT_NAME`). Its public marketing site is
-  `apps/marketing` on the root domain (ADR-0034); real screenshots wait on a visual-only polish of
-  the showcase screens, and site claims must stay true of the product (`lib/content.ts`).
+  `apps/marketing` on the root domain (ADR-0034). Its screenshots are real captures from the
+  fictional demo school (`demo-school` seed, `apps/marketing/scripts/capture-screens.mjs`); site
+  claims and captions must stay true of the product (`lib/content.ts`).
 - Local and CI object storage is Chainguard's MinIO build pinned by digest (MinIO withdrew its
   public images, 2026-10-02 CI repair entry).
 
