@@ -111,7 +111,7 @@ async function main(): Promise<void> {
       template: SOFTWARE_ADMIN_INVITATION_TEMPLATE.name,
       variables: {
         productName: env.PRODUCT_NAME,
-        signInUrl: `https://admin.${env.PLATFORM_ROOT_DOMAIN}`,
+        signInUrl: `https://admin.${env.PLATFORM_ROOT_DOMAIN}/admin/login`,
         password,
       },
     });

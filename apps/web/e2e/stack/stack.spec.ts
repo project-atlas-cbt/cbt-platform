@@ -51,6 +51,15 @@ test('Software Admin sign-in renders under the nonce CSP and installs the servic
   await preview(page, 'admin-sign-in');
 });
 
+test('the admin host sends its bare root and /login to the Software Admin console', async ({
+  page,
+}) => {
+  await page.goto(`https://${WEB}/login`);
+  expect(page.url()).toBe(`https://${WEB}/admin/login`);
+  await page.goto(`https://${WEB}/`);
+  await expect(page).toHaveURL(`https://${WEB}/admin/login`);
+});
+
 test('error pages: 404 and unsupported browser', async ({ page }) => {
   const missing = await page.goto(`https://${WEB}/no-such-page`);
   expect(missing?.status()).toBe(404);

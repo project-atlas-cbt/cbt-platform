@@ -112,7 +112,7 @@ export function leadEmail(
 }
 
 export interface MailSettings {
-  provider: 'resend' | 'brevo' | 'log';
+  provider: 'resend' | 'brevo' | 'zeptomail' | 'log';
   apiKey?: string | undefined;
   to?: string | undefined;
   from?: string | undefined;
@@ -126,7 +126,7 @@ export function readMailSettings(
     // Development only: never accept leads into a log in production.
     return env.NODE_ENV === 'production' ? undefined : { provider };
   }
-  if (provider !== 'resend' && provider !== 'brevo') return undefined;
+  if (provider !== 'resend' && provider !== 'brevo' && provider !== 'zeptomail') return undefined;
   const apiKey = env.MARKETING_LEAD_EMAIL_API_KEY?.trim();
   const to = env.MARKETING_LEAD_EMAIL_TO?.trim();
   const from = env.MARKETING_LEAD_EMAIL_FROM?.trim();
@@ -147,31 +147,50 @@ export async function sendLead(
     return true;
   }
   const request =
-    settings.provider === 'resend'
+    settings.provider === 'zeptomail'
       ? {
-          url: 'https://api.resend.com/emails',
-          headers: { Authorization: `Bearer ${settings.apiKey}` },
+          // The agent's Send Mail token, the same one its SMTP settings use.
+          url: 'https://api.zeptomail.com/v1.1/email',
+          headers: {
+            Accept: 'application/json',
+            Authorization: settings.apiKey!.startsWith('Zoho-enczapikey ')
+              ? settings.apiKey!
+              : `Zoho-enczapikey ${settings.apiKey}`,
+          },
           body: {
-            from: settings.from,
-            to: [settings.to],
-            reply_to: lead.email,
+            from: { address: settings.from },
+            to: [{ email_address: { address: settings.to } }],
+            reply_to: [{ address: lead.email, name: lead.name }],
             subject: mail.subject,
-            text: mail.text,
-            html: mail.html,
+            textbody: mail.text,
+            htmlbody: mail.html,
           },
         }
-      : {
-          url: 'https://api.brevo.com/v3/smtp/email',
-          headers: { 'api-key': settings.apiKey! },
-          body: {
-            sender: { email: settings.from },
-            to: [{ email: settings.to }],
-            replyTo: { email: lead.email, name: lead.name },
-            subject: mail.subject,
-            textContent: mail.text,
-            htmlContent: mail.html,
-          },
-        };
+      : settings.provider === 'resend'
+        ? {
+            url: 'https://api.resend.com/emails',
+            headers: { Authorization: `Bearer ${settings.apiKey}` },
+            body: {
+              from: settings.from,
+              to: [settings.to],
+              reply_to: lead.email,
+              subject: mail.subject,
+              text: mail.text,
+              html: mail.html,
+            },
+          }
+        : {
+            url: 'https://api.brevo.com/v3/smtp/email',
+            headers: { 'api-key': settings.apiKey! },
+            body: {
+              sender: { email: settings.from },
+              to: [{ email: settings.to }],
+              replyTo: { email: lead.email, name: lead.name },
+              subject: mail.subject,
+              textContent: mail.text,
+              htmlContent: mail.html,
+            },
+          };
   try {
     const response = await fetchImpl(request.url, {
       method: 'POST',
