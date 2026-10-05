@@ -99,8 +99,9 @@ export function Step02Branding() {
             const file = e.target.files?.[0];
             if (file) void onLogoSelected(file);
           }}
-          className="text-sm text-text-secondary"
+          className="block w-full text-sm text-text-secondary file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-text-primary hover:file:bg-surface-muted disabled:opacity-50"
         />
+        <p className="text-xs text-text-muted">PNG, JPEG or WebP.</p>
         {logoUpload.uploading ? <p className="text-sm text-text-muted">Uploading…</p> : null}
         {logoUpload.error ? (
           <p role="alert" className="text-sm font-medium text-danger">

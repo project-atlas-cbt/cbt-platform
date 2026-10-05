@@ -3,6 +3,7 @@
 import type { ApiComponents } from '@atlas/contracts';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format/date';
+import { sessionTypeLabel } from '@/lib/format/labels';
 
 type ExamSession = ApiComponents['schemas']['ExamSessionResponseDto'];
 
@@ -41,7 +42,8 @@ export function SessionPicker({
               : 'border-border bg-surface text-text-secondary hover:text-text-primary',
           )}
         >
-          {session.sessionType} — opened {formatDateTime(session.reopenedAt ?? session.openedAt)}
+          {sessionTypeLabel(session.sessionType)} session · opened{' '}
+          {formatDateTime(session.reopenedAt ?? session.openedAt)}
         </button>
       ))}
     </div>

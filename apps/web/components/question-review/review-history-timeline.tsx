@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { formatDate } from '@/lib/format/date';
 
 export interface ReviewHistoryTimelineItem {
   id: string;
@@ -51,9 +52,7 @@ export function ReviewHistoryTimeline({ history }: { history: ReviewHistoryTimel
                 </span>
                 <span className="flex items-center gap-2">
                   <Badge status={meta.status}>{meta.label}</Badge>
-                  <span className="text-xs text-text-muted">
-                    {new Date(entry.createdAt).toLocaleDateString()}
-                  </span>
+                  <span className="text-xs text-text-muted">{formatDate(entry.createdAt)}</span>
                 </span>
               </div>
               <p className="mt-1 text-text-secondary">

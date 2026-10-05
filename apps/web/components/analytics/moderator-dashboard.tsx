@@ -83,7 +83,7 @@ export function ModeratorDashboard() {
             Moderator Dashboard
           </h1>
           <p className="text-xs text-text-muted mt-0.5">
-            Is the school&apos;s data and user structure correctly configured? (04 §21, §67)
+            Students, staff, classes and imports for your school.
           </p>
         </div>
 

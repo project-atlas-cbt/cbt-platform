@@ -26,7 +26,7 @@ const shots: Record<string, { kind: ShotKind; title: string; caption: string }> 
   results: {
     kind: 'results',
     title: 'Exam results',
-    caption: 'An exam’s score distribution and results, ready for the school to publish.',
+    caption: 'An exam’s marked and graded results, waiting for the school to publish them.',
   },
   'school-admin': {
     kind: 'setup',

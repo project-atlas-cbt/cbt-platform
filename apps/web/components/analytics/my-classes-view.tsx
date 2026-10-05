@@ -44,7 +44,7 @@ export function MyClassesView() {
         <div className="border-b border-border pb-4">
           <h1 className="text-xl font-bold tracking-tight text-text-primary">My Classes</h1>
           <p className="text-xs text-text-muted mt-0.5">
-            Classes assigned to you for teaching and assessment (04 §37).
+            Classes assigned to you for teaching and assessment.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -61,7 +61,7 @@ export function MyClassesView() {
       <div className="border-b border-border pb-4">
         <h1 className="text-xl font-bold tracking-tight text-text-primary">My Classes</h1>
         <p className="text-xs text-text-muted mt-0.5">
-          Classes assigned to you for teaching and assessment (04 §37).
+          Classes assigned to you for teaching and assessment.
         </p>
       </div>
 

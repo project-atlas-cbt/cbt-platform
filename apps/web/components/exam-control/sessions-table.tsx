@@ -8,6 +8,7 @@ import { formatDateTime } from '@/lib/format/date';
 import { examControlStudentsPath } from '@/lib/exam-control/navigation';
 import { ExamSessionStatusBadge } from './exam-session-status-badge';
 import { Monitor } from 'lucide-react';
+import { sessionTypeLabel } from '@/lib/format/labels';
 
 type ExamSession = ApiComponents['schemas']['ExamSessionResponseDto'];
 
@@ -42,7 +43,7 @@ export function SessionsTable({
   const canReopen = useHasPermission('exam.reopen');
 
   const columns: DataTableColumn<ExamSession>[] = [
-    { id: 'type', header: 'Type', cell: (row) => row.sessionType },
+    { id: 'type', header: 'Type', cell: (row) => sessionTypeLabel(row.sessionType) },
     {
       id: 'status',
       header: 'Status',

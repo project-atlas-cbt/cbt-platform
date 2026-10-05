@@ -77,7 +77,7 @@ export function HodDashboard() {
             {department?.name || 'Department'} Dashboard
           </h1>
           <p className="text-xs text-text-muted mt-0.5">
-            Is my department academically ready and performing well? (04 §29, §67)
+            Your department&apos;s question review, exam readiness and results.
           </p>
         </div>
 

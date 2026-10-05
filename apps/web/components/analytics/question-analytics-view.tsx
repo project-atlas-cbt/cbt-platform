@@ -55,8 +55,7 @@ export function QuestionAnalyticsView({ examId }: QuestionAnalyticsViewProps) {
               {exam?.title || 'Exam Analytics'}
             </h1>
             <p className="text-xs text-text-muted mt-0.5">
-              Question-by-question performance, difficulty rates, and class breakdowns (04 §50, 05
-              §52)
+              Question-by-question performance, difficulty rates, and class breakdowns
             </p>
           </div>
         </div>

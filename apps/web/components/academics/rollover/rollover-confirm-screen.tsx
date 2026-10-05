@@ -134,7 +134,7 @@ export function RolloverConfirmScreen({ planId, basePath }: RolloverConfirmScree
       <div className="rounded-lg border border-brand-primary/30 bg-brand-primary-subtle/20 p-5 space-y-2">
         <div className="flex items-center gap-2 text-brand-primary font-semibold text-sm">
           <ShieldCheck className="h-5 w-5 shrink-0" aria-hidden />
-          <span>Historical Academic Integrity Guarantee (03 §59 / ADR-0026)</span>
+          <span>Historical Academic Integrity Guarantee</span>
         </div>
         <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
           Historical records are permanently preserved. Prior student enrollments, exam sittings,
@@ -202,8 +202,7 @@ export function RolloverConfirmScreen({ planId, basePath }: RolloverConfirmScree
           <div className="rounded-lg border border-border bg-surface p-5 space-y-4">
             <h3 className="text-base font-semibold text-text-primary">Scale of Operation</h3>
             <p className="text-xs text-text-muted">
-              The following changes will be applied atomically inside a single database transaction
-              (08 §7.3):
+              The following changes will be applied atomically inside a single database transaction:
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-1">
