@@ -5532,6 +5532,7 @@ export interface components {
             highestPercentage: number | null;
             lowestPercentage: number | null;
             passRate: number | null;
+            ungradedCount: number;
         };
         ExamResultClassSummaryDto: {
             expectedStudentCount: number;
@@ -5543,6 +5544,7 @@ export interface components {
             highestPercentage: number | null;
             lowestPercentage: number | null;
             passRate: number | null;
+            ungradedCount: number;
             classId: string;
             className: string;
         };
@@ -5654,6 +5656,8 @@ export interface components {
             targetResultId?: string;
             /** @description MANUAL_OVERRIDE only — the earned-marks value set outright. */
             overrideEarnedMarks?: number;
+            /** @description RECALCULATE only — "Grade now": touch only results finalised without a grade, and grade them against the school's current scale. */
+            ungradedOnly?: boolean;
         };
         ResultAdjustmentOperationResponseDto: {
             id: string;

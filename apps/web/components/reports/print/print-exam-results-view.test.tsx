@@ -120,6 +120,7 @@ const results: PrintExamResultsData = {
     highestPercentage: 84,
     lowestPercentage: 60,
     passRate: 100,
+    ungradedCount: 0,
   },
   classSummaries: [],
   published: false,

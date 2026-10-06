@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useHasPermission } from '@/lib/nav';
 import {
@@ -7,10 +7,15 @@ import {
   useExamResults,
   useSchoolResultPolicy,
 } from '@/lib/results/staff-queries';
-import { usePublishResults, useUnpublishResults } from '@/lib/results/staff-mutations';
+import {
+  useCreateResultAdjustment,
+  usePublishResults,
+  useUnpublishResults,
+} from '@/lib/results/staff-mutations';
 import { ExamResultsScreen } from './exam-results-screen';
 
 const replace = vi.fn();
+const createAdjustment = vi.fn();
 let params = new URLSearchParams();
 vi.mock('next/navigation', () => ({
   // HelpLink (ADR-0035) reads the path; outside a workspace it renders nothing.
@@ -27,6 +32,7 @@ vi.mock('@/lib/results/staff-queries', () => ({
 vi.mock('@/lib/results/staff-mutations', () => ({
   usePublishResults: vi.fn(),
   useUnpublishResults: vi.fn(),
+  useCreateResultAdjustment: vi.fn(),
 }));
 
 const mockUseHasPermission = vi.mocked(useHasPermission);
@@ -46,6 +52,7 @@ const SUMMARY = {
   highestPercentage: 82,
   lowestPercentage: 60,
   passRate: 66.7,
+  ungradedCount: 0,
 };
 
 function data(overrides: Record<string, unknown> = {}) {
@@ -84,6 +91,10 @@ describe('ExamResultsScreen', () => {
     mockUseAdjustmentOperation.mockReturnValue({ isPending: true } as never);
     mockUsePublishResults.mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never);
     mockUseUnpublishResults.mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never);
+    vi.mocked(useCreateResultAdjustment).mockReturnValue({
+      mutateAsync: createAdjustment,
+      isPending: false,
+    } as never);
     mockUseExamResults.mockReturnValue({
       data: data(),
       isPending: false,
@@ -102,6 +113,46 @@ describe('ExamResultsScreen', () => {
     // Voided visible alongside the averages) — assert both explicitly.
     expect(screen.getAllByText('1')).toHaveLength(2);
     expect(screen.getByText('Voided')).toBeInTheDocument();
+  });
+
+  it('P2-21: offers "Grade now" for ungraded results and grades only those', async () => {
+    mockUseHasPermission.mockImplementation((resource) => resource === 'results.adjust');
+    mockUseExamResults.mockReturnValue({
+      data: data({ summary: { ...SUMMARY, ungradedCount: 2 } }),
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    createAdjustment.mockResolvedValue({ id: 'op-1' });
+    renderWithClient(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
+
+    expect(screen.getByText(/2 results have no grade/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Grade now' }));
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'Bands were set after marking.' },
+    });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Grade now' }));
+
+    await waitFor(() =>
+      expect(createAdjustment).toHaveBeenCalledWith({
+        examId: 'exam-1',
+        type: 'RECALCULATE',
+        reason: 'Bands were set after marking.',
+        ungradedOnly: true,
+      }),
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/moderator/results/exam-1?op=op-1'));
+  });
+
+  it('hides "Grade now" from staff who cannot adjust results', () => {
+    mockUseExamResults.mockReturnValue({
+      data: data({ summary: { ...SUMMARY, ungradedCount: 2 } }),
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    renderWithClient(<ExamResultsScreen examId="exam-1" basePath="/moderator/results" />);
+    expect(screen.queryByRole('button', { name: 'Grade now' })).not.toBeInTheDocument();
   });
 
   it('shows a loading state', () => {

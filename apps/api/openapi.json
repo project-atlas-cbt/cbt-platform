@@ -15899,6 +15899,9 @@
           "passRate": {
             "type": "number",
             "nullable": true
+          },
+          "ungradedCount": {
+            "type": "number"
           }
         },
         "required": [
@@ -15910,7 +15913,8 @@
           "averagePercentage",
           "highestPercentage",
           "lowestPercentage",
-          "passRate"
+          "passRate",
+          "ungradedCount"
         ]
       },
       "ExamResultClassSummaryDto": {
@@ -15947,6 +15951,9 @@
             "type": "number",
             "nullable": true
           },
+          "ungradedCount": {
+            "type": "number"
+          },
           "classId": {
             "type": "string"
           },
@@ -15964,6 +15971,7 @@
           "highestPercentage",
           "lowestPercentage",
           "passRate",
+          "ungradedCount",
           "classId",
           "className"
         ]
@@ -16352,6 +16360,10 @@
           "overrideEarnedMarks": {
             "type": "number",
             "description": "MANUAL_OVERRIDE only — the earned-marks value set outright."
+          },
+          "ungradedOnly": {
+            "type": "boolean",
+            "description": "RECALCULATE only — \"Grade now\": touch only results finalised without a grade, and grade them against the school's current scale."
           }
         },
         "required": [

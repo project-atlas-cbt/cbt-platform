@@ -1443,6 +1443,62 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(progress.id).toBe(body.id);
   });
 
+  it('P2-21 "Grade now": targets only ungraded results, and needs bands to grade against', async () => {
+    const examId = await buildReadyExam();
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const a = await sitExamAndMark(studentA, examId, 2);
+    await sitExamAndMark(studentB, examId, 1);
+    // Student A's result finalised before the school had any bands.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.result.update({
+        where: { id: a.resultId },
+        data: { grade: null, gradingScaleVersionId: null },
+      }),
+    );
+
+    const wrongType = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'AWARD_MARK',
+      markDelta: 1,
+      reason: 'Grade now',
+      ungradedOnly: true,
+    });
+    expect(wrongType.statusCode).toBe(400);
+
+    const activeScales = await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.findMany({ where: { schoolId, archivedAt: null }, select: { id: true } }),
+    );
+    const ids = activeScales.map((sc) => sc.id);
+    expect(ids.length).toBeGreaterThan(0);
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.updateMany({ where: { id: { in: ids } }, data: { archivedAt: new Date() } }),
+    );
+    const noBands = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'RECALCULATE',
+      reason: 'Grade now',
+      ungradedOnly: true,
+    });
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.updateMany({ where: { id: { in: ids } }, data: { archivedAt: null } }),
+    );
+    expect(noBands.statusCode).toBe(409);
+
+    const op = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'RECALCULATE',
+      reason: 'Grading bands were set after this exam finalised.',
+      ungradedOnly: true,
+    });
+    expect(op.statusCode).toBe(200);
+    const body = op.json<{ id: string; totalCount: number }>();
+    expect(body.totalCount).toBe(1);
+    const stored = await withTenant(prisma, schoolId, (tx) =>
+      tx.resultAdjustmentOperation.findUniqueOrThrow({ where: { id: body.id } }),
+    );
+    expect(stored.ungradedOnly).toBe(true);
+  });
+
   it('DoD 10: a teacher cannot adjust, and only a School Admin may manually override', async () => {
     const examId = await buildReadyExam();
     await post(teacher, `/exams/${examId}/sessions`, {});

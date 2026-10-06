@@ -12,6 +12,7 @@ import {
   type ResultAdjustmentJobPayload,
   type ResultQuestionMarking,
 } from '@atlas/domain';
+import { resolveGradingScaleVersion } from './result-finalization.js';
 
 /**
  * ADR-0025's bulk-adjustment consumer — the only place in the product where a
@@ -156,7 +157,13 @@ async function refreshClaim(schoolId: string, operationId: string): Promise<void
  */
 async function loadPendingResultIds(
   schoolId: string,
-  operation: { id: string; examId: string; type: string; targetResultId: string | null },
+  operation: {
+    id: string;
+    examId: string;
+    type: string;
+    targetResultId: string | null;
+    ungradedOnly: boolean;
+  },
   take: number,
 ): Promise<string[]> {
   // P2-19: an override's one result may have been voided (attempt
@@ -166,7 +173,13 @@ async function loadPendingResultIds(
   const scope: Prisma.ResultWhereInput =
     operation.type === 'MANUAL_OVERRIDE' && operation.targetResultId
       ? { schoolId, id: operation.targetResultId, state: { in: ['FINAL', 'ADJUSTED'] } }
-      : { schoolId, examId: operation.examId, state: { in: ['FINAL', 'ADJUSTED'] } };
+      : {
+          schoolId,
+          examId: operation.examId,
+          state: { in: ['FINAL', 'ADJUSTED'] },
+          // P2-21 "Grade now": only results finalised without a grade.
+          ...(operation.ungradedOnly && { gradingScaleVersionId: null }),
+        };
 
   const rows = await withTenant(prisma, schoolId, (tx) =>
     tx.result.findMany({
@@ -238,6 +251,7 @@ async function applyChunk(
         select: {
           id: true,
           attemptId: true,
+          grade: true,
           totalMarks: true,
           earnedMarks: true,
           percentage: true,
@@ -293,12 +307,20 @@ async function applyChunk(
       // result was originally graded with — never the school's current one.
       // A regrade after an adjustment must reflect the new mark under the
       // rules that applied at the time, not rules adopted since (ADR-0018).
-      const grade = await resolveGradeForVersion(
-        tx,
-        schoolId,
-        result.gradingScaleVersionId,
-        newValue.percentage,
-      );
+      //
+      // P2-21 ("Grade now", Haneef 2026-10-06): the one exception is a
+      // RECALCULATE over a result that was never graded because the school
+      // had no bands at finalisation. It is graded against the school's
+      // current scale for the student's level, and that version is stored,
+      // so from then on it is frozen like any other.
+      let versionId = result.gradingScaleVersionId;
+      let gradedNow = false;
+      if (operation.type === 'RECALCULATE' && versionId === null) {
+        const level = await levelForResult(tx, resultId);
+        versionId = (await resolveGradingScaleVersion(tx, schoolId, level))?.versionId ?? null;
+        gradedNow = versionId !== null;
+      }
+      const grade = await resolveGradeForVersion(tx, schoolId, versionId, newValue.percentage);
 
       await tx.result.update({
         where: { id: resultId },
@@ -311,6 +333,7 @@ async function applyChunk(
           unansweredCount: newValue.unansweredCount,
           partialCount: newValue.partialCount,
           grade,
+          ...(gradedNow && { gradingScaleVersionId: versionId }),
           // 07 §19: "An adjustment does not erase the original result state."
           // FINAL becomes ADJUSTED; an already-ADJUSTED result stays so.
           state: 'ADJUSTED',
@@ -323,8 +346,12 @@ async function applyChunk(
           operationId: operation.id,
           resultId,
           adjustmentType: operation.type as never,
-          oldValue: oldValue as unknown as Prisma.InputJsonValue,
-          newValue: newValue as unknown as Prisma.InputJsonValue,
+          oldValue: (gradedNow
+            ? { ...oldValue, grade: result.grade }
+            : oldValue) as unknown as Prisma.InputJsonValue,
+          newValue: (gradedNow
+            ? { ...newValue, grade }
+            : newValue) as unknown as Prisma.InputJsonValue,
           reason: operation.reason,
           authorizedByMembershipId: operation.createdByMembershipId,
         },
@@ -363,6 +390,38 @@ async function applyChunk(
       data: { appliedCount: { increment: resultIds.length } },
     });
   });
+}
+
+/** The class level the student sat the exam in: their enrolment in the
+ * exam's own academic session (the class they were in then, even after
+ * rollover), else their current one. */
+async function levelForResult(
+  tx: Prisma.TransactionClient,
+  resultId: string,
+): Promise<string | null> {
+  const row = await tx.result.findUniqueOrThrow({
+    where: { id: resultId },
+    select: {
+      exam: { select: { academicSessionId: true } },
+      studentProfile: {
+        select: {
+          enrollments: {
+            orderBy: { startDate: 'desc' },
+            select: {
+              status: true,
+              academicSessionId: true,
+              classGroupSession: { select: { level: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  const enrollments = row.studentProfile.enrollments;
+  const chosen =
+    enrollments.find((e) => e.academicSessionId === row.exam.academicSessionId) ??
+    enrollments.find((e) => e.status === 'ACTIVE');
+  return chosen?.classGroupSession.level ?? null;
 }
 
 async function resolveGradeForVersion(

@@ -93,11 +93,30 @@ export class ResultAdjustmentService {
       }
     }
 
+    if (dto.ungradedOnly) {
+      // P2-21 "Grade now": there must be bands to grade against, or the run
+      // would mark results adjusted while leaving them ungraded.
+      const scale = await withTenant(prisma, schoolId, (tx) =>
+        tx.gradingScale.findFirst({
+          where: { schoolId, archivedAt: null, currentVersionId: { not: null } },
+          select: { id: true },
+        }),
+      );
+      if (!scale) {
+        throw new AppHttpException({
+          code: 'CONFLICT',
+          message: 'Set up grading bands first, then grade these results.',
+        });
+      }
+    }
+
     const targetResults = await this.resolveTargets(schoolId, dto);
     if (targetResults.length === 0) {
       throw new AppHttpException({
         code: 'CONFLICT',
-        message: 'No finalised results match this adjustment.',
+        message: dto.ungradedOnly
+          ? 'Every finalised result for this exam already has a grade.'
+          : 'No finalised results match this adjustment.',
       });
     }
 
@@ -134,6 +153,7 @@ export class ResultAdjustmentService {
           ...(dto.overrideEarnedMarks !== undefined && {
             overrideEarnedMarks: dto.overrideEarnedMarks,
           }),
+          ...(dto.ungradedOnly && { ungradedOnly: true }),
         },
       });
 
@@ -152,6 +172,7 @@ export class ResultAdjustmentService {
         examId: dto.examId,
         type: dto.type,
         targetCount: targetResults.length,
+        ...(dto.ungradedOnly && { ungradedOnly: true }),
         ...(dto.targetExamQuestionId !== undefined && {
           targetExamQuestionId: dto.targetExamQuestionId,
         }),
@@ -202,6 +223,10 @@ export class ResultAdjustmentService {
     const fail = (message: string): never => {
       throw new AppHttpException({ code: 'VALIDATION_ERROR', message });
     };
+
+    if (dto.ungradedOnly && dto.type !== 'RECALCULATE') {
+      fail('ungradedOnly applies to RECALCULATE only.');
+    }
 
     switch (dto.type) {
       case 'VOID_QUESTION':
@@ -265,7 +290,12 @@ export class ResultAdjustmentService {
 
     return withTenant(prisma, schoolId, (tx) =>
       tx.result.findMany({
-        where: { schoolId, examId: dto.examId, state: { in: ['FINAL', 'ADJUSTED'] } },
+        where: {
+          schoolId,
+          examId: dto.examId,
+          state: { in: ['FINAL', 'ADJUSTED'] },
+          ...(dto.ungradedOnly && { gradingScaleVersionId: null }),
+        },
         select: { id: true },
       }),
     );

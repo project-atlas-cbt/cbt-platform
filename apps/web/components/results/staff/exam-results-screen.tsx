@@ -27,6 +27,7 @@ import { ExamResultsTable } from './exam-results-table';
 import { ExamResultClassTabs, ExamResultSummaryPanel } from './exam-result-summary-panel';
 import { PublicationControls } from './publication-controls';
 import { AdjustmentProgress } from './adjustment-progress';
+import { GradeNowPanel } from './grade-now-panel';
 import { HelpLink } from '@/components/help/help-link';
 
 const PAGE_SIZE = 50;
@@ -193,6 +194,12 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
             examId={examId}
             published={data.published}
             adjustmentInProgress={data.adjustmentInProgress}
+          />
+          <GradeNowPanel
+            examId={examId}
+            ungradedCount={data.summary.ungradedCount}
+            adjustmentInProgress={data.adjustmentInProgress}
+            onStarted={(id) => updateParams({ op: id })}
           />
           <ExamResultClassTabs
             classSummaries={data.classSummaries ?? []}

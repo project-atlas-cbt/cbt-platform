@@ -1,6 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 import {
   RESULT_ADJUSTMENT_TYPES,
   RESULT_STATES,
@@ -113,6 +123,10 @@ export class ExamResultSummaryDto {
    * derives it from the frozen grading scale and reports nothing rather
    * than inventing a cut-off when none is configured. */
   @ApiProperty({ type: Number, nullable: true }) passRate!: number | null;
+
+  /** P2-21: finalised results with no grade (the school had no bands yet).
+   * "Grade now" grades these against the current bands. */
+  @ApiProperty({ type: Number }) ungradedCount!: number;
 }
 
 /** ADR-0013's per-class breakdown, alongside the whole-exam aggregate. */
@@ -259,6 +273,15 @@ export class CreateResultAdjustmentDto {
   @IsInt()
   @Min(0)
   overrideEarnedMarks?: number;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'RECALCULATE only — "Grade now": touch only results finalised without a grade, and grade them against the school\'s current scale.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  ungradedOnly?: boolean;
 }
 
 export class ResultAdjustmentOperationResponseDto {

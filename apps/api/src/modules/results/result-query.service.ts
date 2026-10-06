@@ -353,6 +353,9 @@ export class ResultQueryService {
       lowestPercentage:
         aggregate._min.percentage === null ? null : decimalToNumber(aggregate._min.percentage),
       passRate,
+      // P2-21: finalised before the school had grading bands; "Grade now"
+      // grades exactly these.
+      ungradedCount: resultCount - passingRows.length,
     };
   }
 

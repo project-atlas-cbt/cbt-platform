@@ -204,6 +204,7 @@ async function createOperation(
     markDelta?: number;
     targetResultId?: string;
     overrideEarnedMarks?: number;
+    ungradedOnly?: boolean;
     totalCount: number;
   },
 ): Promise<string> {
@@ -236,6 +237,7 @@ async function createOperation(
         ...(data.overrideEarnedMarks !== undefined && {
           overrideEarnedMarks: data.overrideEarnedMarks,
         }),
+        ...(data.ungradedOnly && { ungradedOnly: true }),
       },
     });
     return operation.id;
@@ -254,6 +256,9 @@ async function cleanupSchool(schoolId: string): Promise<void> {
     'resultAdjustment',
     'resultAdjustmentOperation',
     'result',
+    'gradingScaleBand',
+    'gradingScaleVersion',
+    'gradingScale',
     'resultPublication',
     'attemptQuestionResult',
     'examAttempt',
@@ -586,6 +591,82 @@ describe('B15 result adjustment worker (ADR-0025)', () => {
       tx.auditEvent.findMany({ where: { schoolId: fixture.schoolId } }),
     );
     expect(audits.map((a) => a.action)).toEqual(['RESULT_MANUAL_OVERRIDE']);
+  });
+
+  it('P2-21 "Grade now": grades only the ungraded results, against the current scale', async () => {
+    const fixture = await createFixture(2);
+    schools.push(fixture.schoolId);
+    const [ungraded, graded] = await Promise.all(
+      fixture.studentProfileIds.map((id, i) => createFinalisedResult(fixture, id, i + 1)),
+    );
+
+    // The school sets its bands after the first results finalised Ungraded.
+    const versionId = await withTenant(prisma, fixture.schoolId, async (tx) => {
+      const scale = await tx.gradingScale.create({
+        data: { schoolId: fixture.schoolId, name: 'School scale' },
+      });
+      const version = await tx.gradingScaleVersion.create({
+        data: { schoolId: fixture.schoolId, scaleId: scale.id, versionNumber: 1 },
+      });
+      await tx.gradingScaleBand.createMany({
+        data: [
+          {
+            schoolId: fixture.schoolId,
+            versionId: version.id,
+            label: 'P',
+            sortOrder: 1,
+            minPercentage: 50,
+            maxPercentage: 100,
+            isPassing: true,
+          },
+          {
+            schoolId: fixture.schoolId,
+            versionId: version.id,
+            label: 'F',
+            sortOrder: 2,
+            minPercentage: 0,
+            maxPercentage: 49.99,
+            isPassing: false,
+          },
+        ],
+      });
+      await tx.gradingScale.update({
+        where: { id: scale.id },
+        data: { currentVersionId: version.id },
+      });
+      // A result already graded keeps its stored grade (ADR-0018, #52).
+      await tx.result.update({
+        where: { id: graded! },
+        data: { grade: 'KEPT', gradingScaleVersionId: version.id },
+      });
+      return version.id;
+    });
+
+    const operationId = await createOperation(fixture, {
+      type: 'RECALCULATE',
+      reason: 'Grading bands set after the first results finalised.',
+      ungradedOnly: true,
+      totalCount: 1,
+    });
+    await runResultAdjustment({}, { schoolId: fixture.schoolId, operationId });
+
+    const [nowGraded, untouched, children] = await withTenant(prisma, fixture.schoolId, (tx) =>
+      Promise.all([
+        tx.result.findUniqueOrThrow({ where: { id: ungraded! } }),
+        tx.result.findUniqueOrThrow({ where: { id: graded! } }),
+        tx.resultAdjustment.findMany({ where: { operationId } }),
+      ]),
+    );
+    expect(nowGraded).toMatchObject({
+      grade: 'P',
+      gradingScaleVersionId: versionId,
+      state: 'ADJUSTED',
+      earnedMarks: 5,
+    });
+    expect(untouched).toMatchObject({ grade: 'KEPT', state: 'FINAL' });
+    expect(children).toHaveLength(1);
+    expect(children[0]!.oldValue).toMatchObject({ grade: null });
+    expect(children[0]!.newValue).toMatchObject({ grade: 'P' });
   });
 
   it("P2-17: per-result audit rows carry the adjuster's role, not a fixed SCHOOL_ADMIN", async () => {

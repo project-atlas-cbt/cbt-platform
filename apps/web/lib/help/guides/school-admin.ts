@@ -102,7 +102,8 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
         'If a class level grades differently, choose it under **Scale for** and press **Give … its own scale**, then edit and save. Other levels keep using the school-wide scale.',
       ],
       notes: [
-        'Set the bands before the first exam is marked. A grade is worked out once, when a result is finalised, so results finalised with no scale stay **Ungraded** and have no pass rate.',
+        'Set the bands before the first exam is marked. A grade is worked out once, when a result is finalised, so results finalised with no scale show **Ungraded** and have no pass rate.',
+        'If results came out **Ungraded** because the bands were not set yet, set them, then open that exam under **Results** and press **Grade now**. Only the ungraded results are graded, with the bands in place now; results that already have a grade keep it.',
         'Saving creates a new version. Grades already given never change; only results finalised afterwards use the new bands. **Version history** shows which versions have been used for grades.',
         'Once a class level has its own scale it can be changed but not removed.',
       ],

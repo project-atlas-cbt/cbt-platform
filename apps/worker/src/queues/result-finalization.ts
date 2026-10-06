@@ -250,7 +250,7 @@ async function applyCompletedVoids(
  * performs on the API side; duplicated for the same cross-app-import reason
  * as the rest of this file.
  */
-async function resolveGradingScaleVersion(
+export async function resolveGradingScaleVersion(
   tx: Prisma.TransactionClient,
   schoolId: string,
   level: string | null,
