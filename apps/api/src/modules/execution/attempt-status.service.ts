@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
-import { computeResultTotals } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
@@ -11,20 +10,16 @@ import type { AttemptStatusResponseDto } from './dto/attempt.dto.js';
 
 /**
  * `GET /v1/attempts/:id/status` (B14) — post-submission status for the
- * confirmation screen (`04 §59`). Every `marking` field is a live aggregate
- * over `AttemptQuestionResult` rows, computed on every read.
+ * confirmation screen (`04 §59`): "did my submission go through, and is
+ * marking finished?" — an execution question, answered from live counts
+ * of `AttemptQuestionResult` rows.
  *
- * Still deliberately does NOT read the `Result` row, now that B15 has built
- * one. This endpoint answers "did my submission go through, and is marking
- * finished?" — an execution question, available the instant marking
- * completes and regardless of publication. The `Result` is the academic
- * record, gated by ADR-0010's visibility rules and served by
- * `student-results.v1`. Reading the result here would leak an unpublished
- * score through the execution surface.
- *
- * B15 did make the two share their arithmetic: both go through
- * `@atlas/domain`'s `computeResultTotals`, so the number shown here and the
- * number persisted on the result can never disagree.
+ * It returns NO marks or correct/incorrect counts (2026-10-06). It used to,
+ * which put a student's score on the confirmation screen the moment marking
+ * finished — before any release and regardless of the exam's "what
+ * students see" setting. Scores reach students only through
+ * `student-results.v1`, gated by ADR-0010's publication and visibility
+ * rules.
  */
 @Injectable()
 export class AttemptStatusService {
@@ -71,33 +66,9 @@ export class AttemptStatusService {
     }
     const questionCount = index.size;
 
-    const results = await withTenant(prisma, schoolId, (tx) =>
-      tx.attemptQuestionResult.findMany({
-        where: { schoolId, attemptId },
-        select: {
-          examQuestionId: true,
-          correctness: true,
-          awardedMarks: true,
-          maximumMarks: true,
-        },
-      }),
+    const markedCount = await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptQuestionResult.count({ where: { schoolId, attemptId } }),
     );
-
-    const markedCount = results.length;
-    // B15 extracted this arithmetic into @atlas/domain so the live aggregate
-    // here and the persisted `Result` row the marking worker writes are the
-    // same computation, not two implementations that could drift.
-    const totals = computeResultTotals(
-      results.map((r) => ({
-        examQuestionId: r.examQuestionId,
-        correctness: r.correctness,
-        awardedMarks: r.awardedMarks,
-        maximumMarks: r.maximumMarks,
-      })),
-    );
-    const { correctCount, incorrectCount, unansweredCount, partialCount } = totals;
-    const awardedMarks = totals.earnedMarks;
-    const maximumMarks = totals.totalMarks;
 
     const isFinalized = current.state === 'SUBMITTED' || current.state === 'AUTO_SUBMITTED';
     const markingComplete = isFinalized && questionCount > 0 && markedCount >= questionCount;
@@ -116,13 +87,6 @@ export class AttemptStatusService {
         status: markingStatus,
         questionCount,
         markedCount,
-        correctCount,
-        incorrectCount,
-        unansweredCount,
-        partialCount,
-        awardedMarks,
-        maximumMarks,
-        percentage: markingComplete && maximumMarks > 0 ? totals.percentage : null,
       },
     };
   }

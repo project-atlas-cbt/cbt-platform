@@ -1,4 +1,5 @@
 import { prisma, withTenant, type Prisma } from '@atlas/db';
+import { effectiveResultSettings, type SchoolResultSettings } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import type {
   ExamClassResponseDto,
@@ -138,7 +139,14 @@ export function toExamListItemResponseDto(exam: ExamWithListRelations): ExamList
   };
 }
 
-export function toExamResponseDto(exam: ExamWithDetailRelations): ExamResponseDto {
+/** `school` supplies ADR-0010's lock: while it is on, the two result
+ * settings shown are the school's (what actually applies), not the exam
+ * row's stored copy. */
+export function toExamResponseDto(
+  exam: ExamWithDetailRelations,
+  school: SchoolResultSettings,
+): ExamResponseDto {
+  const resultSettings = effectiveResultSettings(school, exam);
   return {
     ...toExamListItemResponseDto(exam),
     durationSeconds: exam.durationSeconds,
@@ -146,8 +154,9 @@ export function toExamResponseDto(exam: ExamWithDetailRelations): ExamResponseDt
     navigationPolicy: exam.navigationPolicy,
     randomizeQuestions: exam.randomizeQuestions,
     randomizeOptions: exam.randomizeOptions,
-    resultPolicy: exam.resultPolicy,
-    resultDetailVisibility: exam.resultDetailVisibility,
+    resultPolicy: resultSettings.resultPolicy,
+    resultDetailVisibility: resultSettings.resultDetailVisibility,
+    resultSettingsLocked: school.resultPolicyLocked,
     accessMode: exam.accessMode,
     generalInstructions: exam.generalInstructions,
     navigationInstructions: exam.navigationInstructions,

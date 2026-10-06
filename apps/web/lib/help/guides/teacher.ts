@@ -100,7 +100,7 @@ export const TEACHER_GUIDES: RoleGuideSet = {
         'Open **Exams** and press **New exam**.',
         '**Details**: choose the session, term, subject and classes, and give the exam a title and type (for example CA or Examination). Press **Continue to Questions**.',
         '**Questions**: add approved questions from the bank on the left and set their marks. Press **Save selection**, then **Continue to Rules**.',
-        '**Rules**: set the duration, number of attempts, question navigation, shuffling, who can start, and how results are released. Press **Save rules**, then **Continue to Review**.',
+        '**Rules**: set the duration, number of attempts, question navigation, shuffling, who can start, and how results are released. If your school has locked its result settings, you can’t change how results are released or what students see. Press **Save rules**, then **Continue to Review**.',
         '**Review**: work through the readiness checklist. **Save as Ready** works once every item passes.',
       ],
       notes: [
@@ -143,7 +143,7 @@ export const TEACHER_GUIDES: RoleGuideSet = {
         'If you release results yourself, press **Publish results**. Every result for the exam is released except those withheld.',
       ],
       notes: [
-        'Your school’s result policy decides who releases results. If it is locked, the publish button may be refused.',
+        'Your school’s result policy decides who releases results. If the school has locked it, you can’t publish, unpublish or withhold results yourself.',
         '**Unpublish** takes results back from students and asks for a reason.',
       ],
       screen: { label: 'Results', href: 'results' },

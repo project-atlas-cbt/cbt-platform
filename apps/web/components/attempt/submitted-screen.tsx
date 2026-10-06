@@ -15,8 +15,10 @@ const STATUS_POLL_INTERVAL_MS = 5_000;
  * a `SUBMITTED`/`AUTO_SUBMITTED` attempt — the one and only place that
  * state is ever shown, so a repeat visit to the runtime URL always
  * redirects here rather than allowing a restart (`exam-runtime.tsx`).
- * Polls `GET /attempts/:id/status` (B14, live-aggregated) only while
- * marking is still `PENDING`.
+ * Polls `GET /attempts/:id/status` (B14) only while marking is still
+ * `PENDING`. Never shows a score or counts (04 §59, 2026-10-06): those
+ * reach the student only once results are released, through My Results,
+ * as the exam's "what students see" setting allows.
  */
 export function SubmittedScreen({ attemptId }: { attemptId: string }) {
   const status = useAttemptStatus(attemptId, { refetchIntervalMs: STATUS_POLL_INTERVAL_MS });
@@ -57,24 +59,10 @@ export function SubmittedScreen({ attemptId }: { attemptId: string }) {
               Your answers are being marked — this page will update automatically.
             </p>
           ) : (
-            <dl className="grid grid-cols-2 gap-2">
-              <dt className="text-text-muted">Score</dt>
-              <dd className="text-right font-medium tabular-nums text-text-primary">
-                {status.data.marking.awardedMarks} / {status.data.marking.maximumMarks}
-              </dd>
-              <dt className="text-text-muted">Correct</dt>
-              <dd className="text-right font-medium tabular-nums text-text-primary">
-                {status.data.marking.correctCount}
-              </dd>
-              <dt className="text-text-muted">Incorrect</dt>
-              <dd className="text-right font-medium tabular-nums text-text-primary">
-                {status.data.marking.incorrectCount}
-              </dd>
-              <dt className="text-text-muted">Unanswered</dt>
-              <dd className="text-right font-medium tabular-nums text-text-primary">
-                {status.data.marking.unansweredCount}
-              </dd>
-            </dl>
+            <p className="text-text-secondary">
+              Your answers have been marked. Your result will be available according to your
+              school&apos;s result policy.
+            </p>
           )}
         </div>
       )}

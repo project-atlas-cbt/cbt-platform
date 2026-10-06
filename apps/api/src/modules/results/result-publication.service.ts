@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
+import { effectiveResultSettings, type ExamResultSettings } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { loadExamOrThrow } from '../exams/exam-mappers.js';
+import { loadSchoolResultSettings } from '../platform/school-result-settings.util.js';
 import { NotificationService } from '../notification-center/notification.service.js';
 import { AnalyticsCacheService } from '../analytics/analytics-cache.service.js';
 import { AuditService } from '../operations/audit-event.service.js';
@@ -247,18 +249,14 @@ export class ResultPublicationService {
   private async assertPolicyPermits(
     schoolId: string,
     actor: Extract<AuthorizedActor, { kind: 'SCHOOL' }>,
-    exam: { resultPolicy: string },
+    exam: ExamResultSettings,
   ): Promise<void> {
     const isAdministrative =
       actor.roles.includes('SCHOOL_ADMIN') || actor.roles.includes('MODERATOR');
     if (isAdministrative) return;
 
-    const school = await prisma.school.findUniqueOrThrow({
-      where: { id: schoolId },
-      select: { resultPolicy: true, resultPolicyLocked: true },
-    });
-
-    const effectivePolicy = school.resultPolicyLocked ? school.resultPolicy : exam.resultPolicy;
+    const school = await loadSchoolResultSettings(schoolId);
+    const { resultPolicy: effectivePolicy } = effectiveResultSettings(school, exam);
 
     if (effectivePolicy !== 'TEACHER') {
       throw new AppHttpException({

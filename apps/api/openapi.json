@@ -13794,6 +13794,9 @@
               "FULL_REVIEW"
             ]
           },
+          "resultSettingsLocked": {
+            "type": "boolean"
+          },
           "accessMode": {
             "type": "string",
             "enum": [
@@ -13863,6 +13866,7 @@
           "randomizeOptions",
           "resultPolicy",
           "resultDetailVisibility",
+          "resultSettingsLocked",
           "accessMode",
           "generalInstructions",
           "navigationInstructions",
@@ -14758,43 +14762,12 @@
           },
           "markedCount": {
             "type": "number"
-          },
-          "correctCount": {
-            "type": "number"
-          },
-          "incorrectCount": {
-            "type": "number"
-          },
-          "unansweredCount": {
-            "type": "number"
-          },
-          "partialCount": {
-            "type": "number",
-            "description": "Always 0 this phase — PARTIAL is reserved for a future non-objective type."
-          },
-          "awardedMarks": {
-            "type": "number"
-          },
-          "maximumMarks": {
-            "type": "number"
-          },
-          "percentage": {
-            "type": "number",
-            "nullable": true,
-            "description": "null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE."
           }
         },
         "required": [
           "status",
           "questionCount",
-          "markedCount",
-          "correctCount",
-          "incorrectCount",
-          "unansweredCount",
-          "partialCount",
-          "awardedMarks",
-          "maximumMarks",
-          "percentage"
+          "markedCount"
         ]
       },
       "AttemptStatusResponseDto": {

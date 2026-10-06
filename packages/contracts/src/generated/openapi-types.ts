@@ -4979,6 +4979,7 @@ export interface components {
             resultPolicy: "TEACHER" | "SCHOOL_ADMIN" | "AUTOMATIC";
             /** @enum {string} */
             resultDetailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            resultSettingsLocked: boolean;
             /** @enum {string} */
             accessMode: "OPEN_TO_ELIGIBLE" | "EXPLICIT_AUTHORIZATION";
             generalInstructions: string | null;
@@ -5246,15 +5247,6 @@ export interface components {
             status: "NOT_APPLICABLE" | "PENDING" | "COMPLETE";
             questionCount: number;
             markedCount: number;
-            correctCount: number;
-            incorrectCount: number;
-            unansweredCount: number;
-            /** @description Always 0 this phase — PARTIAL is reserved for a future non-objective type. */
-            partialCount: number;
-            awardedMarks: number;
-            maximumMarks: number;
-            /** @description null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE. */
-            percentage: number | null;
         };
         AttemptStatusResponseDto: {
             attemptId: string;

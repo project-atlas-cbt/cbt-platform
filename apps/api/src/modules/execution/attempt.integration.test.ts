@@ -1149,7 +1149,7 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     expect(body.marking.questionCount).toBe(2);
   });
 
-  it('B14 GET /status: COMPLETE with correct live-aggregated totals once marking output exists', async () => {
+  it('B14 GET /status: COMPLETE once marking output exists, with no marks or counts', async () => {
     const examId = await buildReadyExam();
     await openSession(examId);
     const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
@@ -1185,32 +1185,11 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
 
     const res = await get(studentA, `/attempts/${pkg.attemptId}/status`);
     expect(res.statusCode).toBe(200);
-    const body = res.json<{
-      marking: {
-        status: string;
-        questionCount: number;
-        markedCount: number;
-        correctCount: number;
-        incorrectCount: number;
-        unansweredCount: number;
-        partialCount: number;
-        awardedMarks: number;
-        maximumMarks: number;
-        percentage: number | null;
-      };
-    }>();
-    expect(body.marking).toEqual({
-      status: 'COMPLETE',
-      questionCount: 2,
-      markedCount: 2,
-      correctCount: 1,
-      incorrectCount: 1,
-      unansweredCount: 0,
-      partialCount: 0,
-      awardedMarks: 2,
-      maximumMarks: 4,
-      percentage: 50,
-    });
+    const body = res.json<{ marking: Record<string, unknown> }>();
+    // Marking is reported as finished, but no marks or counts: a student
+    // reads this before any release, so a score here would bypass ADR-0010's
+    // publication and visibility rules (04 §59).
+    expect(body.marking).toEqual({ status: 'COMPLETE', questionCount: 2, markedCount: 2 });
   });
 
   it("B14 security regression: a student cannot view another student's submission status", async () => {

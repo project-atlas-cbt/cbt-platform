@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useExam } from '@/lib/exams/queries';
+import { useHasPermission } from '@/lib/nav';
 import { useSetExamConfiguration } from '@/lib/exams/mutations';
 import { examStepPath } from '@/lib/exams/navigation';
 import { describeExamError } from '@/lib/exams/error-utils';
@@ -82,6 +83,14 @@ const rulesFormSchema = z.object({
 });
 type RulesFormValues = z.infer<typeof rulesFormSchema>;
 
+/** Radix Select's hidden native select can report `''` when `form.reset`
+ * moves it to a value its options haven't registered yet, which would
+ * overwrite the loaded value and fail the save. No option here is empty, so
+ * an empty value is never a real choice. */
+function keepChosen(value: string, onChange: (value: string) => void) {
+  if (value !== '') onChange(value);
+}
+
 /**
  * F11 — the Rules step (`EX-04`, `05 §22`/`§71`). Unlike the Details step's
  * continuous autosave (needed there because `POST /exams` has no partial-
@@ -96,6 +105,11 @@ export function RulesForm({ examId, basePath }: { examId: string; basePath: stri
   const router = useRouter();
   const exam = useExam(examId);
   const readOnly = exam.data ? exam.data.status !== 'DRAFT' : false;
+  // ADR-0010 (2026-10-06 amendment): a locked school fixes both result
+  // settings for teachers and HODs; the API refuses a change and returns the
+  // school's values. A School Admin can still change them.
+  const canOverrideLock = useHasPermission('schoolConfig.settings.manage');
+  const resultSettingsLocked = exam.data?.resultSettingsLocked === true && !canOverrideLock;
   const setConfiguration = useSetExamConfiguration(examId);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -158,8 +172,12 @@ export function RulesForm({ examId, basePath }: { examId: string; basePath: stri
         navigationPolicy: values.navigationPolicy,
         randomizeQuestions: values.randomizeQuestions,
         randomizeOptions: values.randomizeOptions,
-        resultPolicy: values.resultPolicy,
-        resultDetailVisibility: values.resultDetailVisibility,
+        ...(resultSettingsLocked
+          ? {}
+          : {
+              resultPolicy: values.resultPolicy,
+              resultDetailVisibility: values.resultDetailVisibility,
+            }),
         accessMode: values.accessMode,
         generalInstructions: values.generalInstructions,
         navigationInstructions: values.navigationInstructions,
@@ -231,7 +249,11 @@ export function RulesForm({ examId, basePath }: { examId: string; basePath: stri
           render={({ field }) => (
             <FormItem>
               <FormLabel>Question navigation</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
+              <Select
+                value={field.value}
+                onValueChange={(value) => keepChosen(value, field.onChange)}
+                disabled={readOnly}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue />
@@ -290,7 +312,11 @@ export function RulesForm({ examId, basePath }: { examId: string; basePath: stri
           render={({ field }) => (
             <FormItem>
               <FormLabel>Who can start this exam</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
+              <Select
+                value={field.value}
+                onValueChange={(value) => keepChosen(value, field.onChange)}
+                disabled={readOnly}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue />
@@ -316,7 +342,11 @@ export function RulesForm({ examId, basePath }: { examId: string; basePath: stri
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Result publication</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
+                <Select
+                  value={field.value}
+                  onValueChange={(value) => keepChosen(value, field.onChange)}
+                  disabled={readOnly || resultSettingsLocked}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue />
@@ -340,7 +370,11 @@ export function RulesForm({ examId, basePath }: { examId: string; basePath: stri
             render={({ field }) => (
               <FormItem>
                 <FormLabel>What students see</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
+                <Select
+                  value={field.value}
+                  onValueChange={(value) => keepChosen(value, field.onChange)}
+                  disabled={readOnly || resultSettingsLocked}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue />
@@ -358,6 +392,11 @@ export function RulesForm({ examId, basePath }: { examId: string; basePath: stri
               </FormItem>
             )}
           />
+          {resultSettingsLocked ? (
+            <p className="text-sm text-text-muted sm:col-span-2">
+              Your school has locked these two settings, so they can&apos;t be changed on this exam.
+            </p>
+          ) : null}
         </div>
 
         <FormField

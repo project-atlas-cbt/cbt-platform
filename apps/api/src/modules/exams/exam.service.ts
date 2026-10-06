@@ -20,6 +20,7 @@ import {
   resolveAndValidateClassTargets,
 } from './exam-scope.util.js';
 import { toExamResponseDtoFresh } from './exam.util.js';
+import { loadSchoolResultSettings } from '../platform/school-result-settings.util.js';
 import type {
   CancelExamDto,
   CreateExamDto,
@@ -205,7 +206,7 @@ export class ExamService {
     if (!decision.allowed && !this.isCreator(actor, exam)) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Exam not found.' });
     }
-    return toExamResponseDto(exam);
+    return toExamResponseDto(exam, await loadSchoolResultSettings(schoolId));
   }
 
   /** `GET /v1/exams/:id/available-questions` — the subject/level pair the

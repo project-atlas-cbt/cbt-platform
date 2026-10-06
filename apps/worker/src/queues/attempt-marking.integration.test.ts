@@ -817,6 +817,48 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
     expect(audits).toHaveLength(1);
   });
 
+  it("ADR-0010 lock: a locked school's own release setting decides automatic publication", async () => {
+    const markAllRight = async (fixture: Awaited<ReturnType<typeof createFixtureSchool>>) => {
+      const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+        { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+        { examQuestionId: Q2, selectedOptionId: OPT_10MINUS6_RIGHT },
+        { examQuestionId: Q3, selectedOptionId: OPT_TRUEFALSE_RIGHT },
+      ]);
+      await runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId });
+      return withTenant(prisma, fixture.schoolId, (tx) =>
+        tx.resultPublication.findUnique({
+          where: { schoolId_examId: { schoolId: fixture.schoolId, examId: fixture.examId } },
+        }),
+      );
+    };
+
+    // Locked to administrative release: an exam a teacher set to AUTOMATIC
+    // must not release itself.
+    const lockedAdmin = await createFixtureSchool();
+    schools.push(lockedAdmin.schoolId);
+    await prisma.school.update({
+      where: { id: lockedAdmin.schoolId },
+      data: { resultPolicy: 'SCHOOL_ADMIN', resultPolicyLocked: true },
+    });
+    await withTenant(prisma, lockedAdmin.schoolId, (tx) =>
+      tx.exam.update({ where: { id: lockedAdmin.examId }, data: { resultPolicy: 'AUTOMATIC' } }),
+    );
+    expect(await markAllRight(lockedAdmin)).toBeNull();
+
+    // Locked to automatic release: it applies even to an exam whose stored
+    // copy says the teacher publishes.
+    const lockedAuto = await createFixtureSchool();
+    schools.push(lockedAuto.schoolId);
+    await prisma.school.update({
+      where: { id: lockedAuto.schoolId },
+      data: { resultPolicy: 'AUTOMATIC', resultPolicyLocked: true },
+    });
+    await withTenant(prisma, lockedAuto.schoolId, (tx) =>
+      tx.exam.update({ where: { id: lockedAuto.examId }, data: { resultPolicy: 'TEACHER' } }),
+    );
+    expect((await markAllRight(lockedAuto))?.status).toBe('PUBLISHED');
+  });
+
   it("B15: automatic publication never overrides a human's decision to unpublish", async () => {
     const fixture = await createFixtureSchool();
     schools.push(fixture.schoolId);

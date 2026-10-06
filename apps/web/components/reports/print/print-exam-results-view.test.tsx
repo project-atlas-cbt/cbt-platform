@@ -150,6 +150,7 @@ const exam: ApiComponents['schemas']['ExamResponseDto'] = {
   randomizeOptions: false,
   resultPolicy: 'TEACHER',
   resultDetailVisibility: 'SCORE_ONLY',
+  resultSettingsLocked: false,
   accessMode: 'OPEN_TO_ELIGIBLE',
   generalInstructions: null,
   navigationInstructions: null,

@@ -34,7 +34,8 @@ the teacher will read, or **Request changes**. Keyboard shortcuts are shown on t
 1. **Details**: subject, title, duration, attempts allowed, the classes (arms) sitting it.
 2. **Questions**: choose approved questions and their marks. Every student gets the same
    questions; their order, and the order of options, is shuffled per student.
-3. **Rules**: how results are shown and when (your school's result policy applies).
+3. **Rules**: how results are shown and when (your school's result policy applies). If your school
+   has locked its result settings, you can't change who releases results or what students see.
 4. **Review**: the readiness checklist. **Save as Ready** works only once every item passes.
 
 A ready exam does nothing until a session is opened for it in **Exam Control**.
