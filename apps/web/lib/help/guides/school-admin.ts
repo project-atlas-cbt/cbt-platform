@@ -53,7 +53,7 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
       steps: [
         'Open **School Settings**, then **Results**.',
         'Choose **Who releases results by default** and **What students see once a result is released**.',
-        'Tick **Lock this policy** if teachers must not change it on their own exams.',
+        'Tick **Lock these settings** if teachers must not change either setting on their own exams. While locked, every exam follows the school’s settings, including exams made before you locked them.',
         'Press **Save result policy**.',
       ],
       screen: { label: 'Result settings', href: 'settings/results' },

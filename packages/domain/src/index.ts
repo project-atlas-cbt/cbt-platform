@@ -59,8 +59,11 @@ export {
 export {
   RESULT_POLICIES,
   RESULT_DETAIL_VISIBILITIES,
+  effectiveResultSettings,
   type ResultPolicy,
   type ResultDetailVisibility,
+  type SchoolResultSettings,
+  type ExamResultSettings,
 } from './platform/result-policy.js';
 export {
   derivePalette,

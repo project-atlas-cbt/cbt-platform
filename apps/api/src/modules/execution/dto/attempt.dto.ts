@@ -436,6 +436,11 @@ export class RecordAttemptEventDto {
  * a `Result` view (that entity doesn't exist until B15 — this phase's own
  * confirmed decision): every field here is a live aggregate over
  * `AttemptQuestionResult` rows, computed on read, never persisted. */
+/** No marks or counts (2026-10-06): a student reads this straight after
+ * submitting, before any release. Scores reach students only through
+ * `student-results.v1`, gated by ADR-0010's publication and visibility
+ * rules; 04 §59 says this screen shows only that the result will follow
+ * the school's result policy. */
 export class AttemptMarkingStatusDto {
   @ApiProperty({
     type: String,
@@ -450,34 +455,6 @@ export class AttemptMarkingStatusDto {
 
   @ApiProperty({ type: Number })
   markedCount!: number;
-
-  @ApiProperty({ type: Number })
-  correctCount!: number;
-
-  @ApiProperty({ type: Number })
-  incorrectCount!: number;
-
-  @ApiProperty({ type: Number })
-  unansweredCount!: number;
-
-  @ApiProperty({
-    type: Number,
-    description: 'Always 0 this phase — PARTIAL is reserved for a future non-objective type.',
-  })
-  partialCount!: number;
-
-  @ApiProperty({ type: Number })
-  awardedMarks!: number;
-
-  @ApiProperty({ type: Number })
-  maximumMarks!: number;
-
-  @ApiProperty({
-    type: Number,
-    nullable: true,
-    description: 'null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE.',
-  })
-  percentage!: number | null;
 }
 
 /** `GET /v1/attempts/:id/status` — B14. Post-submission status for the

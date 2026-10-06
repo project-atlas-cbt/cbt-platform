@@ -867,6 +867,152 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
   // Publication policy (DoD 7)
   // ---------------------------------------------------------------------
 
+  it('ADR-0010 lock: a teacher cannot change either result setting on their exam while the school has locked them', async () => {
+    await prisma.school.update({
+      where: { id: schoolId },
+      data: {
+        resultPolicy: 'SCHOOL_ADMIN',
+        resultDetailVisibility: 'SCORE_ONLY',
+        resultPolicyLocked: true,
+      },
+    });
+    try {
+      const examId = (
+        await post(teacher, '/exams', {
+          academicSessionId: sessionId,
+          academicTermId: termId,
+          subjectId: mathSubjectId,
+          title: `Lock Test ${randomUUID().slice(0, 8)}`,
+          examType: 'Test',
+          classIds: [classAId],
+        })
+      ).json<{ id: string }>().id;
+
+      const toAutomatic = await put(teacher, `/exams/${examId}/configuration`, {
+        resultPolicy: 'AUTOMATIC',
+      });
+      expect(toAutomatic.statusCode).toBe(403);
+      expect(toAutomatic.json<{ error: { message: string } }>().error.message).toContain('locked');
+
+      const toFullReview = await put(teacher, `/exams/${examId}/configuration`, {
+        resultDetailVisibility: 'FULL_REVIEW',
+      });
+      expect(toFullReview.statusCode).toBe(403);
+
+      // Resending the school's own values, alongside an unrelated rule, is
+      // not an override.
+      const sameValues = await put(teacher, `/exams/${examId}/configuration`, {
+        resultPolicy: 'SCHOOL_ADMIN',
+        resultDetailVisibility: 'SCORE_ONLY',
+        durationSeconds: 1800,
+      });
+      expect(sameValues.statusCode).toBe(200);
+      expect(sameValues.json<{ resultSettingsLocked: boolean }>().resultSettingsLocked).toBe(true);
+
+      // A School Admin is not constrained by the lock.
+      const byAdmin = await put(admin, `/exams/${examId}/configuration`, {
+        resultDetailVisibility: 'SCORE_AND_COUNTS',
+      });
+      expect(byAdmin.statusCode).toBe(200);
+    } finally {
+      await prisma.school.update({
+        where: { id: schoolId },
+        data: {
+          resultPolicy: 'SCHOOL_ADMIN',
+          resultDetailVisibility: 'SCORE_AND_COUNTS',
+          resultPolicyLocked: false,
+        },
+      });
+    }
+  });
+
+  it("ADR-0010 lock: an exam set up before the lock shows, and is governed by, the school's locked values", async () => {
+    const examId = await buildReadyExam({
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'FULL_REVIEW',
+    });
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const sat = await sitExamAndMark(studentA, examId, 1);
+
+    await prisma.school.update({
+      where: { id: schoolId },
+      data: {
+        resultPolicy: 'SCHOOL_ADMIN',
+        resultDetailVisibility: 'SCORE_ONLY',
+        resultPolicyLocked: true,
+      },
+    });
+    try {
+      const exam = (await get(teacher, `/exams/${examId}`)).json<{
+        resultPolicy: string;
+        resultDetailVisibility: string;
+        resultSettingsLocked: boolean;
+      }>();
+      expect(exam).toMatchObject({
+        resultPolicy: 'SCHOOL_ADMIN',
+        resultDetailVisibility: 'SCORE_ONLY',
+        resultSettingsLocked: true,
+      });
+
+      expect((await post(admin, `/exams/${examId}/results/publish`, {})).statusCode).toBe(200);
+      const detail = (await get(studentA, `/student/results/${sat.resultId}`)).json<{
+        detailVisibility: string;
+        correctCount: number | null;
+        questions: unknown[];
+      }>();
+      expect(detail.detailVisibility).toBe('SCORE_ONLY');
+      expect(detail.correctCount).toBeNull();
+      expect(detail.questions).toHaveLength(0);
+    } finally {
+      await prisma.school.update({
+        where: { id: schoolId },
+        data: {
+          resultPolicy: 'SCHOOL_ADMIN',
+          resultDetailVisibility: 'SCORE_AND_COUNTS',
+          resultPolicyLocked: false,
+        },
+      });
+    }
+  });
+
+  it('with the lock off, a teacher may change both result settings on their own exam', async () => {
+    const examId = (
+      await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: `Unlocked Test ${randomUUID().slice(0, 8)}`,
+        examType: 'Test',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>().id;
+    const res = await put(teacher, `/exams/${examId}/configuration`, {
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'FULL_REVIEW',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'FULL_REVIEW',
+      resultSettingsLocked: false,
+    });
+  });
+
+  it('SCORE_AND_COUNTS gives the counts but no question review', async () => {
+    const examId = await buildReadyExam({ resultDetailVisibility: 'SCORE_AND_COUNTS' });
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const sat = await sitExamAndMark(studentB, examId, 1);
+    await post(teacher, `/exams/${examId}/results/publish`, {});
+    const detail = (await get(studentB, `/student/results/${sat.resultId}`)).json<{
+      correctCount: number | null;
+      incorrectCount: number | null;
+      questions: unknown[];
+    }>();
+    expect(detail.correctCount).toBe(1);
+    expect(detail.incorrectCount).toBe(1);
+    expect(detail.questions).toHaveLength(0);
+  });
+
   it('DoD 7: a teacher cannot publish when the school has locked its result policy', async () => {
     const examId = await buildReadyExam({ resultPolicy: 'TEACHER' });
     await post(teacher, `/exams/${examId}/sessions`, {});

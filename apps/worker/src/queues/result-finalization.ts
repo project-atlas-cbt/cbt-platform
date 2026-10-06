@@ -1,6 +1,7 @@
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import {
   computeResultTotals,
+  effectiveResultSettings,
   resolveGradeBand,
   type GradingBand,
   type ResultQuestionMarking,
@@ -86,7 +87,7 @@ export async function finalizeResultAfterMarking(
           },
         },
       },
-      exam: { select: { resultPolicy: true } },
+      exam: { select: { resultPolicy: true, resultDetailVisibility: true } },
     },
   });
 
@@ -132,11 +133,21 @@ export async function finalizeResultAfterMarking(
     },
   });
 
+  // ADR-0010 (2026-10-06 amendment): while the school's policy is locked,
+  // its own "who releases" wins over the exam's stored copy — otherwise a
+  // teacher could set their exam to AUTOMATIC and release results the
+  // school locked to administrative release.
+  const school = await tx.school.findUniqueOrThrow({
+    where: { id: schoolId },
+    select: { resultPolicy: true, resultDetailVisibility: true, resultPolicyLocked: true },
+  });
+  const { resultPolicy } = effectiveResultSettings(school, attempt.exam);
+
   return {
     resultId: result.id,
     examId: attempt.examId,
     studentUserId: attempt.studentProfile.membership.userId,
-    autoPublish: attempt.exam.resultPolicy === 'AUTOMATIC',
+    autoPublish: resultPolicy === 'AUTOMATIC',
   };
 }
 

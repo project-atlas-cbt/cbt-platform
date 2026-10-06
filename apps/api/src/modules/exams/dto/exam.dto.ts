@@ -174,8 +174,9 @@ export class SetExamQuestionsDto {
  * field. `resultPolicy`/`resultDetailVisibility` are pre-seeded from the
  * school's current values at creation (see `ExamService.create`'s own doc
  * comment) — this endpoint is what lets a teacher override them while
- * `DRAFT`; `School.resultPolicyLocked` is deliberately not enforced here
- * (B15's job). */
+ * `DRAFT`. While `School.resultPolicyLocked` is on, a teacher or HOD may not
+ * set either result setting to anything but the school's value (ADR-0010,
+ * 2026-10-06 amendment). */
 export class UpdateExamConfigurationDto {
   @ApiPropertyOptional({ type: Number, minimum: 1, description: 'Duration in whole seconds.' })
   @IsOptional()
@@ -448,6 +449,13 @@ export class ExamResponseDto extends ExamListItemResponseDto {
 
   @ApiProperty({ type: String, enum: RESULT_DETAIL_VISIBILITIES })
   resultDetailVisibility!: ResultDetailVisibility;
+
+  /** ADR-0010 (2026-10-06 amendment): the school has locked both result
+   * settings. `resultPolicy`/`resultDetailVisibility` above are then the
+   * school's values, and only a School Admin or Moderator may change them
+   * on an exam. */
+  @ApiProperty({ type: Boolean })
+  resultSettingsLocked!: boolean;
 
   @ApiProperty({ type: String, enum: EXAM_ACCESS_MODES })
   accessMode!: ExamAccessMode;

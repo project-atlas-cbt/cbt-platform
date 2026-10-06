@@ -2,6 +2,36 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Result settings lock covers both settings; no score before release
+
+Owner request: check that a locked "School Admin publishes" policy cannot be varied by teachers,
+and that "What students see" works on the student side. Findings:
+`/mnt/project-files/result-policy-check/findings.md` (project files). Two defects and one product
+decision followed:
+
+- **Lock bypass fixed.** A teacher could set their own draft exam to "Automatic" under a lock to
+  "School Admin publishes", and the worker then published results to students. Owner decision
+  ("Lock both"): the lock now fixes both who releases results and what students see, and while
+  locked every exam follows the school's values, older exams included. One domain rule
+  (`effectiveResultSettings`) is applied at configuration (403 for a teacher or HOD), publication,
+  the worker's auto-publish and the student result detail. ADR-0010 amendment.
+- **Score leak fixed.** The screen a student sees after submitting showed score and
+  correct/incorrect counts as soon as marking finished, before release and whatever the visibility
+  setting said (`GET /attempts/:id/status`). The endpoint now returns marking progress only, and the
+  screen shows `04 §59`'s "available according to your school's result policy" message.
+- **Teacher Rules screen:** both selects are disabled under a lock, with a line saying why, and the
+  save leaves them out. The Settings checkbox now reads "Lock these settings: teachers cannot change
+  who releases results or what students see on their own exams". Help guides and
+  `docs/user-guides/teacher.md` updated.
+- The Rules form's selects ignore an empty value from Radix Select, which jsdom showed overwriting
+  a loaded "School Admin releases results" with `''` on hydrate.
+
+Unchanged and confirmed working: with the lock off, teachers may change both settings while the
+exam is a draft; the three visibility options show score only, score plus counts, and per-question
+correctness on the student result page.
+
+**Tested:** see the PR.
+
 ### 2026-10-06 — Tour video: a bulk import, softer sound, no tones
 
 Owner feedback on the first cut: bulk import is a key selling point and must be in it, the clicks

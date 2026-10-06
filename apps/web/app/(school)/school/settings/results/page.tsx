@@ -52,12 +52,9 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 /**
- * `05 §47`/`§58`, ADR-0010 — F5/B3 gap-closure. These are *defaults* only:
- * no `Exam` exists yet (`B11`) to seed from them, and no `B15` marking/
- * publication logic exists yet to honour `resultPolicyLocked`. Saving here
- * stores the school's chosen defaults correctly and auditably, ahead of the
- * phases that will read them — DoD item 6 is real for the storage half,
- * honestly partial for the "applied to exams" half until `B11`/`B15` ship.
+ * `05 §47`/`§58`, ADR-0010 — the school's result defaults. New exams copy
+ * both values; ticking the lock fixes both for teachers and HODs, and every
+ * exam then follows the school's values (ADR-0010 2026-10-06 amendment).
  * Grading Scale (`05 §46`, ADR-0018) is its own section below, against
  * B15's versioned grading-scale API (closes F5 DoD item 7).
  */
@@ -176,7 +173,8 @@ export default function SchoolResultsSettingsPage() {
                   </FormControl>
                   <div>
                     <FormLabel className="font-normal">
-                      Lock this policy — teachers cannot override it on their own exams
+                      Lock these settings: teachers cannot change who releases results or what
+                      students see on their own exams
                     </FormLabel>
                     <FormMessage />
                   </div>

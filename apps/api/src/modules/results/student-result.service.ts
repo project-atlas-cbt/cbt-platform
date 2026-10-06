@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
-import type { AttemptSnapshotDocumentV1, ResultDetailVisibility } from '@atlas/domain';
+import {
+  effectiveResultSettings,
+  type AttemptSnapshotDocumentV1,
+  type ResultDetailVisibility,
+} from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
+import { loadSchoolResultSettings } from '../platform/school-result-settings.util.js';
 import { decimalToNumber } from './result-mappers.js';
 import { studentVisibleResultWhere } from './result-visibility.util.js';
 import type {
@@ -71,6 +76,7 @@ export class StudentResultService {
               id: true,
               title: true,
               examType: true,
+              resultPolicy: true,
               resultDetailVisibility: true,
               subject: { select: { name: true } },
               resultPublication: { select: { publishedAt: true } },
@@ -83,7 +89,12 @@ export class StudentResultService {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Result not found.' });
     }
 
-    const visibility: ResultDetailVisibility = row.exam.resultDetailVisibility;
+    // ADR-0010 (2026-10-06 amendment): a locked school's own setting wins
+    // over the exam's stored copy.
+    const visibility: ResultDetailVisibility = effectiveResultSettings(
+      await loadSchoolResultSettings(schoolId),
+      row.exam,
+    ).resultDetailVisibility;
     const base = this.toListItem(row);
 
     const showCounts = visibility === 'SCORE_AND_COUNTS' || visibility === 'FULL_REVIEW';
