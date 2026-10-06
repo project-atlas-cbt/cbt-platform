@@ -165,6 +165,8 @@ export {
   type AttemptAnswerState,
   type AttemptEventType,
   type AttemptQuestionCorrectness,
+  MAX_EXAM_DURATION_SECONDS,
+  MAX_EXAM_ATTEMPT_LIMIT,
 } from './exams/constants.js';
 export {
   CANONICAL_AUDIT_ACTIONS,

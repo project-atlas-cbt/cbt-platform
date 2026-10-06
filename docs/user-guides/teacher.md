@@ -22,7 +22,8 @@ a place for notes, homework or messages.
   questions only for subjects and levels you teach.
 - To change an approved question, edit it: that creates a new revision, which goes through review
   again. Exams that already use the old revision keep it, so past results stay exactly as marked.
-- Many questions at once: **Question Bank → Import**, from the CSV template.
+- Many questions at once: **Question Bank → Import**, from the CSV template. In Excel, format the
+  option columns as Text before typing, so an answer like 1/2 is not turned into a date.
 
 **HODs:** **Question Review** is a queue. For each question: **Approve**, **Reject** with a reason
 the teacher will read, or **Request changes**. Keyboard shortcuts are shown on the screen.

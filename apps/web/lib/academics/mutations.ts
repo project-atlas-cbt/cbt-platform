@@ -218,7 +218,7 @@ export function useUpdateRolloverDecisions(planId: string) {
     mutationFn: (body: {
       decisions: Array<{
         decisionId: string;
-        outcome: 'PROMOTE' | 'REPEAT' | 'CHANGE_DEPARTMENT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
+        outcome: 'PROMOTE' | 'REPEAT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
         targetDraftClassId?: string | null;
         reason: string;
       }>;
@@ -227,6 +227,8 @@ export function useUpdateRolloverDecisions(planId: string) {
       unwrap(
         apiClient.PATCH('/academics/rollovers/{id}/decisions', {
           params: { path: { id: planId } },
+          // The generated schema types the nullable targetDraftClassId as an
+          // object; the outcomes match the API's own list.
           body: body as never,
         }),
       ),

@@ -164,6 +164,8 @@ export const BASE_ERROR_CODES = {
   QUESTION_INSUFFICIENT_OPTIONS: { httpStatus: 400, retryable: false },
   QUESTION_OPTION_TEXT_EMPTY: { httpStatus: 400, retryable: false },
   QUESTION_CORRECT_ANSWER_MISSING: { httpStatus: 400, retryable: false },
+  // Bug audit P3-9: a True/False question has exactly two options.
+  QUESTION_TRUE_FALSE_OPTIONS: { httpStatus: 400, retryable: false },
   // QUESTION_OPTION_NOT_FOUND: a body-supplied option id doesn't belong to
   // this revision — this schema stores correctFlag per-option (06 §27),
   // not a separate correct-answer pointer field, so this is the closest

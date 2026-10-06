@@ -51,7 +51,10 @@ export const TEACHER_GUIDES: RoleGuideSet = {
         'Rows that need attention are listed with the reason. Press **Download error file** to fix them in your spreadsheet.',
         'Press the **Import … valid rows** button to add the rows that passed. They arrive as drafts for you to submit for review.',
       ],
-      notes: ['A checked file is held for 24 hours. After that, upload it again.'],
+      notes: [
+        'A checked file is held for 24 hours. After that, upload it again.',
+        'In Excel, format the option columns as **Text** before you type, so an answer like 1/2 is not changed into a date.',
+      ],
       screen: { label: 'Import questions', href: 'question-bank/import' },
       related: ['write-a-question'],
     },

@@ -88,12 +88,16 @@ export type ValidationResult =
  * binary signal plain text never legitimately contains; `TextDecoder`'s
  * `fatal: true` (unlike `Buffer#toString`, which silently replaces invalid
  * sequences with U+FFFD) is what makes this a real decodability check.
+ * The import parser checks the whole file's encoding (import-file-parser.ts).
  */
 function looksLikePlainText(buffer: Buffer): boolean {
   if (buffer.length === 0) return false;
   if (buffer.includes(0)) return false;
   try {
-    new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    // `stream: true`: the prefix is a fixed byte count, so it can end in the
+    // middle of a multi-byte character (₦, ×, a smart quote). A cut sequence
+    // is not invalid text; only a malformed one is (bug audit P1-10).
+    new TextDecoder('utf-8', { fatal: true }).decode(buffer, { stream: true });
     return true;
   } catch {
     return false;

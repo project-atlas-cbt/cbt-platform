@@ -1,9 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsIn, IsInt, IsOptional, Max, Min, ValidateIf } from 'class-validator';
-import { EXAM_NAVIGATION_POLICIES, type ExamNavigationPolicy } from '@atlas/domain';
+import {
+  EXAM_NAVIGATION_POLICIES,
+  MAX_EXAM_ATTEMPT_LIMIT,
+  MAX_EXAM_DURATION_SECONDS,
+  type ExamNavigationPolicy,
+} from '@atlas/domain';
 
 /** Longest default an exam may start with: 24 hours. */
-export const MAX_DEFAULT_EXAM_DURATION_SECONDS = 24 * 60 * 60;
+export const MAX_DEFAULT_EXAM_DURATION_SECONDS = MAX_EXAM_DURATION_SECONDS;
 
 /** Partial merge, like `PUT /v1/school/result-policy`: each field is
  * independently optional. `defaultExamDurationSeconds: null` clears the
@@ -23,10 +28,11 @@ export class UpdateSchoolAssessmentRulesDto {
   @Max(MAX_DEFAULT_EXAM_DURATION_SECONDS)
   defaultExamDurationSeconds?: number | null;
 
-  @ApiPropertyOptional({ type: Number, minimum: 1 })
+  @ApiPropertyOptional({ type: Number, minimum: 1, maximum: MAX_EXAM_ATTEMPT_LIMIT })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(MAX_EXAM_ATTEMPT_LIMIT)
   defaultAttemptLimit?: number;
 
   @ApiPropertyOptional({ type: String, enum: EXAM_NAVIGATION_POLICIES })

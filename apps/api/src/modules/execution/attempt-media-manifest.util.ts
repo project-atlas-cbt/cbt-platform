@@ -1,6 +1,9 @@
 import { prisma, withTenant } from '@atlas/db';
 import type { AttemptSnapshotDocumentV1 } from '@atlas/domain';
-import type { ObjectStorageService } from '../../storage/object-storage.service.js';
+import {
+  mediaResponseFor,
+  type ObjectStorageService,
+} from '../../storage/object-storage.service.js';
 
 /** ADR-0021: signed URLs need only outlive the client's initial download
  * window at attempt start (or a resume's re-download after a cache
@@ -44,7 +47,7 @@ export async function resolveMediaManifest(
   const assets = await withTenant(prisma, schoolId, (tx) =>
     tx.mediaAsset.findMany({
       where: { schoolId, id: { in: assetIds }, status: 'READY' },
-      select: { id: true, storageKey: true },
+      select: { id: true, storageKey: true, sniffedMimeType: true },
     }),
   );
 
@@ -53,6 +56,7 @@ export async function resolveMediaManifest(
     const signed = await storage.createSignedDownloadUrl(
       asset.storageKey,
       ATTEMPT_MEDIA_DOWNLOAD_TTL_SECONDS,
+      mediaResponseFor(asset.sniffedMimeType),
     );
     resolved.set(asset.id, { url: signed.url, expiresAt: signed.expiresAt.toISOString() });
   }

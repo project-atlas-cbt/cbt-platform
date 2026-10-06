@@ -8,6 +8,7 @@ import { AuditService } from '../operations/audit-event.service.js';
 import {
   QUESTION_DETAIL_INCLUDE,
   QUESTION_INCLUDE,
+  QUESTION_REVISION_INCLUDE,
   currentRevisionOwnedBy,
   deriveCurrentStatus,
   toQuestionListItemDto,
@@ -61,6 +62,7 @@ export class QuestionService {
   ): Promise<QuestionResponseDto> {
     validateQuestionRevisionForSubmit({
       content: dto.content,
+      questionType: dto.questionType,
       options: dto.options,
       marks: dto.marks,
     });
@@ -271,6 +273,67 @@ export class QuestionService {
 
     return {
       questions: questions.map((q) => toQuestionListItemDto(q, currentRevisionOwnedBy(actor, q))),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  /**
+   * `GET /v1/exams/:id/available-questions`: every unarchived question in
+   * the scope with an approved revision, shown as its latest approved
+   * revision. `list(status: APPROVED)` filters on the *current* revision,
+   * so a question hid from exam building as soon as someone started a new
+   * draft of it, and its row carried the draft's id (bug audit P2-5).
+   */
+  async listBindable(
+    schoolId: string,
+    actor: AuthorizedActor,
+    query: ListQuestionsQueryDto,
+  ): Promise<QuestionListResponseDto> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const scopeFilter = await this.buildScopeFilter(schoolId, actor);
+    const approved: Prisma.QuestionRevisionWhereInput = {
+      status: 'APPROVED',
+      ...(query.topicId !== undefined && { topicId: query.topicId }),
+      ...(query.difficulty !== undefined && { difficulty: query.difficulty }),
+    };
+    const where: Prisma.QuestionWhereInput = {
+      schoolId,
+      ...scopeFilter,
+      ...(query.subjectId !== undefined && { subjectId: query.subjectId }),
+      ...(query.level !== undefined && { level: query.level }),
+      archivedAt: null,
+      revisions: { some: approved },
+    };
+
+    const [questions, total] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.question.findMany({
+          where,
+          include: {
+            ...QUESTION_INCLUDE,
+            revisions: {
+              where: { status: 'APPROVED' },
+              include: QUESTION_REVISION_INCLUDE,
+              orderBy: { revisionNumber: 'desc' },
+              take: 1,
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.question.count({ where }),
+      ]),
+    );
+
+    return {
+      questions: questions.map((q) => {
+        const asApproved = { ...q, currentRevision: q.revisions[0] ?? null };
+        return toQuestionListItemDto(asApproved, currentRevisionOwnedBy(actor, asApproved));
+      }),
       total,
       page,
       pageSize,

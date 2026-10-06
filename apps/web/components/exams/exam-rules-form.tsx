@@ -167,7 +167,9 @@ export function RulesForm({ examId, basePath }: { examId: string; basePath: stri
     const values = form.getValues();
     try {
       await setConfiguration.mutateAsync({
-        durationSeconds: values.durationMinutes === '' ? 0 : values.durationMinutes * 60,
+        // Blank means "not set yet": left out, so the rest still saves and
+        // readiness keeps reporting the missing duration (bug audit P2-4).
+        ...(values.durationMinutes === '' ? {} : { durationSeconds: values.durationMinutes * 60 }),
         attemptLimit: values.attemptLimit === '' ? 1 : values.attemptLimit,
         navigationPolicy: values.navigationPolicy,
         randomizeQuestions: values.randomizeQuestions,

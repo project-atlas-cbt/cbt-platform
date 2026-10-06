@@ -40,6 +40,9 @@ interface ActorContext {
  * Question selection lives in `ExamQuestionService`; configuration in
  * `ExamConfigurationService` — both mirror this service's own "authorize
  * before revealing, then check DRAFT-only state" ordering exactly. */
+/** Matches no membership: evaluates a permission as if the actor did not own the resource. */
+const NO_OWNER = '00000000-0000-0000-0000-000000000000';
+
 @Injectable()
 export class ExamService {
   constructor(
@@ -332,6 +335,16 @@ export class ExamService {
         resolvedClassSubjectIds = resolved.map((c) => c.classSubjectId);
       }
 
+      // Bug audit P1-8: the check above ran against the exam as it stands.
+      // A move to another subject or other classes must also be one the
+      // actor could have made in the first place.
+      await this.assertMayRetarget(schoolId, actor, {
+        ownerMembershipId: exam.createdByMembershipId,
+        currentDepartmentId: exam.departmentId,
+        newDepartmentId,
+        newClassSubjectIds: resolvedClassSubjectIds,
+      });
+
       const updated = await tx.exam.updateMany({
         where: { id, status: 'DRAFT' },
         data: {
@@ -601,6 +614,78 @@ export class ExamService {
    * alongside the real `evaluate()` decision, so authorship alone is always
    * enough to view (never to configure/publish/etc. — those still go
    * through the real `OWNED` grant on their own permission id). */
+  /**
+   * `editDraft` is OWNED for a Teacher and DEPARTMENT for an HOD, both
+   * evaluated against the exam's current subject. Moving the exam is held
+   * to the rules that applied when it was created:
+   * - a new department must be inside the actor's scope (an HOD cannot
+   *   move an exam into another department's subject);
+   * - new classes must include one the actor teaches, as `create()`
+   *   requires, unless the actor holds the exam by school or department
+   *   scope rather than only by owning it.
+   */
+  private async assertMayRetarget(
+    schoolId: string,
+    actor: AuthorizedActor,
+    params: {
+      ownerMembershipId: string;
+      currentDepartmentId: string | null;
+      newDepartmentId: string | null;
+      newClassSubjectIds: string[] | undefined;
+    },
+  ): Promise<void> {
+    const forbidden = () =>
+      new AppHttpException({
+        code: 'EXAM_OUT_OF_SCOPE',
+        message: 'You can only move this exam to subjects and classes within your own scope.',
+      });
+
+    if (params.newDepartmentId !== params.currentDepartmentId) {
+      const decision = await this.authz.evaluate(actor, 'exam.editDraft', {
+        schoolId,
+        ownerMembershipId: params.ownerMembershipId,
+        ...(params.newDepartmentId !== null && { departmentId: params.newDepartmentId }),
+      });
+      if (!decision.allowed) throw forbidden();
+    }
+
+    const newClassSubjectIds = params.newClassSubjectIds;
+    if (newClassSubjectIds === undefined) return;
+
+    // Allowed without owning the exam: School Admin, Moderator, or the HOD of
+    // the exam's (new) department. They need no teaching assignment. The nil
+    // owner makes OWNED fail (it passes when no owner is given at all).
+    const byScope = await this.authz.evaluate(actor, 'exam.editDraft', {
+      schoolId,
+      ownerMembershipId: NO_OWNER,
+      ...(params.newDepartmentId !== null && { departmentId: params.newDepartmentId }),
+    });
+    if (byScope.allowed) return;
+
+    const schoolActor = requireSchoolActor(actor);
+    const profile = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherProfile.findUnique({
+        where: {
+          schoolId_membershipId: { schoolId, membershipId: schoolActor.membershipId },
+        },
+        select: { id: true },
+      }),
+    );
+    if (!profile) throw forbidden();
+    const assignment = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherAssignment.findFirst({
+        where: {
+          schoolId,
+          teacherProfileId: profile.id,
+          status: 'ACTIVE',
+          classSubjectId: { in: newClassSubjectIds },
+        },
+        select: { id: true },
+      }),
+    );
+    if (!assignment) throw forbidden();
+  }
+
   private isCreator(actor: AuthorizedActor, exam: { createdByMembershipId: string }): boolean {
     return actor.kind === 'SCHOOL' && actor.membershipId === exam.createdByMembershipId;
   }

@@ -3,7 +3,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
-import { resolveActorRole } from './actor.util.js';
+import { resolveActorRole, selfOnlyMembershipId } from './actor.util.js';
 import {
   ClassTeachersResponseDto,
   MyTeacherAssignmentsResponseDto,
@@ -54,9 +54,11 @@ export class TeacherAssignmentController {
     @Req() req: FastifyRequest,
     @Param('id') teacherProfileId: string,
   ): Promise<TeacherAssignmentListResponseDto> {
+    const user = currentUser(req);
     const assignments = await this.assignments.listForTeacher(
-      currentUser(req).schoolId,
+      user.schoolId,
       teacherProfileId,
+      selfOnlyMembershipId(user),
     );
     return { assignments };
   }

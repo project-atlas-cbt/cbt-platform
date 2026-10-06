@@ -344,6 +344,15 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
     expect(second.statusCode).toBe(409);
   });
 
+  it('bug audit P2-6: rejects a studentId that differs only by case as a clean 409', async () => {
+    const second = await post(admin, '/students', {
+      firstName: 'F',
+      lastName: 'G',
+      studentId: 'dup-001',
+    });
+    expect(second.statusCode).toBe(409);
+  });
+
   it('creates a teacher — invitation dispatched, no plaintext password ever shown (DoD 1)', async () => {
     const res = await post(admin, '/teachers', {
       firstName: 'Tunde',

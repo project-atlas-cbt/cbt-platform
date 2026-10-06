@@ -79,4 +79,26 @@ describe('validateContent', () => {
       expect(result.height).toBeUndefined();
     }
   });
+
+  it('P1-10: accepts a CSV prefix cut inside a multi-byte character, at every cut position', async () => {
+    const row = 'Q1,"What is ₦50 × 2?",“₦100”,₦50,₦200,A\n';
+    const file = Buffer.from(row.repeat(200), 'utf8');
+    for (let cut = 4000; cut <= 4100; cut++) {
+      const result = await validateContent({
+        prefix: file.subarray(0, cut),
+        sizeBytes: file.length,
+        limits: CONTENT_LIMITS.IMPORT_SOURCE,
+      });
+      expect(result.ok, `cut at ${cut}`).toBe(true);
+    }
+  });
+
+  it('P1-10: still rejects bytes that are malformed UTF-8 before the end of the prefix', async () => {
+    const result = await validateContent({
+      prefix: Buffer.concat([Buffer.from([0xc3, 0x28]), Buffer.from('abc,def\n')]),
+      sizeBytes: 11,
+      limits: CONTENT_LIMITS.IMPORT_SOURCE,
+    });
+    expect(result.ok).toBe(false);
+  });
 });

@@ -24,6 +24,7 @@ export interface QuestionValidationOption {
  */
 export function validateQuestionRevisionForSubmit(input: {
   content: string;
+  questionType?: 'SINGLE_CHOICE' | 'TRUE_FALSE';
   options: QuestionValidationOption[];
   marks: number;
 }): void {
@@ -37,6 +38,12 @@ export function validateQuestionRevisionForSubmit(input: {
     throw new AppHttpException({
       code: 'QUESTION_INSUFFICIENT_OPTIONS',
       message: 'At least two options are required.',
+    });
+  }
+  if (input.questionType === 'TRUE_FALSE' && input.options.length !== 2) {
+    throw new AppHttpException({
+      code: 'QUESTION_TRUE_FALSE_OPTIONS',
+      message: 'A True/False question has exactly two options.',
     });
   }
   for (const option of input.options) {

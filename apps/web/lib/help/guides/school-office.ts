@@ -90,6 +90,7 @@ export function schoolOfficeGuides(): Guide[] {
         'Downloading a credential sheet gives every active student in that class a new password. Do it before they first sign in, or when you mean to reset the whole class.',
         'Students choose their own password the first time they sign in.',
         'Students are registered for the subjects their class offers automatically.',
+        'In Excel, format the **Student ID** column as **Text** before you type, so IDs like 00123 keep their leading zeros.',
       ],
       screen: { label: 'Students', href: 'people/students' },
       related: ['reset-passwords', 'move-student'],

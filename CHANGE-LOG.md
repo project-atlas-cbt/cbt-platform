@@ -2,6 +2,57 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Imports and authoring: P2 and P3 bug audit fixes
+
+The P2 and P3 items of the bug audit in imports, authoring and their permissions:
+
+- **P2-4:** the exam Rules form leaves a blank duration out of the save instead of sending 0.
+- **P2-5:** the exam question picker lists each question as its latest approved revision, even
+  while a new draft of it exists, and matches the selection by question; the API refuses two
+  revisions of one question in an exam.
+- **P2-6:** login identifiers are unique per school regardless of case (a `lower()` unique
+  index, migration `20261007090000`), and the import duplicate checks ignore case too.
+- **P2-7:** CSV rows of nothing but commas are dropped; a file that is not UTF-8 fails with "save
+  as CSV UTF-8" instead of importing garbled names.
+- **P2-8:** import templates are headers only. The sample rows (01 §7's worked example) were
+  imported as real records when a school typed below them.
+- **P2-9:** a Teacher or Student reads only their own assignment or subject-registration list by
+  id (403 otherwise).
+- **P2-10:** the rollover screens no longer offer "Change Department", which the API refuses;
+  Promote into a class of the other department does it.
+- **P3-7:** exam duration (24 hours) and attempt limit (100) have maximums, on the exam and in
+  Assessment Rules.
+- **P3-9:** a True/False question must have exactly two options.
+
+**Tested:** unit tests (parser, validator, template, Rules form, question picker) and integration
+tests (picker and double binding, limits, case-insensitive student ID, own assignment list);
+typecheck, lint, unit suites and `test:security`.
+
+### 2026-10-06 — Imports and authoring: P0 and P1 bug audit fixes
+
+From the bug audit (`/mnt/project-files/bug-audit/findings.md`, project files), the imports, media
+and authoring items at P0 and P1:
+
+- **P0-1, uploaded page on the media host.** Import uploads accept only the types browsers really
+  declare for CSV and .xlsx (never `text/html`). Every signed download link now forces its type and
+  disposition: the sniffed image type inline for images, `application/octet-stream` as a download
+  for everything else, whatever the uploader's PUT said. `GET /media/:id/url` refuses import files
+  (404); only the import job reads them. The API's CORS no longer trusts `media`, `www` or `api`
+  under the root domain (`admin` stays), and the pilot's media host sends
+  `Content-Security-Policy: sandbox` and `X-Content-Type-Options: nosniff`.
+- **P1-10, CSV with ₦, × or smart quotes refused.** The upload sniff decodes its 4,100-byte
+  prefix as a stream, so a cut multi-byte character no longer fails it.
+- **P1-11, Excel imports.** A number in a padded format (`00000`, `"ST"000`) imports as shown
+  (`00123`), and any cell Excel turned into a date is an invalid row saying to format the column
+  as Text. The import guides say so too.
+- **P1-8, retargeting a draft exam.** Changing a draft's subject or classes is held to the scope
+  it was created under: a teacher only to classes they teach, an HOD only within their department.
+- **P1-9, revising a question.** A new revision keeps the source revision's images and diagrams.
+
+**Tested:** new unit tests (content sniff at every cut position, xlsx formats and dates, CORS
+hosts) and integration tests (media type forcing and import-link refusal, imports date row, exam
+retargeting, revision media); typecheck, lint, unit suites and `test:security`.
+
 ### 2026-10-06 — Exam sitting fixes from the bug audit, second part (P2-2, P3-1, P3-8, P3-10)
 
 - **P2-2:** a makeup grant is refused for a student who has a running or submitted attempt for the
