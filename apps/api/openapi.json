@@ -5137,7 +5137,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
+                  "$ref": "#/components/schemas/HeartbeatResponseDto"
                 }
               }
             }
@@ -14664,6 +14664,27 @@
         },
         "required": [
           "results"
+        ]
+      },
+      "HeartbeatResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The server's current clock. The client counts the exam countdown from it on its own monotonic clock, never from the PC's wall clock."
+          }
+        },
+        "required": [
+          "status",
+          "serverTime"
         ]
       },
       "RecordAttemptEventDto": {

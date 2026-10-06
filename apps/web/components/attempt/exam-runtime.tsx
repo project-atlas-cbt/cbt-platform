@@ -16,7 +16,11 @@ import { useAttemptLock } from '@/lib/attempt/use-attempt-lock';
 import { recordAttemptEvent } from '@/lib/attempt/events';
 import { setErrorContext } from '@/lib/observability/client-errors';
 import { connectivityStore } from '@/lib/attempt/connectivity-store';
-import { isNavigationAllowed, nextFurthestIndex } from '@/lib/attempt/navigation-policy';
+import {
+  isNavigationAllowed,
+  nextFurthestIndex,
+  restoredPosition,
+} from '@/lib/attempt/navigation-policy';
 import { QuestionDisplay } from './question-display';
 import { QuestionNavigator } from './question-navigator';
 import { TimerDisplay } from './timer-display';
@@ -26,7 +30,17 @@ import { SubmitDialog } from './submit-dialog';
 import { ExamLockedElsewhereScreen } from './exam-locked-elsewhere-screen';
 import { InvalidatedScreen } from './invalidated-screen';
 import { AttemptMissingScreen } from './attempt-missing-screen';
-import { isAttemptMissingError } from '@/lib/attempt/error-utils';
+import { AnswersNotSyncedError, isAttemptMissingError } from '@/lib/attempt/error-utils';
+import { serverNow } from '@/lib/attempt/server-clock';
+
+/** ADR-0003's post-expiry grace is 60 s against server receipt time. At
+ * expiry the runtime keeps flushing unsent answers for up to this long after
+ * the deadline before it submits, leaving room for one last flush request
+ * (`FLUSH_TIMEOUT_MS`) and the submit itself inside the grace (audit P0-2). */
+export const EXPIRY_FLUSH_BUDGET_MS = 40_000;
+/** Audit P0-2: flush tries before a manual submit gives up and tells the
+ * student their answers are still saving. */
+export const MANUAL_SUBMIT_FLUSH_TRIES = 3;
 
 /**
  * F13 — the exam runtime orchestrator (`04 §55`). All hooks are called
@@ -40,6 +54,7 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
   const [furthestIndex, setFurthestIndex] = useState(0);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [submitError, setSubmitError] = useState<unknown>(null);
+  const [confirmingSubmit, setConfirmingSubmit] = useState(false);
 
   const reconciled = useReconciledAttempt(attemptId);
   // F20 (DoD 11): ids only — an error report from the runtime can be traced
@@ -103,19 +118,43 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
       [attemptId],
     ) ?? [];
 
+  // Audit P0-2: at expiry, never submit while answers are still waiting to
+  // sync — the server would then refuse them as not writable and they were
+  // lost. Keep flushing inside the grace window first; submit with whatever
+  // arrived once the budget is spent (the server's sweeper finalises at the
+  // end of the grace either way). Single-flight: the timer's own expiry call
+  // and the retry hook below share one run.
+  const expiresAtMs = attemptPackageRow ? Date.parse(attemptPackageRow.expiresAt) : Number.NaN;
+  const clockSkewMs = attemptPackageRow?.clockSkewMs ?? 0;
+  const expirySubmitRef = useRef<Promise<void> | null>(null);
+  const flushUntilSynced = syncEngine.flushUntilSynced;
+  const submitAfterExpiry = useCallback((): Promise<void> => {
+    expirySubmitRef.current ??= (async () => {
+      await flushUntilSynced(
+        () =>
+          !Number.isFinite(expiresAtMs) ||
+          serverNow(clockSkewMs) < expiresAtMs + EXPIRY_FLUSH_BUDGET_MS,
+      );
+      await doSubmit();
+    })().finally(() => {
+      expirySubmitRef.current = null;
+    });
+    return expirySubmitRef.current;
+  }, [flushUntilSynced, doSubmit, expiresAtMs, clockSkewMs]);
+
   const timer = useAttemptTimer(
     attemptId,
     isLeader ? attemptPackageRow?.expiresAt : undefined,
-    attemptPackageRow?.clockSkewMs ?? 0,
+    clockSkewMs,
     // Bug fix: this proactive, one-shot attempt is a UX nicety, not the
     // real recovery path — `useExpirySubmitRetry` below is what actually
     // retries on failure. Swallow a rejection here explicitly rather than
     // leaving it as an unhandled promise rejection if it fails offline.
     () => {
-      doSubmit().catch(() => undefined);
+      submitAfterExpiry().catch(() => undefined);
     },
   );
-  useExpirySubmitRetry(attemptId, isLeader && timer.expired, doSubmit);
+  useExpirySubmitRetry(attemptId, isLeader && timer.expired, submitAfterExpiry);
 
   const warnedFiveRef = useRef(false);
   useEffect(() => {
@@ -183,14 +222,51 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
 
   const questionCount = questions.length;
   const navigationPolicy = attemptPackageRow?.navigationPolicy;
+
+  // Audit P1-6: resume at the saved question, not question 1. A reload used
+  // to reset both positions to 0, which under SEQUENTIAL_NO_REVISIT reopened
+  // questions the student had already passed. Restored once, during render
+  // (React's "adjusting state when a prop changes" pattern, as for
+  // `takeoverRequested` above), as soon as the package, the questions and
+  // the answers have all loaded.
+  const answeredQuestionIds = useLiveQuery(
+    async () =>
+      (await getAttemptDb().answers.where('attemptId').equals(attemptId).toArray())
+        .filter((row) => row.selectedOptionId !== null)
+        .map((row) => row.examQuestionId),
+    [attemptId],
+  );
+  const [positionRestored, setPositionRestored] = useState(false);
+  if (!positionRestored && attemptPackageRow && questionCount > 0 && answeredQuestionIds) {
+    const indexById = new Map(questions.map((q, index) => [q.examQuestionId, index]));
+    const restored = restoredPosition({
+      policy: attemptPackageRow.navigationPolicy,
+      questionCount,
+      savedCurrentIndex: attemptPackageRow.currentIndex,
+      savedFurthestIndex: attemptPackageRow.furthestIndex,
+      answeredIndexes: answeredQuestionIds
+        .map((id) => indexById.get(id))
+        .filter((index): index is number => index !== undefined),
+    });
+    setPositionRestored(true);
+    setCurrentIndex(restored.currentIndex);
+    setFurthestIndex(restored.furthestIndex);
+  }
+
   const navigateTo = useCallback(
     (index: number) => {
       if (!navigationPolicy || index < 0 || index >= questionCount) return;
       if (!isNavigationAllowed(navigationPolicy, index, furthestIndex, questionCount)) return;
+      const furthest = nextFurthestIndex(furthestIndex, index);
       setCurrentIndex(index);
-      setFurthestIndex((prev) => nextFurthestIndex(prev, index));
+      setFurthestIndex(furthest);
+      // Saved so a reload resumes here (audit P1-6). Best-effort: a failed
+      // write only costs the position, never an answer.
+      void getAttemptDb()
+        .attemptPackages.update(attemptId, { currentIndex: index, furthestIndex: furthest })
+        .catch(() => undefined);
     },
-    [navigationPolicy, furthestIndex, questionCount],
+    [navigationPolicy, furthestIndex, questionCount, attemptId],
   );
 
   // F20 (DoD 2): Alt+N / Alt+P move between questions (documented on the
@@ -400,7 +476,7 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
           setSubmitDialogOpen(open);
           setSubmitError(null);
         }}
-        submitting={submitAttempt.isPending}
+        submitting={confirmingSubmit || submitAttempt.isPending}
         error={submitError}
         onConfirm={() => {
           // Bug fix: a failed submit (e.g. genuinely offline right when the
@@ -409,11 +485,20 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
           // the failure is caught and surfaced in the dialog itself, and
           // the dialog stays open so the student can retry once
           // reconnected.
+          // Audit P0-2: and never submit while answers are still unsent —
+          // the submit used to go ahead after a failed flush, and the
+          // answers still on the device were then lost.
           setSubmitError(null);
+          setConfirmingSubmit(true);
+          let tries = 1;
           void syncEngine
-            .flushNow()
-            .then(() => doSubmit())
-            .catch((error) => setSubmitError(error));
+            .flushUntilSynced(() => tries++ < MANUAL_SUBMIT_FLUSH_TRIES)
+            .then((unsynced) => {
+              if (unsynced > 0) throw new AnswersNotSyncedError(unsynced);
+              return doSubmit();
+            })
+            .catch((error) => setSubmitError(error))
+            .finally(() => setConfirmingSubmit(false));
         }}
       />
     </div>

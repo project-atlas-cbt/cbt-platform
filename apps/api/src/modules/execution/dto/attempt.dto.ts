@@ -500,3 +500,18 @@ export class GrantLargerTextDto {
   @IsBoolean()
   largerText!: boolean;
 }
+
+/** `POST /v1/attempts/:id/heartbeat`. Audit P1-5: carries the server's clock
+ * so the client re-anchors its exam countdown on every heartbeat
+ * (`apps/web/lib/attempt/server-clock.ts`). */
+export class HeartbeatResponseDto {
+  @ApiProperty({ type: String, enum: ['ok'], example: 'ok' })
+  status!: 'ok';
+
+  @ApiProperty({
+    format: 'date-time',
+    description:
+      "The server's current clock. The client counts the exam countdown from it on its own monotonic clock, never from the PC's wall clock.",
+  })
+  serverTime!: string;
+}
