@@ -42,6 +42,39 @@ actions, the clicked spot highlighted, interface sounds and no music, and not to
 
 **Tested:** marketing lint and typecheck; unit tests (40) and browser tests (47, including axe on the home page and the new tour check) pass. Playback itself was not checked here: the test Chromium has no H.264 decoder.
 
+### 2026-10-06 — School admins can set grading bands (F5 DoD 7 closed)
+
+**Owner decisions (2026-10-06):** per-level scales are on the screen as well as the school-wide
+one; no grading step in the onboarding wizard for now; no automatic default scale for new schools
+(that would need an ADR-0018 amendment), but a warning while a scale is missing.
+
+- **Settings → Results → Grading scale** replaces the F5 placeholder that said it waited on B15.
+  It uses B15's existing `GET/PUT /v1/school/grading-scales` and `/versions`; no API, migration
+  or ADR change. A **Scale for** picker covers the school-wide scale and JSS1–SS3. The bands
+  (grade, From %, To %, Pass) are an editable table that starts from the default template when
+  the school has none, and a level's own scale starts from a copy of the school-wide bands. The
+  form checks the bands with `validateGradingBands` (the server's own rules) plus field checks
+  (labels up to 16 characters, numbers 0–100 with two decimals) before saving and lists every
+  problem; server errors show in the same place. The screen says that a save creates a new
+  version and never changes grades already given, and a version history marks the versions used
+  for grades. Read-only without `schoolConfig.settings.manage`. The page now registers one
+  combined dirty flag for both forms.
+- **Known limit, not changed:** the API cannot retire a level's own scale, so once saved it can be
+  changed but not removed. The screen says so before one is created.
+- **School admin dashboard:** a warning alert, linking to the screen, while any class level would
+  be finalised Ungraded (no school-wide scale and no own scale for that level).
+- Help guide `grading-scale` added (and the "cannot be set yet" note removed from
+  `result-policy`); `school-onboarding.md` step 5 now says where bands are set and that they must
+  be set before the first exam is marked. `docs/user-guides/` has no school admin guide, so it is
+  unchanged. Roadmap: F5 DoD 7, F5 Deferred and F15's open line marked closed. This closes the
+  2026-10-05 Help centre entry's grading Candidate.
+- Tested: unit tests for the form helpers, component tests for the section (default template,
+  gap/overlap/duplicate messages, save payloads for a new scale, a new version and a level's own
+  scale, server error, view-only, version history, load error) and the dashboard alert; web
+  typecheck, lint and the full web suite (1,108 tests) pass. The F20 axe scan now includes
+  `/school/settings/results` and passes against production builds; the screen was also driven in
+  Chromium against the real API (save, new version, a JSS1 scale) and screenshots reviewed.
+
 ### 2026-10-05 — Software Admin: System Configuration built (ADR-0036); Sign-in Security gaps filled
 
 **Owner decisions (2026-10-05):** System Configuration holds **editable** settings, and the set is

@@ -15,7 +15,10 @@ import {
   useSchoolAnalytics,
   useSchoolSubscription,
 } from '@/lib/analytics';
+import { useGradingScales } from '@/lib/school-settings/queries';
 import { SchoolAdminDashboard } from './school-admin-dashboard';
+
+vi.mock('@/lib/school-settings/queries', () => ({ useGradingScales: vi.fn() }));
 
 vi.mock('@/lib/academics/queries', () => ({
   useAcademicsContext: vi.fn(),
@@ -93,13 +96,50 @@ describe('SchoolAdminDashboard', () => {
       isPending: false,
     } as never);
 
+    vi.mocked(useGradingScales).mockReturnValue({
+      data: { items: [{ level: null, currentVersion: { id: 'v1' } }], defaultTemplate: [] },
+    } as never);
+
     render(<SchoolAdminDashboard />);
 
+    expect(screen.queryByText(/no grading scale/i)).not.toBeInTheDocument();
     expect(screen.getByText('King’s College Lagos Dashboard')).toBeInTheDocument();
     expect(screen.getByText(/2025\/2026 Academic Session/i)).toBeInTheDocument();
     expect(screen.getByText('420')).toBeInTheDocument(); // Students
     expect(screen.getByText('32')).toBeInTheDocument(); // Teachers
     expect(screen.getByText('73.4%')).toBeInTheDocument(); // Average
     expect(screen.getByText('380')).toBeInTheDocument(); // Results count
+  });
+
+  // Mocks from the test above stay in place; only the scales change.
+  it('warns when no grading scale is set, linking to the Results settings', () => {
+    vi.mocked(useGradingScales).mockReturnValue({
+      data: { items: [], defaultTemplate: [] },
+    } as never);
+
+    render(<SchoolAdminDashboard />);
+
+    expect(screen.getByText('No grading scale has been set')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /set grading bands/i })).toHaveAttribute(
+      'href',
+      '/school/settings/results',
+    );
+  });
+
+  it('names the levels left ungraded when only some have their own scale', () => {
+    vi.mocked(useGradingScales).mockReturnValue({
+      data: {
+        items: [
+          { level: 'JSS1', currentVersion: { id: 'v1' } },
+          { level: 'JSS2', currentVersion: { id: 'v2' } },
+          { level: 'JSS3', currentVersion: { id: 'v3' } },
+        ],
+        defaultTemplate: [],
+      },
+    } as never);
+
+    render(<SchoolAdminDashboard />);
+
+    expect(screen.getByText('No grading scale for SS1, SS2, SS3')).toBeInTheDocument();
   });
 });

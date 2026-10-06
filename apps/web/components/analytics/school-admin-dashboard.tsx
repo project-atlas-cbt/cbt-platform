@@ -28,6 +28,8 @@ import {
   useSchoolAnalytics,
   useSchoolSubscription,
 } from '@/lib/analytics';
+import { useGradingScales } from '@/lib/school-settings/queries';
+import { levelsWithoutGradingScale } from '@/lib/school-settings/grading-scale-form';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { MetricTile } from './metric-tile';
 import { AlertPanel, type OperationalAlert } from './alert-panel';
@@ -59,6 +61,7 @@ export function SchoolAdminDashboard() {
 
   const questionsCountQuery = useQuestionCounts();
   const subscriptionQuery = useSchoolSubscription();
+  const gradingScalesQuery = useGradingScales();
 
   // Capture the page-load timestamp once via lazy useState initializer.
   // This is the React Compiler-compliant way to call an impure function once at mount
@@ -128,6 +131,26 @@ export function SchoolAdminDashboard() {
       }
     }
 
+    // Grading scale alert: grades are fixed when a result is finalised
+    // (ADR-0018), so a result finalised with no scale stays Ungraded.
+    if (gradingScalesQuery.data) {
+      const ungraded = levelsWithoutGradingScale(gradingScalesQuery.data.items);
+      if (ungraded.length > 0) {
+        const allLevels = gradingScalesQuery.data.items.length === 0;
+        list.push({
+          id: 'no-grading-scale',
+          title: allLevels
+            ? 'No grading scale has been set'
+            : `No grading scale for ${ungraded.join(', ')}`,
+          description:
+            'Results finalised now are recorded as Ungraded and stay that way. Set the grading bands before the first exam is marked.',
+          severity: 'warning',
+          actionLabel: 'Set grading bands',
+          actionHref: '/school/settings/results',
+        });
+      }
+    }
+
     // Pending question reviews alert
     if (questionsCountQuery.data) {
       const pending =
@@ -145,7 +168,7 @@ export function SchoolAdminDashboard() {
     }
 
     return list;
-  }, [subscriptionQuery.data, questionsCountQuery.data, mountedAt]);
+  }, [subscriptionQuery.data, questionsCountQuery.data, gradingScalesQuery.data, mountedAt]);
 
   const analytics = analyticsQuery.data;
 
