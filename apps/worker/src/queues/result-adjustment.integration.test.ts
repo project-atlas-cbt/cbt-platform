@@ -588,6 +588,63 @@ describe('B15 result adjustment worker (ADR-0025)', () => {
     expect(audits.map((a) => a.action)).toEqual(['RESULT_MANUAL_OVERRIDE']);
   });
 
+  it("P2-17: per-result audit rows carry the adjuster's role, not a fixed SCHOOL_ADMIN", async () => {
+    const fixture = await createFixture(1);
+    schools.push(fixture.schoolId);
+    await createFinalisedResult(fixture, fixture.studentProfileIds[0]!, 1);
+    const operationId = await createOperation(fixture, {
+      type: 'AWARD_MARK',
+      reason: 'Marking scheme accepted an alternative answer.',
+      markDelta: 1,
+      totalCount: 1,
+    });
+    // The adjusting member is an HOD (the fixture's member is a School Admin).
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.roleAssignment.updateMany({
+        where: { schoolId: fixture.schoolId, membershipId: fixture.teacherMembershipId },
+        data: { role: 'HOD' },
+      }),
+    );
+
+    await runResultAdjustment({}, { schoolId: fixture.schoolId, operationId });
+
+    const perResult = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.auditEvent.findMany({ where: { schoolId: fixture.schoolId, entityType: 'Result' } }),
+    );
+    expect(perResult.map((a) => a.actorRole)).toEqual(['HOD']);
+  });
+
+  it('P2-19: an override whose result was voided meanwhile completes and releases the hold', async () => {
+    const fixture = await createFixture(1);
+    schools.push(fixture.schoolId);
+    const target = await createFinalisedResult(fixture, fixture.studentProfileIds[0]!, 1);
+    const operationId = await createOperation(fixture, {
+      type: 'MANUAL_OVERRIDE',
+      reason: 'Script re-marked by hand.',
+      targetResultId: target,
+      overrideEarnedMarks: 8,
+      totalCount: 1,
+    });
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.update({ where: { id: target }, data: { state: 'VOIDED' } }),
+    );
+
+    await runResultAdjustment({}, { schoolId: fixture.schoolId, operationId });
+
+    const [operation, result, publication] = await withTenant(prisma, fixture.schoolId, (tx) =>
+      Promise.all([
+        tx.resultAdjustmentOperation.findUniqueOrThrow({ where: { id: operationId } }),
+        tx.result.findUniqueOrThrow({ where: { id: target } }),
+        tx.resultPublication.findUniqueOrThrow({
+          where: { schoolId_examId: { schoolId: fixture.schoolId, examId: fixture.examId } },
+        }),
+      ]),
+    );
+    expect(operation.status).toBe('COMPLETED');
+    expect(result.state).toBe('VOIDED');
+    expect(publication.adjustmentInProgress).toBe(false);
+  });
+
   // Regression (post-implementation review): a second, SEPARATE, later
   // operation of a different type must not silently discard the first one's
   // effect. Runs the real worker end to end across two completed operations

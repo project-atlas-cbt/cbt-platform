@@ -9,33 +9,40 @@ import type {
 /** Everything the staff results list and detail need in one query — the
  * student's identity, the class they sat the exam in, and the attempt's own
  * state and invalidation reason (ADR-0025 attaches the latter to a VOIDED
- * result rather than duplicating it onto the result row). */
-export const RESULT_LIST_INCLUDE = {
-  studentProfile: {
-    select: {
-      id: true,
-      studentId: true,
-      membership: { select: { user: { select: { displayName: true } } } },
-      enrollments: {
-        where: { status: 'ACTIVE' as const },
-        select: { classGroupSession: { select: { id: true, name: true } } },
-        take: 1,
+ * result rather than duplicating it onto the result row).
+ *
+ * P2-14: "the class they sat in" is the student's enrolment in the exam's
+ * own academic session, whatever its status now — after rollover the
+ * ACTIVE enrolment is next session's class, and past exams showed "—". */
+export function resultListInclude(examAcademicSessionId: string) {
+  return {
+    studentProfile: {
+      select: {
+        id: true,
+        studentId: true,
+        membership: { select: { user: { select: { displayName: true } } } },
+        enrollments: {
+          where: { academicSessionId: examAcademicSessionId },
+          orderBy: { startDate: 'desc' as const },
+          select: { classGroupSession: { select: { id: true, name: true } } },
+          take: 1,
+        },
       },
     },
-  },
-  attempt: {
-    select: {
-      id: true,
-      state: true,
-      submittedAt: true,
-      invalidationReason: true,
-      examSession: { select: { id: true } },
+    attempt: {
+      select: {
+        id: true,
+        state: true,
+        submittedAt: true,
+        invalidationReason: true,
+        examSession: { select: { id: true } },
+      },
     },
-  },
-} satisfies Prisma.ResultInclude;
+  } satisfies Prisma.ResultInclude;
+}
 
 export type ResultWithRelations = Prisma.ResultGetPayload<{
-  include: typeof RESULT_LIST_INCLUDE;
+  include: ReturnType<typeof resultListInclude>;
 }>;
 
 /** Prisma returns `Decimal` for the percentage column. Converted once, here,

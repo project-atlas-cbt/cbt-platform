@@ -76,6 +76,22 @@ export class ResultAdjustmentService {
     }
 
     this.assertTypeArgumentsValid(dto);
+    if (dto.type === 'VOID_QUESTION') {
+      // P2-18: a question from another exam (or none) would mark the whole
+      // cohort ADJUSTED, irreversibly, while changing no score.
+      const question = await withTenant(prisma, schoolId, (tx) =>
+        tx.examQuestion.findFirst({
+          where: { schoolId, examId: dto.examId, id: dto.targetExamQuestionId as string },
+          select: { id: true },
+        }),
+      );
+      if (!question) {
+        throw new AppHttpException({
+          code: 'VALIDATION_ERROR',
+          message: 'That question is not part of this exam.',
+        });
+      }
+    }
 
     const targetResults = await this.resolveTargets(schoolId, dto);
     if (targetResults.length === 0) {

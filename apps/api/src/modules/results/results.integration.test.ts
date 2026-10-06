@@ -24,6 +24,7 @@ import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
 import { AttemptMarkingQueueService } from '../execution/attempt-marking-queue.service.js';
 import { ResultAdjustmentQueueService } from './result-adjustment-queue.service.js';
+import { ExportService } from '../reports/export.service.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -1298,6 +1299,64 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(list.summary.lowestPercentage).toBe(0);
     expect(list.summary.passRate).toBe(50);
     expect(list.items.map((i) => i.grade).sort()).toEqual(['F', 'P']);
+
+    // P2-13: the class filter survives a search — a search matching Tunde
+    // inside a class he is not in finds nobody.
+    const otherClass = (
+      await get(teacher, `/exams/${examId}/results?classId=${randomUUID()}&q=Tunde`)
+    ).json<{ items: unknown[] }>();
+    expect(otherClass.items).toHaveLength(0);
+    const ownClass = (
+      await get(teacher, `/exams/${examId}/results?classId=${classAId}&q=Tunde`)
+    ).json<{ items: { studentProfileId: string }[] }>();
+    expect(ownClass.items.map((i) => i.studentProfileId)).toEqual([studentAProfileId]);
+
+    // P2-14: after the enrolment ends (rollover), the past exam still shows
+    // and filters by the class it was sat in.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.studentEnrollment.updateMany({
+        where: { schoolId, studentProfileId: studentAProfileId },
+        data: { status: 'COMPLETED' },
+      }),
+    );
+    try {
+      const after = (await get(teacher, `/exams/${examId}/results?classId=${classAId}`)).json<{
+        items: { studentProfileId: string; className: string | null }[];
+      }>();
+      const tunde = after.items.find((i) => i.studentProfileId === studentAProfileId);
+      expect(tunde?.className).not.toBeNull();
+    } finally {
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.studentEnrollment.updateMany({
+          where: { schoolId, studentProfileId: studentAProfileId },
+          data: { status: 'ACTIVE' },
+        }),
+      );
+    }
+
+    // P2-11/P2-12: the results CSV writes percentages as numbers, and a
+    // voided result has no score and says VOIDED.
+    // `render` is private: the CSV the export job writes, without the queue.
+    const exportService = app.get(ExportService);
+    const render = (
+      Reflect.get(exportService, 'render') as (
+        schoolId: string,
+        type: string,
+        scope: unknown,
+      ) => Promise<{ csv: string }>
+    ).bind(exportService);
+    const before = (await render(schoolId, 'EXAM_RESULTS', { examId })).csv;
+    expect(before).toMatch(/,100,P,COMPLETED,/);
+    expect(before).not.toContain('"100"');
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.result.updateMany({
+        where: { schoolId, examId, studentProfileId: studentAProfileId },
+        data: { state: 'VOIDED' },
+      }),
+    );
+    const after = (await render(schoolId, 'EXAM_RESULTS', { examId })).csv;
+    const tundeRow = after.split('\r\n').find((line) => line.includes('Tunde'));
+    expect(tundeRow).toMatch(/,,,,VOIDED,/);
   });
 
   // ---------------------------------------------------------------------
@@ -1406,6 +1465,19 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
         })
       ).statusCode,
     ).toBe(400);
+
+    // P2-18: a question that is not in this exam is refused, rather than
+    // marking the whole cohort ADJUSTED for nothing.
+    const notInExam = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'VOID_QUESTION',
+      reason: 'Wrong question picked.',
+      targetExamQuestionId: randomUUID(),
+    });
+    expect(notInExam.statusCode).toBe(400);
+    expect(notInExam.json<{ error: { message: string } }>().error.message).toContain(
+      'not part of this exam',
+    );
 
     expect(
       (

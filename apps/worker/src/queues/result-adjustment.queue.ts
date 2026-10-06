@@ -159,9 +159,13 @@ async function loadPendingResultIds(
   operation: { id: string; examId: string; type: string; targetResultId: string | null },
   take: number,
 ): Promise<string[]> {
+  // P2-19: an override's one result may have been voided (attempt
+  // invalidated) after the override was queued. VOIDED → ADJUSTED is refused
+  // by the database, so it is skipped like any other non-adjustable result
+  // and the operation completes, releasing the exam's results hold.
   const scope: Prisma.ResultWhereInput =
     operation.type === 'MANUAL_OVERRIDE' && operation.targetResultId
-      ? { schoolId, id: operation.targetResultId }
+      ? { schoolId, id: operation.targetResultId, state: { in: ['FINAL', 'ADJUSTED'] } }
       : { schoolId, examId: operation.examId, state: { in: ['FINAL', 'ADJUSTED'] } };
 
   const rows = await withTenant(prisma, schoolId, (tx) =>
@@ -216,6 +220,18 @@ async function applyChunk(
   previouslyVoided: readonly string[],
 ): Promise<void> {
   await withTenant(prisma, schoolId, async (tx) => {
+    // P2-17: each per-result audit row carries the adjusting member's role
+    // (the API's `auditRoleFor` precedence), not a fixed SCHOOL_ADMIN — a
+    // Moderator or HOD may adjust results too. Read from their role
+    // assignments: the runtime role cannot read audit events back.
+    const assignments = await tx.roleAssignment.findMany({
+      where: { schoolId, membershipId: operation.createdByMembershipId, status: 'ACTIVE' },
+      select: { role: true },
+    });
+    const roles = new Set(assignments.map((a) => a.role));
+    const actorRole =
+      (['SCHOOL_ADMIN', 'MODERATOR', 'HOD', 'TEACHER'] as const).find((r) => roles.has(r)) ??
+      'SCHOOL_ADMIN';
     for (const resultId of resultIds) {
       const result = await tx.result.findUniqueOrThrow({
         where: { id: resultId },
@@ -326,7 +342,7 @@ async function applyChunk(
               select: { userId: true },
             })
           ).userId,
-          actorRole: 'SCHOOL_ADMIN',
+          actorRole,
           action:
             operation.type === 'MANUAL_OVERRIDE' ? 'RESULT_MANUAL_OVERRIDE' : 'RESULT_ADJUSTED',
           entityType: 'Result',
