@@ -285,6 +285,18 @@ export class IdentityService {
     };
   }
 
+  /** P1-4: a new password ends any sign-in lockout on this school's
+   * login identifier — the person has just proved who they are. */
+  private async clearLockoutFor(schoolId: string, userId: string): Promise<void> {
+    const membership = await withTenant(prisma, schoolId, (tx) =>
+      tx.schoolMembership.findFirst({
+        where: { schoolId, userId },
+        select: { loginIdentifier: true },
+      }),
+    );
+    if (membership) await this.lockout.clear(schoolId, membership.loginIdentifier);
+  }
+
   async changePassword(
     schoolId: string,
     userId: string,
@@ -317,6 +329,7 @@ export class IdentityService {
       where: { id: userId },
       data: { passwordHash, credentialState: 'OK' },
     });
+    await this.clearLockoutFor(schoolId, userId);
 
     // B20 (08 §16 revocable sessions): every other session issued against
     // the old credential ends now; the caller's own session survives.
@@ -496,6 +509,7 @@ export class IdentityService {
     // B20: a reset is exactly the case where an attacker may hold a live
     // session — every session for this user at this school ends now.
     const revoked = await this.sessions.revokeAllForUser(schoolId, token.userId);
+    await this.clearLockoutFor(schoolId, token.userId);
     const membership = await withTenant(prisma, schoolId, (tx) =>
       tx.schoolMembership.findFirst({
         where: { schoolId, userId: token.userId },

@@ -2923,6 +2923,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/{id}/unlock-sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a student's sign-in lockout after too many wrong passwords, without changing their password (audited). */
+        post: operations["StudentController_unlockSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teachers": {
         parameters: {
             query?: never;
@@ -10713,6 +10730,25 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CredentialResetResponseDto"];
                 };
+            };
+        };
+    };
+    StudentController_unlockSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

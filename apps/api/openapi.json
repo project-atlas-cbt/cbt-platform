@@ -7030,6 +7030,30 @@
         ]
       }
     },
+    "/students/{id}/unlock-sign-in": {
+      "post": {
+        "operationId": "StudentController_unlockSignIn",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "End a student's sign-in lockout after too many wrong passwords, without changing their password (audited).",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/teachers": {
       "get": {
         "operationId": "TeacherController_list",
