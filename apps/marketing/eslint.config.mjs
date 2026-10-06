@@ -28,7 +28,7 @@ export default tseslint.config(
       'public/**',
       // F20: plain-Node build checks (bundle budget) — same no-tsconfig
       // situation as the two .mjs configs above.
-      'scripts/*.mjs',
+      'scripts/**/*.mjs',
     ],
   },
   js.configs.recommended,

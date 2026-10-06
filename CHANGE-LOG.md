@@ -2,6 +2,27 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — One-minute tour video on the home page
+
+Owner request: the teaser belongs on the website, and should feel interactive: a cursor doing the
+actions, the clicked spot highlighted, interface sounds and no music, and not too much animation.
+
+- `apps/marketing/scripts/teaser/` records the tour from the real app on the fictional demo
+  school (`record.mjs`), renders its cards and captions in the site's fonts (`cards.mjs`) and
+  composes it (`compose.py`). The recorder logs a timeline of cursor moves, clicks, typing, zooms
+  and captions beside the screencast frames; the compositor draws the cursor and a fading click
+  mark from it, applies a gentle zoom on the area in use, and synthesises quiet click, key and
+  confirmation tones. Headless screencast frames come at CSS pixel size unless Chromium runs with
+  `--force-device-scale-factor`, so the recorder sets it (1.5).
+- The story: an HOD approves a question; the Exam Control Center during a sitting, with quiet
+  computers flagged; a student signs in, sits the paper, loses the network and carries on, and
+  submits; the teacher publishes the results. About 75 seconds, captions burned in.
+- The home page has a "product in one minute" section after the hero (`TeaserVideo`): the video
+  plays only when pressed (`preload="none"`, no autoplay), so only the poster loads until then. A
+  browser check asserts that and that both files are served. `media-src 'self'` already allowed it.
+
+**Tested:** marketing lint, typecheck, unit and browser tests.
+
 ### 2026-10-05 — Software Admin: System Configuration built (ADR-0036); Sign-in Security gaps filled
 
 **Owner decisions (2026-10-05):** System Configuration holds **editable** settings, and the set is
