@@ -307,9 +307,10 @@ if (want('student')) {
 
   const s2 = new Scene(p, 'exam', [s1.cx, s1.cy]);
   await s2.start();
-  s2.caption('Each student sits the paper on their own timer.', 'top');
   await sleep(500);
   await s2.click(start, { ms: 800 });
+  // after the click: a caption earlier would sit over the Start button
+  s2.caption('Each student sits the paper on their own timer.');
   await p.getByRole('heading', { name: /question 1 of/i }).waitFor({ timeout: 30000 });
   await sleep(700);
   await s2.zoom(p.locator('#exam-main'), 1.12, 900);
