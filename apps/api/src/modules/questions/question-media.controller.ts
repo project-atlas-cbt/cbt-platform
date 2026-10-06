@@ -3,7 +3,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { prisma, withTenant } from '@atlas/db';
 import { AppHttpException } from '../../common/app-http-exception.js';
-import { Authorized } from '../authorization/decorators.js';
+import { AuthorizedWrite } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
@@ -38,7 +38,7 @@ export class QuestionMediaController {
   constructor(private readonly media: QuestionMediaService) {}
 
   @Post('media/upload-target')
-  @Authorized('media.upload')
+  @AuthorizedWrite('media.upload')
   @ApiOperation({
     summary: 'Request an upload target for a question image/diagram, scope-checked.',
   })
@@ -72,7 +72,7 @@ export class QuestionMediaController {
   }
 
   @Post('media/upload-target/:id/complete')
-  @Authorized('media.upload')
+  @AuthorizedWrite('media.upload')
   @ApiOperation({ summary: 'Finalise and validate an uploaded question image/diagram.' })
   @ApiOkResponse({ type: MediaAssetSummaryResponseDto })
   async completeUpload(
@@ -84,7 +84,7 @@ export class QuestionMediaController {
 
   @Post(':questionId/revisions/:revisionId/media')
   @HttpCode(HttpStatus.CREATED)
-  @Authorized('questionBank.editOwnDraft')
+  @AuthorizedWrite('questionBank.editOwnDraft')
   @ApiOperation({ summary: 'Attach an already-uploaded, READY asset to a draft revision.' })
   @ApiOkResponse({ type: QuestionMediaItemResponseDto })
   async attach(
@@ -104,7 +104,7 @@ export class QuestionMediaController {
   }
 
   @Delete(':questionId/revisions/:revisionId/media/:mediaId')
-  @Authorized('questionBank.editOwnDraft')
+  @AuthorizedWrite('questionBank.editOwnDraft')
   @ApiOperation({ summary: 'Remove media from a draft revision.' })
   @ApiOkResponse({ type: StatusResponseDto })
   async detach(

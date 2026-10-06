@@ -666,6 +666,56 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     expect(count).toBe(1);
   });
 
+  it('P1-3 / ADR-0015: past the grace period a running attempt resumes, but nothing new starts', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const first = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    // Expired 20 days ago: past the 14-day grace.
+    const expiredAt = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.subscription.create({
+        data: {
+          schoolId,
+          plan: 'TEST',
+          status: 'EXPIRED',
+          startAt: new Date(expiredAt.getTime() - 365 * 24 * 60 * 60 * 1000),
+          expiresAt: expiredAt,
+        },
+      }),
+    );
+    try {
+      const resumed = await post(studentA, `/exams/${examId}/attempts`, {});
+      expect(resumed.statusCode).toBe(200);
+      expect(resumed.json<AttemptPackage>().attemptId).toBe(first.attemptId);
+
+      const fresh = await post(studentB, `/exams/${examId}/attempts`, {});
+      expect(fresh.statusCode).toBe(403);
+      expect(fresh.json<{ error: { code: string } }>().error.code).toBe('SUBSCRIPTION_EXPIRED');
+
+      const newSession = await post(teacher, `/exams/${examId}/sessions`, {});
+      expect(newSession.statusCode).toBe(403);
+      const newExam = await post(teacher, '/exams', { title: 'Blocked' });
+      expect(newExam.json<{ error: { code: string } }>().error.code).toBe('SUBSCRIPTION_EXPIRED');
+
+      // Reads keep working (ADR-0015: read access to all historical data).
+      expect((await get(teacher, `/exams/${examId}`)).statusCode).toBe(200);
+
+      // Inside the grace period nothing is blocked.
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.subscription.updateMany({
+          where: { schoolId },
+          data: { expiresAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+        }),
+      );
+      expect((await post(studentB, `/exams/${examId}/attempts`, {})).statusCode).toBe(200);
+    } finally {
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.subscription.deleteMany({ where: { schoolId } }),
+      );
+    }
+  });
+
   // ---------------------------------------------------------------------
   // Concurrency
   // ---------------------------------------------------------------------

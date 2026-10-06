@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { Authorized } from '../authorization/decorators.js';
+import { Authorized, AuthorizedWrite } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
@@ -126,7 +126,7 @@ export class ExamControlController {
 
   @Post(':id/reopen')
   @HttpCode(HttpStatus.OK)
-  @Authorized('exam.reopen')
+  @AuthorizedWrite('exam.reopen')
   @ApiOperation({
     summary:
       'Reopen the exam so new sessions may be opened again. Does not auto-reopen closed sessions.',
@@ -142,7 +142,7 @@ export class ExamControlController {
 
   @Post(':id/sessions')
   @HttpCode(HttpStatus.CREATED)
-  @Authorized('examAdmin.controlCenter')
+  @AuthorizedWrite('examAdmin.controlCenter')
   @ApiOperation({ summary: 'Open a new ExamSession (DoD items 1-4).' })
   @ApiOkResponse({ type: ExamSessionResponseDto })
   async openSession(

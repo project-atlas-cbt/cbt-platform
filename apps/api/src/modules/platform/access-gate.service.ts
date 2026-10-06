@@ -72,6 +72,41 @@ export class AccessGateService {
     return resolveAccessGate({ ...input, now: new Date() });
   }
 
+  /**
+   * P1-3 / ADR-0015's `EXPIRED` profile: refuses new exams, questions,
+   * imports, sessions and attempts once the subscription has expired and
+   * its grace period has ended. Read-only — no status write on this path,
+   * which every one of those requests takes. A school with no subscription
+   * row at all (one seeded directly, like the demo schools) is not gated
+   * here: it never expired. Platform suspend/deactivate is AuthGuard's.
+   */
+  async requireActiveSubscription(schoolId: string): Promise<void> {
+    if (await this.isSubscriptionRestricted(schoolId)) throw subscriptionExpired();
+  }
+
+  /** The check behind `requireActiveSubscription`, for a caller that must
+   * still allow part of its work (resuming a running attempt) when it is
+   * true. */
+  async isSubscriptionRestricted(schoolId: string): Promise<boolean> {
+    const [school, subscription] = await Promise.all([
+      prisma.school.findUnique({ where: { id: schoolId }, select: { platformOverride: true } }),
+      withTenant(prisma, schoolId, (tx) =>
+        tx.subscription.findFirst({
+          where: { schoolId },
+          orderBy: { createdAt: 'desc' },
+          select: { status: true, expiresAt: true },
+        }),
+      ),
+    ]);
+    if (!school || !subscription) return false;
+    const result = this.evaluate({
+      subscriptionStatus: subscription.status,
+      subscriptionExpiresAt: subscription.expiresAt,
+      platformOverride: school.platformOverride,
+    });
+    return result.status === 'EXPIRED' && !meetsCapability(result.capability, 'FULL');
+  }
+
   /** Recomputes live and throws FORBIDDEN if the school's current
    * capability doesn't meet `minimum`. The "one shared function every write
    * guard calls" (ADR-0016) — no B3 route currently calls this (redemption
@@ -88,4 +123,13 @@ export class AccessGateService {
     }
     return result;
   }
+}
+
+export function subscriptionExpired(): AppHttpException {
+  return new AppHttpException({
+    code: 'SUBSCRIPTION_EXPIRED',
+    message:
+      "Your school's subscription has expired. Renew it to create exams, questions, " +
+      'imports or new sittings. Existing results and records stay available.',
+  });
 }
