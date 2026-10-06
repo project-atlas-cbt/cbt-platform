@@ -2,6 +2,23 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Pilot server: nightly backups could not write their dump
+
+Bug audit P0-3, confirmed on the pilot server: `infra/vps/backups/` was owned by root, because
+nothing created it before the first `docker compose up` and Docker makes a missing bind-mount
+source as root. `bin/backup.sh` runs as `atlas` from cron, so every nightly run since the first
+deploy failed, and the cron line's own log redirect failed first, so nothing was logged.
+
+- **On the server:** the folder was chowned to `atlas`, and a hand-run `bin/backup.sh` wrote a
+  readable 512K dump. The off-site bucket (`BACKUP_S3_*`) is still empty, so dumps stay on the
+  server only until it is set.
+- **Scripts:** `deploy.sh` creates `backups/` as the deploying user before Compose starts (chowning
+  it to the checkout's owner when run as root) and stops with a message if it is still not
+  writable. The cron line `setup-server.sh` installs runs `mkdir -p backups` before the redirect.
+- **Still open from P0-3:** an alert to `OPS_ALERT_EMAILS` when a nightly backup fails.
+
+**Tested:** `bash -n` on both scripts; the server fix was checked by hand on the pilot server.
+
 ### 2026-10-06 — Result settings lock covers both settings; no score before release
 
 Owner request: check that a locked "School Admin publishes" policy cannot be varied by teachers,

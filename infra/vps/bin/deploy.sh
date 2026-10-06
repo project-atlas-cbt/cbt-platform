@@ -23,6 +23,11 @@ echo "== building $RELEASE"
 docker compose build marketing web api ops
 
 echo "== data services"
+# Create backups/ as this user before compose bind-mounts it; otherwise Docker
+# creates it owned by root and the nightly backup (run as atlas) cannot write.
+mkdir -p backups
+[ "$(id -u)" != 0 ] || chown "$(stat -c %U:%G .)" backups
+[ -w backups ] || { echo "backups/ is not writable by $(id -un); chown it (vps-pilot.md)" >&2; exit 1; }
 docker compose up -d --wait postgres redis minio
 
 echo "== object storage bucket and app user"
