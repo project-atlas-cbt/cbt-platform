@@ -1,6 +1,7 @@
 import {
   ENCRYPTED_CACHE_NAME,
   MEDIA_CACHE_NAME,
+  SW_MEDIA_CACHE_NAME,
   encryptedCacheKey,
   mediaCacheKey,
 } from './cache-keys';
@@ -195,9 +196,8 @@ export async function clearAttemptData(attemptId: string): Promise<void> {
   // attempt's decrypted media and any leftover ciphertext go too — until
   // F20 only the Dexie rows were removed and the images stayed in Cache
   // Storage indefinitely.
-  const mediaAssetIds = (await db.mediaManifest.where('attemptId').equals(attemptId).toArray()).map(
-    (row) => row.mediaAssetId,
-  );
+  const manifestRows = await db.mediaManifest.where('attemptId').equals(attemptId).toArray();
+  const mediaAssetIds = manifestRows.map((row) => row.mediaAssetId);
   const examId = (await db.attemptPackages.get(attemptId))?.examId;
   await db.transaction(
     'rw',
@@ -217,9 +217,12 @@ export async function clearAttemptData(attemptId: string): Promise<void> {
   if (typeof caches !== 'undefined') {
     const plain = await caches.open(MEDIA_CACHE_NAME);
     const encrypted = await caches.open(ENCRYPTED_CACHE_NAME);
+    // Bug audit P3-10: the service worker's copy, keyed by signed URL.
+    const worker = await caches.open(SW_MEDIA_CACHE_NAME);
     for (const id of mediaAssetIds) {
       await plain.delete(mediaCacheKey(id));
       if (examId) await encrypted.delete(encryptedCacheKey(examId, id));
     }
+    for (const row of manifestRows) await worker.delete(row.url);
   }
 }

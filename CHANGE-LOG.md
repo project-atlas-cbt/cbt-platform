@@ -2,6 +2,24 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Exam sitting fixes from the bug audit, second part (P2-2, P3-1, P3-8, P3-10)
+
+- **P2-2:** a makeup grant is refused for a student who has a running or submitted attempt for the
+  exam (they sat another batch). Retry stays the route for a deliberate second attempt. Still open:
+  the End Examination absentee list still includes such a student's other batch, which the rollup
+  already reports as attended.
+- **P3-1:** a repeat Start on an attempt past its time and grace finalises it to `AUTO_SUBMITTED`,
+  as `GET /attempts/:id` already did, instead of returning an in-progress package.
+- **P3-8:** opening an exam whose academic session is not the current one says so, instead of "must
+  be READY or OPEN".
+- **P3-10:** the service worker caches presigned media under its own `atlas-exam-media-sw-v1`
+  (expiring after an hour, at most 300 entries), and attempt cleanup deletes the attempt's signed
+  URLs from it. On activation, the new worker removes signed-URL entries earlier builds left in
+  `atlas-exam-media-v1`.
+
+**Tested:** new API integration tests for P2-2, P3-1 and P3-8 and a web test for P3-10; typecheck,
+lint, format, unit suites and the execution integration suites pass locally.
+
 ### 2026-10-06 — Exam sitting fixes from the bug audit (P0-2, P1-1, P1-2, P1-5, P1-6, P2-1)
 
 Fixes from `bug-audit/findings.md` (dev at 5b16ecd) for the exam engine and the student's sitting,

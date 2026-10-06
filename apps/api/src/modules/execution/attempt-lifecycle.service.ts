@@ -468,6 +468,12 @@ export class AttemptLifecycleService {
       await this.stream.publishSoon(schoolId, examId);
     }
 
+    if (outcome.kind === 'EXISTING') {
+      // Bug audit P3-1: a repeat Start on an attempt whose time and grace
+      // have run out finalises it, exactly as `resume()` does (ADR-0004),
+      // rather than handing back an IN_PROGRESS package with a past expiry.
+      await this.finalization.finalizeIfExpired(schoolId, outcome.attemptId, new Date());
+    }
     const attempt = await loadAttemptWithOwnerOrThrow(schoolId, outcome.attemptId);
     return this.buildAttemptPackage(schoolId, attempt);
   }

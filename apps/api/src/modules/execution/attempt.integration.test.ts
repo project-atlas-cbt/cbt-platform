@@ -2030,6 +2030,87 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     ).not.toBe(examId);
   });
 
+  it('audit P2-2: makeup is refused for a student who sat the exam in another batch', async () => {
+    const examId = await buildReadyExam();
+    const batchOne = await openSession(examId);
+    const sat = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await post(studentA, `/attempts/${sat.attemptId}/submit`, {})).statusCode).toBe(200);
+    expect((await post(teacher, `/exam-sessions/${batchOne}/close`, {})).statusCode).toBe(200);
+    const batchTwo = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${batchTwo}/close`, {})).statusCode).toBe(200);
+
+    const participation = (await get(teacher, `/exams/${examId}/participation`)).json<{
+      students: {
+        studentProfileId: string;
+        sessions: { examSessionId: string; status: string; attemptId: string | null }[];
+      }[];
+    }>();
+    const pending = participation.students.flatMap((student) =>
+      student.sessions
+        .filter((session) => session.status === 'PENDING' && session.attemptId === null)
+        .map((session) => ({
+          examSessionId: session.examSessionId,
+          studentProfileId: student.studentProfileId,
+        })),
+    );
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+          confirmedAbsentParticipations: pending,
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'Absent from batch two',
+    });
+    expect(grant.statusCode).toBe(409);
+    expect(grant.json<{ error: { message: string } }>().error.message).toMatch(/already sat/);
+    // Student B missed both batches and still gets a makeup.
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+          studentProfileIds: [studentBProfileId],
+          reason: 'Absent from both batches',
+        })
+      ).statusCode,
+    ).toBe(201);
+  });
+
+  it('audit P3-1: Start again on an attempt past its time and grace finalises it instead of resuming it', async () => {
+    await endRunningAttempts(studentAProfileId);
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.update({
+        where: { id: pkg.attemptId },
+        data: { expiresAt: new Date(Date.now() - 10 * 60_000) },
+      }),
+    );
+
+    const again = await post(studentA, `/exams/${examId}/attempts`, {});
+    expect(again.statusCode).toBe(200);
+    expect(again.json<AttemptPackage & { state: string }>().state).toBe('AUTO_SUBMITTED');
+  });
+
+  it('audit P3-8: opening an exam whose academic session is not current says so', async () => {
+    const examId = await buildReadyExam();
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.academicSession.update({ where: { id: sessionId }, data: { status: 'UPCOMING' } }),
+    );
+    try {
+      const res = await post(teacher, `/exams/${examId}/sessions`, {});
+      expect(res.statusCode).toBeGreaterThanOrEqual(400);
+      expect(res.json<{ error: { message: string } }>().error.message).toMatch(/academic session/i);
+    } finally {
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.academicSession.update({ where: { id: sessionId }, data: { status: 'CURRENT' } }),
+      );
+    }
+  });
+
   // ---------------------------------------------------------------------
   // Failure — no orphan attempt on a snapshot-build failure
   // ---------------------------------------------------------------------
