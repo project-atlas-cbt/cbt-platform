@@ -95,7 +95,26 @@ export async function finalizeResultAfterMarking(
     throw new Error(`attempt ${attemptId} is not eligible for result finalization`);
   }
 
-  const totals = computeResultTotals(questionResults);
+  // P1-7: a question voided by a completed VOID_QUESTION operation is off
+  // the paper for everyone. That operation only rewrote results that were
+  // already final, so a result finalised later (a makeup, a retry, a late
+  // auto-submit) leaves it out here — the same exclusion the adjustment
+  // worker applies when it recalculates. A void still in progress picks
+  // this result up itself, since it is FINAL with no adjustment row yet.
+  const voided = await tx.resultAdjustmentOperation.findMany({
+    where: {
+      schoolId,
+      examId: attempt.examId,
+      type: 'VOID_QUESTION',
+      status: 'COMPLETED',
+      targetExamQuestionId: { not: null },
+    },
+    select: { targetExamQuestionId: true },
+  });
+  const voidedIds = new Set(voided.map((o) => o.targetExamQuestionId));
+  const totals = computeResultTotals(
+    questionResults.filter((q) => !voidedIds.has(q.examQuestionId)),
+  );
 
   // ADR-0018: the grade is resolved ONCE, here, against a specific version,
   // and both the label and that version's id are stored. A later edit to the

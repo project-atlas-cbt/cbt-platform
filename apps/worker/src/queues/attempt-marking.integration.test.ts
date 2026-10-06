@@ -313,6 +313,9 @@ async function cleanupSchool(schoolId: string): Promise<void> {
     () => undefined,
   );
   await withTenant(prisma, schoolId, (tx) =>
+    tx.resultAdjustmentOperation.deleteMany({ where: { schoolId } }),
+  ).catch(() => undefined);
+  await withTenant(prisma, schoolId, (tx) =>
     tx.resultPublication.deleteMany({ where: { schoolId } }),
   ).catch(() => undefined);
   await withTenant(prisma, schoolId, (tx) =>
@@ -678,6 +681,57 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
     expect(Number(result.percentage)).toBe(50);
     expect(result.correctCount).toBe(1);
     expect(result.incorrectCount).toBe(1);
+    expect(result.unansweredCount).toBe(1);
+  });
+
+  it('P1-7: a question voided before this result finalised is left out of it', async () => {
+    const fixture = await createFixtureSchool();
+    schools.push(fixture.schoolId);
+    const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
+      { examQuestionId: Q1, selectedOptionId: OPT_2PLUS2_RIGHT },
+      { examQuestionId: Q2, selectedOptionId: OPT_10MINUS6_WRONG },
+      { examQuestionId: Q3, selectedOptionId: null },
+    ]);
+    // Q2 was voided for the cohort before this (makeup) attempt was marked;
+    // a void still in progress and a different exam's void must not count.
+    await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultAdjustmentOperation.createMany({
+        data: [
+          {
+            schoolId: fixture.schoolId,
+            examId: fixture.examId,
+            type: 'VOID_QUESTION',
+            status: 'COMPLETED',
+            reason: 'Ambiguous question',
+            targetExamQuestionId: Q2,
+            createdByMembershipId: randomUUID(),
+            completedAt: new Date(),
+          },
+          {
+            schoolId: fixture.schoolId,
+            examId: fixture.examId,
+            type: 'VOID_QUESTION',
+            status: 'PROCESSING',
+            reason: 'Still running',
+            targetExamQuestionId: Q3,
+            createdByMembershipId: randomUUID(),
+          },
+        ],
+      }),
+    );
+
+    await runAttemptMarking({}, { schoolId: fixture.schoolId, attemptId });
+
+    const result = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.findUniqueOrThrow({
+        where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId } },
+      }),
+    );
+    expect(result.state).toBe('FINAL');
+    // Q1 correct (5/5) and Q3 unanswered (0/2); Q2 (0/3) is off the paper.
+    expect(result.totalMarks).toBe(7);
+    expect(result.earnedMarks).toBe(5);
+    expect(result.incorrectCount).toBe(0);
     expect(result.unansweredCount).toBe(1);
   });
 
