@@ -138,11 +138,11 @@ class SceneSeg:
                 caps.append(cur)
                 cur = None
             if e['text']:
-                cur = [e['text'], max(0.0, e['t']), None]
+                cur = [e['text'], max(0.0, e['t']), None, e.get('place', 'bottom')]
         if cur:
             cur[2] = self.dur
             caps.append(cur)
-        self.captions = [(txt, a, b) for txt, a, b in caps]
+        self.captions = [tuple(c) for c in caps]
 
     def src(self, t):
         k = int(np.searchsorted(self.ft, t, side='right')) - 1
@@ -218,7 +218,7 @@ def caption_img(text):
     return _capcache[text]
 
 def apply_caption(frame, seg, t):
-    for text, a, b in seg.captions:
+    for text, a, b, place in seg.captions:
         if a - 0.01 <= t <= b:
             alpha = min(1, (t - a) / 0.25, (b - t) / 0.25)
             if alpha <= 0:
@@ -228,7 +228,13 @@ def apply_caption(frame, seg, t):
                 im = im.copy()
                 im.putalpha(im.getchannel('A').point(lambda v: int(v * alpha)))
             base = frame.convert('RGBA')
-            base.alpha_composite(im)
+            # cards draw the caption at the foot; a head caption is the same image raised
+            bbox = im.getchannel('A').getbbox()
+            if place == 'top' and bbox:
+                im = im.crop(bbox)
+                base.alpha_composite(im, (bbox[0], 56))
+            else:
+                base.alpha_composite(im)
             frame = base.convert('RGB')
     return frame
 

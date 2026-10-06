@@ -184,8 +184,9 @@ class Scene {
   unzoom(ms = 900) {
     this.log({ kind: 'zoom', cx: VW / 2, cy: VH / 2, scale: 1, dur: ms / 1000 });
   }
-  caption(text) {
-    this.log({ kind: 'caption', text });
+  /** A caption at the foot of the frame, or at its head when the action happens low down. */
+  caption(text, place = 'bottom') {
+    this.log({ kind: 'caption', text, place });
   }
   captionOff() {
     this.log({ kind: 'caption', text: null });
@@ -306,7 +307,7 @@ if (want('student')) {
 
   const s2 = new Scene(p, 'exam', [s1.cx, s1.cy]);
   await s2.start();
-  s2.caption('Each student sits the paper on their own timer.');
+  s2.caption('Each student sits the paper on their own timer.', 'top');
   await sleep(500);
   await s2.click(start, { ms: 800 });
   await p.getByRole('heading', { name: /question 1 of/i }).waitFor({ timeout: 30000 });
