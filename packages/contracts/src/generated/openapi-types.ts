@@ -4635,6 +4635,7 @@ export interface components {
             code: string;
             /** @enum {string} */
             status: "ACTIVE" | "INACTIVE";
+            headedByMe?: boolean;
         };
         DepartmentListResponseDto: {
             departments: components["schemas"]["DepartmentResponseDto"][];

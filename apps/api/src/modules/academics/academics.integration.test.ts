@@ -609,6 +609,29 @@ describe('B5 HODAssignment — active-HOD-role invariant (DoD item 8)', () => {
     expect(listRes.statusCode).toBe(200);
     expect(listRes.json<{ assignments: unknown[] }>().assignments).toHaveLength(1);
   });
+
+  it("marks only the HOD's own department as headedByMe (P1-12)", async () => {
+    // An alphabetically earlier department the HOD does not head: the HOD
+    // screens used to open the first department in the list.
+    await post(admin, '/academics/departments', {
+      name: 'Arts',
+      code: `ART-${randomUUID().slice(0, 6)}`,
+    });
+    const hod = await freshCtx(host, `10.${RUN}.4.2`);
+    await login(hod, 'hod03', 'a-real-password-123');
+
+    const res = await get(hod, '/academics/departments');
+    expect(res.statusCode).toBe(200);
+    const { departments } = res.json<{
+      departments: { id: string; name: string; headedByMe?: boolean }[];
+    }>();
+    expect(departments[0]?.name).toBe('Arts');
+    expect(departments.filter((d) => d.headedByMe).map((d) => d.id)).toEqual([departmentId]);
+
+    const adminRes = await get(admin, '/academics/departments');
+    const adminDepartments = adminRes.json<{ departments: { headedByMe?: boolean }[] }>();
+    expect(adminDepartments.departments.some((d) => d.headedByMe)).toBe(false);
+  });
 });
 
 describe('B5 GET /academics/context — every role (DoD item 10)', () => {

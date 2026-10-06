@@ -67,6 +67,15 @@ export function useDepartments(options?: { enabled?: boolean }) {
   });
 }
 
+/** P1-12: the department the signed-in HOD heads (the first, by name, if
+ * they head several). `department` is undefined until loaded, and also when
+ * they head none — check `isSuccess` to tell the two apart. */
+export function useMyHodDepartment() {
+  const query = useDepartments();
+  const department = query.data?.departments.find((d) => d.headedByMe);
+  return { ...query, department };
+}
+
 export function useDepartment(id: string | undefined) {
   return useQuery({
     queryKey: ['academics', 'departments', id],
