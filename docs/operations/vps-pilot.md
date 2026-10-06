@@ -106,7 +106,9 @@ What stays the same:
 
    The password goes to that address by email only. Sign in at `https://admin.<root>/admin/login`.
 
-6. **Back up once by hand** (`bin/backup.sh`) and check the objects arrived off-site.
+6. **Back up once by hand** (`bin/backup.sh`) and check the objects arrived off-site. `backups/`
+   must belong to `atlas`: the deploy creates it that way, and stops with a message if root owns
+   it (fix with `chown -R atlas:atlas /home/atlas/cbt-platform/infra/vps/backups` as root).
 
 ## Adding a school
 
