@@ -127,6 +127,20 @@ way to replace it (the gap `operator-access.md` recorded). Now:
   security suite; new `password-change-gate.test.tsx`; web and API typecheck and lint.
 - Not changed: school accounts still get no email after a password change (out of this ask).
 
+### 2026-10-06 — Deploy reloads Caddy so new schools are served
+
+Adding the demo schools to `SCHOOLS` and redeploying left their hosts without certificates: the
+smoke failed 18 checks with a TLS alert. `bin/deploy.sh` rewrote the Caddyfile, but it is a bind
+mount, so `docker compose up` left the running Caddy untouched, and Caddy reads its file only at
+start.
+
+- `infra/vps/bin/deploy.sh` now runs `caddy reload` before the smoke.
+- `tools/load/src/smoke.ts` retries a TLS handshake alert for up to a minute, so a host whose
+  certificate Let's Encrypt is still issuing does not fail the smoke. A host that never gets one
+  still does.
+- Tested: load typecheck, lint and format; shell syntax. The reload itself runs only on the
+  server (no Docker here).
+
 ### 2026-10-05 — Pilot server findings: admin sign-in route, demo form through ZeptoMail
 
 Haneef's first look at the deployed pilot server (staging, demo data only) found two problems.

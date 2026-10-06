@@ -111,7 +111,8 @@ What stays the same:
 ## Adding a school
 
 Create the school in the Software Admin console, add its subdomain label to `SCHOOLS` in `.env`,
-and run `bin/deploy.sh`. Caddy fetches the new certificates on start.
+and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the new certificates; the smoke
+waits up to a minute for them.
 
 ## Demo school (staging only)
 

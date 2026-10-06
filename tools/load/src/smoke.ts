@@ -52,7 +52,31 @@ interface Reply {
   body: string;
 }
 
-function request(
+/**
+ * A host Caddy has only just been told about has no certificate until Let's
+ * Encrypt has issued one (seconds), and the handshake fails with a TLS alert
+ * meanwhile. Only that failure is retried, for up to a minute; a host that
+ * never gets a certificate still fails.
+ */
+async function request(
+  url: URL,
+  host: string,
+  method = 'GET',
+  headers: Record<string, string> = {},
+): Promise<Reply> {
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    try {
+      return await requestOnce(url, host, method, headers);
+    } catch (err) {
+      const tlsAlert = err instanceof Error && /SSL alert number|EPROTO/.test(err.message);
+      if (!tlsAlert || Date.now() > deadline) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
+}
+
+function requestOnce(
   url: URL,
   host: string,
   method = 'GET',
