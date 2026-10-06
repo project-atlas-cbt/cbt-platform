@@ -1,6 +1,7 @@
 import {
   ENCRYPTED_CACHE_NAME,
   MEDIA_CACHE_NAME,
+  SW_MEDIA_CACHE_NAME,
   encryptedCacheKey,
   mediaCacheKey,
 } from './cache-keys';
@@ -61,6 +62,12 @@ export interface AttemptPackageRow {
   largerText?: boolean;
   generalInstructions: string | null;
   navigationInstructions: string | null;
+  /** Audit P1-6: the question on screen and the furthest question reached
+   * (0-based), kept so a reload neither resets the student to question 1
+   * nor reopens questions `SEQUENTIAL_NO_REVISIT` has locked. Optional and
+   * unindexed, like `largerText` — no schema version bump. */
+  currentIndex?: number;
+  furthestIndex?: number;
   /** `Date.parse(serverTime) - Date.now()` at the moment this row was
    * written — the single source of truth `use-attempt-timer.ts` reads to
    * reconstruct server-relative "now" without trusting the local clock. */
@@ -177,7 +184,11 @@ export function getAttemptDb(): AtlasAttemptDB {
 /** Deletes every row for one attempt across all five tables. Called once an
  * attempt reaches a confirmed terminal state with both queues flushed —
  * bounds storage growth and narrows the window a stale local copy of
- * anything could be inspected. Not a DoD requirement; low-cost to do. */
+ * anything could be inspected. Not a DoD requirement; low-cost to do.
+ *
+ * Audit P0-2: except answers the server never acknowledged (`pending` or
+ * `in-flight`). They are the only copy of what the student chose, so they
+ * stay on the device as evidence rather than being silently deleted. */
 export async function clearAttemptData(attemptId: string): Promise<void> {
   const db = getAttemptDb();
   // F20 (Security row: "no sensitive data in browser storage beyond the
@@ -185,9 +196,8 @@ export async function clearAttemptData(attemptId: string): Promise<void> {
   // attempt's decrypted media and any leftover ciphertext go too — until
   // F20 only the Dexie rows were removed and the images stayed in Cache
   // Storage indefinitely.
-  const mediaAssetIds = (await db.mediaManifest.where('attemptId').equals(attemptId).toArray()).map(
-    (row) => row.mediaAssetId,
-  );
+  const manifestRows = await db.mediaManifest.where('attemptId').equals(attemptId).toArray();
+  const mediaAssetIds = manifestRows.map((row) => row.mediaAssetId);
   const examId = (await db.attemptPackages.get(attemptId))?.examId;
   await db.transaction(
     'rw',
@@ -195,7 +205,11 @@ export async function clearAttemptData(attemptId: string): Promise<void> {
     async () => {
       await db.attemptPackages.delete(attemptId);
       await db.questions.where('attemptId').equals(attemptId).delete();
-      await db.answers.where('attemptId').equals(attemptId).delete();
+      await db.answers
+        .where('attemptId')
+        .equals(attemptId)
+        .filter((row) => row.syncStatus !== 'pending' && row.syncStatus !== 'in-flight')
+        .delete();
       await db.eventOutbox.where('attemptId').equals(attemptId).delete();
       await db.mediaManifest.where('attemptId').equals(attemptId).delete();
     },
@@ -203,9 +217,12 @@ export async function clearAttemptData(attemptId: string): Promise<void> {
   if (typeof caches !== 'undefined') {
     const plain = await caches.open(MEDIA_CACHE_NAME);
     const encrypted = await caches.open(ENCRYPTED_CACHE_NAME);
+    // Bug audit P3-10: the service worker's copy, keyed by signed URL.
+    const worker = await caches.open(SW_MEDIA_CACHE_NAME);
     for (const id of mediaAssetIds) {
       await plain.delete(mediaCacheKey(id));
       if (examId) await encrypted.delete(encryptedCacheKey(examId, id));
     }
+    for (const row of manifestRows) await worker.delete(row.url);
   }
 }

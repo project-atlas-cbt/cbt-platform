@@ -16,6 +16,7 @@ import {
   AttemptPackageResponseDto,
   AttemptStateResponseDto,
   AttemptStatusResponseDto,
+  HeartbeatResponseDto,
   RecordAttemptEventDto,
   SaveAnswerBatchDto,
   SaveAnswerBatchResponseDto,
@@ -132,15 +133,18 @@ export class AttemptController {
     summary:
       'Liveness (ADR-0020) plus the decision-1 device/session-binding signal — never blocks or delays answering.',
   })
-  @ApiOkResponse({ type: StatusResponseDto })
-  async heartbeat(@Req() req: FastifyRequest, @Param('id') id: string): Promise<StatusResponseDto> {
+  @ApiOkResponse({ type: HeartbeatResponseDto })
+  async heartbeat(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+  ): Promise<HeartbeatResponseDto> {
     const user = currentUser(req);
     const deviceId = req.headers['x-device-id'];
     await this.events.heartbeat(user.schoolId, actorFromAuthenticatedUser(user), id, {
       ...(req.ip !== undefined && { ipAddress: req.ip }),
       ...(typeof deviceId === 'string' && { deviceId }),
     });
-    return { status: 'ok' };
+    return { status: 'ok', serverTime: new Date().toISOString() };
   }
 
   @Post(':id/events')

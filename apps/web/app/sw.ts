@@ -1,7 +1,12 @@
 import { defaultCache } from '@serwist/next/worker';
-import { CacheFirst, Serwist } from 'serwist';
+import { CacheFirst, ExpirationPlugin, Serwist } from 'serwist';
 import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist';
 import { ACTIVATE_UPDATE_MESSAGE, hasOpenAttempt } from '@/lib/pwa/update-policy';
+import {
+  MEDIA_CACHE_NAME,
+  SW_MEDIA_CACHE_NAME,
+  SYNTHETIC_MEDIA_KEY_PREFIX,
+} from '@/lib/attempt/cache-keys';
 
 // F0 scope: app-shell precaching only (doctrine defers exam-asset runtime
 // caching rules to F13's offline engine — this is deliberately the
@@ -79,8 +84,19 @@ self.addEventListener('fetch', (event: FetchEvent) => {
   event.stopImmediatePropagation();
 });
 self.addEventListener('activate', (event: ExtendableEvent) => {
-  // Purge what earlier builds cached under the rule above.
-  event.waitUntil(Promise.all(LEAKY_CACHES.map((name) => caches.delete(name))));
+  // Purge what earlier builds cached under the rule above, and (bug audit
+  // P3-10) the signed-URL media entries earlier builds stored in the app's
+  // own media cache, where attempt cleanup never reached them.
+  event.waitUntil(
+    Promise.all([
+      ...LEAKY_CACHES.map((name) => caches.delete(name)),
+      caches.open(MEDIA_CACHE_NAME).then(async (cache) => {
+        for (const request of await cache.keys()) {
+          if (!request.url.startsWith(SYNTHETIC_MEDIA_KEY_PREFIX)) await cache.delete(request);
+        }
+      }),
+    ]),
+  );
 });
 
 /**
@@ -109,7 +125,18 @@ const serwist = new Serwist({
   runtimeCaching: [
     {
       matcher: isPresignedMediaRequest,
-      handler: new CacheFirst({ cacheName: 'atlas-exam-media-v1' }),
+      // Bug audit P3-10: its own cache, expiring. A signed URL is good for
+      // 15 minutes, so an older entry can never be requested again anyway.
+      handler: new CacheFirst({
+        cacheName: SW_MEDIA_CACHE_NAME,
+        plugins: [
+          new ExpirationPlugin({
+            maxAgeSeconds: 60 * 60,
+            maxEntries: 300,
+            purgeOnQuotaError: true,
+          }),
+        ],
+      }),
     },
     ...defaultCache,
   ],

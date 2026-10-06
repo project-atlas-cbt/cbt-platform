@@ -50,6 +50,7 @@ export function useAttemptSyncEngine(
 ): {
   recordAnswer: (examQuestionId: string, selectedOptionId: string | null) => void;
   flushNow: () => Promise<void>;
+  flushUntilSynced: (keepTrying: () => boolean) => Promise<number>;
 } {
   const engine = useMemo(() => (attemptId ? new AttemptSyncEngine(attemptId) : null), [attemptId]);
 
@@ -123,12 +124,18 @@ export function useAttemptSyncEngine(
     };
   }, [attemptId, engine]);
 
-  return {
-    recordAnswer: (examQuestionId: string, selectedOptionId: string | null) => {
-      void engine?.recordAnswer(examQuestionId, selectedOptionId);
-    },
-    flushNow: async () => {
-      await engine?.flushNow();
-    },
-  };
+  // Stable per engine, so callers can list these in hook dependencies.
+  return useMemo(
+    () => ({
+      recordAnswer: (examQuestionId: string, selectedOptionId: string | null) => {
+        void engine?.recordAnswer(examQuestionId, selectedOptionId);
+      },
+      flushNow: async () => {
+        await engine?.flushNow();
+      },
+      flushUntilSynced: async (keepTrying: () => boolean) =>
+        engine ? engine.flushUntilSynced(keepTrying) : 0,
+    }),
+    [engine],
+  );
 }
