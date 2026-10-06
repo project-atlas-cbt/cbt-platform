@@ -22,8 +22,13 @@ describe('readSiteConfig', () => {
       MARKETING_WHATSAPP: ' ',
     });
     expect(config.priceFromNgn).toBeUndefined();
+    expect(config.founder).toBeUndefined();
     expect(config.whatsapp).toBeUndefined();
     expect(whatsappLink(config)).toBeUndefined();
+  });
+
+  it('reads the founder named on About', () => {
+    expect(readSiteConfig({ MARKETING_FOUNDER_NAME: ' Ada Obi ' }).founder).toBe('Ada Obi');
   });
 
   it('normalises a WhatsApp number to international digits', () => {

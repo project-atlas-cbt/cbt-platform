@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { CtaBand } from '@/components/cta-band';
 import { Container, PageHeader, SectionHeading } from '@/components/ui';
 import { site } from '@/lib/site';
@@ -82,6 +83,21 @@ export default function AboutPage() {
                 build the platform.
               </p>
               {site.address ? <p className="text-base text-ink-muted">{site.address}</p> : null}
+              {site.founder ? (
+                <figure className="flex items-center gap-5 border-t border-rule pt-6">
+                  <Image
+                    src="/team/founder.jpg"
+                    alt={site.founder}
+                    width={96}
+                    height={96}
+                    className="size-24 shrink-0 rounded-full object-cover"
+                  />
+                  <figcaption>
+                    <p className="font-display text-lg font-semibold text-ink">{site.founder}</p>
+                    <p className="text-base text-ink-muted">Founder</p>
+                  </figcaption>
+                </figure>
+              ) : null}
             </div>
           </Container>
         </section>

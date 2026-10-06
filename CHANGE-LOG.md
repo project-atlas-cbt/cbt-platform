@@ -2,6 +2,16 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Marketing site: the founder on About
+
+Owner decision (marketing plan, 2026-10-06): proprietors buy from a person, so the site names the
+founder with a photo. About's "Who we are" section now shows Haneef Ojutalayo, Founder, beside
+`public/team/founder.jpg`. The name comes from `MARKETING_FOUNDER_NAME` (set in
+`.env.production`); unset, the founder is hidden, like every other optional business detail.
+Marketing unit tests, lint, typecheck and 46 of 47 browser checks pass; "says plainly when a
+request could not be sent" fails the same way on `dev` in the cloud container (the browser lands
+on an error page), so it is not this change.
+
 ### 2026-10-06 — Tour video: a bulk import, softer sound, no tones
 
 Owner feedback on the first cut: bulk import is a key selling point and must be in it, the clicks
