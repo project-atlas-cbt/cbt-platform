@@ -1,3 +1,4 @@
+import { forbiddenOtherRecord } from './actor.util.js';
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
@@ -43,10 +44,23 @@ function toResponseDto(assignment: {
 export class TeacherAssignmentService {
   constructor(private readonly audit: AuditService) {}
 
+  /** `ownMembershipId`: set for an actor whose only `assignments.view`
+   * grant is SELF (a Teacher or Student), who may read only their own
+   * record (bug audit P2-9). */
   async listForTeacher(
     schoolId: string,
     teacherProfileId: string,
+    ownMembershipId?: string,
   ): Promise<TeacherAssignmentResponseDto[]> {
+    if (ownMembershipId !== undefined) {
+      const profile = await withTenant(prisma, schoolId, (tx) =>
+        tx.teacherProfile.findUnique({
+          where: { id: teacherProfileId },
+          select: { membershipId: true },
+        }),
+      );
+      if (profile?.membershipId !== ownMembershipId) throw forbiddenOtherRecord();
+    }
     const assignments = await withTenant(prisma, schoolId, (tx) =>
       tx.teacherAssignment.findMany({
         where: { schoolId, teacherProfileId, status: 'ACTIVE' },

@@ -1,3 +1,4 @@
+import { forbiddenOtherRecord } from './actor.util.js';
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
 import type { Role } from '@atlas/domain';
@@ -40,10 +41,22 @@ function toResponseDto(registration: {
 export class StudentSubjectRegistrationService {
   constructor(private readonly audit: AuditService) {}
 
+  /** `ownMembershipId`: as `TeacherAssignmentService.listForTeacher`'s
+   * (bug audit P2-9). */
   async listForStudent(
     schoolId: string,
     studentProfileId: string,
+    ownMembershipId?: string,
   ): Promise<StudentSubjectRegistrationResponseDto[]> {
+    if (ownMembershipId !== undefined) {
+      const profile = await withTenant(prisma, schoolId, (tx) =>
+        tx.studentProfile.findUnique({
+          where: { id: studentProfileId },
+          select: { membershipId: true },
+        }),
+      );
+      if (profile?.membershipId !== ownMembershipId) throw forbiddenOtherRecord();
+    }
     const registrations = await withTenant(prisma, schoolId, (tx) =>
       tx.studentSubjectRegistration.findMany({
         where: {

@@ -73,30 +73,6 @@ export const IMPORT_TEMPLATES: Record<ImportJobType, ImportTemplateDef> = {
   },
 };
 
-const SAMPLE_ROWS: Record<ImportJobType, readonly (readonly string[])[]> = {
-  // 01 §7's own worked example, verbatim.
-  STUDENTS: [
-    ['ST001', 'Ahmed', 'Bello', 'SS1A', 'Science'],
-    ['ST002', 'David', 'John', 'SS1A', 'Science'],
-  ],
-  TEACHERS: [['STF001', 'Ngozi', 'Okafor', 'ngozi.okafor@example.com']],
-  QUESTIONS: [
-    [
-      'What is the capital of Nigeria?',
-      'Lagos',
-      'Abuja',
-      'Kano',
-      'Ibadan',
-      'B',
-      'Geography',
-      'SS1A',
-      'Nigerian States',
-      'EASY',
-      '2',
-    ],
-  ],
-};
-
 function toCsvLine(cells: readonly string[]): string {
   return cells
     .map((cell) => {
@@ -109,14 +85,13 @@ function toCsvLine(cells: readonly string[]): string {
     .join(',');
 }
 
-/** `GET /v1/imports/templates/:type` — a static, versioned CSV download. */
+/** `GET /v1/imports/templates/:type` — a static, versioned CSV download.
+ * Headers only: the sample rows it once carried (01 §7's worked example)
+ * were imported as real students whenever a school typed below them
+ * (bug audit P2-8). */
 export function buildTemplateCsv(type: ImportJobType): string {
   const def = IMPORT_TEMPLATES[type];
-  const lines = [
-    templateVersionMarker(IMPORT_TEMPLATE_VERSION),
-    toCsvLine(def.columns),
-    ...SAMPLE_ROWS[type].map(toCsvLine),
-  ];
+  const lines = [templateVersionMarker(IMPORT_TEMPLATE_VERSION), toCsvLine(def.columns)];
   return lines.join('\r\n') + '\r\n';
 }
 

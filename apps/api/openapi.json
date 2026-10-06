@@ -11870,7 +11870,8 @@
           },
           "defaultAttemptLimit": {
             "type": "number",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100
           },
           "defaultNavigationPolicy": {
             "type": "string",
@@ -18760,11 +18761,13 @@
           "durationSeconds": {
             "type": "number",
             "minimum": 1,
+            "maximum": 86400,
             "description": "Duration in whole seconds."
           },
           "attemptLimit": {
             "type": "number",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100
           },
           "navigationPolicy": {
             "type": "string",

@@ -105,4 +105,30 @@ describe('validateQuestionRevisionForSubmit', () => {
       ).toBe('QUESTION_MARKS_INVALID');
     }
   });
+
+  it('bug audit P3-9: a True/False question must have exactly two options', () => {
+    const three = [
+      { content: 'True', correctFlag: true },
+      { content: 'False', correctFlag: false },
+      { content: 'Maybe', correctFlag: false },
+    ];
+    expect(
+      codeOf(() =>
+        validateQuestionRevisionForSubmit({
+          content: 'x',
+          questionType: 'TRUE_FALSE',
+          options: three,
+          marks: 1,
+        }),
+      ),
+    ).toBe('QUESTION_TRUE_FALSE_OPTIONS');
+    expect(() =>
+      validateQuestionRevisionForSubmit({
+        content: 'x',
+        questionType: 'TRUE_FALSE',
+        options: three.slice(0, 2),
+        marks: 1,
+      }),
+    ).not.toThrow();
+  });
 });

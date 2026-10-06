@@ -83,6 +83,7 @@ export class ExamQuestionService {
               where: { schoolId, id: { in: revisionIds } },
               select: {
                 id: true,
+                questionId: true,
                 status: true,
                 marks: true,
                 question: { select: { subjectId: true, level: true } },
@@ -90,6 +91,14 @@ export class ExamQuestionService {
             }),
           );
     const byId = new Map(revisions.map((r) => [r.id, r]));
+    // Bug audit P2-5: two revisions of one question are one question asked
+    // twice, whatever their ids.
+    if (new Set(revisions.map((r) => r.questionId)).size !== revisions.length) {
+      throw new AppHttpException({
+        code: 'VALIDATION_ERROR',
+        message: 'A question was selected more than once (two versions of the same question).',
+      });
+    }
 
     const rows = dto.questions.map((entry, index) => {
       const revision = byId.get(entry.questionRevisionId);

@@ -238,3 +238,29 @@ describe('parseImportFile — .xlsx cell formats (bug audit P1-11)', () => {
     expect(parsed.dateColumnsByRow).toEqual([[]]);
   });
 });
+
+describe('parseImportFile — CSV saved from Excel (bug audit P2-7)', () => {
+  it('drops rows made only of commas', async () => {
+    const parsed = await parseImportFile(
+      csvBuffer([
+        '# template-version: 1',
+        'Student ID,First Name',
+        'ST1,Ada',
+        ',',
+        ' , ',
+        'ST2,Bo',
+      ]),
+      'text/csv',
+    );
+    expect(parsed.rows.map((r) => r['Student ID'])).toEqual(['ST1', 'ST2']);
+    expect(parsed.dateColumnsByRow).toHaveLength(2);
+  });
+
+  it('refuses a file that is not UTF-8, naming the Excel save option', async () => {
+    const latin1 = Buffer.from(
+      '# template-version: 1\r\nStudent ID,First Name\r\nST1,Zo\xe9\r\n',
+      'latin1',
+    );
+    await expect(parseImportFile(latin1, 'text/csv')).rejects.toThrow(/CSV UTF-8/);
+  });
+});

@@ -317,6 +317,7 @@ export class QuestionRevisionService {
 
     validateQuestionRevisionForSubmit({
       content: revision.content,
+      questionType: revision.questionType,
       options: revision.options,
       marks: revision.marks,
     });

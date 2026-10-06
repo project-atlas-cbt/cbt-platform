@@ -48,7 +48,7 @@ describe('validateStudentRow', () => {
   it('flags a Student ID that appears more than once in the file', () => {
     const errors = validateStudentRow(
       { 'Student ID': 'ST001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A', Department: '' },
-      studentCtx({ idCountsInFile: new Map([['ST001', 2]]) }),
+      studentCtx({ idCountsInFile: new Map([['st001', 2]]) }),
     );
     expect(errors.some((e) => e.message.includes('more than once'))).toBe(true);
   });
@@ -56,9 +56,21 @@ describe('validateStudentRow', () => {
   it('flags a Student ID that already exists at this school', () => {
     const errors = validateStudentRow(
       { 'Student ID': 'ST001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A', Department: '' },
-      studentCtx({ existingStudentIds: new Set(['ST001']) }),
+      studentCtx({ existingStudentIds: new Set(['st001']) }),
     );
     expect(errors.some((e) => e.message.includes('already exists'))).toBe(true);
+  });
+
+  it('bug audit P2-6: matches existing and repeated IDs regardless of case', () => {
+    const errors = validateStudentRow(
+      { 'Student ID': 'St001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A', Department: '' },
+      studentCtx({
+        existingStudentIds: new Set(['st001']),
+        idCountsInFile: new Map([['st001', 2]]),
+      }),
+    );
+    expect(errors.some((e) => e.message.includes('already exists'))).toBe(true);
+    expect(errors.some((e) => e.message.includes('more than once'))).toBe(true);
   });
 
   it('flags an unresolvable Class', () => {
@@ -169,8 +181,8 @@ describe('validateTeacherRow', () => {
     const errors = validateTeacherRow(
       { 'Staff ID': 'STF001', 'First Name': 'N', 'Last Name': 'O', Email: 'n@example.com' },
       teacherCtx({
-        idCountsInFile: new Map([['STF001', 2]]),
-        existingStaffIds: new Set(['STF001']),
+        idCountsInFile: new Map([['stf001', 2]]),
+        existingStaffIds: new Set(['stf001']),
       }),
     );
     expect(errors.filter((e) => e.field === 'Staff ID')).toHaveLength(2);

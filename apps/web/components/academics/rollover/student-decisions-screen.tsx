@@ -183,8 +183,6 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
         return <Badge status="success">Promote</Badge>;
       case 'REPEAT':
         return <Badge status="warning">Repeat Year</Badge>;
-      case 'CHANGE_DEPARTMENT':
-        return <Badge status="info">Change Dept</Badge>;
       case 'GRADUATE':
         return <Badge status="info">Graduate</Badge>;
       case 'TRANSFER':
@@ -302,7 +300,6 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
                 <SelectItem value="ALL">All Outcomes</SelectItem>
                 <SelectItem value="PROMOTE">Promote</SelectItem>
                 <SelectItem value="REPEAT">Repeat</SelectItem>
-                <SelectItem value="CHANGE_DEPARTMENT">Change Department</SelectItem>
                 <SelectItem value="GRADUATE">Graduate</SelectItem>
                 <SelectItem value="TRANSFER">Transfer</SelectItem>
                 <SelectItem value="WITHDRAW">Withdraw</SelectItem>

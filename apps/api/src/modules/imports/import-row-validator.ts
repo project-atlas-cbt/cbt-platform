@@ -13,7 +13,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * endpoints already document avoiding (StudentService.list, F7). */
 export interface StudentValidationContext {
   /** Student IDs already present in `05 §10.2`'s "duplicate accounts"
-   * sense — this school's existing SchoolMembership.loginIdentifiers. */
+   * sense — this school's existing SchoolMembership.loginIdentifiers,
+   * lower-cased, as `idCountsInFile`'s keys are: sign-in ignores case. */
   existingStudentIds: Set<string>;
   /** How many times each Student ID appears in *this file* — every row
    * sharing an ID that appears more than once is flagged, not just the
@@ -57,13 +58,13 @@ export function validateStudentRow(
   if (!className) errors.push({ field: 'Class', message: 'Class is required.' });
 
   if (studentId) {
-    if ((ctx.idCountsInFile.get(studentId) ?? 0) > 1) {
+    if ((ctx.idCountsInFile.get(studentId.toLowerCase()) ?? 0) > 1) {
       errors.push({
         field: 'Student ID',
         message: `Student ID "${studentId}" appears more than once in this file.`,
       });
     }
-    if (ctx.existingStudentIds.has(studentId)) {
+    if (ctx.existingStudentIds.has(studentId.toLowerCase())) {
       errors.push({
         field: 'Student ID',
         message: `A student with ID "${studentId}" already exists at this school.`,
@@ -129,13 +130,13 @@ export function validateTeacherRow(
   }
 
   if (staffId) {
-    if ((ctx.idCountsInFile.get(staffId) ?? 0) > 1) {
+    if ((ctx.idCountsInFile.get(staffId.toLowerCase()) ?? 0) > 1) {
       errors.push({
         field: 'Staff ID',
         message: `Staff ID "${staffId}" appears more than once in this file.`,
       });
     }
-    if (ctx.existingStaffIds.has(staffId)) {
+    if (ctx.existingStaffIds.has(staffId.toLowerCase())) {
       errors.push({
         field: 'Staff ID',
         message: `A teacher with staff ID "${staffId}" already exists at this school.`,

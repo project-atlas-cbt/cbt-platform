@@ -118,7 +118,17 @@ function holdsDate(cell: ExcelJS.Cell): boolean {
  * cell 1 can be extracted without trailing commas breaking version extraction.
  */
 function parseCsv(buffer: Buffer): ParsedImportFile {
-  const text = buffer.toString('utf-8');
+  // Excel's plain "CSV" saves in the PC's legacy code page, not UTF-8.
+  // Decoding that leniently stored names with � in them (bug audit P2-7).
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+  } catch {
+    throw new ImportParseError(
+      'This file is not saved as UTF-8 text. In Excel, use Save As and choose ' +
+        '"CSV UTF-8 (Comma delimited)", then upload it again.',
+    );
+  }
   let records: string[][];
   try {
     // bom: true strips a leading UTF-8 byte-order mark, which spreadsheet
@@ -156,7 +166,11 @@ function parseCsv(buffer: Buffer): ParsedImportFile {
     throw new ImportParseError('The file has no header row.');
   }
 
-  const dataRows = records.slice(headerRowIndex + 1);
+  // A row of nothing but commas is what spreadsheet software writes for a
+  // row it once touched; it is not a row the school entered (P2-7).
+  const dataRows = records
+    .slice(headerRowIndex + 1)
+    .filter((cells) => cells.some((cell) => cell.trim() !== ''));
   return {
     version,
     headers,

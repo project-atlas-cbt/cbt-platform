@@ -2,6 +2,32 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Imports and authoring: P2 and P3 bug audit fixes
+
+The P2 and P3 items of the bug audit in imports, authoring and their permissions:
+
+- **P2-4:** the exam Rules form leaves a blank duration out of the save instead of sending 0.
+- **P2-5:** the exam question picker lists each question as its latest approved revision, even
+  while a new draft of it exists, and matches the selection by question; the API refuses two
+  revisions of one question in an exam.
+- **P2-6:** login identifiers are unique per school regardless of case (a `lower()` unique
+  index, migration `20261007090000`), and the import duplicate checks ignore case too.
+- **P2-7:** CSV rows of nothing but commas are dropped; a file that is not UTF-8 fails with "save
+  as CSV UTF-8" instead of importing garbled names.
+- **P2-8:** import templates are headers only. The sample rows (01 §7's worked example) were
+  imported as real records when a school typed below them.
+- **P2-9:** a Teacher or Student reads only their own assignment or subject-registration list by
+  id (403 otherwise).
+- **P2-10:** the rollover screens no longer offer "Change Department", which the API refuses;
+  Promote into a class of the other department does it.
+- **P3-7:** exam duration (24 hours) and attempt limit (100) have maximums, on the exam and in
+  Assessment Rules.
+- **P3-9:** a True/False question must have exactly two options.
+
+**Tested:** unit tests (parser, validator, template, Rules form, question picker) and integration
+tests (picker and double binding, limits, case-insensitive student ID, own assignment list);
+typecheck, lint, unit suites and `test:security`.
+
 ### 2026-10-06 — Imports and authoring: P0 and P1 bug audit fixes
 
 From the bug audit (`/mnt/project-files/bug-audit/findings.md`, project files), the imports, media

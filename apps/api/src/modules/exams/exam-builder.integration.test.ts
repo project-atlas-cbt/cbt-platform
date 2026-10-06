@@ -960,6 +960,60 @@ describe('B11 Exam Builder & Readiness', () => {
     expect(adminMove.statusCode).toBe(200);
   });
 
+  it('bug audit P2-5: a question under revision stays bindable as its approved revision, and one question cannot be bound twice', async () => {
+    const created = (
+      await post(teacher, '/questions', {
+        subjectId: mathSubjectId,
+        level: 'SS2',
+        questionType: 'SINGLE_CHOICE',
+        content: `What is 9 - 4? ${randomUUID().slice(0, 6)}`,
+        difficulty: 'EASY',
+        marks: 1,
+        options: [
+          { content: '5', correctFlag: true },
+          { content: '4', correctFlag: false },
+        ],
+      })
+    ).json<{ id: string; revisions: { id: string }[] }>();
+    const firstRev = created.revisions[0]!.id;
+    await post(teacher, `/questions/${created.id}/revisions/${firstRev}/submit`);
+    expect((await post(hod, `/reviews/questions/${created.id}/approve`, {})).statusCode).toBe(200);
+    const secondRev = (
+      await post(teacher, `/questions/${created.id}/revisions`, { content: 'What is 9 - 4 now?' })
+    ).json<{ id: string }>().id;
+
+    const exam = (
+      await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'Revision binding fixture',
+        examType: 'Mock Examination',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>();
+    const available = await get(teacher, `/exams/${exam.id}/available-questions?pageSize=100`);
+    const row = available
+      .json<{ questions: { id: string; currentRevisionId: string }[] }>()
+      .questions.find((q) => q.id === created.id);
+    expect(row?.currentRevisionId).toBe(firstRev);
+
+    await post(teacher, `/questions/${created.id}/revisions/${secondRev}/submit`);
+    await post(hod, `/reviews/questions/${created.id}/approve`, {});
+    const both = await put(teacher, `/exams/${exam.id}/questions`, {
+      questions: [{ questionRevisionId: firstRev }, { questionRevisionId: secondRev }],
+    });
+    expect(both.statusCode).toBe(400);
+    expect(both.json<{ error: { code: string } }>().error.code).toBe('VALIDATION_ERROR');
+
+    // P3-7: an absurd duration or attempt limit is a validation error, not a 500.
+    const huge = await put(teacher, `/exams/${exam.id}/configuration`, {
+      durationSeconds: 10_000_000_000,
+      attemptLimit: 10_000_000_000,
+    });
+    expect(huge.statusCode).toBe(400);
+  });
+
   it('concurrency: two simultaneous ready() calls on one DRAFT exam — exactly one succeeds', async () => {
     const raceExam = (
       await post(teacher, '/exams', {
