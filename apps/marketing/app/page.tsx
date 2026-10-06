@@ -78,16 +78,16 @@ export default function HomePage() {
           <div>
             <SectionHeading
               id="tour-title"
-              eyebrow="The product in one minute"
-              title="Watch an exam from question to result"
-              lead="An HOD approves a question, a teacher watches the sitting live, a student loses the network mid-paper and carries on, and the results are published."
+              eyebrow="The product in a minute"
+              title="Watch it work, from class list to published result"
+              lead="A moderator imports a class list from a spreadsheet, an HOD approves a question, a teacher watches the sitting live, a student loses the network mid-paper and carries on, and the results are published."
             />
             <p className="mt-6 text-[0.9375rem] leading-relaxed text-ink-muted">
               Recorded in {site.name} itself, using a fictional school. The video has captions and
               no voice-over, so it works with the sound off.
             </p>
           </div>
-          <TeaserVideo title={`A one-minute tour of ${site.name}`} />
+          <TeaserVideo title={`A short tour of ${site.name}`} />
         </Container>
       </section>
 

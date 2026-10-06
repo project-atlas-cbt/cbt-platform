@@ -1,5 +1,5 @@
 // Records the tour video's scenes from the real app on the fictional demo school: screencast
-// frames plus a timeline of cursor moves, clicks, keys, zooms, captions and sounds. The cursor
+// frames plus a timeline of cursor moves, clicks, keys, zooms and captions. The cursor
 // is not in the frames; compose.py draws it from the timeline. See README.md beside this file.
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -191,9 +191,137 @@ class Scene {
   captionOff() {
     this.log({ kind: 'caption', text: null });
   }
-  sound(name) {
-    this.log({ kind: 'sound', name });
-  }
+}
+
+// --- 0. A Moderator imports a class list -------------------------------------
+// A real spreadsheet built from the app's own template: thirty new SS2 students, one of whom
+// reuses an existing student's ID so validation has something true to catch. Each take needs
+// fresh IDs (imported students cannot be deleted), so IMPORT_BASE moves the range on.
+const IMPORT_FILE = 'SS2 new students.xlsx';
+const IMPORT_NAMES = [
+  ['Adaeze', 'Nwosu'],
+  ['Bashir', 'Lawal'],
+  ['Chiamaka', 'Obi'],
+  ['Damilola', 'Akande'],
+  ['Emeka', 'Udeh'],
+  ['Fatima', 'Sani'],
+  ['Gbenga', 'Oyelaran'],
+  ['Halima', 'Garba'],
+  ['Ifeoma', 'Chukwu'],
+  ['Jide', 'Afolabi'],
+  ['Kemi', 'Adebayo'],
+  ['Lami', 'Danjuma'],
+  ['Musa', 'Abdullahi'],
+  ['Nkechi', 'Eze'],
+  ['Olumide', 'Fashola'],
+  ['Precious', 'Etim'],
+  ['Rukayya', 'Bello'],
+  ['Segun', 'Adewale'],
+  ['Tobi', 'Ogundipe'],
+  ['Uche', 'Okeke'],
+  ['Victoria', 'Inyang'],
+  ['Wale', 'Ibrahim'],
+  ['Yetunde', 'Alabi'],
+  ['Zainab', 'Yusuf'],
+  ['Ayodele', 'Ojo'],
+  ['Bolaji', 'Salami'],
+  ['Chidi', 'Anyanwu'],
+  ['Dayo', 'Ilori'],
+  ['Esther', 'Okon'],
+];
+async function importWorkbook() {
+  const { createRequire } = await import('node:module');
+  const ExcelJS = createRequire(`${root}apps/api/package.json`)('exceljs');
+  const base = Number(process.env.IMPORT_BASE ?? 201);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Students');
+  ws.addRow(['# template-version: 1']);
+  ws.addRow(['Student ID', 'First Name', 'Last Name', 'Class', 'Department']);
+  IMPORT_NAMES.forEach(([first, last], i) => {
+    ws.addRow([`OKC24${base + i}`, first, last, `SS2${'ABC'[i % 3]}`, '']);
+    // row 13 of the sheet repeats a student the school already has
+    if (i === 10) ws.addRow([o.students[4].identifier, 'Ibrahim', 'Musa', 'SS2B', '']);
+  });
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+if (want('import')) {
+  const file = await importWorkbook();
+  const p = await newPage();
+  await signIn(p, o.moderator);
+  await p.goto(url('/moderator/people/students/import'));
+  await p.waitForLoadState('networkidle');
+  const zone = p.getByRole('button', { name: /Drag a file here/ });
+  await zone.waitFor({ timeout: 20000 });
+  await sleep(1200);
+  const dt = await p.evaluateHandle(
+    ({ b64, name }) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const d = new DataTransfer();
+      d.items.add(
+        new File([bytes], name, {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+      );
+      return d;
+    },
+    { b64: file.toString('base64'), name: IMPORT_FILE },
+  );
+
+  const s = new Scene(p, 'import', [VW * 0.9, VH * 0.92]);
+  await s.start();
+  s.caption('Bring a whole class list in from a spreadsheet.');
+  const head = p.getByRole('heading', { name: 'Import students' });
+  const hb = await head.boundingBox();
+  const zb = await zone.boundingBox();
+  const panel = [hb.x - 24, hb.y - 60, zb.width + 48, zb.y + zb.height + 40 - (hb.y - 60)];
+  await s.zoom([panel], 1.35, 1000);
+  // compose.py draws the file under the cursor from 'drag' until 'drop'
+  s.log({ kind: 'drag', file: IMPORT_FILE });
+  await sleep(300);
+  const [zx, zy] = await s.point(zone);
+  const halfway = s.move([zx + 120, zy + 30], 700);
+  await sleep(450);
+  await zone.dispatchEvent('dragover', { dataTransfer: dt });
+  await halfway;
+  await s.move([zx, zy], 500);
+  await sleep(250);
+  s.log({ kind: 'drop', x: s.cx, y: s.cy });
+  s.log({ kind: 'click', x: s.cx, y: s.cy, sound: 'click' });
+  await zone.dispatchEvent('drop', { dataTransfer: dt });
+
+  const summary = p.getByTestId('import-summary-sentence');
+  await summary.waitFor({ timeout: 30000 });
+  s.caption('Every row is checked before anything is saved.');
+  await sleep(500);
+  const confirm = p.getByRole('button', { name: /^Import \d+ valid rows?$/ });
+  const sb = await p.getByText('Total rows').boundingBox();
+  const cb = await confirm.boundingBox();
+  await s.zoom(
+    // the three counts, the row that needs attention and the import button, all in view
+    [[sb.x - 24, sb.y - 24, VW - sb.x + 8, cb.y + cb.height + 24 - (sb.y - 24)]],
+    1.3,
+    900,
+  );
+  await sleep(500);
+  await s.move(p.getByText(/already exists at this school/).first(), 900, 0.3);
+  await sleep(1900);
+  s.caption('Valid rows go in now. The one to fix is kept aside.');
+  await s.click(confirm, { ms: 800 });
+  // the import runs in the background; compose.py cuts the wait after a moment of progress
+  await sleep(1600);
+  s.log({ kind: 'skip', on: true });
+  await p.getByText('Import complete').waitFor({ timeout: 60000 });
+  await sleep(400);
+  s.log({ kind: 'skip', on: false });
+  const done = p.getByText('Import complete').locator('xpath=..');
+  await s.zoom(done, 1.3, 800);
+  await s.move(p.getByText(/students imported/).first(), 800);
+  await sleep(2200);
+  s.unzoom(700);
+  await sleep(700);
+  await s.stop();
+  await p.context().close();
 }
 
 // --- 1. HOD approves a question --------------------------------------------
@@ -222,7 +350,6 @@ if (want('review')) {
   await s.move(approve, 900);
   await sleep(300);
   await s.click(null);
-  s.sound('success');
   await sleep(250);
   s.unzoom(800);
   await sleep(2600);
@@ -327,7 +454,6 @@ if (want('student')) {
   const s3 = new Scene(p, 'offline', [s2.cx, s2.cy]);
   await s3.start();
   await p.context().setOffline(true);
-  s3.sound('offline');
   s3.caption('If the network drops, answers are kept on the computer.');
   await sleep(700);
   const banner = p.getByText(/You.re offline/).first();
@@ -347,7 +473,6 @@ if (want('student')) {
   await sleep(900);
   await p.context().setOffline(false);
   s3.caption('When it returns, they are sent to the server on their own.');
-  s3.sound('online');
   await sleep(2600);
   await s3.unzoom(700);
   await sleep(500);
@@ -376,7 +501,6 @@ if (want('student')) {
   await s4.zoom(dialog, 1.3, 800);
   await sleep(1300);
   await s4.click(dialog.getByRole('button', { name: /^Submit/ }).last(), { ms: 700 });
-  s4.sound('success');
   await sleep(800);
   s4.unzoom(700);
   await sleep(2400);
@@ -405,7 +529,6 @@ if (want('results')) {
   await s.move(pub, 900);
   await sleep(500);
   await s.click(null);
-  s.sound('success');
   await sleep(2600);
   await s.unzoom(700);
   await sleep(700);

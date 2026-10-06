@@ -37,10 +37,12 @@ async function card(name, html) {
   await p.context().close();
 }
 const CAPTIONS = [
+  'Bring a whole class list in from a spreadsheet.',
+  'Every row is checked before anything is saved.',
+  'Valid rows go in now. The one to fix is kept aside.',
   'HODs check every question before it can go into an exam.',
   'One screen shows every student in the sitting, live.',
   'A computer that goes quiet is flagged and listed first.',
-  'Students sign in with their student ID.',
   'Each student sits the paper on their own timer.',
   'If the network drops, answers are kept on the computer.',
   'When it returns, they are sent to the server on their own.',
@@ -68,5 +70,12 @@ await card(
   <img src="${logo}" style="width:600px;filter:brightness(0) invert(1)">
   <div style="font-size:46px;font-weight:600;letter-spacing:-.01em">examkeep.com</div>
   <div style="font-size:32px;opacity:.92">Computer-based testing for secondary schools</div></div>`,
+);
+// What the cursor carries in the import scene: the spreadsheet being dragged in from the desktop.
+const sheetIcon = `<svg width="34" height="42" viewBox="0 0 34 42" xmlns="http://www.w3.org/2000/svg"><path d="M3 0h20l11 11v28a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3z" fill="#1F7A4D"/><path d="M23 0v8a3 3 0 0 0 3 3h8z" fill="#6FBF94"/><g stroke="#fff" stroke-width="2" fill="none"><rect x="7" y="18" width="20" height="16" rx="1"/><path d="M7 23.5h20M7 28.5h20M14 18v16"/></g></svg>`;
+await card(
+  'file-chip',
+  `<div style="position:absolute;left:40px;top:40px;display:flex;align-items:center;gap:16px;padding:14px 22px 14px 16px;background:#fff;border:1px solid #D6DAE1;border-radius:12px;box-shadow:0 2px 4px rgb(20 22 27/.08),0 14px 30px -12px rgb(20 22 27/.35)">
+  ${sheetIcon}<div style="font-size:24px;font-weight:500;color:#14161B;letter-spacing:-.01em">SS2 new students.xlsx</div></div>`,
 );
 await b.close();

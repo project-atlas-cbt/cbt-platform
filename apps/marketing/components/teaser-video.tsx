@@ -1,11 +1,11 @@
 /**
- * The one-minute product tour.
+ * The short product tour.
  *
  * Recorded in the real app on the fictional demo school, like the
  * screenshots (`scripts/teaser/`). It plays only when pressed, and nothing but
  * the poster loads before that, so a visitor on mobile data pays for the video
  * only if they choose to watch it. Its captions are part of the picture, and
- * its only sound is the interface: clicks, typing and confirmation tones.
+ * its sound is soft clicks and typing over a quiet room tone, never music.
  */
 export function TeaserVideo({ title }: { title: string }) {
   return (

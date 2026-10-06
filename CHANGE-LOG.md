@@ -2,6 +2,25 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Tour video: a bulk import, softer sound, no tones
+
+Owner feedback on the first cut: bulk import is a key selling point and must be in it, the clicks
+were too sharp, and the video and audio rule (never music, musical instruments or
+melodic tones; light non-instrumental ambience is welcome) applies to everything we make.
+
+- A new opening scene: a Moderator drags a 30-row class list (`.xlsx`, built from the app's own
+  student template) onto Import students; validation finds 29 valid rows and one student ID the
+  school already has; the 29 are imported. The recorder writes `skip` markers so the compositor
+  cuts the background job's wait, and the dragged file is drawn under the cursor. Imported IDs
+  cannot be deleted, so each take needs a new `IMPORT_BASE`.
+- Sound: the clicks and keys are now low-passed noise (no sine body), about 9 dB quieter at peak;
+  the approval, offline and online tones are gone. A quiet room tone runs throughout, with faint
+  distant typing during the lab scenes, all synthesised from filtered noise.
+- The student sign-in shot was dropped to keep it short: 79 seconds. Home page copy now names the
+  import.
+
+**Tested:** see the PR; playback still unchecked here (no H.264 decoder in the test Chromium).
+
 ### 2026-10-06 — One-minute tour video on the home page
 
 Owner request: the teaser belongs on the website, and should feel interactive: a cursor doing the
