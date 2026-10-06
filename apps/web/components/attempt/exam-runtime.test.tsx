@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { ExamRuntime } from './exam-runtime';
-import { clearAttemptData } from '@/lib/attempt/db';
+import { clearAttemptData, getAttemptDb } from '@/lib/attempt/db';
+import { resetServerClock } from '@/lib/attempt/server-clock';
 
 const replace = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
@@ -77,6 +78,8 @@ function renderRuntime() {
 describe('ExamRuntime (integration)', () => {
   beforeEach(async () => {
     await clearAttemptData(ATTEMPT_ID);
+    await getAttemptDb().answers.where('attemptId').equals(ATTEMPT_ID).delete();
+    resetServerClock();
     mockGet.mockReset();
     mockPost.mockReset();
     replace.mockReset();
@@ -200,6 +203,88 @@ describe('ExamRuntime (integration)', () => {
     // actionable — the student can retry once reconnected.
     expect(replace).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Submit' })).toBeInTheDocument();
+  });
+
+  it('audit P0-2 — a manual submit is refused while an answer has not reached the server', async () => {
+    mockPost.mockImplementation((path: unknown) => {
+      if (path === '/attempts/{id}/answers/batch') {
+        return Promise.reject(new Error('network down')) as never;
+      }
+      return ok({ status: 'ok' }) as never;
+    });
+    renderRuntime();
+    await screen.findByText('What is 2+2?');
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText('4'));
+    await user.click(screen.getByRole('button', { name: /submit assessment/i }));
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    expect(await screen.findByRole('alert', {}, { timeout: 10_000 })).toHaveTextContent(
+      /1 answer hasn't reached the server yet/i,
+    );
+    expect(mockPost).not.toHaveBeenCalledWith('/attempts/{id}/submit', expect.anything());
+    expect(replace).not.toHaveBeenCalled();
+    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('pending');
+  }, 15_000);
+
+  it('audit P0-2 — at expiry, an unsynced answer is sent before the submit', async () => {
+    const calls: string[] = [];
+    let batchCalls = 0;
+    mockPost.mockImplementation((path: unknown) => {
+      calls.push(String(path));
+      if (path === '/attempts/{id}/answers/batch') {
+        batchCalls += 1;
+        if (batchCalls === 1) return Promise.reject(new Error('network down')) as never;
+        return ok({
+          results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }],
+        }) as never;
+      }
+      if (path === '/attempts/{id}/submit') {
+        return ok({ ...PACKAGE, state: 'AUTO_SUBMITTED', submittedAt: null }) as never;
+      }
+      return ok({ status: 'ok' }) as never;
+    });
+    const now = Date.now();
+    mockGet.mockResolvedValue(
+      ok({
+        ...PACKAGE,
+        expiresAt: new Date(now + 2_500).toISOString(),
+        serverTime: new Date(now).toISOString(),
+      }),
+    );
+    renderRuntime();
+    await screen.findByText('What is 2+2?');
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText('4'));
+
+    await waitFor(
+      () => expect(replace).toHaveBeenCalledWith(`/student/exam/${ATTEMPT_ID}/submitted`),
+      { timeout: 10_000 },
+    );
+    const submitAt = calls.indexOf('/attempts/{id}/submit');
+    const lastBatchAt = calls.lastIndexOf('/attempts/{id}/answers/batch');
+    expect(batchCalls).toBeGreaterThanOrEqual(2);
+    expect(lastBatchAt).toBeLessThan(submitAt);
+    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('synced');
+  }, 15_000);
+
+  it('audit P1-6 — a reload resumes at the saved question, and SEQUENTIAL_NO_REVISIT keeps passed questions locked', async () => {
+    mockGet.mockResolvedValue(ok({ ...PACKAGE, navigationPolicy: 'SEQUENTIAL_NO_REVISIT' }));
+    const first = renderRuntime();
+    await screen.findByText('What is 2+2?');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('What is 3+3?')).toBeInTheDocument();
+    await waitFor(async () =>
+      expect((await getAttemptDb().attemptPackages.get(ATTEMPT_ID))?.furthestIndex).toBe(1),
+    );
+    first.unmount();
+
+    renderRuntime();
+    expect(await screen.findByText('What is 3+3?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(screen.getByText('What is 3+3?')).toBeInTheDocument();
+    expect(screen.queryByText('What is 2+2?')).not.toBeInTheDocument();
   });
 
   it('DoD 16 — an already-submitted attempt redirects to the confirmation screen rather than rendering the runtime', async () => {

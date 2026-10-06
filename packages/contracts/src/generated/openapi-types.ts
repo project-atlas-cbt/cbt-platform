@@ -5217,6 +5217,18 @@ export interface components {
         SaveAnswerBatchResponseDto: {
             results: components["schemas"]["BatchAnswerResultDto"][];
         };
+        HeartbeatResponseDto: {
+            /**
+             * @example ok
+             * @enum {string}
+             */
+            status: "ok";
+            /**
+             * Format: date-time
+             * @description The server's current clock. The client counts the exam countdown from it on its own monotonic clock, never from the PC's wall clock.
+             */
+            serverTime: string;
+        };
         RecordAttemptEventDto: {
             /** @enum {string} */
             type: "WINDOW_BLUR" | "FULLSCREEN_EXIT" | "TAB_HIDDEN" | "RECONNECTED" | "RESUMED" | "BINDING_MISMATCH";
@@ -9635,7 +9647,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StatusResponseDto"];
+                    "application/json": components["schemas"]["HeartbeatResponseDto"];
                 };
             };
         };

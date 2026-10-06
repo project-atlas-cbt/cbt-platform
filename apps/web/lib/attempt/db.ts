@@ -61,6 +61,12 @@ export interface AttemptPackageRow {
   largerText?: boolean;
   generalInstructions: string | null;
   navigationInstructions: string | null;
+  /** Audit P1-6: the question on screen and the furthest question reached
+   * (0-based), kept so a reload neither resets the student to question 1
+   * nor reopens questions `SEQUENTIAL_NO_REVISIT` has locked. Optional and
+   * unindexed, like `largerText` — no schema version bump. */
+  currentIndex?: number;
+  furthestIndex?: number;
   /** `Date.parse(serverTime) - Date.now()` at the moment this row was
    * written — the single source of truth `use-attempt-timer.ts` reads to
    * reconstruct server-relative "now" without trusting the local clock. */
@@ -177,7 +183,11 @@ export function getAttemptDb(): AtlasAttemptDB {
 /** Deletes every row for one attempt across all five tables. Called once an
  * attempt reaches a confirmed terminal state with both queues flushed —
  * bounds storage growth and narrows the window a stale local copy of
- * anything could be inspected. Not a DoD requirement; low-cost to do. */
+ * anything could be inspected. Not a DoD requirement; low-cost to do.
+ *
+ * Audit P0-2: except answers the server never acknowledged (`pending` or
+ * `in-flight`). They are the only copy of what the student chose, so they
+ * stay on the device as evidence rather than being silently deleted. */
 export async function clearAttemptData(attemptId: string): Promise<void> {
   const db = getAttemptDb();
   // F20 (Security row: "no sensitive data in browser storage beyond the
@@ -195,7 +205,11 @@ export async function clearAttemptData(attemptId: string): Promise<void> {
     async () => {
       await db.attemptPackages.delete(attemptId);
       await db.questions.where('attemptId').equals(attemptId).delete();
-      await db.answers.where('attemptId').equals(attemptId).delete();
+      await db.answers
+        .where('attemptId')
+        .equals(attemptId)
+        .filter((row) => row.syncStatus !== 'pending' && row.syncStatus !== 'in-flight')
+        .delete();
       await db.eventOutbox.where('attemptId').equals(attemptId).delete();
       await db.mediaManifest.where('attemptId').equals(attemptId).delete();
     },

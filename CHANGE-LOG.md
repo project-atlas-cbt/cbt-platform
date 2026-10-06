@@ -2,6 +2,40 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Exam sitting fixes from the bug audit (P0-2, P1-1, P1-2, P1-5, P1-6, P2-1)
+
+Fixes from `bug-audit/findings.md` (dev at 5b16ecd) for the exam engine and the student's sitting,
+before the pilot school's first CA test.
+
+- **P0-2, unsynced answers lost at submit.** Every submit now flushes first and checks the device
+  for answers the server has not acknowledged. A manual submit tries three times, then refuses with
+  "N answers haven't reached the server yet" and keeps the dialog open. At expiry the runtime keeps
+  flushing for up to 40 s of the 60 s grace (ADR-0003), then submits; the expiry call and its retry
+  share one run. `clearAttemptData` no longer deletes `pending` or `in-flight` answers.
+- **P1-2, submit racing an answer save.** The `attempt_answers` guard trigger reads the attempt's
+  state `FOR SHARE` (migration `20261006200000`, function body only). A submit, auto-submit or staff
+  end now waits for an answer transaction already past the check, and a write arriving during a
+  submit is refused after it. Answer writes do not block each other; a heartbeat's `last_seen_at`
+  update can wait for one answer transaction. Not yet measured under the B21 load profile.
+- **P1-5, timer following the PC clock.** The countdown reads `lib/attempt/server-clock.ts`: server
+  time anchored at start/resume, on the reconnect check and on every heartbeat (the heartbeat now
+  returns `serverTime`), counted on `performance.now()` in between (ADR-0027's monotonic clock).
+- **P1-6, reload undoing "no going back".** The question on screen and the furthest reached are
+  saved on the device's attempt row and restored on reload (also from the server's answers on a
+  different PC); `SEQUENTIAL_NO_REVISIT` resumes at the furthest question. The server still does not
+  enforce navigation (Candidate / Deferred: refusing writes to locked questions needs the server to
+  know the furthest question, and offline batches arrive in no particular order).
+- **P1-1 and P2-1, student home.** `GET /student/assessment` offers the newest exam the student can
+  start by `start()`'s own clauses: an OPEN exam with attempt-limit headroom, or a live MAKEUP/RETRY
+  authorization (which also admits a COMPLETED exam). Makeup students now see their exam; a
+  submitted exam no longer shows "Available now" or hides another open exam.
+
+**Tested:** new API integration tests for each server fix (the P1-2 test fails with the old trigger
+body), web tests for the submit paths, the clock jump, re-anchoring and restored position.
+`pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm test:security`, the execution
+integration suites and the worker's auto-submit and marking integration suites pass locally. CI is
+blocked by GitHub Actions billing.
+
 ### 2026-10-06 — Pilot server: nightly backups could not write their dump
 
 Bug audit P0-3, confirmed on the pilot server: `infra/vps/backups/` was owned by root, because

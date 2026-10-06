@@ -72,6 +72,19 @@ describe('attempt Dexie schema', () => {
     expect(await db.eventOutbox.where('attemptId').equals(ATTEMPT_ID).count()).toBe(0);
   });
 
+  it('audit P0-2 — clearAttemptData keeps answers the server never acknowledged', async () => {
+    const db = getAttemptDb();
+    await db.answers.put(makeAnswer({ examQuestionId: 'q1', syncStatus: 'synced' }));
+    await db.answers.put(makeAnswer({ examQuestionId: 'q2', syncStatus: 'pending' }));
+    await db.answers.put(makeAnswer({ examQuestionId: 'q3', syncStatus: 'in-flight' }));
+
+    await clearAttemptData(ATTEMPT_ID);
+
+    const left = await db.answers.where('attemptId').equals(ATTEMPT_ID).toArray();
+    expect(left.map((row) => row.examQuestionId).sort()).toEqual(['q2', 'q3']);
+    await db.answers.where('attemptId').equals(ATTEMPT_ID).delete();
+  });
+
   /**
    * DoD 19 — "browser storage contains no correct-answer data." The
    * server's student-facing payload structurally has no `correctFlag`

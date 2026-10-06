@@ -1853,6 +1853,184 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
   });
 
   // ---------------------------------------------------------------------
+  // Bug audit 2026-10-06 — exam sitting fixes
+  // ---------------------------------------------------------------------
+
+  it('audit P1-2: a submit waits for an answer write still committing, so the answer is in the submitted attempt', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const question = pkg.questions[0]!;
+    expect(
+      (
+        await put(studentA, `/attempts/${pkg.attemptId}/answers/${question.examQuestionId}`, {
+          selectedOptionId: question.options[0]!.optionId,
+          sequenceNumber: 1,
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    // An answer write that has passed the trigger's state check and not yet
+    // committed (the audit's repro: a batch save holding its transaction).
+    let releaseWrite!: () => void;
+    const writeHeld = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    let writeStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      writeStarted = resolve;
+    });
+    const heldWrite = withTenant(prisma, schoolId, async (tx) => {
+      await tx.$executeRaw`
+        UPDATE attempt_answers SET selected_option_id = ${question.options[1]!.optionId}::uuid
+        WHERE attempt_id = ${pkg.attemptId}::uuid AND exam_question_id = ${question.examQuestionId}::uuid
+      `;
+      writeStarted();
+      await writeHeld;
+    });
+    await started;
+
+    let submitDone = false;
+    const submit = post(studentA, `/attempts/${pkg.attemptId}/submit`, {}).then((res) => {
+      submitDone = true;
+      return res;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    // Before the fix the submit returned at once, without the answer.
+    expect(submitDone).toBe(false);
+
+    releaseWrite();
+    await heldWrite;
+    expect((await submit).statusCode).toBe(200);
+    const answer = await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptAnswer.findFirstOrThrow({
+        where: { schoolId, attemptId: pkg.attemptId, examQuestionId: question.examQuestionId },
+      }),
+    );
+    expect(answer.selectedOptionId).toBe(question.options[1]!.optionId);
+
+    // And a write after the submit is refused by the same guard.
+    await expect(
+      withTenant(
+        prisma,
+        schoolId,
+        (tx) =>
+          tx.$executeRaw`
+          UPDATE attempt_answers SET selected_option_id = ${question.options[0]!.optionId}::uuid
+          WHERE attempt_id = ${pkg.attemptId}::uuid
+        `,
+      ),
+    ).rejects.toThrow(/immutable/);
+  });
+
+  it('audit P1-5: the heartbeat returns the server clock', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const before = Date.now();
+    const res = await post(studentA, `/attempts/${pkg.attemptId}/heartbeat`, {});
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ status: string; serverTime: string }>();
+    expect(body.status).toBe('ok');
+    expect(Date.parse(body.serverTime)).toBeGreaterThanOrEqual(before - 1_000);
+  });
+
+  /** Earlier tests leave attempts running; the student home always offers
+   * a running attempt first, so end them before testing what it offers. */
+  async function endRunningAttempts(studentProfileId: string): Promise<void> {
+    const running = await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.findMany({
+        where: { schoolId, studentProfileId, state: 'IN_PROGRESS' },
+        select: { id: true },
+      }),
+    );
+    for (const attempt of running) {
+      expect((await post(teacher, `/attempts/${attempt.id}/end`, {})).statusCode).toBe(200);
+    }
+  }
+
+  it('audit P2-1: once the attempt limit is used, the student home stops offering the exam and shows another open one', async () => {
+    await endRunningAttempts(studentAProfileId);
+    const examId = await buildReadyExam({ attemptLimit: 1 });
+    await openSession(examId);
+    expect((await get(studentA, '/student/assessment')).json<{ examId: string }>().examId).toBe(
+      examId,
+    );
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await post(studentA, `/attempts/${pkg.attemptId}/submit`, {})).statusCode).toBe(200);
+
+    const after = (await get(studentA, '/student/assessment')).json<{
+      examId: string | null;
+      state: string | null;
+    }>();
+    expect(after.examId).not.toBe(examId);
+
+    // A second open exam, authorised earlier, is no longer hidden behind it.
+    const otherExamId = await buildReadyExam();
+    await openSession(otherExamId);
+    const next = (await get(studentA, '/student/assessment')).json<{
+      examId: string | null;
+      state: string | null;
+    }>();
+    expect(next.examId).toBe(otherExamId);
+    expect(next.state).toBe('NOT_STARTED');
+    // Leave nothing startable behind for later tests.
+    const other = (
+      await post(studentA, `/exams/${otherExamId}/attempts`, {})
+    ).json<AttemptPackage>();
+    await post(studentA, `/attempts/${other.attemptId}/submit`, {});
+  });
+
+  it('audit P1-1: a makeup student sees the completed exam on their home screen and can start it', async () => {
+    await endRunningAttempts(studentAProfileId);
+    const examId = await buildReadyExam();
+    const originalSessionId = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+          confirmedAbsentParticipations: [
+            { examSessionId: originalSessionId, studentProfileId: studentAProfileId },
+            { examSessionId: originalSessionId, studentProfileId: studentBProfileId },
+          ],
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await get(studentA, '/student/assessment')).json<{ examId: string | null }>().examId,
+    ).not.toBe(examId);
+
+    const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'Approved medical absence',
+    });
+    expect(grant.statusCode).toBe(201);
+
+    const home = (await get(studentA, '/student/assessment')).json<{
+      examId: string | null;
+      state: string | null;
+    }>();
+    expect(home).toMatchObject({ examId, state: 'NOT_STARTED' });
+    // Student B was not granted makeup and still sees nothing for this exam.
+    expect(
+      (await get(studentB, '/student/assessment')).json<{ examId: string | null }>().examId,
+    ).not.toBe(examId);
+
+    const started = await post(studentA, `/exams/${examId}/attempts`, {});
+    expect(started.statusCode).toBe(200);
+    const makeup = started.json<AttemptPackage>();
+    expect(
+      (await get(studentA, '/student/assessment')).json<{ attemptId: string }>().attemptId,
+    ).toBe(makeup.attemptId);
+    await post(studentA, `/attempts/${makeup.attemptId}/submit`, {});
+    expect(
+      (await get(studentA, '/student/assessment')).json<{ examId: string | null }>().examId,
+    ).not.toBe(examId);
+  });
+
+  // ---------------------------------------------------------------------
   // Failure — no orphan attempt on a snapshot-build failure
   // ---------------------------------------------------------------------
 
