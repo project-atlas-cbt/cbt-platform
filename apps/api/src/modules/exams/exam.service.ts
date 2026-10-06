@@ -52,10 +52,12 @@ export class ExamService {
    * `ExamClass` targeting rows in one transaction, only within the actor's
    * real assigned scope (ADR-0013's "at least one targeted class" rule),
    * with `resultPolicy`/`resultDetailVisibility` seeded from the school's
-   * current values (F5/B3 gap-closure). `durationSeconds` starts at `0`
-   * deliberately — 05 §23 names "zero duration" as one of the readiness
-   * checklist's own failure states, so a freshly created exam is expected
-   * to start unready until `PUT .../configuration` sets it. */
+   * current values (F5/B3 gap-closure), and its duration, attempt limit,
+   * navigation and randomisation seeded from the school's Assessment Rules
+   * (05 §58). With no default duration set, `durationSeconds` starts at `0`
+   * — 05 §23 names "zero duration" as one of the readiness checklist's own
+   * failure states, so such an exam starts unready until
+   * `PUT .../configuration` sets it. */
   async create(
     schoolId: string,
     actor: AuthorizedActor,
@@ -101,7 +103,15 @@ export class ExamService {
     const school = await withTenant(prisma, schoolId, (tx) =>
       tx.school.findUniqueOrThrow({
         where: { id: schoolId },
-        select: { resultPolicy: true, resultDetailVisibility: true },
+        select: {
+          resultPolicy: true,
+          resultDetailVisibility: true,
+          defaultExamDurationSeconds: true,
+          defaultAttemptLimit: true,
+          defaultNavigationPolicy: true,
+          defaultRandomizeQuestions: true,
+          defaultRandomizeOptions: true,
+        },
       }),
     );
 
@@ -115,7 +125,11 @@ export class ExamService {
           departmentId: subject.departmentId,
           title: dto.title,
           examType: dto.examType,
-          durationSeconds: 0,
+          durationSeconds: school.defaultExamDurationSeconds ?? 0,
+          attemptLimit: school.defaultAttemptLimit,
+          navigationPolicy: school.defaultNavigationPolicy,
+          randomizeQuestions: school.defaultRandomizeQuestions,
+          randomizeOptions: school.defaultRandomizeOptions,
           resultPolicy: school.resultPolicy,
           resultDetailVisibility: school.resultDetailVisibility,
           createdByMembershipId: schoolActor.membershipId,

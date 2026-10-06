@@ -24,6 +24,8 @@ import { SchoolBrandingService } from './school-branding.service.js';
 import { SchoolBrandingController } from './school-branding.controller.js';
 import { SchoolResultPolicyService } from './school-result-policy.service.js';
 import { SchoolResultPolicyController } from './school-result-policy.controller.js';
+import { SchoolAssessmentRulesService } from './school-assessment-rules.service.js';
+import { SchoolAssessmentRulesController } from './school-assessment-rules.controller.js';
 import { SchoolOnboardingService } from './school-onboarding.service.js';
 import { SchoolOnboardingController } from './school-onboarding.controller.js';
 import { registerPlatformTemplates } from './templates.js';
@@ -85,6 +87,7 @@ import { PlatformSettingsAdminService } from './platform-settings-admin.service.
     SchoolProfileController,
     SchoolBrandingController,
     SchoolResultPolicyController,
+    SchoolAssessmentRulesController,
     SchoolOnboardingController,
     PlatformAuditController,
     PlatformAttemptAdministrationController,
@@ -103,6 +106,7 @@ import { PlatformSettingsAdminService } from './platform-settings-admin.service.
     SchoolProfileService,
     SchoolBrandingService,
     SchoolResultPolicyService,
+    SchoolAssessmentRulesService,
     SchoolOnboardingService,
     PlatformAuditActionRegistrationProvider,
     PlatformAuditReaderService,

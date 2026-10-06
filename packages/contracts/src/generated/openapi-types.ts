@@ -894,6 +894,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/school/assessment-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own school's default rules for new exams. */
+        get: operations["SchoolAssessmentRulesController_getAssessmentRules"];
+        /** Update the default rules for new exams (School Admin only). */
+        put: operations["SchoolAssessmentRulesController_updateAssessmentRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/school/onboarding": {
         parameters: {
             query?: never;
@@ -4435,6 +4453,23 @@ export interface components {
             /** @description Whether a teacher may override the seeded resultPolicy on their own exams (B15 enforces this; F5 only stores the flag). */
             resultPolicyLocked?: boolean;
         };
+        SchoolAssessmentRulesResponseDto: {
+            defaultExamDurationSeconds: number | null;
+            defaultAttemptLimit: number;
+            /** @enum {string} */
+            defaultNavigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            defaultRandomizeQuestions: boolean;
+            defaultRandomizeOptions: boolean;
+        };
+        UpdateSchoolAssessmentRulesDto: {
+            /** @description Default exam duration in whole seconds; null means no default. */
+            defaultExamDurationSeconds?: number | null;
+            defaultAttemptLimit?: number;
+            /** @enum {string} */
+            defaultNavigationPolicy?: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            defaultRandomizeQuestions?: boolean;
+            defaultRandomizeOptions?: boolean;
+        };
         OnboardingStatusResponseDto: {
             /** Format: date-time */
             completedAt: string | null;
@@ -7527,6 +7562,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchoolResultPolicyResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolAssessmentRulesController_getAssessmentRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolAssessmentRulesResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolAssessmentRulesController_updateAssessmentRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSchoolAssessmentRulesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolAssessmentRulesResponseDto"];
                 };
             };
         };

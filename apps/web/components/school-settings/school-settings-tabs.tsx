@@ -11,9 +11,7 @@ import { UnsavedChangesDialog } from '@/components/forms/unsaved-changes-dialog'
  * F5's five School Settings sections, as real routes under
  * `/school/settings/` (matching `SchoolDetailTabs`'s own precedent —
  * shareable/bookmarkable/reloadable, not client-only tab state). "Assessment
- * Rules" is included as a route but stays an honest placeholder — deferred
- * alongside Grading Scale until `B11`/`B15` exist to define real vocabulary
- * (see `app/(school)/school/settings/assessment/page.tsx`'s own comment).
+ * Rules" holds the school's defaults for new exams (`05 §58`).
  */
 const SECTIONS = [
   { slug: 'profile', label: 'Profile' },

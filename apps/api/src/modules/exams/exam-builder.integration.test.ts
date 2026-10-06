@@ -826,6 +826,44 @@ describe('B11 Exam Builder & Readiness', () => {
     expect(getRes.statusCode).toBe(404);
   });
 
+  it("Assessment Rules (05 §58): a new exam starts from the school's defaults", async () => {
+    const defaults = {
+      defaultExamDurationSeconds: 2400,
+      defaultAttemptLimit: 2,
+      defaultNavigationPolicy: 'SEQUENTIAL_NO_REVISIT',
+      defaultRandomizeQuestions: true,
+      defaultRandomizeOptions: true,
+    };
+    expect((await put(admin, '/school/assessment-rules', defaults)).statusCode).toBe(200);
+    try {
+      const res = await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'Seeded from school defaults',
+        examType: 'Mock Examination',
+        classIds: [classAId],
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({
+        durationSeconds: 2400,
+        attemptLimit: 2,
+        navigationPolicy: 'SEQUENTIAL_NO_REVISIT',
+        randomizeQuestions: true,
+        randomizeOptions: true,
+      });
+    } finally {
+      // Later tests rely on a new exam starting with no duration.
+      await put(admin, '/school/assessment-rules', {
+        defaultExamDurationSeconds: null,
+        defaultAttemptLimit: 1,
+        defaultNavigationPolicy: 'FREE',
+        defaultRandomizeQuestions: false,
+        defaultRandomizeOptions: false,
+      });
+    }
+  });
+
   it('DoD 10: cross-tenant — a revision id from a different school cannot be bound (NOT_FOUND, never FORBIDDEN)', async () => {
     const otherSchool = await createSchool();
     createdSchoolIds.push(otherSchool.id);

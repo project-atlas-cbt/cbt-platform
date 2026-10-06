@@ -1915,6 +1915,58 @@
         ]
       }
     },
+    "/school/assessment-rules": {
+      "get": {
+        "operationId": "SchoolAssessmentRulesController_getAssessmentRules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAssessmentRulesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own school's default rules for new exams.",
+        "tags": [
+          "school"
+        ]
+      },
+      "put": {
+        "operationId": "SchoolAssessmentRulesController_updateAssessmentRules",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSchoolAssessmentRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAssessmentRulesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update the default rules for new exams (School Admin only).",
+        "tags": [
+          "school"
+        ]
+      }
+    },
     "/school/onboarding": {
       "get": {
         "operationId": "SchoolOnboardingController_getStatus",
@@ -11770,6 +11822,69 @@
           "resultPolicyLocked": {
             "type": "boolean",
             "description": "Whether a teacher may override the seeded resultPolicy on their own exams (B15 enforces this; F5 only stores the flag)."
+          }
+        }
+      },
+      "SchoolAssessmentRulesResponseDto": {
+        "type": "object",
+        "properties": {
+          "defaultExamDurationSeconds": {
+            "type": "number",
+            "nullable": true
+          },
+          "defaultAttemptLimit": {
+            "type": "number"
+          },
+          "defaultNavigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "defaultRandomizeQuestions": {
+            "type": "boolean"
+          },
+          "defaultRandomizeOptions": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "defaultExamDurationSeconds",
+          "defaultAttemptLimit",
+          "defaultNavigationPolicy",
+          "defaultRandomizeQuestions",
+          "defaultRandomizeOptions"
+        ]
+      },
+      "UpdateSchoolAssessmentRulesDto": {
+        "type": "object",
+        "properties": {
+          "defaultExamDurationSeconds": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 60,
+            "maximum": 86400,
+            "description": "Default exam duration in whole seconds; null means no default."
+          },
+          "defaultAttemptLimit": {
+            "type": "number",
+            "minimum": 1
+          },
+          "defaultNavigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "defaultRandomizeQuestions": {
+            "type": "boolean"
+          },
+          "defaultRandomizeOptions": {
+            "type": "boolean"
           }
         }
       },

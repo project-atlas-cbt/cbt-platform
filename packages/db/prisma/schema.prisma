@@ -107,6 +107,16 @@ model School {
   resultDetailVisibility ResultDetailVisibility @default(SCORE_AND_COUNTS) @map("result_detail_visibility")
   resultPolicyLocked     Boolean                @default(false) @map("result_policy_locked")
 
+  // --- Assessment Rules (05 §58, 03 §26): school-level exam defaults. Seed a
+  // new Exam's own rule fields at creation (ExamService.create); a teacher
+  // may still change every one of them on the exam's Rules step. Null
+  // duration = no default: the exam starts at 0 and stays unready until set.
+  defaultExamDurationSeconds Int?                 @map("default_exam_duration_seconds")
+  defaultAttemptLimit        Int                  @default(1) @map("default_attempt_limit")
+  defaultNavigationPolicy    ExamNavigationPolicy @default(FREE) @map("default_navigation_policy")
+  defaultRandomizeQuestions  Boolean              @default(false) @map("default_randomize_questions")
+  defaultRandomizeOptions    Boolean              @default(false) @map("default_randomize_options")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
