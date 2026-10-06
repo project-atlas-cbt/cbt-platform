@@ -66,6 +66,7 @@ function resultRow(overrides: Partial<PrintExamResultItem>): PrintExamResultItem
     unansweredCount: 0,
     partialCount: 0,
     grade: 'A',
+    gradePassing: true,
     withheld: false,
     withheldReason: null,
     voidedReason: null,

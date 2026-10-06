@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient, setCsrfToken, unwrap } from '@/lib/api';
 import { ThemeProvider } from '@/lib/theme/theme-provider';
 import { useNonce } from '@/lib/security/nonce-context';
+import { setDisplayTimeZone } from '@/lib/format/date';
 
 export interface TenantSchool {
   name: string;
@@ -92,6 +93,10 @@ const TenantContext = createContext<TenantResolution | null>(null);
 export function TenantProvider({ children }: { children: ReactNode }) {
   const resolution = useTenantResolution();
   const nonce = useNonce();
+  // P2-24: render times in the school's timezone (ADR-0027). Set during
+  // render, not in an effect, so the first screen that formats a date
+  // already sees it; it is a plain idempotent assignment.
+  setDisplayTimeZone(resolution.school?.timezone);
   // exactOptionalPropertyTypes forbids `primaryColor={undefined}` as an
   // explicit prop value — the key must be entirely absent, not present
   // with an undefined value, to mean "use the platform default".

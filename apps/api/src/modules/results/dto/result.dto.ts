@@ -75,6 +75,9 @@ export class ResultListItemDto {
   @ApiProperty({ type: Number }) partialCount!: number;
 
   @ApiProperty({ type: String, nullable: true }) grade!: string | null;
+  /** P3-6: the grade's band was marked passing in the scale it was graded
+   * against. `null` when ungraded. */
+  @ApiProperty({ type: Boolean, nullable: true }) gradePassing!: boolean | null;
 
   @ApiProperty({ type: Boolean }) withheld!: boolean;
   @ApiProperty({ type: String, nullable: true }) withheldReason!: string | null;

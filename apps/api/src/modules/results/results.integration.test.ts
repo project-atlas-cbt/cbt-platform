@@ -301,6 +301,7 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
   let studentAProfileId: string;
   let studentBProfileId: string;
   let approvedRevisionIds: string[];
+  let adminMembershipId: string;
 
   async function createApprovedQuestion(content: string, correctIndex: number): Promise<string> {
     const options = ['4', '5', '6'].map((v, i) => ({
@@ -530,13 +531,14 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     host = `${school.subdomain}.${ROOT_DOMAIN}`;
     createdSchoolIds.push(schoolId);
 
-    const { user: adminUser } = await seedUser({
+    const { user: adminUser, membership: adminMembership } = await seedUser({
       schoolId,
       loginIdentifier: 'resadmin01',
       password: 'a-real-password-123',
       role: 'SCHOOL_ADMIN',
     });
     createdUserIds.push(adminUser.id);
+    adminMembershipId = adminMembership.id;
     admin = await freshCtx(host, `10.${RUN}.15.1`);
     await login(admin, 'resadmin01', 'a-real-password-123');
 
@@ -855,13 +857,40 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
 
     const fullReview = (await get(studentB, `/student/results/${fullReviewResult.resultId}`)).json<{
       correctCount: number;
-      questions: { content: string; correctness: string }[];
+      questions: { content: string; correctness: string; voided: boolean }[];
     }>();
     expect(fullReview.correctCount).toBe(2);
     expect(fullReview.questions).toHaveLength(2);
+    expect(fullReview.questions.every((q) => !q.voided)).toBe(true);
     // Question review, never an answer key — the snapshot's correctFlag does
     // not leave the server (the X-05 boundary, extended to results).
     expect(JSON.stringify(fullReview)).not.toContain('correctFlag');
+
+    // P3-2: once a question is voided, the review marks it.
+    const [voidedQuestion] = await withTenant(prisma, schoolId, (tx) =>
+      tx.examQuestion.findMany({
+        where: { schoolId, examId: fullReviewExam },
+        orderBy: { sequence: 'asc' },
+        take: 1,
+      }),
+    );
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.resultAdjustmentOperation.create({
+        data: {
+          schoolId,
+          examId: fullReviewExam,
+          type: 'VOID_QUESTION',
+          status: 'COMPLETED',
+          reason: 'Misprinted options',
+          targetExamQuestionId: voidedQuestion!.id,
+          createdByMembershipId: adminMembershipId,
+        },
+      }),
+    );
+    const afterVoid = (await get(studentB, `/student/results/${fullReviewResult.resultId}`)).json<{
+      questions: { voided: boolean }[];
+    }>();
+    expect(afterVoid.questions.filter((q) => q.voided)).toHaveLength(1);
   });
 
   // ---------------------------------------------------------------------
@@ -1283,7 +1312,7 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     await sitExamAndMark(studentB, examId, 0); // 0%
 
     const list = (await get(teacher, `/exams/${examId}/results`)).json<{
-      items: { grade: string | null; percentage: number }[];
+      items: { grade: string | null; gradePassing: boolean | null; percentage: number }[];
       summary: {
         resultCount: number;
         averagePercentage: number;
@@ -1299,6 +1328,11 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(list.summary.lowestPercentage).toBe(0);
     expect(list.summary.passRate).toBe(50);
     expect(list.items.map((i) => i.grade).sort()).toEqual(['F', 'P']);
+    // P3-6: whether a grade is a pass comes from its band, not its letter.
+    expect(list.items.map((i) => `${i.grade}:${i.gradePassing}`).sort()).toEqual([
+      'F:false',
+      'P:true',
+    ]);
 
     // P2-13: the class filter survives a search — a search matching Tunde
     // inside a class he is not in finds nobody.

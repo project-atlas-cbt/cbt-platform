@@ -5514,6 +5514,7 @@ export interface components {
             unansweredCount: number;
             partialCount: number;
             grade: string | null;
+            gradePassing: boolean | null;
             withheld: boolean;
             withheldReason: string | null;
             voidedReason: string | null;
@@ -5593,6 +5594,7 @@ export interface components {
             unansweredCount: number;
             partialCount: number;
             grade: string | null;
+            gradePassing: boolean | null;
             withheld: boolean;
             withheldReason: string | null;
             voidedReason: string | null;
@@ -5679,6 +5681,7 @@ export interface components {
             earnedMarks: number;
             percentage: number;
             grade: string | null;
+            gradePassing: boolean | null;
             publishedAt: string | null;
         };
         StudentResultsResponseDto: {
@@ -5690,6 +5693,7 @@ export interface components {
             correctness: string;
             awardedMarks: number;
             maximumMarks: number;
+            voided: boolean;
         };
         StudentResultDetailDto: {
             id: string;
@@ -5701,6 +5705,7 @@ export interface components {
             earnedMarks: number;
             percentage: number;
             grade: string | null;
+            gradePassing: boolean | null;
             publishedAt: string | null;
             /** @enum {string} */
             detailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";

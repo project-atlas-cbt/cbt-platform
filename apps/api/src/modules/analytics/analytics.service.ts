@@ -417,7 +417,7 @@ export class AnalyticsService {
       );
     if (teacherOnly && !query.subjectId)
       throw new AppHttpException({
-        code: 'VALIDATION_FAILED',
+        code: 'VALIDATION_ERROR',
         message: 'subjectId is required for Teacher class analytics.',
       });
     const classSubject = subjects[0];
@@ -430,7 +430,7 @@ export class AnalyticsService {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Class not found.' });
     if (query.subjectId && subjects.length === 0)
       throw new AppHttpException({
-        code: 'VALIDATION_FAILED',
+        code: 'VALIDATION_ERROR',
         message: 'Subject is not assigned to this class.',
       });
     return { classGroup, subjects };
@@ -457,7 +457,7 @@ export class AnalyticsService {
       );
       if (!subject)
         throw new AppHttpException({
-          code: 'VALIDATION_FAILED',
+          code: 'VALIDATION_ERROR',
           message: 'Subject is not in this department.',
         });
     }
@@ -475,7 +475,7 @@ export class AnalyticsService {
         tx.subject.findFirst({ where: { schoolId, id: query.subjectId! }, select: { id: true } }),
       );
       if (!subject)
-        throw new AppHttpException({ code: 'VALIDATION_FAILED', message: 'Subject not found.' });
+        throw new AppHttpException({ code: 'VALIDATION_ERROR', message: 'Subject not found.' });
     }
     await this.assert(actor, 'analytics.schoolWide', { schoolId });
   }
@@ -629,7 +629,7 @@ export class AnalyticsService {
       (term && query.academicSessionId && term.academicSessionId !== query.academicSessionId)
     )
       throw new AppHttpException({
-        code: 'VALIDATION_FAILED',
+        code: 'VALIDATION_ERROR',
         message: 'Invalid academic context.',
       });
   }

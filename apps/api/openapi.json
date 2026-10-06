@@ -15813,6 +15813,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "withheld": {
             "type": "boolean"
           },
@@ -15853,6 +15857,7 @@
           "unansweredCount",
           "partialCount",
           "grade",
+          "gradePassing",
           "withheld",
           "withheldReason",
           "voidedReason",
@@ -16149,6 +16154,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "withheld": {
             "type": "boolean"
           },
@@ -16214,6 +16223,7 @@
           "unansweredCount",
           "partialCount",
           "grade",
+          "gradePassing",
           "withheld",
           "withheldReason",
           "voidedReason",
@@ -16452,6 +16462,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "publishedAt": {
             "type": "string",
             "nullable": true
@@ -16467,6 +16481,7 @@
           "earnedMarks",
           "percentage",
           "grade",
+          "gradePassing",
           "publishedAt"
         ]
       },
@@ -16501,6 +16516,9 @@
           },
           "maximumMarks": {
             "type": "number"
+          },
+          "voided": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -16508,7 +16526,8 @@
           "content",
           "correctness",
           "awardedMarks",
-          "maximumMarks"
+          "maximumMarks",
+          "voided"
         ]
       },
       "StudentResultDetailDto": {
@@ -16541,6 +16560,10 @@
           },
           "grade": {
             "type": "string",
+            "nullable": true
+          },
+          "gradePassing": {
+            "type": "boolean",
             "nullable": true
           },
           "publishedAt": {
@@ -16584,6 +16607,7 @@
           "earnedMarks",
           "percentage",
           "grade",
+          "gradePassing",
           "publishedAt",
           "detailVisibility",
           "correctCount",

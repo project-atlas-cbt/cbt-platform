@@ -29,6 +29,7 @@ export function resultListInclude(examAcademicSessionId: string) {
         },
       },
     },
+    gradingScaleVersion: { select: { bands: { select: { label: true, isPassing: true } } } },
     attempt: {
       select: {
         id: true,
@@ -44,6 +45,18 @@ export function resultListInclude(examAcademicSessionId: string) {
 export type ResultWithRelations = Prisma.ResultGetPayload<{
   include: ReturnType<typeof resultListInclude>;
 }>;
+
+/** P3-6: whether a stored grade is a pass, read from the band with that
+ * label in the very scale version the result was graded against — so a later
+ * edit to the school's bands never restates it (ADR-0018), and a school whose
+ * pass mark is "E" sees E as a pass. `null` for an ungraded result. */
+export function gradePassing(
+  grade: string | null,
+  version: { bands: { label: string; isPassing: boolean }[] } | null,
+): boolean | null {
+  if (grade === null || !version) return null;
+  return version.bands.find((band) => band.label === grade)?.isPassing ?? null;
+}
 
 /** Prisma returns `Decimal` for the percentage column. Converted once, here,
  * so no downstream caller has to remember that `percentage` is not already a
@@ -72,6 +85,7 @@ export function toResultListItemDto(row: ResultWithRelations): ResultListItemDto
     unansweredCount: row.unansweredCount,
     partialCount: row.partialCount,
     grade: row.grade,
+    gradePassing: gradePassing(row.grade, row.gradingScaleVersion),
     withheld: row.withheld,
     withheldReason: row.withheldReason,
     // ADR-0025: "visible to authorized staff WITH the invalidation reason

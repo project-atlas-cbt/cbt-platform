@@ -9,7 +9,7 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { loadSchoolResultSettings } from '../platform/school-result-settings.util.js';
-import { decimalToNumber } from './result-mappers.js';
+import { decimalToNumber, gradePassing } from './result-mappers.js';
 import { studentVisibleResultWhere } from './result-visibility.util.js';
 import type {
   StudentResultDetailDto,
@@ -39,6 +39,7 @@ export class StudentResultService {
       tx.result.findMany({
         where: studentVisibleResultWhere(schoolId, studentProfileId),
         include: {
+          gradingScaleVersion: { select: { bands: { select: { label: true, isPassing: true } } } },
           exam: {
             select: {
               id: true,
@@ -71,6 +72,7 @@ export class StudentResultService {
       tx.result.findFirst({
         where: { AND: [studentVisibleResultWhere(schoolId, studentProfileId), { id: resultId }] },
         include: {
+          gradingScaleVersion: { select: { bands: { select: { label: true, isPassing: true } } } },
           exam: {
             select: {
               id: true,
@@ -99,7 +101,9 @@ export class StudentResultService {
 
     const showCounts = visibility === 'SCORE_AND_COUNTS' || visibility === 'FULL_REVIEW';
     const questions =
-      visibility === 'FULL_REVIEW' ? await this.loadQuestionReview(schoolId, row.attemptId) : [];
+      visibility === 'FULL_REVIEW'
+        ? await this.loadQuestionReview(schoolId, row.exam.id, row.attemptId)
+        : [];
 
     return {
       ...base,
@@ -120,17 +124,31 @@ export class StudentResultService {
    */
   private async loadQuestionReview(
     schoolId: string,
+    examId: string,
     attemptId: string,
   ): Promise<StudentResultDetailDto['questions']> {
-    const [questionResults, snapshot] = await withTenant(prisma, schoolId, (tx) =>
+    const [questionResults, snapshot, voids] = await withTenant(prisma, schoolId, (tx) =>
       Promise.all([
         tx.attemptQuestionResult.findMany({ where: { schoolId, attemptId } }),
         tx.attemptQuestionSnapshot.findUnique({
           where: { schoolId_attemptId: { schoolId, attemptId } },
           select: { document: true },
         }),
+        // P3-2: a voided question no longer counts towards the score, so the
+        // review marks it rather than leaving marks that don't add up.
+        tx.resultAdjustmentOperation.findMany({
+          where: {
+            schoolId,
+            examId,
+            type: 'VOID_QUESTION',
+            status: 'COMPLETED',
+            targetExamQuestionId: { not: null },
+          },
+          select: { targetExamQuestionId: true },
+        }),
       ]),
     );
+    const voided = new Set(voids.map((op) => op.targetExamQuestionId));
 
     const document = snapshot?.document as unknown as AttemptSnapshotDocumentV1 | undefined;
     const byId = new Map((document?.questions ?? []).map((q) => [q.examQuestionId, q] as const));
@@ -144,6 +162,7 @@ export class StudentResultService {
           correctness: qr.correctness,
           awardedMarks: qr.awardedMarks,
           maximumMarks: qr.maximumMarks,
+          voided: voided.has(qr.examQuestionId),
         };
       })
       .sort((a, b) => a.displaySequence - b.displaySequence);
@@ -155,6 +174,7 @@ export class StudentResultService {
     earnedMarks: number;
     percentage: unknown;
     grade: string | null;
+    gradingScaleVersion: { bands: { label: string; isPassing: boolean }[] } | null;
     exam: {
       id: string;
       title: string;
@@ -175,6 +195,7 @@ export class StudentResultService {
       // ADR-0018: the STORED grade, never recomputed from the school's
       // current scale — a later edit must not restate a past grade.
       grade: row.grade,
+      gradePassing: gradePassing(row.grade, row.gradingScaleVersion),
       publishedAt: row.exam.resultPublication?.publishedAt?.toISOString() ?? null,
     };
   }
