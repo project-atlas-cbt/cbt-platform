@@ -21,7 +21,7 @@ actions, the clicked spot highlighted, interface sounds and no music, and not to
   plays only when pressed (`preload="none"`, no autoplay), so only the poster loads until then. A
   browser check asserts that and that both files are served. `media-src 'self'` already allowed it.
 
-**Tested:** marketing lint, typecheck, unit and browser tests.
+**Tested:** marketing lint and typecheck; unit tests (40) and browser tests (47, including axe on the home page and the new tour check) pass. Playback itself was not checked here: the test Chromium has no H.264 decoder.
 
 ### 2026-10-05 — Software Admin: System Configuration built (ADR-0036); Sign-in Security gaps filled
 
