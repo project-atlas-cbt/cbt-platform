@@ -22,6 +22,12 @@ export interface ParsedImportFile {
   version: number | null;
   headers: string[];
   rows: Record<string, string>[];
+  /** Per row (same index as `rows`), the columns whose .xlsx cell held a
+   * date. No template has a date column, so each one is Excel converting
+   * what was typed (an option like `1/2`, an ID like `3-1`) into a date;
+   * the validator reports it rather than importing the date (P1-11).
+   * Always empty for CSV, where the text is what was saved. */
+  dateColumnsByRow: string[][];
 }
 
 const VERSION_MARKER_PATTERN = /^["']?#\s*template-version:\s*(\d+)["']?(?:[,;\t\s].*)?$/i;
@@ -40,12 +46,36 @@ function rowToRecord(headers: string[], cells: string[]): Record<string, string>
   return record;
 }
 
+/** `"ST"00000`, `00000`, `000"-A"`: a whole-number format whose zeros pad
+ * the number to a fixed width, optionally with literal text around it. */
+const PADDED_NUMBER_FORMAT = /^(?:"([^"]*)")?(0+)(?:"([^"]*)")?$/;
+
+/** What Excel shows for a number, where that differs from the stored value
+ * in a way an import cares about: a student ID typed as `00123` into a
+ * column formatted `00000` is stored as 123 but printed and handed out as
+ * `00123` (bug audit P1-11). Other formats (currency, decimals) fall back
+ * to the plain number. */
+function formatNumber(value: number, numFmt: string | undefined): string {
+  const match = numFmt ? PADDED_NUMBER_FORMAT.exec(numFmt) : null;
+  if (match && Number.isInteger(value) && value >= 0) {
+    return `${match[1] ?? ''}${String(value).padStart(match[2]!.length, '0')}${match[3] ?? ''}`;
+  }
+  return String(value);
+}
+
+/** A date cell's calendar day, without the time and zone noise of an ISO
+ * timestamp: what the school sees in the error file next to the message. */
+function formatDate(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
 function getCellString(cell: ExcelJS.Cell): string {
   const value = cell.value;
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'number') return formatNumber(value, cell.numFmt);
+  if (typeof value === 'boolean') return String(value);
+  if (value instanceof Date) return formatDate(value);
   if (typeof value === 'object') {
     if ('richText' in value && Array.isArray(value.richText)) {
       return value.richText.map((item: { text?: string }) => item.text ?? '').join('');
@@ -53,8 +83,9 @@ function getCellString(cell: ExcelJS.Cell): string {
     if ('result' in value && value.result !== undefined && value.result !== null) {
       const result = value.result;
       if (typeof result === 'string') return result;
-      if (typeof result === 'number' || typeof result === 'boolean') return String(result);
-      if (result instanceof Date) return result.toISOString();
+      if (typeof result === 'number') return formatNumber(result, cell.numFmt);
+      if (typeof result === 'boolean') return String(result);
+      if (result instanceof Date) return formatDate(result);
       return '';
     }
     if ('text' in value && typeof value.text === 'string') {
@@ -62,6 +93,17 @@ function getCellString(cell: ExcelJS.Cell): string {
     }
   }
   return cell.text ?? '';
+}
+
+function holdsDate(cell: ExcelJS.Cell): boolean {
+  const value = cell.value;
+  if (value instanceof Date) return true;
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'result' in value &&
+    (value as { result?: unknown }).result instanceof Date
+  );
 }
 
 /**
@@ -115,7 +157,12 @@ function parseCsv(buffer: Buffer): ParsedImportFile {
   }
 
   const dataRows = records.slice(headerRowIndex + 1);
-  return { version, headers, rows: dataRows.map((cells) => rowToRecord(headers, cells)) };
+  return {
+    version,
+    headers,
+    rows: dataRows.map((cells) => rowToRecord(headers, cells)),
+    dateColumnsByRow: dataRows.map(() => []),
+  };
 }
 
 /**
@@ -180,13 +227,15 @@ async function parseXlsx(buffer: Buffer): Promise<ParsedImportFile> {
   }
 
   const rows: Record<string, string>[] = [];
+  const dateColumnsByRow: string[][] = [];
   for (let r = headerRowNumber + 1; r <= worksheet.rowCount; r++) {
     const row = worksheet.getRow(r);
     const cells = headers.map((_, i) => getCellString(row.getCell(i + 1)).trim());
     if (cells.every((cell) => cell === '')) continue; // skip a fully blank row
     rows.push(rowToRecord(headers, cells));
+    dateColumnsByRow.push(headers.filter((_, i) => holdsDate(row.getCell(i + 1))));
   }
-  return { version, headers, rows };
+  return { version, headers, rows, dateColumnsByRow };
 }
 
 /** Branches on the asset's real, sniffed content type (never the client's

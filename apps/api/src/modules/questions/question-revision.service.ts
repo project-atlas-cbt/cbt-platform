@@ -253,6 +253,19 @@ export class QuestionRevisionService {
           correctFlag: option.correctFlag,
         })),
       });
+      // Bug audit P1-9: the images and diagrams carry over too, as fresh
+      // join rows on the same assets, or the next exam gets the question
+      // without its diagram. The author can still detach them on the draft.
+      if (source.media.length > 0) {
+        await tx.questionMedia.createMany({
+          data: source.media.map((m) => ({
+            schoolId,
+            questionRevisionId: revision.id,
+            mediaAssetId: m.mediaAssetId,
+            displayOrder: m.displayOrder,
+          })),
+        });
+      }
       await tx.question.update({
         where: { id: questionId },
         data: { currentRevisionId: revision.id },

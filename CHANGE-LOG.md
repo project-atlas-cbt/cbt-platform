@@ -2,6 +2,31 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Imports and authoring: P0 and P1 bug audit fixes
+
+From the bug audit (`/mnt/project-files/bug-audit/findings.md`, project files), the imports, media
+and authoring items at P0 and P1:
+
+- **P0-1, uploaded page on the media host.** Import uploads accept only the types browsers really
+  declare for CSV and .xlsx (never `text/html`). Every signed download link now forces its type and
+  disposition: the sniffed image type inline for images, `application/octet-stream` as a download
+  for everything else, whatever the uploader's PUT said. `GET /media/:id/url` refuses import files
+  (404); only the import job reads them. The API's CORS no longer trusts `media`, `www` or `api`
+  under the root domain (`admin` stays), and the pilot's media host sends
+  `Content-Security-Policy: sandbox` and `X-Content-Type-Options: nosniff`.
+- **P1-10, CSV with ₦, × or smart quotes refused.** The upload sniff decodes its 4,100-byte
+  prefix as a stream, so a cut multi-byte character no longer fails it.
+- **P1-11, Excel imports.** A number in a padded format (`00000`, `"ST"000`) imports as shown
+  (`00123`), and any cell Excel turned into a date is an invalid row saying to format the column
+  as Text. The import guides say so too.
+- **P1-8, retargeting a draft exam.** Changing a draft's subject or classes is held to the scope
+  it was created under: a teacher only to classes they teach, an HOD only within their department.
+- **P1-9, revising a question.** A new revision keeps the source revision's images and diagrams.
+
+**Tested:** new unit tests (content sniff at every cut position, xlsx formats and dates, CORS
+hosts) and integration tests (media type forcing and import-link refusal, imports date row, exam
+retargeting, revision media); typecheck, lint, unit suites and `test:security`.
+
 ### 2026-10-06 — Pilot server: nightly backups could not write their dump
 
 Bug audit P0-3, confirmed on the pilot server: `infra/vps/backups/` was owned by root, because

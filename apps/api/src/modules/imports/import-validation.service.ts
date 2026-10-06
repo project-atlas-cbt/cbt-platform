@@ -19,6 +19,10 @@ import { classifyUnavailable } from '../../common/dependency-errors.js';
  * generous headroom above the DoD's 1,500-row fixture. */
 export const MAX_IMPORT_ROWS = 5000;
 
+export const EXCEL_DATE_MESSAGE =
+  'Excel changed this value into a date. Format the column as Text in Excel, type the value ' +
+  'again, and upload the file again.';
+
 const ID_COLUMN: Record<'STUDENTS' | 'TEACHERS', string> = {
   STUDENTS: 'Student ID',
   TEACHERS: 'Staff ID',
@@ -282,6 +286,20 @@ export class ImportValidationService {
             errors: validateTeacherRow(row, ctx),
           }));
         }
+
+        // P1-11: a date in any column is Excel's conversion of what was
+        // typed, never the value the school meant; report it on the row.
+        outcomes = outcomes.map((o, i) => {
+          const dateColumns = parsed.dateColumnsByRow[i] ?? [];
+          if (dateColumns.length === 0) return o;
+          return {
+            ...o,
+            errors: [
+              ...o.errors,
+              ...dateColumns.map((field) => ({ field, message: EXCEL_DATE_MESSAGE })),
+            ],
+          };
+        });
 
         const validRows = outcomes.filter((o) => o.errors.length === 0).length;
         const invalidRows = outcomes.length - validRows;

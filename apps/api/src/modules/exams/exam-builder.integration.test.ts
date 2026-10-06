@@ -905,6 +905,61 @@ describe('B11 Exam Builder & Readiness', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("bug audit P1-8: a draft cannot be moved to classes or a department outside the editor's scope", async () => {
+    const created = await post(teacher, '/exams', {
+      academicSessionId: sessionId,
+      academicTermId: termId,
+      subjectId: mathSubjectId,
+      title: 'Retarget fixture',
+      examType: 'Mock Examination',
+      classIds: [classAId],
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json<{ id: string }>().id;
+    const code = (res: { json: <T>() => T }) => res.json<{ error: { code: string } }>().error.code;
+
+    // A teacher: only to classes they teach, as at create().
+    const toSs1 = await patch(teacher, `/exams/${id}`, { classIds: [classDId] });
+    expect(code(toSs1)).toBe('EXAM_OUT_OF_SCOPE');
+    const toUntaught = await patch(teacher, `/exams/${id}`, { classIds: [classBId] });
+    expect(code(toUntaught)).toBe('EXAM_OUT_OF_SCOPE');
+    const kept = await patch(teacher, `/exams/${id}`, { classIds: [classAId, classBId] });
+    expect(kept.statusCode).toBe(200);
+
+    // An HOD: not into another department's subject.
+    const otherDeptId = (
+      await post(admin, '/academics/departments', {
+        name: `Arts ${randomUUID().slice(0, 6)}`,
+        code: `ART-${randomUUID().slice(0, 6)}`,
+      })
+    ).json<{ id: string }>().id;
+    const englishId = (
+      await post(admin, '/academics/subjects', {
+        name: `English ${randomUUID().slice(0, 6)}`,
+        code: `ENG-${randomUUID().slice(0, 6)}`,
+      })
+    ).json<{ id: string }>().id;
+    await patch(admin, `/academics/subjects/${englishId}`, { departmentId: otherDeptId });
+    await post(admin, `/academics/classes/${classAId}/subjects`, { subjectId: englishId });
+    const hodMove = await patch(hod, `/exams/${id}`, {
+      subjectId: englishId,
+      classIds: [classAId],
+    });
+    expect(code(hodMove)).toBe('EXAM_OUT_OF_SCOPE');
+    const teacherMove = await patch(teacher, `/exams/${id}`, {
+      subjectId: englishId,
+      classIds: [classAId],
+    });
+    expect(code(teacherMove)).toBe('EXAM_OUT_OF_SCOPE');
+
+    // School Admin holds every draft by school scope.
+    const adminMove = await patch(admin, `/exams/${id}`, {
+      subjectId: englishId,
+      classIds: [classAId],
+    });
+    expect(adminMove.statusCode).toBe(200);
+  });
+
   it('concurrency: two simultaneous ready() calls on one DRAFT exam — exactly one succeeds', async () => {
     const raceExam = (
       await post(teacher, '/exams', {
