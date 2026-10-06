@@ -2,6 +2,46 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Tour video: a bulk import, softer sound, no tones
+
+Owner feedback on the first cut: bulk import is a key selling point and must be in it, the clicks
+were too sharp, and the video and audio rule (never music, musical instruments or
+melodic tones; light non-instrumental ambience is welcome) applies to everything we make.
+
+- A new opening scene: a Moderator drags a 30-row class list (`.xlsx`, built from the app's own
+  student template) onto Import students; validation finds 29 valid rows and one student ID the
+  school already has; the 29 are imported. The recorder writes `skip` markers so the compositor
+  cuts the background job's wait, and the dragged file is drawn under the cursor. Imported IDs
+  cannot be deleted, so each take needs a new `IMPORT_BASE`.
+- Sound: the clicks and keys are now low-passed noise (no sine body), about 9 dB quieter at peak;
+  the approval, offline and online tones are gone. A quiet room tone runs throughout, with faint
+  distant typing during the lab scenes, all synthesised from filtered noise.
+- The student sign-in shot was dropped to keep it short: 79 seconds. Home page copy now names the
+  import.
+
+**Tested:** see the PR; playback still unchecked here (no H.264 decoder in the test Chromium).
+
+### 2026-10-06 — One-minute tour video on the home page
+
+Owner request: the teaser belongs on the website, and should feel interactive: a cursor doing the
+actions, the clicked spot highlighted, interface sounds and no music, and not too much animation.
+
+- `apps/marketing/scripts/teaser/` records the tour from the real app on the fictional demo
+  school (`record.mjs`), renders its cards and captions in the site's fonts (`cards.mjs`) and
+  composes it (`compose.py`). The recorder logs a timeline of cursor moves, clicks, typing, zooms
+  and captions beside the screencast frames; the compositor draws the cursor and a fading click
+  mark from it, applies a gentle zoom on the area in use, and synthesises quiet click, key and
+  confirmation tones. Headless screencast frames come at CSS pixel size unless Chromium runs with
+  `--force-device-scale-factor`, so the recorder sets it (1.5).
+- The story: an HOD approves a question; the Exam Control Center during a sitting, with quiet
+  computers flagged; a student signs in, sits the paper, loses the network and carries on, and
+  submits; the teacher publishes the results. About 75 seconds, captions burned in.
+- The home page has a "product in one minute" section after the hero (`TeaserVideo`): the video
+  plays only when pressed (`preload="none"`, no autoplay), so only the poster loads until then. A
+  browser check asserts that and that both files are served. `media-src 'self'` already allowed it.
+
+**Tested:** marketing lint and typecheck; unit tests (40) and browser tests (47, including axe on the home page and the new tour check) pass. Playback itself was not checked here: the test Chromium has no H.264 decoder.
+
 ### 2026-10-06 — School admins can set grading bands (F5 DoD 7 closed)
 
 **Owner decisions (2026-10-06):** per-level scales are on the screen as well as the school-wide

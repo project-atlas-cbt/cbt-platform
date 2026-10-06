@@ -68,3 +68,6 @@ code before adding one; the comment at the top of that file lists what must not 
 through the API: `PLATFORM_ROOT_DOMAIN=localhost pnpm --filter @atlas/load demo-school seed --live`
 against a local stack, then `node scripts/capture-screens.mjs` (its header lists what it needs). When a pictured screen changes,
 capture it again; a caption must describe only what its picture shows.
+
+The home page's one-minute tour (`public/teaser/`) is recorded the same way; `scripts/teaser/README.md`
+says how to redo it.

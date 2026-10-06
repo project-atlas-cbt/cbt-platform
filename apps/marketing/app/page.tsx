@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { CtaBand } from '@/components/cta-band';
 import { ProductShot } from '@/components/product-shot';
+import { TeaserVideo } from '@/components/teaser-video';
 import { ButtonLink, Container, JsonLd, SectionHeading, Tick } from '@/components/ui';
 import { examSteps, faqs, roles, worries } from '@/lib/content';
 import { site } from '@/lib/site';
@@ -65,6 +66,28 @@ export default function HomePage() {
             title="The student exam screen"
             caption="The student’s exam screen: one question at a time, their own timer, and a navigator showing what is answered."
           />
+        </Container>
+      </section>
+
+      {/* The one-minute tour, straight after the promise it demonstrates. */}
+      <section
+        aria-labelledby="tour-title"
+        className="border-b border-rule bg-surface py-20 sm:py-24"
+      >
+        <Container className="grid items-center gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-14">
+          <div>
+            <SectionHeading
+              id="tour-title"
+              eyebrow="The product in a minute"
+              title="Watch it work, from class list to published result"
+              lead="A moderator imports a class list from a spreadsheet, an HOD approves a question, a teacher watches the sitting live, a student loses the network mid-paper and carries on, and the results are published."
+            />
+            <p className="mt-6 text-[0.9375rem] leading-relaxed text-ink-muted">
+              Recorded in {site.name} itself, using a fictional school. The video has captions and
+              no voice-over, so it works with the sound off.
+            </p>
+          </div>
+          <TeaserVideo title={`A short tour of ${site.name}`} />
         </Container>
       </section>
 
