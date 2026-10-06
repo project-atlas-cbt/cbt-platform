@@ -135,6 +135,28 @@ describe('Software Admin MFA', () => {
     expect(reused.statusCode).toBe(401);
   });
 
+  it('P3-15: parallel wrong codes cannot go over the five-attempt limit', async () => {
+    const admin = await fixture.createPlatformAdmin();
+    const ctx0 = await fixture.loginPlatform(app, admin.email);
+    const { secret, step } = await enrol(ctx0);
+
+    const challenge = await passwordStep(admin.email);
+    const guesses = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        call(app, challenge.ctx, 'POST', '/platform/auth/mfa/verify', {
+          challengeToken: challenge.body.challengeToken,
+          otp: '000000',
+        }),
+      ),
+    );
+    expect(guesses.every((g) => g.statusCode === 401 || g.statusCode === 429)).toBe(true);
+    const valid = await call(app, challenge.ctx, 'POST', '/platform/auth/mfa/verify', {
+      challengeToken: challenge.body.challengeToken,
+      otp: totpAt(secret, step + 1),
+    });
+    expect(valid.statusCode).toBe(401);
+  });
+
   it('self-disable needs a current code; a peer reset is audited and ends the target’s sessions', async () => {
     const target = await fixture.createPlatformAdmin();
     const peer = await fixture.createPlatformAdmin();

@@ -13,7 +13,7 @@ import { AccessGateService } from '../platform/access-gate.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService, type AuthenticatedSession } from './session.service.js';
 import { AuthLockoutService } from './auth-lockout.service.js';
-import { PASSWORD_RESET_TEMPLATE_NAME } from './templates.js';
+import { PASSWORD_RESET_TEMPLATE_NAME, STAFF_INVITATION_TEMPLATE_NAME } from './templates.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { PlatformSettingsService } from '../../platform-settings/platform-settings.service.js';
 
@@ -430,6 +430,20 @@ export class IdentityService {
     );
 
     const resetUrl = await this.schoolResetUrl(schoolId, rawToken);
+    // P3-16: someone who has never signed in gets an invitation; a staff
+    // member whose credentials are being reset gets the reset text.
+    if (user.status === 'INVITED') {
+      const school = await prisma.school.findUniqueOrThrow({
+        where: { id: schoolId },
+        select: { name: true },
+      });
+      await this.notifications.send({
+        to: user.email,
+        template: STAFF_INVITATION_TEMPLATE_NAME,
+        variables: { displayName: user.displayName, schoolName: school.name, resetUrl },
+      });
+      return;
+    }
     await this.notifications.send({
       to: user.email,
       template: PASSWORD_RESET_TEMPLATE_NAME,
@@ -476,6 +490,15 @@ export class IdentityService {
 
     const passwordHash = await this.passwords.hash(newPassword);
     await withTenant(prisma, schoolId, async (tx) => {
+      // P3-14: claim the token first, conditionally, so two requests sent at
+      // the same moment can't both redeem it. The loser updates nothing and
+      // its whole transaction (password included) rolls back.
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: token.id, usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw invalid();
+
       // Gap closure (2026-08-30): this endpoint is also where a freshly
       // invited staff member (B6's `issueStaffInvitation`, sharing this
       // exact token mechanism per its own doc comment) accepts their
@@ -499,10 +522,6 @@ export class IdentityService {
           credentialState: 'OK',
           ...(user.status === 'INVITED' ? { status: 'ACTIVE' as const } : {}),
         },
-      });
-      await tx.passwordResetToken.update({
-        where: { id: token.id },
-        data: { usedAt: new Date() },
       });
     });
 

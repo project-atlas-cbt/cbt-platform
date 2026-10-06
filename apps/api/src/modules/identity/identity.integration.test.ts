@@ -370,6 +370,36 @@ describe('Staff password reset request → confirm cycle (DoD 7)', () => {
     expect(loginRes.statusCode).toBe(200);
   });
 
+  it('P3-14: two confirmations sent at once redeem the token only once', async () => {
+    consoleLogSpy.mockClear();
+    const ctx = await freshCtx(host, `10.${RUN}.3.5`);
+    await post(ctx, '/auth/password/reset/request', { identifier: 'staffreset01' });
+    const logged = consoleLogSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    const token = /token=([\w-]+)/.exec(logged)![1];
+
+    const [a, b] = await Promise.all([
+      post(await freshCtx(host, `10.${RUN}.3.6`), '/auth/password/reset/confirm', {
+        token,
+        newPassword: 'racing-password-aa1',
+      }),
+      post(await freshCtx(host, `10.${RUN}.3.7`), '/auth/password/reset/confirm', {
+        token,
+        newPassword: 'racing-password-bb2',
+      }),
+    ]);
+    expect([a.statusCode, b.statusCode].sort()).toEqual([200, 400]);
+
+    // The password that took is the winner's, not the loser's.
+    const winner = a.statusCode === 200 ? 'racing-password-aa1' : 'racing-password-bb2';
+    const loser = a.statusCode === 200 ? 'racing-password-bb2' : 'racing-password-aa1';
+    expect(
+      (await login(await freshCtx(host, `10.${RUN}.3.8`), 'staffreset01', loser)).statusCode,
+    ).not.toBe(200);
+    expect(
+      (await login(await freshCtx(host, `10.${RUN}.3.9`), 'staffreset01', winner)).statusCode,
+    ).toBe(200);
+  });
+
   it('a used or unknown reset token is rejected', async () => {
     const ctx = await freshCtx(host, `10.${RUN}.3.4`);
     const res = await post(ctx, '/auth/password/reset/confirm', {

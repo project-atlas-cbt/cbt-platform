@@ -477,6 +477,9 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
     // login attempt regardless of how correct the credential was.
     const logged = consoleLogSpy.mock.calls.map((c) => String(c[0])).join('\n');
     expect(logged).toContain(`to=${email}`);
+    // P3-16: a new staff member gets an invitation, not "Reset your password".
+    expect(logged).toContain('has created a staff account for you');
+    expect(logged).not.toContain('Reset your password');
     const match = /token=([\w-]+)/.exec(logged);
     expect(match).not.toBeNull();
     const token = match![1];
