@@ -716,6 +716,37 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(v1.bands.find((b) => b.label === 'A')!.minPercentage).toBe(70);
   });
 
+  it('P3-5: a level never ends up with two active scales', async () => {
+    const bands = [
+      { label: 'P', minPercentage: 40, maxPercentage: 100, isPassing: true },
+      { label: 'F', minPercentage: 0, maxPercentage: 39.99, isPassing: false },
+    ];
+    // Two first saves for the same level at once.
+    const [first, second] = await Promise.all([
+      put(admin, '/school/grading-scales', { name: 'JSS1 scale', level: 'JSS1', bands }),
+      put(admin, '/school/grading-scales', { name: 'JSS1 scale', level: 'JSS1', bands }),
+    ]);
+    expect([first.statusCode, second.statusCode]).toEqual([200, 200]);
+    const jss1 = await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.findMany({ where: { schoolId, level: 'JSS1', archivedAt: null } }),
+    );
+    expect(jss1).toHaveLength(1);
+
+    // A scale cannot be moved onto another level.
+    const moved = await put(admin, '/school/grading-scales', {
+      scaleId: jss1[0]!.id,
+      name: 'JSS1 scale',
+      level: 'JSS2',
+      bands,
+    });
+    expect(moved.statusCode).toBe(400);
+
+    // Leave the other tests' grading as it was.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.update({ where: { id: jss1[0]!.id }, data: { archivedAt: new Date() } }),
+    );
+  });
+
   it('rejects a scale whose bands overlap or leave a gap', async () => {
     const overlapping = await put(admin, '/school/grading-scales', {
       name: 'Bad scale',
@@ -1177,6 +1208,32 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
 
     await post(teacher, `/results/${a.resultId}/release`, { reason: 'Cleared.' });
     expect(await studentSeesResult(studentA, a.resultId)).toBe(true);
+  });
+
+  it('P3-4: each result is announced once, and a released result is announced then', async () => {
+    const examId = await buildReadyExam();
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const a = await sitExamAndMark(studentA, examId, 2);
+    const b = await sitExamAndMark(studentB, examId, 1);
+    await post(teacher, `/results/${a.resultId}/withhold`, { reason: 'Under review.' });
+
+    const told = async (resultId: string) =>
+      withTenant(prisma, schoolId, (tx) =>
+        tx.notification.count({
+          where: { schoolId, type: 'RESULT_PUBLISHED', relatedEntityId: resultId },
+        }),
+      );
+
+    await post(teacher, `/exams/${examId}/results/publish`, {});
+    expect(await told(a.resultId)).toBe(0);
+    expect(await told(b.resultId)).toBe(1);
+
+    await post(teacher, `/exams/${examId}/results/publish`, {});
+    expect(await told(b.resultId)).toBe(1);
+
+    await post(teacher, `/results/${a.resultId}/release`, { reason: 'Cleared.' });
+    expect(await told(a.resultId)).toBe(1);
+    expect(await told(b.resultId)).toBe(1);
   });
 
   it('a withhold without a reason is refused', async () => {

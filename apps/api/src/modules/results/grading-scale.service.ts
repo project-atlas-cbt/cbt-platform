@@ -131,12 +131,25 @@ export class GradingScaleService {
     }
 
     const scaleId = await withTenant(prisma, schoolId, async (tx) => {
+      // P3-5: two first saves at once would each find no scale for the level
+      // and each create one. Saves for a school are serialised instead.
+      // $executeRaw, not $queryRaw: pg_advisory_xact_lock returns void.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`grading-scale:${schoolId}`}))`;
+
       let scale = dto.scaleId
         ? await tx.gradingScale.findUnique({ where: { id: dto.scaleId } })
         : null;
 
-      if (dto.scaleId && !scale) {
+      if (dto.scaleId && (!scale || scale.archivedAt)) {
         throw new AppHttpException({ code: 'NOT_FOUND', message: 'Grading scale not found.' });
+      }
+      // P3-5: a scale keeps its level. Moving one onto another level would
+      // leave that level with two active scales.
+      if (scale && (scale.level ?? null) !== (dto.level ?? null)) {
+        throw new AppHttpException({
+          code: 'VALIDATION_ERROR',
+          message: "A grading scale's level can't be changed. Save a scale for that level instead.",
+        });
       }
 
       // At most ONE active scale per level scope, including the school-wide
