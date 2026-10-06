@@ -60,6 +60,34 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
       related: ['publish-results', 'grading-scale'],
     },
     {
+      id: 'exam-defaults',
+      title: 'Set the default rules for new exams',
+      summary:
+        'Choose the duration, attempts, navigation and shuffling every new exam starts with.',
+      area: 'setup',
+      keywords: [
+        'assessment rules',
+        'default',
+        'duration',
+        'attempts',
+        'navigation',
+        'shuffle',
+        'randomize',
+      ],
+      requires: ['schoolConfig.settings.manage'],
+      steps: [
+        'Open **School Settings**, then **Assessment Rules**.',
+        'Enter the **Duration (minutes)** and **Number of attempts**, choose the **Question navigation**, and tick the randomization options you want.',
+        'Press **Save assessment rules**.',
+      ],
+      notes: [
+        'These are starting values only. Teachers can still change each rule on their own exam before it is ready.',
+        'Exams already created keep their own rules.',
+      ],
+      screen: { label: 'Assessment Rules', href: 'settings/assessment' },
+      related: ['result-policy'],
+    },
+    {
       id: 'grading-scale',
       title: 'Set the grading bands',
       summary: 'Choose the grade each percentage earns and which grades count as a pass.',

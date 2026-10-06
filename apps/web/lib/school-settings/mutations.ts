@@ -49,3 +49,17 @@ export function usePutGradingScale() {
     onSuccess: () => client.invalidateQueries({ queryKey: ['school', 'grading-scales'] }),
   });
 }
+
+export function useUpdateAssessmentRules() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      defaultExamDurationSeconds?: number | null;
+      defaultAttemptLimit?: number;
+      defaultNavigationPolicy?: 'FREE' | 'SEQUENTIAL_NO_REVISIT' | 'SEQUENTIAL_WITH_REVISIT';
+      defaultRandomizeQuestions?: boolean;
+      defaultRandomizeOptions?: boolean;
+    }) => unwrap(apiClient.PUT('/school/assessment-rules', { body })),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['school', 'assessment-rules'] }),
+  });
+}

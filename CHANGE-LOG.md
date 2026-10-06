@@ -2,6 +2,27 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Assessment Rules: school defaults for new exams
+
+Owner report: Settings → Assessment Rules on the demo school still said the page was not built.
+F5 had deferred it until `B11` defined the exam rules; `B11` has long since shipped. Owner
+decision (2026-10-06): editable defaults, no lock.
+
+- `School` gains `defaultExamDurationSeconds` (nullable: no default), `defaultAttemptLimit`,
+  `defaultNavigationPolicy`, `defaultRandomizeQuestions` and `defaultRandomizeOptions`, defaulting
+  to what a new exam got before (expand-only migration `20261006120000_school_assessment_rules`).
+- `GET/PUT /v1/school/assessment-rules` (`schoolConfig.settings.view` / `.manage`, so Moderator
+  views, Teacher is denied), a partial merge like the result policy, audited as
+  `SCHOOL_ASSESSMENT_RULES_CHANGED` only when a value actually changes.
+- `ExamService.create` seeds a new exam's duration, attempts, navigation and randomisation from
+  them. Teachers can change every rule on the exam's Rules step; existing exams keep their own.
+- The settings page replaces the placeholder (plain-language labels from the Rules step), and the
+  school admin help gains "Set the default rules for new exams" (ADR-0035).
+
+**Tested:** API integration (`school-assessment-rules`, 11 tests including role and cross-school
+checks; `exam-builder` gains a seeding test), web component tests for the page, help guide tests,
+typecheck and lint. CI is still blocked by billing.
+
 ### 2026-10-06 — Tour video: a bulk import, softer sound, no tones
 
 Owner feedback on the first cut: bulk import is a key selling point and must be in it, the clicks
