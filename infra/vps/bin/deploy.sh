@@ -52,6 +52,11 @@ if ! docker compose up -d --wait --wait-timeout 180 --remove-orphans caddy marke
   exit 1
 fi
 
+# Caddy reads its Caddyfile only at start, and the file is a bind mount, so
+# `up` leaves a running Caddy untouched when only SCHOOLS changed. Reload it
+# so a new school's hosts are served (and their certificates requested).
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+
 echo "== smoke"
 ready=""
 for _ in $(seq 1 30); do
