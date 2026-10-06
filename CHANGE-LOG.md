@@ -2,6 +2,35 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Bug audit fixes: sign-in, HOD screens, results and expiry (P1)
+
+The P1 items from the full app bug audit (`/mnt/project-files/bug-audit/findings.md`) that sit in
+sign-in, HOD screens, results and operations:
+
+- **P1-4 sign-in lockout.** A credential reset, a password change and a completed reset now end a
+  lockout. School Admins and Moderators get **Unlock sign-in** on a student
+  (`POST /students/:id/unlock-sign-in`, permission `users.student.resetCredentials`, audited as
+  `STUDENT_SIGN_IN_UNLOCKED`). Invigilator guide and help updated.
+- **P1-12 HOD screens.** `GET /academics/departments` marks the caller's own department
+  (`headedByMe`); the HOD dashboard and Department Analytics use it, show an error when results
+  can't load, and say so when the HOD heads no department. The HOD Academics strip no longer
+  shows Rollover (owner request).
+- **P1-7 voids after marking.** A result finalised after a completed `VOID_QUESTION` has each
+  void applied at finalisation: ADJUSTED, with a child adjustment row per operation.
+- **P1-3 subscription expiry (ADR-0015).** Past the 14-day grace, exam and question writes,
+  imports, opening sessions and starting new attempts answer `SUBSCRIPTION_EXPIRED`
+  (`@AuthorizedWrite`); a running attempt still resumes. Schools with no subscription row
+  (seeded) are not gated.
+- **P1-13 restore.** `vps-pilot.md`'s restore runs TLS, migrations, stops the apps, then
+  `pg_restore --clean --if-exists --exit-on-error`; `ops:restore-verify` fails when either
+  platform audit policy is missing.
+
+**Tested:** typecheck, lint, format, all unit suites, `test:security` (9/9) and the integration
+suites pass, with new tests per fix. Two integration failures are this sandbox's, not the change:
+the unsigned-GET check in `media.integration.test.ts` (the local S3 stand-in allows it) and the
+migration reset test (PostgreSQL 16 has no `uuidv7()` after a reset). The restore order was
+rehearsed on PostgreSQL 16, not on the pilot server.
+
 ### 2026-10-06 — Pilot server: nightly backups could not write their dump
 
 Bug audit P0-3, confirmed on the pilot server: `infra/vps/backups/` was owned by root, because
