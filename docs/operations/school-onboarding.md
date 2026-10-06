@@ -31,7 +31,12 @@ session and at least one class (05 §5.2).
 4. **Departments and subjects**, then **classes** (arms such as SS2A) and which subjects each class
    offers. Students are registered for offered subjects automatically; electives can be
    deregistered (ADR-0011).
-5. **Grading scale** and **result policy** (ADR-0018, ADR-0010).
+5. **Grading scale** and **result policy** (ADR-0018, ADR-0010), both in **School Settings →
+   Results**; the wizard has no step for them. Set the grading bands before the first exam is
+   marked: a grade is fixed when a result is finalised, so results finalised with no scale stay
+   Ungraded with no pass rate, and the school admin dashboard warns until a scale is set. Start
+   from the default bands and adjust them to the school's own; a class level that grades
+   differently can have its own scale.
 6. **Staff**: import teachers from the CSV template (Imports → Teachers) or add them one by one;
    assign HODs to departments and teachers to subject-class offerings. Each receives an
    invitation email with a link to the school's own address (`https://<school>.<root>`), where
