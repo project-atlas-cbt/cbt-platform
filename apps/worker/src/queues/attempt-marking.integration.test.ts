@@ -684,7 +684,7 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
     expect(result.unansweredCount).toBe(1);
   });
 
-  it('P1-7: a question voided before this result finalised is left out of it', async () => {
+  it('P1-7: a question voided before this result finalised is applied to it as an adjustment', async () => {
     const fixture = await createFixtureSchool();
     schools.push(fixture.schoolId);
     const attemptId = await createSubmittedAttemptWithAnswers(fixture, [
@@ -727,12 +727,20 @@ describe.skipIf(!ownerDatabaseUrl)('attempt-marking job (B14)', () => {
         where: { schoolId_attemptId: { schoolId: fixture.schoolId, attemptId } },
       }),
     );
-    expect(result.state).toBe('FINAL');
+    // Applied as the operation itself would have: ADJUSTED, with its child
+    // row, so the score stays traceable to the raw marks.
+    expect(result.state).toBe('ADJUSTED');
     // Q1 correct (5/5) and Q3 unanswered (0/2); Q2 (0/3) is off the paper.
     expect(result.totalMarks).toBe(7);
     expect(result.earnedMarks).toBe(5);
     expect(result.incorrectCount).toBe(0);
     expect(result.unansweredCount).toBe(1);
+    const children = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultAdjustment.findMany({ where: { schoolId: fixture.schoolId, resultId: result.id } }),
+    );
+    expect(children).toHaveLength(1);
+    expect(children[0]?.adjustmentType).toBe('VOID_QUESTION');
+    expect((children[0]?.oldValue as { totalMarks: number }).totalMarks).toBe(10);
   });
 
   it('B15 DoD 8: freezes the grade AND its scale version at finalisation', async () => {
