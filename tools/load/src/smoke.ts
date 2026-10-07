@@ -15,8 +15,11 @@ import https from 'node:https';
  *
  * SMOKE_API: `https://{host}/v1` by default — each request connects to the
  *   host it names; a fixed URL sends every request there with that Host.
- * SMOKE_SCHOOL: a real school's subdomain whose branding must resolve
- *   (optional; without it only the unknown-school path is checked).
+ * SMOKE_SCHOOLS: the real schools' subdomains, comma-separated (deploy.sh
+ *   passes SCHOOLS). Each must resolve, refuse an anonymous caller and admit
+ *   its own origin; the first also gets the web checks. Optional; without it
+ *   only the unknown-school path is checked. SMOKE_SCHOOL (one school) is
+ *   still read when SMOKE_SCHOOLS is unset.
  * SMOKE_ANY_SCHOOL_HOST: `true` when any school host has a certificate (a
  *   wildcard, as in the CI stack). Without it, only listed schools do (the
  *   pilot VPS), so the unknown-school checks are skipped and the school
@@ -33,7 +36,12 @@ import https from 'node:https';
 const root = required('SMOKE_ROOT');
 const apiSpec = process.env.SMOKE_API ?? 'https://{host}/v1';
 // An empty value (deploy.sh with SCHOOLS='', as in CI) means no school yet.
-const school = process.env.SMOKE_SCHOOL || undefined;
+// P2-25: every listed school is checked, not only the first.
+const schools = (process.env.SMOKE_SCHOOLS ?? process.env.SMOKE_SCHOOL ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const school = schools[0];
 const anySchoolHost = process.env.SMOKE_ANY_SCHOOL_HOST === 'true';
 const checkWeb = process.env.SMOKE_WEB === 'true';
 const webSpec = process.env.SMOKE_WEB_URL ?? 'https://{host}';
@@ -163,23 +171,29 @@ if (anySchoolHost) {
   });
 }
 
-if (school) {
-  await check(`school ${school} resolves on its API host`, async () => {
-    const r = await api(schoolApiHost(school), '/tenant/resolve');
+for (const listed of schools) {
+  await check(`school ${listed} resolves on its API host`, async () => {
+    const r = await api(schoolApiHost(listed), '/tenant/resolve');
     const body = json<{ school: { subdomain: string } | null }>(r);
-    expect(body.school?.subdomain === school, `HTTP ${r.status}, school ${body.school?.subdomain}`);
+    expect(
+      body.school?.subdomain === listed,
+      body.school === null
+        ? `no school "${listed}" exists: create it in the Software Admin console before listing it in SCHOOLS`
+        : `HTTP ${r.status}, school ${body.school?.subdomain}`,
+    );
   });
 }
 
-const schoolLabel = school ?? (anySchoolHost ? unknownSchool : undefined);
-if (schoolLabel) {
-  await check('school routes refuse an anonymous caller', async () => {
+const schoolLabels = schools.length > 0 ? schools : anySchoolHost ? [unknownSchool] : [];
+if (schoolLabels.length === 0) {
+  console.log('[smoke] - school route and CORS checks skipped: no school listed yet');
+}
+for (const schoolLabel of schoolLabels) {
+  await check(`school routes refuse an anonymous caller on ${schoolLabel}`, async () => {
     const r = await api(schoolApiHost(schoolLabel), '/auth/me');
     expect(r.status === 401, `HTTP ${r.status}`);
     expect(json<{ error: { code: string } }>(r).error.code === 'UNAUTHENTICATED', r.body);
   });
-} else {
-  console.log('[smoke] - school route and CORS checks skipped: no school listed yet');
 }
 
 await check('platform routes refuse an anonymous caller', async () => {
@@ -187,21 +201,27 @@ await check('platform routes refuse an anonymous caller', async () => {
   expect(r.status === 401, `HTTP ${r.status}`);
 });
 
-if (schoolLabel) {
-  await check('CORS admits a school origin with credentials, refuses a foreign one', async () => {
-    const origin = `https://${schoolLabel}.${root}`;
-    const preflight = (o: string) =>
-      api(schoolApiHost(schoolLabel), '/auth/login', 'OPTIONS', {
-        origin: o,
-        'access-control-request-method': 'POST',
-        'access-control-request-headers': 'content-type',
-      });
-    const ours = await preflight(origin);
-    expect(ours.headers['access-control-allow-origin'] === origin, 'school origin not allowed');
-    expect(ours.headers['access-control-allow-credentials'] === 'true', 'credentials not allowed');
-    const foreign = await preflight('https://smoke.invalid');
-    expect(!foreign.headers['access-control-allow-origin'], 'foreign origin allowed');
-  });
+for (const schoolLabel of schoolLabels) {
+  await check(
+    `CORS admits ${schoolLabel}'s origin with credentials, refuses a foreign one`,
+    async () => {
+      const origin = `https://${schoolLabel}.${root}`;
+      const preflight = (o: string) =>
+        api(schoolApiHost(schoolLabel), '/auth/login', 'OPTIONS', {
+          origin: o,
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'content-type',
+        });
+      const ours = await preflight(origin);
+      expect(ours.headers['access-control-allow-origin'] === origin, 'school origin not allowed');
+      expect(
+        ours.headers['access-control-allow-credentials'] === 'true',
+        'credentials not allowed',
+      );
+      const foreign = await preflight('https://smoke.invalid');
+      expect(!foreign.headers['access-control-allow-origin'], 'foreign origin allowed');
+    },
+  );
 }
 
 if (checkWeb) {

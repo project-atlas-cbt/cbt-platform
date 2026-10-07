@@ -83,7 +83,9 @@ What stays the same:
 
    This writes `.env` (Compose: domain and infrastructure passwords) and `app.env` (application
    secrets), each with fresh random secrets and mode 600. Then fill in:
-   - `.env`: `SCHOOLS` (comma-separated school labels), `ACME_EMAIL`, and the `BACKUP_S3_*` values.
+   - `.env`: `ACME_EMAIL` and the `BACKUP_S3_*` values. Leave `SCHOOLS` empty for now: the
+     post-deploy smoke checks that every listed school exists, and schools are created only after
+     the first deploy (see "Adding a school").
      `SUPPORT_EMAIL` and `SUPPORT_WHATSAPP` set the contacts on staff Help screens (ADR-0035); they
      are built into the web image, so changing them needs a rebuild. `MARKETING_LEAD_EMAIL_*`
      send the marketing site's demo requests (`apps/marketing/README.md`); left empty, the form
@@ -112,9 +114,10 @@ What stays the same:
 
 ## Adding a school
 
-Create the school in the Software Admin console, add its subdomain label to `SCHOOLS` in `.env`,
-and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the new certificates; the smoke
-waits up to a minute for them.
+Create the school in the Software Admin console first, then add its subdomain label to `SCHOOLS`
+in `.env` (comma-separated) and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the
+new certificates; the smoke waits up to a minute for them, then checks every school in `SCHOOLS`.
+A listed school that does not exist fails the smoke with a message naming it.
 
 ## Demo school (staging only)
 
@@ -187,9 +190,15 @@ docker compose stop caddy web api worker 2>/dev/null || true   # 3. nothing writ
 # 4. fetch the latest dump from off-site storage into backups/, then:
 docker compose exec -T postgres pg_restore -U atlas -d atlas \
   --clean --if-exists --exit-on-error < backups/db-<stamp>.dump
-# copy media back:
-docker compose exec -T -e MC_HOST_local=... -e MC_HOST_offsite=... minio \
-  mc mirror offsite/<bucket>/media local/atlas-media
+# copy media back (keys passed by name from .env, as bin/backup.sh does):
+set -a; . ./.env; set +a
+docker compose exec -T -e BACKUP_S3_ENDPOINT -e BACKUP_S3_ACCESS_KEY_ID \
+  -e BACKUP_S3_SECRET_ACCESS_KEY -e BACKUP_S3_BUCKET minio sh -ec '
+  export MC_HOST_local="http://atlas-root:${MINIO_ROOT_PASSWORD}@localhost:9000"
+  mc alias set offsite "https://${BACKUP_S3_ENDPOINT#https://}" \
+    "$BACKUP_S3_ACCESS_KEY_ID" "$BACKUP_S3_SECRET_ACCESS_KEY" >/dev/null
+  mc mirror offsite/$BACKUP_S3_BUCKET/media local/atlas-media
+  mc alias remove offsite >/dev/null'
 bin/deploy.sh                                 # 5. reasserts grants, starts the apps
 ```
 

@@ -20,7 +20,8 @@ the card at the end and keep it at the front desk.
 
 ## Before students arrive
 
-1. Open the exam in **Exam Control**. Check the session for this group is open (or use **Open
+1. Open the exam in **Exam Control** (teachers and HODs) or **Exam Operations** (School Admins and
+   Moderators); it is the same screen. Check the session for this group is open (or use **Open
    session**).
 2. On each computer, open the school's address and sign out any previous user. Do not use
    private or incognito windows.

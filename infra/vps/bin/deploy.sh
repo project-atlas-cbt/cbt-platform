@@ -31,20 +31,39 @@ mkdir -p backups
 docker compose up -d --wait postgres redis minio
 
 echo "== object storage bucket and app user"
+# The app user may write and delete current objects but never object
+# versions (P2-26): an overwritten or deleted file stays recoverable until
+# the lifecycle rule below expires it after 35 days, matching the AWS
+# design (docs/operations/backup-and-restore.md).
 policy=$(mktemp)
 cat > "$policy" <<JSON
 {"Version":"2012-10-17","Statement":[
  {"Effect":"Allow","Action":["s3:GetBucketLocation","s3:ListBucket","s3:ListBucketVersions","s3:GetBucketVersioning"],"Resource":["arn:aws:s3:::atlas-media"]},
- {"Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:PutObject","s3:DeleteObject","s3:DeleteObjectVersion"],"Resource":["arn:aws:s3:::atlas-media/*"]}]}
+ {"Effect":"Allow","Action":["s3:GetObject","s3:GetObjectVersion","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::atlas-media/*"]}]}
+JSON
+lifecycle=$(mktemp)
+cat > "$lifecycle" <<JSON
+{"Rules":[{"ID":"object-noncurrent-versions","Status":"Enabled","Filter":{"Prefix":""},"NoncurrentVersionExpiration":{"NoncurrentDays":35}}]}
 JSON
 docker compose cp "$policy" minio:/tmp/atlas-app-policy.json
-rm -f "$policy"
-docker compose exec -T -e MC_HOST_local="http://atlas-root:${MINIO_ROOT_PASSWORD}@localhost:9000" minio sh -c '
-  mc mb --ignore-existing local/atlas-media >/dev/null &&
-  mc version enable local/atlas-media >/dev/null &&
-  mc admin policy create local atlas-app /tmp/atlas-app-policy.json >/dev/null &&
-  mc admin user add local atlas-app "$0" >/dev/null &&
-  mc admin policy attach local atlas-app --user atlas-app >/dev/null 2>&1 || true' "$MINIO_APP_PASSWORD"
+docker compose cp "$lifecycle" minio:/tmp/atlas-media-lifecycle.json
+rm -f "$policy" "$lifecycle"
+# Every step must succeed (P3-11: a trailing `|| true` used to hide any
+# failure). Only re-attaching an already attached policy is tolerated. The
+# passwords come from the container's own environment, not this command line.
+if ! docker compose exec -T -e MINIO_APP_PASSWORD minio sh -ec '
+  export MC_HOST_local="http://atlas-root:${MINIO_ROOT_PASSWORD}@localhost:9000"
+  mc mb --ignore-existing local/atlas-media >/dev/null
+  mc version enable local/atlas-media >/dev/null
+  mc ilm import local/atlas-media < /tmp/atlas-media-lifecycle.json >/dev/null
+  mc admin policy create local atlas-app /tmp/atlas-app-policy.json >/dev/null
+  mc admin user add local atlas-app "$MINIO_APP_PASSWORD" >/dev/null
+  if ! out=$(mc admin policy attach local atlas-app --user atlas-app 2>&1); then
+    case $out in *already*) ;; *) echo "$out" >&2; exit 1 ;; esac
+  fi'; then
+  echo "object storage setup failed; nothing was changed in the running release" >&2
+  exit 1
+fi
 
 echo "== migrations"
 docker compose --profile ops run --rm ops
@@ -80,9 +99,10 @@ esac
 # uptime check's job. It writes nothing, so it is safe here; the golden
 # path never runs against this database.
 echo "== post-deploy smoke"
-first_school=${SCHOOLS%%,*}
+# P2-25: every listed school is checked; each must already exist (create it
+# in the Software Admin console before adding it to SCHOOLS).
 if ! docker compose --profile ops run --rm --no-deps \
-  -e SMOKE_ROOT="$ROOT_DOMAIN" -e SMOKE_SCHOOL="${first_school}" -e SMOKE_WEB=true -e SMOKE_MARKETING=true \
+  -e SMOKE_ROOT="$ROOT_DOMAIN" -e SMOKE_SCHOOLS="${SCHOOLS:-}" -e SMOKE_WEB=true -e SMOKE_MARKETING=true \
   -e SMOKE_ANY_SCHOOL_HOST="$([ "${CADDY_LOCAL_CA:-}" = 1 ] && echo true || echo false)" \
   -e SMOKE_API=https://caddy/v1 -e SMOKE_WEB_URL=https://caddy \
   ops pnpm --filter @atlas/load smoke; then
