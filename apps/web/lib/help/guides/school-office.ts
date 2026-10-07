@@ -108,6 +108,7 @@ export function schoolOfficeGuides(): Guide[] {
         'login',
         'reset',
         'credentials',
+        'unlock',
       ],
       requires: ['users.student.resetCredentials', 'users.teacher.resetCredentials'],
       steps: [
@@ -118,6 +119,7 @@ export function schoolOfficeGuides(): Guide[] {
       ],
       notes: [
         'Staff can also reset their own password with **Forgot your password?** on the sign-in page.',
+        'After several wrong passwords a sign-in locks for a while. If the student knows their password, press **Unlock sign-in** on the student instead; a new password from **Reset credentials** also ends the lock.',
       ],
       screen: { label: 'People', href: 'people' },
       related: ['add-students', 'add-teachers'],

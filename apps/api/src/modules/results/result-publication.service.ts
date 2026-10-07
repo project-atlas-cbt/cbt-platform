@@ -216,6 +216,7 @@ export class ResultPublicationService {
       entityId: resultId,
       reason,
     });
+    if (!withheld) await this.notifyStudents(schoolId, exam.id, exam.title, resultId);
     await this.analyticsCache.invalidateSchool(schoolId);
 
     return { status: 'ok' };
@@ -298,24 +299,57 @@ export class ResultPublicationService {
   /**
    * B10 declared `RESULT_PUBLISHED` in `NotificationType` and left the
    * producer to this phase (its own DoD item 6). Notifies only the students
-   * whose result the release actually made visible — never the withheld or
-   * still-processing ones, who would be told to look at something they
-   * cannot see.
+   * whose result is actually visible — never the withheld or still-processing
+   * ones, who would be told to look at something they cannot see, and never
+   * while an adjustment holds the cohort.
+   *
+   * P3-4: each result is announced once. Publishing an exam again (or after
+   * an unpublish) skips students already told, and releasing a withheld
+   * result on a published exam tells that one student. `resultId` narrows it
+   * to that one result.
    *
    * Best-effort: `NotificationService.record()` swallows its own failures by
    * design, so a notification problem never fails a publication that has
    * already committed.
    */
-  private async notifyStudents(schoolId: string, examId: string, examTitle: string): Promise<void> {
-    const results = await withTenant(prisma, schoolId, (tx) =>
-      tx.result.findMany({
-        where: { schoolId, examId, state: { in: ['FINAL', 'ADJUSTED'] }, withheld: false },
+  private async notifyStudents(
+    schoolId: string,
+    examId: string,
+    examTitle: string,
+    resultId?: string,
+  ): Promise<void> {
+    const results = await withTenant(prisma, schoolId, async (tx) => {
+      const publication = await tx.resultPublication.findUnique({
+        where: { schoolId_examId: { schoolId, examId } },
+        select: { status: true, adjustmentInProgress: true },
+      });
+      if (publication?.status !== 'PUBLISHED' || publication.adjustmentInProgress) return [];
+
+      const visible = await tx.result.findMany({
+        where: {
+          schoolId,
+          examId,
+          state: { in: ['FINAL', 'ADJUSTED'] },
+          withheld: false,
+          ...(resultId !== undefined && { id: resultId }),
+        },
         select: {
           id: true,
           studentProfile: { select: { membership: { select: { userId: true } } } },
         },
-      }),
-    );
+      });
+      const alreadyTold = await tx.notification.findMany({
+        where: {
+          schoolId,
+          type: 'RESULT_PUBLISHED',
+          relatedEntityType: 'Result',
+          relatedEntityId: { in: visible.map((r) => r.id) },
+        },
+        select: { relatedEntityId: true },
+      });
+      const told = new Set(alreadyTold.map((n) => n.relatedEntityId));
+      return visible.filter((r) => !told.has(r.id));
+    });
 
     for (const result of results) {
       await this.notifications.record({

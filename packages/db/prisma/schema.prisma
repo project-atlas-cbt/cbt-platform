@@ -3117,6 +3117,9 @@ model ResultAdjustmentOperation {
   targetResultId       String? @map("target_result_id") @db.Uuid
   /// MANUAL_OVERRIDE only — the earned-marks value being set outright.
   overrideEarnedMarks  Int?    @map("override_earned_marks")
+  /// RECALCULATE only — "Grade now" (P2-21): touch only results that were
+  /// never graded, and grade them against the school's current scale.
+  ungradedOnly         Boolean @default(false) @map("ungraded_only")
 
   totalCount   Int @default(0) @map("total_count")
   appliedCount Int @default(0) @map("applied_count")

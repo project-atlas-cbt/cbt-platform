@@ -18,11 +18,20 @@ docker compose exec -T postgres pg_restore --list < "$dump" > /dev/null
 echo "database dump: $dump ($(du -h "$dump" | cut -f1))"
 
 if [ -n "${BACKUP_S3_ENDPOINT:-}" ]; then
+  # P2-26: `mc alias set` takes the keys as they are, so a secret containing
+  # / + or @ works (a credentials URL broke on those). The keys go in by name
+  # from this script's environment, so they are not on the docker command
+  # line, and the alias is removed again when the copy ends.
   docker compose exec -T \
-    -e MC_HOST_local="http://atlas-root:${MINIO_ROOT_PASSWORD}@localhost:9000" \
-    -e MC_HOST_offsite="https://${BACKUP_S3_ACCESS_KEY_ID}:${BACKUP_S3_SECRET_ACCESS_KEY}@${BACKUP_S3_ENDPOINT#https://}" \
-    minio sh -c "mc cp --quiet /backups/$(basename "$dump") offsite/$BACKUP_S3_BUCKET/db/ &&
-                 mc mirror --quiet --overwrite local/atlas-media offsite/$BACKUP_S3_BUCKET/media"
+    -e BACKUP_S3_ENDPOINT -e BACKUP_S3_ACCESS_KEY_ID -e BACKUP_S3_SECRET_ACCESS_KEY \
+    -e BACKUP_S3_BUCKET -e DUMP="$(basename "$dump")" \
+    minio sh -ec '
+      export MC_HOST_local="http://atlas-root:${MINIO_ROOT_PASSWORD}@localhost:9000"
+      trap "mc alias remove offsite >/dev/null 2>&1 || true" EXIT
+      mc alias set offsite "https://${BACKUP_S3_ENDPOINT#https://}" \
+        "$BACKUP_S3_ACCESS_KEY_ID" "$BACKUP_S3_SECRET_ACCESS_KEY" >/dev/null
+      mc cp --quiet "/backups/$DUMP" "offsite/$BACKUP_S3_BUCKET/db/"
+      mc mirror --quiet --overwrite local/atlas-media "offsite/$BACKUP_S3_BUCKET/media"'
   echo "off-site copy: $BACKUP_S3_BUCKET"
 else
   echo "WARNING: BACKUP_S3_ENDPOINT is empty; backups are on this server only" >&2

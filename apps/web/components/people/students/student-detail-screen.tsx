@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, KeyRound, ArrowRightLeft } from 'lucide-react';
+import { Pencil, KeyRound, ArrowRightLeft, LockOpen } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
@@ -9,7 +10,11 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useHasPermission } from '@/lib/nav';
 import { useStudent, useStudentEnrollments } from '@/lib/people/queries';
-import { useDeactivateStudent, useReactivateStudent } from '@/lib/people/mutations';
+import {
+  useDeactivateStudent,
+  useReactivateStudent,
+  useUnlockStudentSignIn,
+} from '@/lib/people/mutations';
 import {
   UserStatusBadge,
   StudentProfileStatusBadge,
@@ -37,6 +42,7 @@ export function StudentDetailScreen({ studentProfileId }: { studentProfileId: st
 
   const deactivateStudent = useDeactivateStudent();
   const reactivateStudent = useReactivateStudent();
+  const unlockSignIn = useUnlockStudentSignIn();
 
   const [editOpen, setEditOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -79,6 +85,24 @@ export function StudentDetailScreen({ studentProfileId }: { studentProfileId: st
         {canResetCredentials ? (
           <Button variant="secondary" size="sm" onClick={() => setResetOpen(true)}>
             <KeyRound aria-hidden /> Reset credentials
+          </Button>
+        ) : null}
+        {canResetCredentials ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={unlockSignIn.isPending}
+            onClick={() =>
+              unlockSignIn.mutate(studentProfileId, {
+                onSuccess: () =>
+                  toast.success('Sign-in unlocked', {
+                    description: 'The student can sign in again with their current password.',
+                  }),
+                onError: () => toast.error('Could not unlock sign-in. Try again.'),
+              })
+            }
+          >
+            <LockOpen aria-hidden /> Unlock sign-in
           </Button>
         ) : null}
         {canDeactivate ? (

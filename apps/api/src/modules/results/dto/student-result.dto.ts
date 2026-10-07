@@ -24,6 +24,9 @@ export class StudentResultListItemDto {
    * read — a later edit to the school's scale must not silently restate a
    * student's past grade. */
   @ApiProperty({ type: String, nullable: true }) grade!: string | null;
+  /** Whether that grade was a pass in the scale it was graded against;
+   * `null` when ungraded. */
+  @ApiProperty({ type: Boolean, nullable: true }) gradePassing!: boolean | null;
 
   @ApiProperty({ type: String, nullable: true }) publishedAt!: string | null;
 }
@@ -34,6 +37,9 @@ export class StudentResultQuestionDto {
   @ApiProperty({ type: String }) correctness!: string;
   @ApiProperty({ type: Number }) awardedMarks!: number;
   @ApiProperty({ type: Number }) maximumMarks!: number;
+  /** The question was voided for everyone, so it no longer counts towards
+   * the score. */
+  @ApiProperty({ type: Boolean }) voided!: boolean;
 }
 
 export class StudentResultDetailDto extends StudentResultListItemDto {

@@ -59,6 +59,10 @@ export const BASE_ERROR_CODES = {
   // subscription; only an explicit platform override blocks login itself.
   SCHOOL_ACCESS_SUSPENDED: { httpStatus: 403, retryable: false },
   SCHOOL_ACCESS_DEACTIVATED: { httpStatus: 403, retryable: false },
+  // P1-3 / ADR-0015: the subscription expired and its 14-day grace has
+  // ended. Reads, running attempts, marking and renewal keep working; new
+  // exams, questions, imports, sessions and attempts are refused.
+  SUBSCRIPTION_EXPIRED: { httpStatus: 403, retryable: false },
 
   // B4 (Media, Storage & Branding).
   //

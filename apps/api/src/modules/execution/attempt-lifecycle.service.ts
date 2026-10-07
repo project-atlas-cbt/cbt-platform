@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
+import { AccessGateService, subscriptionExpired } from '../platform/access-gate.service.js';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { ensureProcessingResult } from '../results/result-finalization.util.js';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
@@ -107,6 +108,7 @@ export class AttemptLifecycleService {
     private readonly marking: AttemptMarkingQueueService,
     private readonly telemetry: ExamTelemetryService,
     private readonly precache: ExamMediaPrecacheService,
+    private readonly accessGate: AccessGateService,
   ) {}
 
   // ---- B20 critical-flow instrumentation (08 §18 tracing; 09 §36) -------
@@ -216,6 +218,10 @@ export class AttemptLifecycleService {
       });
     }
 
+    // P1-3 / ADR-0015: past the subscription grace, a running attempt
+    // still resumes, but no new attempt starts.
+    const subscriptionRestricted = await this.accessGate.isSubscriptionRestricted(schoolId);
+
     const lockKey = `${schoolId}:${examId}:${studentProfile.id}`;
     const outcome = await withTenant(prisma, schoolId, async (tx): Promise<StartOutcome> => {
       // Serializes every concurrent start() call for this exact
@@ -259,6 +265,7 @@ export class AttemptLifecycleService {
         }
         return { kind: 'EXISTING', attemptId: existing.id };
       }
+      if (subscriptionRestricted) throw subscriptionExpired();
 
       // A dedicated MAKEUP/SPECIAL session remains startable after its
       // parent exam is completed, but only when a still-valid authorization

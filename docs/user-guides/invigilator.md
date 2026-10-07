@@ -20,7 +20,8 @@ the card at the end and keep it at the front desk.
 
 ## Before students arrive
 
-1. Open the exam in **Exam Control**. Check the session for this group is open (or use **Open
+1. Open the exam in **Exam Control** (teachers and HODs) or **Exam Operations** (School Admins and
+   Moderators); it is the same screen. Check the session for this group is open (or use **Open
    session**).
 2. On each computer, open the school's address and sign out any previous user. Do not use
    private or incognito windows.
@@ -42,6 +43,11 @@ submitted, or **Disconnected**.
   and press **Resume assessment**; the attempt continues with the time it has left. Tell the exam officer
   which computer failed. Turn it back on later and open the exam page once, so anything it had not
   sent yet is sent.
+- **A student cannot sign in** after several wrong passwords: the account locks for a while. Ask a
+  School Admin or Moderator to open the student under **People › Students** and press **Unlock
+  sign-in**; the student then signs in with their usual password and presses **Resume
+  assessment**. If the student has forgotten the password, **Reset credentials** gives a new one
+  and also ends the lock.
 - **Do not** reload the page, close the browser, clear browser data or restart a computer that is
   working, even if the network is down.
 - Students who do not turn up need nothing from you during the sitting. When the teacher ends the

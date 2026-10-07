@@ -1,5 +1,6 @@
 import { applyDecorators, SetMetadata, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../identity/auth.guard.js';
+import { ActiveSubscriptionGuard } from '../platform/active-subscription.guard.js';
 import { PlatformAuthGuard } from '../platform/platform-auth.guard.js';
 import { PermissionGuard } from './permission.guard.js';
 
@@ -32,6 +33,19 @@ export const PublicRoute = (reason: string) => SetMetadata(PUBLIC_ROUTE_KEY, rea
  */
 export function Authorized(permissionId: string) {
   return applyDecorators(RequirePermission(permissionId), UseGuards(AuthGuard, PermissionGuard));
+}
+
+/**
+ * `@Authorized`, plus ADR-0015's subscription gate (P1-3): for a write the
+ * `EXPIRED` profile blocks once the grace period has ended — creating or
+ * changing exams and questions, imports, and opening sittings. Runs after
+ * authentication and permission, so neither is bypassed or leaked.
+ */
+export function AuthorizedWrite(permissionId: string) {
+  return applyDecorators(
+    RequirePermission(permissionId),
+    UseGuards(AuthGuard, PermissionGuard, ActiveSubscriptionGuard),
+  );
 }
 
 /**

@@ -10,7 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { resolveActorRole } from '../academics/actor.util.js';
 import { Authorized } from '../authorization/decorators.js';
@@ -152,6 +152,23 @@ export class StudentController {
   ): Promise<CredentialResetResponseDto> {
     const user = currentUser(req);
     return this.students.resetCredentials(user.schoolId, id, {
+      actorUserId: user.userId,
+      actorRole: resolveActorRole(user),
+    });
+  }
+
+  @Post(':id/unlock-sign-in')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Authorized('users.student.resetCredentials')
+  @ApiOperation({
+    summary:
+      "End a student's sign-in lockout after too many wrong passwords, without changing " +
+      'their password (audited).',
+  })
+  @ApiNoContentResponse()
+  async unlockSignIn(@Req() req: FastifyRequest, @Param('id') id: string): Promise<void> {
+    const user = currentUser(req);
+    await this.students.unlockSignIn(user.schoolId, id, {
       actorUserId: user.userId,
       actorRole: resolveActorRole(user),
     });

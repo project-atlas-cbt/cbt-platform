@@ -22,14 +22,18 @@ export function PrintLayout({ title, subtitle, children }: PrintLayoutProps) {
   const { school } = useTenant();
   const { me } = useAuth();
 
+  // P2-24: the school's own time, whatever the printing PC's clock says.
+  const timeZone = school?.timezone ? { timeZone: school.timezone } : {};
   const generatedDate = new Date().toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    ...timeZone,
   });
   const generatedTime = new Date().toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
+    ...timeZone,
   });
 
   return (

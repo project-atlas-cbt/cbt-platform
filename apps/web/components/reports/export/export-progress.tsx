@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useExportJob, useDownloadExport } from '@/lib/reports/queries';
 import type { ExportStatus } from '@/lib/reports/types';
+import { getDisplayTimeZone } from '@/lib/format/date';
 
 export interface ExportProgressProps {
   jobId: string;
@@ -127,6 +128,7 @@ export function ExportProgress({ jobId, onDone }: ExportProgressProps) {
                 {new Date(job.expiresAt).toLocaleTimeString([], {
                   hour: '2-digit',
                   minute: '2-digit',
+                  ...(getDisplayTimeZone() ? { timeZone: getDisplayTimeZone() } : {}),
                 })}
                 )
               </span>

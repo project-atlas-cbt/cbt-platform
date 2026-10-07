@@ -36,4 +36,11 @@ describe('AcademicsTabs', () => {
     render(<AcademicsTabs basePath="/school/academics" />);
     expect(screen.getByRole('link', { name: 'Classes' })).toHaveAttribute('aria-current', 'page');
   });
+
+  it('leaves Rollover out of the HOD strip', () => {
+    pathname = '/hod/academics/classes';
+    render(<AcademicsTabs basePath="/hod/academics" showRollover={false} />);
+    expect(screen.queryByRole('link', { name: 'Rollover' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Subjects' })).toBeInTheDocument();
+  });
 });

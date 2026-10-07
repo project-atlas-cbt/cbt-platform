@@ -29,6 +29,7 @@ const BASE = {
   earnedMarks: 43,
   percentage: 86,
   grade: 'A',
+  gradePassing: true,
   publishedAt: '2026-09-01T10:00:00.000Z',
 };
 
@@ -115,6 +116,7 @@ describe('ResultDetailScreen', () => {
             correctness: 'CORRECT',
             awardedMarks: 2,
             maximumMarks: 2,
+            voided: false,
           },
         ],
       }),
@@ -127,5 +129,32 @@ describe('ResultDetailScreen', () => {
     expect(within(screen.getByRole('list')).getByText('Correct')).toBeInTheDocument();
     expect(screen.getByText('2 / 2 marks')).toBeInTheDocument();
     expect(JSON.stringify(document.body.innerHTML)).not.toContain('correctAnswer');
+  });
+
+  it('P3-2: marks a voided question instead of showing its marks', async () => {
+    mockGet.mockResolvedValue(
+      ok({
+        ...BASE,
+        detailVisibility: 'FULL_REVIEW',
+        correctCount: 1,
+        incorrectCount: 0,
+        unansweredCount: 0,
+        questions: [
+          {
+            displaySequence: 1,
+            content: '<p>Spelling error question</p>',
+            correctness: 'INCORRECT',
+            awardedMarks: 0,
+            maximumMarks: 2,
+            voided: true,
+          },
+        ],
+      }),
+    );
+    renderWithClient(<ResultDetailScreen resultId="result-1" />);
+    const list = await screen.findByRole('list');
+    expect(within(list).getByText('Voided')).toBeInTheDocument();
+    expect(within(list).queryByText('Incorrect')).not.toBeInTheDocument();
+    expect(within(list).queryByText('0 / 2 marks')).not.toBeInTheDocument();
   });
 });

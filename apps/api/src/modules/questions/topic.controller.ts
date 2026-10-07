@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { Authorized } from '../authorization/decorators.js';
+import { Authorized, AuthorizedWrite } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { TopicService } from './topic.service.js';
 import {
@@ -43,7 +43,7 @@ export class TopicController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @Authorized('questionBank.create')
+  @AuthorizedWrite('questionBank.create')
   @ApiOperation({ summary: 'Create or resolve (case-insensitively) a topic (DoD item 9).' })
   @ApiOkResponse({ type: TopicResponseDto })
   async create(

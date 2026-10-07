@@ -84,6 +84,24 @@ export async function verifyRestoredDatabase(
       ),
   });
 
+  // P1-13: a dump restored before the runtime roles exist silently drops
+  // every policy naming them; without these two, every platform audit write
+  // (Software Admin password change, MFA, sign-out-other-sessions) fails.
+  const requiredPolicies = ['audit_events_platform_insert', 'audit_events_platform_reader'];
+  const presentPolicies = await db.$queryRaw<{ policyname: string }[]>`
+    SELECT policyname FROM pg_policies
+     WHERE schemaname = 'public' AND tablename = 'audit_events'
+       AND policyname = ANY(${requiredPolicies})`;
+  const missingPolicies = requiredPolicies.filter(
+    (p) => !presentPolicies.some((row) => row.policyname === p),
+  );
+  checks.push({
+    name: 'audit policies missing (restored before the database roles existed)',
+    severity: 'error',
+    count: missingPolicies.length,
+    ...(missingPolicies.length > 0 && { detail: missingPolicies.join(', ') }),
+  });
+
   const schoolIds =
     opts.schoolIds ??
     (await db.$queryRaw<{ id: string }[]>`SELECT id::text FROM schools`).map((s) => s.id);
