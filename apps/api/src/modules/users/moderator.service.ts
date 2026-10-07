@@ -10,7 +10,7 @@ import type {
   ModeratorResponseDto,
   UpdateModeratorDto,
 } from './dto/moderator.dto.js';
-import { createPersonMembership, notFound } from './person.util.js';
+import { createPersonMembership, notFound, searchWords } from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -66,17 +66,19 @@ export class ModeratorService {
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
     const sortBy = query.sortBy ?? 'loginIdentifier';
-    const q = query.q?.trim();
+    const words = searchWords(query.q);
 
     const where: Prisma.SchoolMembershipWhereInput = {
       schoolId,
       roleAssignments: { some: { schoolId, role: 'MODERATOR', status: 'ACTIVE' } },
-      ...(q && {
-        OR: [
-          { loginIdentifier: { contains: q, mode: 'insensitive' } },
-          { user: { firstName: { contains: q, mode: 'insensitive' } } },
-          { user: { lastName: { contains: q, mode: 'insensitive' } } },
-        ],
+      ...(words.length > 0 && {
+        AND: words.map((word) => ({
+          OR: [
+            { loginIdentifier: { contains: word, mode: 'insensitive' } },
+            { user: { firstName: { contains: word, mode: 'insensitive' } } },
+            { user: { lastName: { contains: word, mode: 'insensitive' } } },
+          ],
+        })),
       }),
     };
     const orderBy: Prisma.SchoolMembershipOrderByWithRelationInput =

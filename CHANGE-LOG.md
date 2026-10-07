@@ -2,6 +2,15 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-07 — People search matches full names
+
+Searching a full name ("Adaeze Okafor") in the Students, Teachers, HODs or Moderators list returned
+nothing, because the whole phrase was compared against the first name, the last name and the ID
+separately. The search now splits the text into words and a person matches when every word appears
+in one of those fields, in any order (`searchWords` in `apps/api/src/modules/users/person.util.ts`).
+Partial searches behave as before. Tested: the users integration suite (28 passing), with new
+full-name, reversed-order and non-matching cases for all four lists that fail on the old code.
+
 ### 2026-10-07 — Tour video v4: no score on submit, teacher question import, student result, new sound
 
 Owner requests (2026-10-07): the submit scene still showed a score, which students no longer see

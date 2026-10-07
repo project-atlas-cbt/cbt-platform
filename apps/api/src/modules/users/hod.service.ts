@@ -13,7 +13,7 @@ import {
   PromoteHodDto,
   UpdateHodDto,
 } from './dto/hod.dto.js';
-import { notFound } from './person.util.js';
+import { notFound, searchWords } from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -105,19 +105,21 @@ export class HodService {
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
     const sortBy = query.sortBy ?? 'staffId';
-    const q = query.q?.trim();
+    const words = searchWords(query.q);
 
     const where: Prisma.TeacherProfileWhereInput = {
       schoolId,
       membership: {
         roleAssignments: { some: { schoolId, role: 'HOD', status: 'ACTIVE' } },
       },
-      ...(q && {
-        OR: [
-          { staffId: { contains: q, mode: 'insensitive' } },
-          { membership: { user: { firstName: { contains: q, mode: 'insensitive' } } } },
-          { membership: { user: { lastName: { contains: q, mode: 'insensitive' } } } },
-        ],
+      ...(words.length > 0 && {
+        AND: words.map((word) => ({
+          OR: [
+            { staffId: { contains: word, mode: 'insensitive' } },
+            { membership: { user: { firstName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { lastName: { contains: word, mode: 'insensitive' } } } },
+          ],
+        })),
       }),
     };
     const orderBy: Prisma.TeacherProfileOrderByWithRelationInput =

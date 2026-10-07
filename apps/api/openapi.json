@@ -6738,7 +6738,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -7062,7 +7062,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -7332,7 +7332,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -7612,7 +7612,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }

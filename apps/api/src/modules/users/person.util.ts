@@ -81,3 +81,13 @@ export async function createPersonMembership(
 export function notFound(entityLabel: string): never {
   throw new AppHttpException({ code: 'NOT_FOUND', message: `${entityLabel} not found.` });
 }
+
+/**
+ * Splits a people-directory search into words. Each word must match one of
+ * the person's identifier, first name or last name, so a full name such as
+ * "Adaeze Okafor" (or "Okafor Adaeze") finds the person even though neither
+ * name column contains the whole phrase.
+ */
+export function searchWords(q: string | undefined): string[] {
+  return q?.trim().split(/\s+/).filter(Boolean) ?? [];
+}

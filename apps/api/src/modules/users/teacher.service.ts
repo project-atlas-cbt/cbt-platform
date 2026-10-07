@@ -12,7 +12,7 @@ import type {
   TeacherResponseDto,
   UpdateTeacherDto,
 } from './dto/teacher.dto.js';
-import { createPersonMembership, notFound } from './person.util.js';
+import { createPersonMembership, notFound, searchWords } from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -81,16 +81,18 @@ export class TeacherService {
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
     const sortBy = query.sortBy ?? 'staffId';
-    const q = query.q?.trim();
+    const words = searchWords(query.q);
 
     const where: Prisma.TeacherProfileWhereInput = {
       schoolId,
-      ...(q && {
-        OR: [
-          { staffId: { contains: q, mode: 'insensitive' } },
-          { membership: { user: { firstName: { contains: q, mode: 'insensitive' } } } },
-          { membership: { user: { lastName: { contains: q, mode: 'insensitive' } } } },
-        ],
+      ...(words.length > 0 && {
+        AND: words.map((word) => ({
+          OR: [
+            { staffId: { contains: word, mode: 'insensitive' } },
+            { membership: { user: { firstName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { lastName: { contains: word, mode: 'insensitive' } } } },
+          ],
+        })),
       }),
     };
     const orderBy: Prisma.TeacherProfileOrderByWithRelationInput =

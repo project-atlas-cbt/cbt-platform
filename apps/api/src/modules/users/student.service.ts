@@ -15,7 +15,7 @@ import type {
   StudentResponseDto,
   UpdateStudentDto,
 } from './dto/student.dto.js';
-import { createPersonMembership, notFound } from './person.util.js';
+import { createPersonMembership, notFound, searchWords } from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -126,16 +126,18 @@ export class StudentService {
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
     const sortBy = query.sortBy ?? 'studentId';
-    const q = query.q?.trim();
+    const words = searchWords(query.q);
 
     const where: Prisma.StudentProfileWhereInput = {
       schoolId,
-      ...(q && {
-        OR: [
-          { studentId: { contains: q, mode: 'insensitive' } },
-          { membership: { user: { firstName: { contains: q, mode: 'insensitive' } } } },
-          { membership: { user: { lastName: { contains: q, mode: 'insensitive' } } } },
-        ],
+      ...(words.length > 0 && {
+        AND: words.map((word) => ({
+          OR: [
+            { studentId: { contains: word, mode: 'insensitive' } },
+            { membership: { user: { firstName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { lastName: { contains: word, mode: 'insensitive' } } } },
+          ],
+        })),
       }),
       ...(query.classId && {
         enrollments: { some: { classId: query.classId, status: 'ACTIVE' } },

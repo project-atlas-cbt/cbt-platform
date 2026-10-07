@@ -10580,7 +10580,7 @@ export interface operations {
     StudentController_list: {
         parameters: {
             query?: {
-                /** @description Matches the entity's own identifier and first/last name. */
+                /** @description Each word must match the entity's own identifier, first name or last name, so a full name matches. */
                 q?: string;
                 page?: number;
                 pageSize?: number;
@@ -10777,7 +10777,7 @@ export interface operations {
     TeacherController_list: {
         parameters: {
             query?: {
-                /** @description Matches the entity's own identifier and first/last name. */
+                /** @description Each word must match the entity's own identifier, first name or last name, so a full name matches. */
                 q?: string;
                 page?: number;
                 pageSize?: number;
@@ -10935,7 +10935,7 @@ export interface operations {
     HodController_list: {
         parameters: {
             query?: {
-                /** @description Matches the entity's own identifier and first/last name. */
+                /** @description Each word must match the entity's own identifier, first name or last name, so a full name matches. */
                 q?: string;
                 page?: number;
                 pageSize?: number;
@@ -11097,7 +11097,7 @@ export interface operations {
     ModeratorController_list: {
         parameters: {
             query?: {
-                /** @description Matches the entity's own identifier and first/last name. */
+                /** @description Each word must match the entity's own identifier, first name or last name, so a full name matches. */
                 q?: string;
                 page?: number;
                 pageSize?: number;
