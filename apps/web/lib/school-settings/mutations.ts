@@ -32,3 +32,34 @@ export function useUpdateResultPolicy() {
     onSuccess: () => client.invalidateQueries({ queryKey: ['school', 'result-policy'] }),
   });
 }
+
+/** ADR-0018: every save creates a new scale version — bands are never
+ * edited in place. Invalidates both the scale list and its version history
+ * (the shared `['school','grading-scales']` prefix covers both). */
+export function usePutGradingScale() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      scaleId?: string;
+      name: string;
+      /** Absent for the school-wide scale. */
+      level?: 'JSS1' | 'JSS2' | 'JSS3' | 'SS1' | 'SS2' | 'SS3';
+      bands: { label: string; minPercentage: number; maxPercentage: number; isPassing: boolean }[];
+    }) => unwrap(apiClient.PUT('/school/grading-scales', { body })),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['school', 'grading-scales'] }),
+  });
+}
+
+export function useUpdateAssessmentRules() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      defaultExamDurationSeconds?: number | null;
+      defaultAttemptLimit?: number;
+      defaultNavigationPolicy?: 'FREE' | 'SEQUENTIAL_NO_REVISIT' | 'SEQUENTIAL_WITH_REVISIT';
+      defaultRandomizeQuestions?: boolean;
+      defaultRandomizeOptions?: boolean;
+    }) => unwrap(apiClient.PUT('/school/assessment-rules', { body })),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['school', 'assessment-rules'] }),
+  });
+}

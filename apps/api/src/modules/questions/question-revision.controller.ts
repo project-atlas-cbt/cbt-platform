@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { Authorized } from '../authorization/decorators.js';
+import { AuthorizedWrite } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
@@ -36,7 +36,7 @@ export class QuestionRevisionController {
   constructor(private readonly revisions: QuestionRevisionService) {}
 
   @Patch(':revisionId')
-  @Authorized('questionBank.editOwnDraft')
+  @AuthorizedWrite('questionBank.editOwnDraft')
   @ApiOperation({ summary: 'Edit a draft revision in place — freely editable while DRAFT.' })
   @ApiOkResponse({ type: QuestionRevisionResponseDto })
   async update(
@@ -57,7 +57,7 @@ export class QuestionRevisionController {
   }
 
   @Delete(':revisionId')
-  @Authorized('questionBank.deleteOwnDraft')
+  @AuthorizedWrite('questionBank.deleteOwnDraft')
   @ApiOperation({ summary: "Delete a draft revision — refused for a question's only revision." })
   @ApiOkResponse({ type: StatusResponseDto })
   async remove(
@@ -78,7 +78,7 @@ export class QuestionRevisionController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @Authorized('questionBank.editOwnDraft')
+  @AuthorizedWrite('questionBank.editOwnDraft')
   @ApiOperation({
     summary: 'Start a new revision cloned from the current one (must be APPROVED or REJECTED).',
   })
@@ -103,7 +103,7 @@ export class QuestionRevisionController {
 
   @Post(':revisionId/submit')
   @HttpCode(HttpStatus.OK)
-  @Authorized('questionBank.submitForReview')
+  @AuthorizedWrite('questionBank.submitForReview')
   @ApiOperation({
     summary: 'DRAFT -> SUBMITTED, running the full validation catalogue (DoD item 8).',
   })

@@ -114,7 +114,7 @@ export class ExamSessionService {
         FOR UPDATE
       `;
       if (academicSession?.status !== 'CURRENT') {
-        return { blocked: true as const };
+        return { blocked: true as const, reason: 'ACADEMIC_SESSION_NOT_CURRENT' as const };
       }
 
       const claim = await tx.exam.updateMany({
@@ -196,6 +196,14 @@ export class ExamSessionService {
     });
 
     if (openResult.blocked) {
+      // Bug audit P3-8: say the real reason when the exam itself is fine.
+      if ('reason' in openResult && openResult.reason === 'ACADEMIC_SESSION_NOT_CURRENT') {
+        throw new AppHttpException({
+          code: 'EXAM_NOT_OPENABLE',
+          message:
+            "This exam belongs to an academic session that isn't the current one, so it can't be opened yet.",
+        });
+      }
       throw new AppHttpException({
         code: 'EXAM_NOT_OPENABLE',
         message:

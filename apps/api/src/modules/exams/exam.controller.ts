@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { Authorized } from '../authorization/decorators.js';
+import { Authorized, AuthorizedWrite } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
@@ -62,7 +62,7 @@ export class ExamController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @Authorized('exam.create')
+  @AuthorizedWrite('exam.create')
   @ApiOperation({ summary: "Create an exam within the caller's assigned scope (DoD item 1)." })
   @ApiOkResponse({ type: ExamResponseDto })
   async create(@Req() req: FastifyRequest, @Body() body: CreateExamDto): Promise<ExamResponseDto> {
@@ -95,7 +95,7 @@ export class ExamController {
   }
 
   @Patch(':id')
-  @Authorized('exam.editDraft')
+  @AuthorizedWrite('exam.editDraft')
   @ApiOperation({ summary: "Edit a DRAFT exam's identity fields, including class targeting." })
   @ApiOkResponse({ type: ExamResponseDto })
   async update(
@@ -111,7 +111,7 @@ export class ExamController {
   }
 
   @Delete(':id')
-  @Authorized('exam.deleteDraft')
+  @AuthorizedWrite('exam.deleteDraft')
   @ApiOperation({ summary: 'Delete a DRAFT exam outright.' })
   @ApiOkResponse({ type: StatusResponseDto })
   async remove(@Req() req: FastifyRequest, @Param('id') id: string): Promise<StatusResponseDto> {
@@ -141,16 +141,16 @@ export class ExamController {
       actor,
       id,
     );
-    const listQuery: ListQuestionsQueryDto = { ...query, subjectId, status: 'APPROVED' };
+    const listQuery: ListQuestionsQueryDto = { ...query, subjectId };
     if (level !== null) {
       listQuery.level = level as NonNullable<ListQuestionsQueryDto['level']>;
     }
-    return this.questionBank.list(user.schoolId, actor, listQuery);
+    return this.questionBank.listBindable(user.schoolId, actor, listQuery);
   }
 
   @Put(':id/questions')
   @HttpCode(HttpStatus.OK)
-  @Authorized('exam.addQuestions')
+  @AuthorizedWrite('exam.addQuestions')
   @ApiOperation({ summary: "Set the exam's question selection — a full replace (DoD items 2/9)." })
   @ApiOkResponse({ type: ExamResponseDto })
   async setQuestions(
@@ -167,7 +167,7 @@ export class ExamController {
 
   @Put(':id/configuration')
   @HttpCode(HttpStatus.OK)
-  @Authorized('exam.configureDuration')
+  @AuthorizedWrite('exam.configureDuration')
   @ApiOperation({ summary: 'Configure duration/attempts/navigation/randomization/result policy.' })
   @ApiOkResponse({ type: ExamResponseDto })
   async setConfiguration(
@@ -200,7 +200,7 @@ export class ExamController {
 
   @Post(':id/ready')
   @HttpCode(HttpStatus.OK)
-  @Authorized('exam.publish')
+  @AuthorizedWrite('exam.publish')
   @ApiOperation({ summary: 'DRAFT → READY — succeeds only when every readiness check passes.' })
   @ApiOkResponse({ type: ExamResponseDto })
   async ready(@Req() req: FastifyRequest, @Param('id') id: string): Promise<ExamResponseDto> {
@@ -213,7 +213,7 @@ export class ExamController {
 
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
-  @Authorized('exam.cancel')
+  @AuthorizedWrite('exam.cancel')
   @ApiOperation({ summary: 'Cancel from DRAFT or READY — mandatory reason, audited (DoD item 7).' })
   @ApiOkResponse({ type: ExamResponseDto })
   async cancel(
@@ -230,7 +230,7 @@ export class ExamController {
 
   @Post(':id/archive')
   @HttpCode(HttpStatus.OK)
-  @Authorized('exam.archive')
+  @AuthorizedWrite('exam.archive')
   @ApiOperation({ summary: 'Archive from DRAFT, READY, or CANCELLED.' })
   @ApiOkResponse({ type: ExamResponseDto })
   async archive(@Req() req: FastifyRequest, @Param('id') id: string): Promise<ExamResponseDto> {

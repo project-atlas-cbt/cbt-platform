@@ -7,7 +7,7 @@ import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { resolveMembershipDisplayNames } from '../execution/exam-control-mappers.js';
 import { loadExamOrThrow } from '../exams/exam-mappers.js';
 import {
-  RESULT_LIST_INCLUDE,
+  resultListInclude,
   decimalToNumber,
   toAdjustmentHistoryItemDto,
   toResultListItemDto,
@@ -51,31 +51,47 @@ export class ResultQueryService {
     const sortBy = query.sortBy ?? 'studentName';
     const sortDir = query.sortDir ?? 'asc';
 
+    // P2-13: the class filter and the search both narrow the student, so
+    // they are ANDed; spread into one object, the search replaced the class.
+    // P2-14: a class id belongs to one session, so the enrolment's current
+    // status is irrelevant — a rolled-over student still sat in that class.
+    const q = query.q?.trim();
     const where: Prisma.ResultWhereInput = {
       schoolId,
       examId,
       ...(query.state !== undefined && { state: query.state }),
-      ...(query.classId !== undefined && {
-        studentProfile: {
-          enrollments: { some: { schoolId, classId: query.classId, status: 'ACTIVE' } },
-        },
-      }),
-      ...(query.q !== undefined &&
-        query.q.trim() !== '' && {
-          studentProfile: {
-            OR: [
-              { studentId: { contains: query.q.trim(), mode: 'insensitive' } },
+      AND: [
+        ...(query.classId !== undefined
+          ? [
               {
-                membership: {
-                  user: { displayName: { contains: query.q.trim(), mode: 'insensitive' } },
+                studentProfile: {
+                  enrollments: { some: { schoolId, classId: query.classId } },
                 },
               },
-            ],
-          },
-        }),
+            ]
+          : []),
+        ...(q
+          ? [
+              {
+                studentProfile: {
+                  OR: [
+                    { studentId: { contains: q, mode: 'insensitive' as const } },
+                    {
+                      membership: {
+                        user: { displayName: { contains: q, mode: 'insensitive' as const } },
+                      },
+                    },
+                  ],
+                },
+              },
+            ]
+          : []),
+      ],
     };
 
-    const orderBy: Prisma.ResultOrderByWithRelationInput =
+    // P2-15: tied percentages are common; `id` makes the order total so
+    // pages never repeat or skip a student.
+    const primaryOrder: Prisma.ResultOrderByWithRelationInput =
       sortBy === 'studentName'
         ? { studentProfile: { membership: { user: { displayName: sortDir } } } }
         : sortBy === 'percentage'
@@ -88,8 +104,8 @@ export class ResultQueryService {
       Promise.all([
         tx.result.findMany({
           where,
-          include: RESULT_LIST_INCLUDE,
-          orderBy,
+          include: resultListInclude(exam.academicSessionId),
+          orderBy: [primaryOrder, { id: sortDir }],
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),
@@ -118,11 +134,16 @@ export class ResultQueryService {
     actor: AuthorizedActor,
     resultId: string,
   ): Promise<ResultDetailResponseDto> {
-    const result = await withTenant(prisma, schoolId, (tx) =>
-      tx.result.findUnique({
+    const result = await withTenant(prisma, schoolId, async (tx) => {
+      const sessionOf = await tx.result.findUnique({
+        where: { id: resultId },
+        select: { exam: { select: { academicSessionId: true } } },
+      });
+      if (!sessionOf) return null;
+      return tx.result.findUnique({
         where: { id: resultId },
         include: {
-          ...RESULT_LIST_INCLUDE,
+          ...resultListInclude(sessionOf.exam.academicSessionId),
           exam: { select: { id: true, title: true, subject: { select: { name: true } } } },
           adjustments: {
             orderBy: { createdAt: 'asc' },
@@ -131,8 +152,8 @@ export class ResultQueryService {
             },
           },
         },
-      }),
-    );
+      });
+    });
     if (!result) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Result not found.' });
     }
@@ -226,7 +247,7 @@ export class ResultQueryService {
       classId === undefined
         ? undefined
         : {
-            enrollments: { some: { schoolId, classId, status: 'ACTIVE' } },
+            enrollments: { some: { schoolId, classId } },
           };
     const participantWhere: Prisma.ExamSessionParticipantWhereInput = {
       schoolId,
@@ -332,6 +353,9 @@ export class ResultQueryService {
       lowestPercentage:
         aggregate._min.percentage === null ? null : decimalToNumber(aggregate._min.percentage),
       passRate,
+      // P2-21: finalised before the school had grading bands; "Grade now"
+      // grades exactly these.
+      ungradedCount: resultCount - passingRows.length,
     };
   }
 
@@ -397,7 +421,7 @@ export class ResultQueryService {
           exam.id,
           {
             studentProfile: {
-              enrollments: { some: { schoolId, classId: classGroup.id, status: 'ACTIVE' } },
+              enrollments: { some: { schoolId, classId: classGroup.id } },
             },
           },
           classGroup.id,

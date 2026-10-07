@@ -1,5 +1,5 @@
 import { prisma, withTenant } from '@atlas/db';
-import type { ObjectStorageService } from './object-storage.service.js';
+import { mediaResponseFor, type ObjectStorageService } from './object-storage.service.js';
 
 /** Long-lived relative to question media, per ADR-0021's "logo may be
  * cacheable" allowance — still a signed, expiring URL, never a bare public
@@ -31,6 +31,10 @@ export async function resolveLogoSignedUrl(
     tx.mediaAsset.findUnique({ where: { id: logoMediaId } }),
   );
   if (!asset || asset.schoolId !== schoolId || asset.status !== 'READY') return null;
-  const signed = await storage.createSignedDownloadUrl(asset.storageKey, LOGO_DOWNLOAD_TTL_SECONDS);
+  const signed = await storage.createSignedDownloadUrl(
+    asset.storageKey,
+    LOGO_DOWNLOAD_TTL_SECONDS,
+    mediaResponseFor(asset.sniffedMimeType),
+  );
   return signed.url;
 }

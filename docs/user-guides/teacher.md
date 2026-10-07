@@ -22,7 +22,8 @@ a place for notes, homework or messages.
   questions only for subjects and levels you teach.
 - To change an approved question, edit it: that creates a new revision, which goes through review
   again. Exams that already use the old revision keep it, so past results stay exactly as marked.
-- Many questions at once: **Question Bank → Import**, from the CSV template.
+- Many questions at once: **Question Bank → Import**, from the CSV template. In Excel, format the
+  option columns as Text before typing, so an answer like 1/2 is not turned into a date.
 
 **HODs:** **Question Review** is a queue. For each question: **Approve**, **Reject** with a reason
 the teacher will read, or **Request changes**. Keyboard shortcuts are shown on the screen.
@@ -34,7 +35,8 @@ the teacher will read, or **Request changes**. Keyboard shortcuts are shown on t
 1. **Details**: subject, title, duration, attempts allowed, the classes (arms) sitting it.
 2. **Questions**: choose approved questions and their marks. Every student gets the same
    questions; their order, and the order of options, is shuffled per student.
-3. **Rules**: how results are shown and when (your school's result policy applies).
+3. **Rules**: how results are shown and when (your school's result policy applies). If your school
+   has locked its result settings, you can't change who releases results or what students see.
 4. **Review**: the readiness checklist. **Save as Ready** works only once every item passes.
 
 A ready exam does nothing until a session is opened for it in **Exam Control**.

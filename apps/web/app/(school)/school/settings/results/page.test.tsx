@@ -10,6 +10,12 @@ vi.mock('@/lib/school-settings/queries', () => ({ useResultPolicy: vi.fn() }));
 vi.mock('@/lib/school-settings/mutations', () => ({ useUpdateResultPolicy: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 vi.mock('@/lib/forms/settings-dirty-context', () => ({ useRegisterFormDirty: vi.fn() }));
+// The grading section has its own suite (grading-scale-section.test.tsx).
+vi.mock('@/components/school-settings/grading-scale-section', () => ({
+  GradingScaleSection: ({ canEdit }: { canEdit: boolean }) => (
+    <p>Grading scale section ({canEdit ? 'editable' : 'view-only'})</p>
+  ),
+}));
 
 const mockUseResultPolicy = vi.mocked(useResultPolicy);
 const mockUseUpdateResultPolicy = vi.mocked(useUpdateResultPolicy);
@@ -47,7 +53,7 @@ describe('SchoolResultsSettingsPage', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('boom');
   });
 
-  it('renders the school defaults and the Grading Scale placeholder', () => {
+  it('renders the school defaults and the grading scale section', () => {
     mockUseResultPolicy.mockReturnValue({
       isPending: false,
       isError: false,
@@ -55,7 +61,7 @@ describe('SchoolResultsSettingsPage', () => {
     } as never);
     render(<SchoolResultsSettingsPage />);
     expect(screen.getAllByText('School Admin publishes').length).toBeGreaterThan(0);
-    expect(screen.getByText(/waits on b15/i)).toBeInTheDocument();
+    expect(screen.getByText('Grading scale section (editable)')).toBeInTheDocument();
   });
 
   it('toggles the lock checkbox and saves', async () => {
@@ -84,5 +90,6 @@ describe('SchoolResultsSettingsPage', () => {
 
     expect(screen.getByRole('checkbox')).toBeDisabled();
     expect(screen.queryByRole('button', { name: /save result policy/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Grading scale section (view-only)')).toBeInTheDocument();
   });
 });

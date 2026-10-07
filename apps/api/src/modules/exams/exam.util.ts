@@ -1,3 +1,4 @@
+import { loadSchoolResultSettings } from '../platform/school-result-settings.util.js';
 import { loadExamOrThrow, toExamResponseDto } from './exam-mappers.js';
 import type { ExamResponseDto } from './dto/exam.dto.js';
 
@@ -9,6 +10,9 @@ export async function toExamResponseDtoFresh(
   schoolId: string,
   examId: string,
 ): Promise<ExamResponseDto> {
-  const exam = await loadExamOrThrow(schoolId, examId);
-  return toExamResponseDto(exam);
+  const [exam, school] = await Promise.all([
+    loadExamOrThrow(schoolId, examId),
+    loadSchoolResultSettings(schoolId),
+  ]);
+  return toExamResponseDto(exam, school);
 }

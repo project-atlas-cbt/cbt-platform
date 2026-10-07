@@ -151,7 +151,7 @@ export function StaffResultDetailScreen({
           <div className="flex flex-wrap items-center gap-1">
             <ResultStateBadge value={result.state} />
             {result.withheld ? <WithheldBadge /> : null}
-            <ResultGradeBadge grade={result.grade} />
+            <ResultGradeBadge grade={result.grade} passing={result.gradePassing} />
           </div>
         </div>
       </div>

@@ -59,6 +59,10 @@ export const BASE_ERROR_CODES = {
   // subscription; only an explicit platform override blocks login itself.
   SCHOOL_ACCESS_SUSPENDED: { httpStatus: 403, retryable: false },
   SCHOOL_ACCESS_DEACTIVATED: { httpStatus: 403, retryable: false },
+  // P1-3 / ADR-0015: the subscription expired and its 14-day grace has
+  // ended. Reads, running attempts, marking and renewal keep working; new
+  // exams, questions, imports, sessions and attempts are refused.
+  SUBSCRIPTION_EXPIRED: { httpStatus: 403, retryable: false },
 
   // B4 (Media, Storage & Branding).
   //
@@ -164,6 +168,8 @@ export const BASE_ERROR_CODES = {
   QUESTION_INSUFFICIENT_OPTIONS: { httpStatus: 400, retryable: false },
   QUESTION_OPTION_TEXT_EMPTY: { httpStatus: 400, retryable: false },
   QUESTION_CORRECT_ANSWER_MISSING: { httpStatus: 400, retryable: false },
+  // Bug audit P3-9: a True/False question has exactly two options.
+  QUESTION_TRUE_FALSE_OPTIONS: { httpStatus: 400, retryable: false },
   // QUESTION_OPTION_NOT_FOUND: a body-supplied option id doesn't belong to
   // this revision — this schema stores correctFlag per-option (06 §27),
   // not a separate correct-answer pointer field, so this is the closest

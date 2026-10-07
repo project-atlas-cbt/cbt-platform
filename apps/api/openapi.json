@@ -1915,6 +1915,58 @@
         ]
       }
     },
+    "/school/assessment-rules": {
+      "get": {
+        "operationId": "SchoolAssessmentRulesController_getAssessmentRules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAssessmentRulesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own school's default rules for new exams.",
+        "tags": [
+          "school"
+        ]
+      },
+      "put": {
+        "operationId": "SchoolAssessmentRulesController_updateAssessmentRules",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSchoolAssessmentRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAssessmentRulesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update the default rules for new exams (School Admin only).",
+        "tags": [
+          "school"
+        ]
+      }
+    },
     "/school/onboarding": {
       "get": {
         "operationId": "SchoolOnboardingController_getStatus",
@@ -5085,7 +5137,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
+                  "$ref": "#/components/schemas/HeartbeatResponseDto"
                 }
               }
             }
@@ -6686,7 +6738,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -6978,6 +7030,30 @@
         ]
       }
     },
+    "/students/{id}/unlock-sign-in": {
+      "post": {
+        "operationId": "StudentController_unlockSignIn",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "End a student's sign-in lockout after too many wrong passwords, without changing their password (audited).",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/teachers": {
       "get": {
         "operationId": "TeacherController_list",
@@ -6986,7 +7062,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -7256,7 +7332,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -7536,7 +7612,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -9586,7 +9662,7 @@
     }
   },
   "info": {
-    "title": "Project Atlas API",
+    "title": "ExamKeep API",
     "description": "Multi-tenant CBT platform API. Error envelope and idempotency contract: ADR-0033.",
     "version": "1.0.0",
     "contact": {}
@@ -11773,6 +11849,70 @@
           }
         }
       },
+      "SchoolAssessmentRulesResponseDto": {
+        "type": "object",
+        "properties": {
+          "defaultExamDurationSeconds": {
+            "type": "number",
+            "nullable": true
+          },
+          "defaultAttemptLimit": {
+            "type": "number"
+          },
+          "defaultNavigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "defaultRandomizeQuestions": {
+            "type": "boolean"
+          },
+          "defaultRandomizeOptions": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "defaultExamDurationSeconds",
+          "defaultAttemptLimit",
+          "defaultNavigationPolicy",
+          "defaultRandomizeQuestions",
+          "defaultRandomizeOptions"
+        ]
+      },
+      "UpdateSchoolAssessmentRulesDto": {
+        "type": "object",
+        "properties": {
+          "defaultExamDurationSeconds": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 60,
+            "maximum": 86400,
+            "description": "Default exam duration in whole seconds; null means no default."
+          },
+          "defaultAttemptLimit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "defaultNavigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "defaultRandomizeQuestions": {
+            "type": "boolean"
+          },
+          "defaultRandomizeOptions": {
+            "type": "boolean"
+          }
+        }
+      },
       "OnboardingStatusResponseDto": {
         "type": "object",
         "properties": {
@@ -12336,6 +12476,9 @@
               "ACTIVE",
               "INACTIVE"
             ]
+          },
+          "headedByMe": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -13679,6 +13822,9 @@
               "FULL_REVIEW"
             ]
           },
+          "resultSettingsLocked": {
+            "type": "boolean"
+          },
           "accessMode": {
             "type": "string",
             "enum": [
@@ -13748,6 +13894,7 @@
           "randomizeOptions",
           "resultPolicy",
           "resultDetailVisibility",
+          "resultSettingsLocked",
           "accessMode",
           "generalInstructions",
           "navigationInstructions",
@@ -14546,6 +14693,27 @@
           "results"
         ]
       },
+      "HeartbeatResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The server's current clock. The client counts the exam countdown from it on its own monotonic clock, never from the PC's wall clock."
+          }
+        },
+        "required": [
+          "status",
+          "serverTime"
+        ]
+      },
       "RecordAttemptEventDto": {
         "type": "object",
         "properties": {
@@ -14643,43 +14811,12 @@
           },
           "markedCount": {
             "type": "number"
-          },
-          "correctCount": {
-            "type": "number"
-          },
-          "incorrectCount": {
-            "type": "number"
-          },
-          "unansweredCount": {
-            "type": "number"
-          },
-          "partialCount": {
-            "type": "number",
-            "description": "Always 0 this phase — PARTIAL is reserved for a future non-objective type."
-          },
-          "awardedMarks": {
-            "type": "number"
-          },
-          "maximumMarks": {
-            "type": "number"
-          },
-          "percentage": {
-            "type": "number",
-            "nullable": true,
-            "description": "null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE."
           }
         },
         "required": [
           "status",
           "questionCount",
-          "markedCount",
-          "correctCount",
-          "incorrectCount",
-          "unansweredCount",
-          "partialCount",
-          "awardedMarks",
-          "maximumMarks",
-          "percentage"
+          "markedCount"
         ]
       },
       "AttemptStatusResponseDto": {
@@ -15676,6 +15813,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "withheld": {
             "type": "boolean"
           },
@@ -15716,6 +15857,7 @@
           "unansweredCount",
           "partialCount",
           "grade",
+          "gradePassing",
           "withheld",
           "withheldReason",
           "voidedReason",
@@ -15757,6 +15899,9 @@
           "passRate": {
             "type": "number",
             "nullable": true
+          },
+          "ungradedCount": {
+            "type": "number"
           }
         },
         "required": [
@@ -15768,7 +15913,8 @@
           "averagePercentage",
           "highestPercentage",
           "lowestPercentage",
-          "passRate"
+          "passRate",
+          "ungradedCount"
         ]
       },
       "ExamResultClassSummaryDto": {
@@ -15805,6 +15951,9 @@
             "type": "number",
             "nullable": true
           },
+          "ungradedCount": {
+            "type": "number"
+          },
           "classId": {
             "type": "string"
           },
@@ -15822,6 +15971,7 @@
           "highestPercentage",
           "lowestPercentage",
           "passRate",
+          "ungradedCount",
           "classId",
           "className"
         ]
@@ -16012,6 +16162,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "withheld": {
             "type": "boolean"
           },
@@ -16077,6 +16231,7 @@
           "unansweredCount",
           "partialCount",
           "grade",
+          "gradePassing",
           "withheld",
           "withheldReason",
           "voidedReason",
@@ -16205,6 +16360,10 @@
           "overrideEarnedMarks": {
             "type": "number",
             "description": "MANUAL_OVERRIDE only — the earned-marks value set outright."
+          },
+          "ungradedOnly": {
+            "type": "boolean",
+            "description": "RECALCULATE only — \"Grade now\": touch only results finalised without a grade, and grade them against the school's current scale."
           }
         },
         "required": [
@@ -16315,6 +16474,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "publishedAt": {
             "type": "string",
             "nullable": true
@@ -16330,6 +16493,7 @@
           "earnedMarks",
           "percentage",
           "grade",
+          "gradePassing",
           "publishedAt"
         ]
       },
@@ -16364,6 +16528,9 @@
           },
           "maximumMarks": {
             "type": "number"
+          },
+          "voided": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -16371,7 +16538,8 @@
           "content",
           "correctness",
           "awardedMarks",
-          "maximumMarks"
+          "maximumMarks",
+          "voided"
         ]
       },
       "StudentResultDetailDto": {
@@ -16404,6 +16572,10 @@
           },
           "grade": {
             "type": "string",
+            "nullable": true
+          },
+          "gradePassing": {
+            "type": "boolean",
             "nullable": true
           },
           "publishedAt": {
@@ -16447,6 +16619,7 @@
           "earnedMarks",
           "percentage",
           "grade",
+          "gradePassing",
           "publishedAt",
           "detailVisibility",
           "correctCount",
@@ -18672,11 +18845,13 @@
           "durationSeconds": {
             "type": "number",
             "minimum": 1,
+            "maximum": 86400,
             "description": "Duration in whole seconds."
           },
           "attemptLimit": {
             "type": "number",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100
           },
           "navigationPolicy": {
             "type": "string",

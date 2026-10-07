@@ -69,6 +69,19 @@ test('every internal link on every page resolves', async ({ page, request }) => 
   }
 });
 
+test('the home page tour loads nothing until it is played', async ({ page, request }) => {
+  await page.goto('/');
+  const video = page.locator('video');
+  await expect(video).toHaveAttribute('preload', 'none');
+  await expect(video).not.toHaveAttribute('autoplay');
+  const poster = await video.getAttribute('poster');
+  const src = await video.locator('source').getAttribute('src');
+  for (const url of [poster, src]) {
+    const res = await request.get(url ?? '');
+    expect(res.status(), url ?? '').toBe(200);
+  }
+});
+
 test('pages carry the security headers', async ({ request }) => {
   const response = await request.get('/');
   const headers = response.headers();

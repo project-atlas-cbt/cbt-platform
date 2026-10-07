@@ -371,11 +371,24 @@ export class ExportService {
         const classId = this.stringScope(scope, 'classId');
         const departmentId = this.stringScope(scope, 'departmentId');
         const rows = await tx.studentProfile.findMany({
+          // P2-20: both filters narrow the same relation, so they are ANDed
+          // (spread into one object, the department filter replaced the
+          // class one), and both count only current enrolments.
           where: {
-            ...(classId ? { enrollments: { some: { schoolId, classId, status: 'ACTIVE' } } } : {}),
-            ...(departmentId
-              ? { enrollments: { some: { classGroupSession: { departmentId } } } }
-              : {}),
+            AND: [
+              ...(classId
+                ? [{ enrollments: { some: { schoolId, classId, status: 'ACTIVE' as const } } }]
+                : []),
+              ...(departmentId
+                ? [
+                    {
+                      enrollments: {
+                        some: { status: 'ACTIVE' as const, classGroupSession: { departmentId } },
+                      },
+                    },
+                  ]
+                : []),
+            ],
           },
           include: { membership: { include: { user: true } } },
         });
@@ -506,21 +519,27 @@ export class ExportService {
         ];
         const output = source.map((entry) => {
           const result = resultByParticipant.get(key(entry.studentProfileId, entry.examSessionId));
-          if (result)
+          if (result) {
+            // P2-12: a result still being marked, or voided, has no score to
+            // report; its state decides the status before the attempt's.
+            const scored = result.state === 'FINAL' || result.state === 'ADJUSTED';
             return [
               result.exam.title,
               result.studentProfile.studentId,
               result.studentProfile.membership.user.displayName,
-              `${result.earnedMarks}/${result.totalMarks}`,
-              result.percentage,
-              result.grade ?? '',
-              result.attempt.state === 'AUTO_SUBMITTED'
-                ? 'AUTO-SUBMITTED'
-                : result.state === 'VOIDED'
-                  ? 'VOIDED'
-                  : 'COMPLETED',
+              scored ? `${result.earnedMarks}/${result.totalMarks}` : '',
+              scored ? result.percentage : '',
+              scored ? (result.grade ?? '') : '',
+              result.state === 'VOIDED'
+                ? 'VOIDED'
+                : result.state === 'PROCESSING'
+                  ? 'MARKING'
+                  : result.attempt.state === 'AUTO_SUBMITTED'
+                    ? 'AUTO-SUBMITTED'
+                    : 'COMPLETED',
               result.attempt.submittedAt?.toISOString() ?? '',
             ];
+          }
           const status =
             participationByParticipant.get(key(entry.studentProfileId, entry.examSessionId)) ===
             'ABSENT'

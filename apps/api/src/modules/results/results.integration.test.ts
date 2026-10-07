@@ -24,6 +24,7 @@ import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
 import { AttemptMarkingQueueService } from '../execution/attempt-marking-queue.service.js';
 import { ResultAdjustmentQueueService } from './result-adjustment-queue.service.js';
+import { ExportService } from '../reports/export.service.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -300,6 +301,7 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
   let studentAProfileId: string;
   let studentBProfileId: string;
   let approvedRevisionIds: string[];
+  let adminMembershipId: string;
 
   async function createApprovedQuestion(content: string, correctIndex: number): Promise<string> {
     const options = ['4', '5', '6'].map((v, i) => ({
@@ -529,13 +531,14 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     host = `${school.subdomain}.${ROOT_DOMAIN}`;
     createdSchoolIds.push(schoolId);
 
-    const { user: adminUser } = await seedUser({
+    const { user: adminUser, membership: adminMembership } = await seedUser({
       schoolId,
       loginIdentifier: 'resadmin01',
       password: 'a-real-password-123',
       role: 'SCHOOL_ADMIN',
     });
     createdUserIds.push(adminUser.id);
+    adminMembershipId = adminMembership.id;
     admin = await freshCtx(host, `10.${RUN}.15.1`);
     await login(admin, 'resadmin01', 'a-real-password-123');
 
@@ -713,6 +716,37 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(v1.bands.find((b) => b.label === 'A')!.minPercentage).toBe(70);
   });
 
+  it('P3-5: a level never ends up with two active scales', async () => {
+    const bands = [
+      { label: 'P', minPercentage: 40, maxPercentage: 100, isPassing: true },
+      { label: 'F', minPercentage: 0, maxPercentage: 39.99, isPassing: false },
+    ];
+    // Two first saves for the same level at once.
+    const [first, second] = await Promise.all([
+      put(admin, '/school/grading-scales', { name: 'JSS1 scale', level: 'JSS1', bands }),
+      put(admin, '/school/grading-scales', { name: 'JSS1 scale', level: 'JSS1', bands }),
+    ]);
+    expect([first.statusCode, second.statusCode]).toEqual([200, 200]);
+    const jss1 = await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.findMany({ where: { schoolId, level: 'JSS1', archivedAt: null } }),
+    );
+    expect(jss1).toHaveLength(1);
+
+    // A scale cannot be moved onto another level.
+    const moved = await put(admin, '/school/grading-scales', {
+      scaleId: jss1[0]!.id,
+      name: 'JSS1 scale',
+      level: 'JSS2',
+      bands,
+    });
+    expect(moved.statusCode).toBe(400);
+
+    // Leave the other tests' grading as it was.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.update({ where: { id: jss1[0]!.id }, data: { archivedAt: new Date() } }),
+    );
+  });
+
   it('rejects a scale whose bands overlap or leave a gap', async () => {
     const overlapping = await put(admin, '/school/grading-scales', {
       name: 'Bad scale',
@@ -854,18 +888,191 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
 
     const fullReview = (await get(studentB, `/student/results/${fullReviewResult.resultId}`)).json<{
       correctCount: number;
-      questions: { content: string; correctness: string }[];
+      questions: { content: string; correctness: string; voided: boolean }[];
     }>();
     expect(fullReview.correctCount).toBe(2);
     expect(fullReview.questions).toHaveLength(2);
+    expect(fullReview.questions.every((q) => !q.voided)).toBe(true);
     // Question review, never an answer key — the snapshot's correctFlag does
     // not leave the server (the X-05 boundary, extended to results).
     expect(JSON.stringify(fullReview)).not.toContain('correctFlag');
+
+    // P3-2: once a question is voided, the review marks it.
+    const [voidedQuestion] = await withTenant(prisma, schoolId, (tx) =>
+      tx.examQuestion.findMany({
+        where: { schoolId, examId: fullReviewExam },
+        orderBy: { sequence: 'asc' },
+        take: 1,
+      }),
+    );
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.resultAdjustmentOperation.create({
+        data: {
+          schoolId,
+          examId: fullReviewExam,
+          type: 'VOID_QUESTION',
+          status: 'COMPLETED',
+          reason: 'Misprinted options',
+          targetExamQuestionId: voidedQuestion!.id,
+          createdByMembershipId: adminMembershipId,
+        },
+      }),
+    );
+    const afterVoid = (await get(studentB, `/student/results/${fullReviewResult.resultId}`)).json<{
+      questions: { voided: boolean }[];
+    }>();
+    expect(afterVoid.questions.filter((q) => q.voided)).toHaveLength(1);
   });
 
   // ---------------------------------------------------------------------
   // Publication policy (DoD 7)
   // ---------------------------------------------------------------------
+
+  it('ADR-0010 lock: a teacher cannot change either result setting on their exam while the school has locked them', async () => {
+    await prisma.school.update({
+      where: { id: schoolId },
+      data: {
+        resultPolicy: 'SCHOOL_ADMIN',
+        resultDetailVisibility: 'SCORE_ONLY',
+        resultPolicyLocked: true,
+      },
+    });
+    try {
+      const examId = (
+        await post(teacher, '/exams', {
+          academicSessionId: sessionId,
+          academicTermId: termId,
+          subjectId: mathSubjectId,
+          title: `Lock Test ${randomUUID().slice(0, 8)}`,
+          examType: 'Test',
+          classIds: [classAId],
+        })
+      ).json<{ id: string }>().id;
+
+      const toAutomatic = await put(teacher, `/exams/${examId}/configuration`, {
+        resultPolicy: 'AUTOMATIC',
+      });
+      expect(toAutomatic.statusCode).toBe(403);
+      expect(toAutomatic.json<{ error: { message: string } }>().error.message).toContain('locked');
+
+      const toFullReview = await put(teacher, `/exams/${examId}/configuration`, {
+        resultDetailVisibility: 'FULL_REVIEW',
+      });
+      expect(toFullReview.statusCode).toBe(403);
+
+      // Resending the school's own values, alongside an unrelated rule, is
+      // not an override.
+      const sameValues = await put(teacher, `/exams/${examId}/configuration`, {
+        resultPolicy: 'SCHOOL_ADMIN',
+        resultDetailVisibility: 'SCORE_ONLY',
+        durationSeconds: 1800,
+      });
+      expect(sameValues.statusCode).toBe(200);
+      expect(sameValues.json<{ resultSettingsLocked: boolean }>().resultSettingsLocked).toBe(true);
+
+      // A School Admin is not constrained by the lock.
+      const byAdmin = await put(admin, `/exams/${examId}/configuration`, {
+        resultDetailVisibility: 'SCORE_AND_COUNTS',
+      });
+      expect(byAdmin.statusCode).toBe(200);
+    } finally {
+      await prisma.school.update({
+        where: { id: schoolId },
+        data: {
+          resultPolicy: 'SCHOOL_ADMIN',
+          resultDetailVisibility: 'SCORE_AND_COUNTS',
+          resultPolicyLocked: false,
+        },
+      });
+    }
+  });
+
+  it("ADR-0010 lock: an exam set up before the lock shows, and is governed by, the school's locked values", async () => {
+    const examId = await buildReadyExam({
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'FULL_REVIEW',
+    });
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const sat = await sitExamAndMark(studentA, examId, 1);
+
+    await prisma.school.update({
+      where: { id: schoolId },
+      data: {
+        resultPolicy: 'SCHOOL_ADMIN',
+        resultDetailVisibility: 'SCORE_ONLY',
+        resultPolicyLocked: true,
+      },
+    });
+    try {
+      const exam = (await get(teacher, `/exams/${examId}`)).json<{
+        resultPolicy: string;
+        resultDetailVisibility: string;
+        resultSettingsLocked: boolean;
+      }>();
+      expect(exam).toMatchObject({
+        resultPolicy: 'SCHOOL_ADMIN',
+        resultDetailVisibility: 'SCORE_ONLY',
+        resultSettingsLocked: true,
+      });
+
+      expect((await post(admin, `/exams/${examId}/results/publish`, {})).statusCode).toBe(200);
+      const detail = (await get(studentA, `/student/results/${sat.resultId}`)).json<{
+        detailVisibility: string;
+        correctCount: number | null;
+        questions: unknown[];
+      }>();
+      expect(detail.detailVisibility).toBe('SCORE_ONLY');
+      expect(detail.correctCount).toBeNull();
+      expect(detail.questions).toHaveLength(0);
+    } finally {
+      await prisma.school.update({
+        where: { id: schoolId },
+        data: {
+          resultPolicy: 'SCHOOL_ADMIN',
+          resultDetailVisibility: 'SCORE_AND_COUNTS',
+          resultPolicyLocked: false,
+        },
+      });
+    }
+  });
+
+  it('with the lock off, a teacher may change both result settings on their own exam', async () => {
+    const examId = (
+      await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: `Unlocked Test ${randomUUID().slice(0, 8)}`,
+        examType: 'Test',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>().id;
+    const res = await put(teacher, `/exams/${examId}/configuration`, {
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'FULL_REVIEW',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      resultPolicy: 'TEACHER',
+      resultDetailVisibility: 'FULL_REVIEW',
+      resultSettingsLocked: false,
+    });
+  });
+
+  it('SCORE_AND_COUNTS gives the counts but no question review', async () => {
+    const examId = await buildReadyExam({ resultDetailVisibility: 'SCORE_AND_COUNTS' });
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const sat = await sitExamAndMark(studentB, examId, 1);
+    await post(teacher, `/exams/${examId}/results/publish`, {});
+    const detail = (await get(studentB, `/student/results/${sat.resultId}`)).json<{
+      correctCount: number | null;
+      incorrectCount: number | null;
+      questions: unknown[];
+    }>();
+    expect(detail.correctCount).toBe(1);
+    expect(detail.incorrectCount).toBe(1);
+    expect(detail.questions).toHaveLength(0);
+  });
 
   it('DoD 7: a teacher cannot publish when the school has locked its result policy', async () => {
     const examId = await buildReadyExam({ resultPolicy: 'TEACHER' });
@@ -1003,6 +1210,32 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(await studentSeesResult(studentA, a.resultId)).toBe(true);
   });
 
+  it('P3-4: each result is announced once, and a released result is announced then', async () => {
+    const examId = await buildReadyExam();
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const a = await sitExamAndMark(studentA, examId, 2);
+    const b = await sitExamAndMark(studentB, examId, 1);
+    await post(teacher, `/results/${a.resultId}/withhold`, { reason: 'Under review.' });
+
+    const told = async (resultId: string) =>
+      withTenant(prisma, schoolId, (tx) =>
+        tx.notification.count({
+          where: { schoolId, type: 'RESULT_PUBLISHED', relatedEntityId: resultId },
+        }),
+      );
+
+    await post(teacher, `/exams/${examId}/results/publish`, {});
+    expect(await told(a.resultId)).toBe(0);
+    expect(await told(b.resultId)).toBe(1);
+
+    await post(teacher, `/exams/${examId}/results/publish`, {});
+    expect(await told(b.resultId)).toBe(1);
+
+    await post(teacher, `/results/${a.resultId}/release`, { reason: 'Cleared.' });
+    expect(await told(a.resultId)).toBe(1);
+    expect(await told(b.resultId)).toBe(1);
+  });
+
   it('a withhold without a reason is refused', async () => {
     const examId = await buildReadyExam();
     await post(teacher, `/exams/${examId}/sessions`, {});
@@ -1136,7 +1369,7 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     await sitExamAndMark(studentB, examId, 0); // 0%
 
     const list = (await get(teacher, `/exams/${examId}/results`)).json<{
-      items: { grade: string | null; percentage: number }[];
+      items: { grade: string | null; gradePassing: boolean | null; percentage: number }[];
       summary: {
         resultCount: number;
         averagePercentage: number;
@@ -1152,6 +1385,69 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(list.summary.lowestPercentage).toBe(0);
     expect(list.summary.passRate).toBe(50);
     expect(list.items.map((i) => i.grade).sort()).toEqual(['F', 'P']);
+    // P3-6: whether a grade is a pass comes from its band, not its letter.
+    expect(list.items.map((i) => `${i.grade}:${i.gradePassing}`).sort()).toEqual([
+      'F:false',
+      'P:true',
+    ]);
+
+    // P2-13: the class filter survives a search — a search matching Tunde
+    // inside a class he is not in finds nobody.
+    const otherClass = (
+      await get(teacher, `/exams/${examId}/results?classId=${randomUUID()}&q=Tunde`)
+    ).json<{ items: unknown[] }>();
+    expect(otherClass.items).toHaveLength(0);
+    const ownClass = (
+      await get(teacher, `/exams/${examId}/results?classId=${classAId}&q=Tunde`)
+    ).json<{ items: { studentProfileId: string }[] }>();
+    expect(ownClass.items.map((i) => i.studentProfileId)).toEqual([studentAProfileId]);
+
+    // P2-14: after the enrolment ends (rollover), the past exam still shows
+    // and filters by the class it was sat in.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.studentEnrollment.updateMany({
+        where: { schoolId, studentProfileId: studentAProfileId },
+        data: { status: 'COMPLETED' },
+      }),
+    );
+    try {
+      const after = (await get(teacher, `/exams/${examId}/results?classId=${classAId}`)).json<{
+        items: { studentProfileId: string; className: string | null }[];
+      }>();
+      const tunde = after.items.find((i) => i.studentProfileId === studentAProfileId);
+      expect(tunde?.className).not.toBeNull();
+    } finally {
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.studentEnrollment.updateMany({
+          where: { schoolId, studentProfileId: studentAProfileId },
+          data: { status: 'ACTIVE' },
+        }),
+      );
+    }
+
+    // P2-11/P2-12: the results CSV writes percentages as numbers, and a
+    // voided result has no score and says VOIDED.
+    // `render` is private: the CSV the export job writes, without the queue.
+    const exportService = app.get(ExportService);
+    const render = (
+      Reflect.get(exportService, 'render') as (
+        schoolId: string,
+        type: string,
+        scope: unknown,
+      ) => Promise<{ csv: string }>
+    ).bind(exportService);
+    const before = (await render(schoolId, 'EXAM_RESULTS', { examId })).csv;
+    expect(before).toMatch(/,100,P,COMPLETED,/);
+    expect(before).not.toContain('"100"');
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.result.updateMany({
+        where: { schoolId, examId, studentProfileId: studentAProfileId },
+        data: { state: 'VOIDED' },
+      }),
+    );
+    const after = (await render(schoolId, 'EXAM_RESULTS', { examId })).csv;
+    const tundeRow = after.split('\r\n').find((line) => line.includes('Tunde'));
+    expect(tundeRow).toMatch(/,,,,VOIDED,/);
   });
 
   // ---------------------------------------------------------------------
@@ -1202,6 +1498,62 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
 
     const progress = (await get(admin, `/results/adjustments/${body.id}`)).json<{ id: string }>();
     expect(progress.id).toBe(body.id);
+  });
+
+  it('P2-21 "Grade now": targets only ungraded results, and needs bands to grade against', async () => {
+    const examId = await buildReadyExam();
+    await post(teacher, `/exams/${examId}/sessions`, {});
+    const a = await sitExamAndMark(studentA, examId, 2);
+    await sitExamAndMark(studentB, examId, 1);
+    // Student A's result finalised before the school had any bands.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.result.update({
+        where: { id: a.resultId },
+        data: { grade: null, gradingScaleVersionId: null },
+      }),
+    );
+
+    const wrongType = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'AWARD_MARK',
+      markDelta: 1,
+      reason: 'Grade now',
+      ungradedOnly: true,
+    });
+    expect(wrongType.statusCode).toBe(400);
+
+    const activeScales = await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.findMany({ where: { schoolId, archivedAt: null }, select: { id: true } }),
+    );
+    const ids = activeScales.map((sc) => sc.id);
+    expect(ids.length).toBeGreaterThan(0);
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.updateMany({ where: { id: { in: ids } }, data: { archivedAt: new Date() } }),
+    );
+    const noBands = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'RECALCULATE',
+      reason: 'Grade now',
+      ungradedOnly: true,
+    });
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.gradingScale.updateMany({ where: { id: { in: ids } }, data: { archivedAt: null } }),
+    );
+    expect(noBands.statusCode).toBe(409);
+
+    const op = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'RECALCULATE',
+      reason: 'Grading bands were set after this exam finalised.',
+      ungradedOnly: true,
+    });
+    expect(op.statusCode).toBe(200);
+    const body = op.json<{ id: string; totalCount: number }>();
+    expect(body.totalCount).toBe(1);
+    const stored = await withTenant(prisma, schoolId, (tx) =>
+      tx.resultAdjustmentOperation.findUniqueOrThrow({ where: { id: body.id } }),
+    );
+    expect(stored.ungradedOnly).toBe(true);
   });
 
   it('DoD 10: a teacher cannot adjust, and only a School Admin may manually override', async () => {
@@ -1260,6 +1612,19 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
         })
       ).statusCode,
     ).toBe(400);
+
+    // P2-18: a question that is not in this exam is refused, rather than
+    // marking the whole cohort ADJUSTED for nothing.
+    const notInExam = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'VOID_QUESTION',
+      reason: 'Wrong question picked.',
+      targetExamQuestionId: randomUUID(),
+    });
+    expect(notInExam.statusCode).toBe(400);
+    expect(notInExam.json<{ error: { message: string } }>().error.message).toContain(
+      'not part of this exam',
+    );
 
     expect(
       (

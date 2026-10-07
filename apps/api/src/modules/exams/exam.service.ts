@@ -20,6 +20,7 @@ import {
   resolveAndValidateClassTargets,
 } from './exam-scope.util.js';
 import { toExamResponseDtoFresh } from './exam.util.js';
+import { loadSchoolResultSettings } from '../platform/school-result-settings.util.js';
 import type {
   CancelExamDto,
   CreateExamDto,
@@ -39,6 +40,9 @@ interface ActorContext {
  * Question selection lives in `ExamQuestionService`; configuration in
  * `ExamConfigurationService` — both mirror this service's own "authorize
  * before revealing, then check DRAFT-only state" ordering exactly. */
+/** Matches no membership: evaluates a permission as if the actor did not own the resource. */
+const NO_OWNER = '00000000-0000-0000-0000-000000000000';
+
 @Injectable()
 export class ExamService {
   constructor(
@@ -51,10 +55,12 @@ export class ExamService {
    * `ExamClass` targeting rows in one transaction, only within the actor's
    * real assigned scope (ADR-0013's "at least one targeted class" rule),
    * with `resultPolicy`/`resultDetailVisibility` seeded from the school's
-   * current values (F5/B3 gap-closure). `durationSeconds` starts at `0`
-   * deliberately — 05 §23 names "zero duration" as one of the readiness
-   * checklist's own failure states, so a freshly created exam is expected
-   * to start unready until `PUT .../configuration` sets it. */
+   * current values (F5/B3 gap-closure), and its duration, attempt limit,
+   * navigation and randomisation seeded from the school's Assessment Rules
+   * (05 §58). With no default duration set, `durationSeconds` starts at `0`
+   * — 05 §23 names "zero duration" as one of the readiness checklist's own
+   * failure states, so such an exam starts unready until
+   * `PUT .../configuration` sets it. */
   async create(
     schoolId: string,
     actor: AuthorizedActor,
@@ -100,7 +106,15 @@ export class ExamService {
     const school = await withTenant(prisma, schoolId, (tx) =>
       tx.school.findUniqueOrThrow({
         where: { id: schoolId },
-        select: { resultPolicy: true, resultDetailVisibility: true },
+        select: {
+          resultPolicy: true,
+          resultDetailVisibility: true,
+          defaultExamDurationSeconds: true,
+          defaultAttemptLimit: true,
+          defaultNavigationPolicy: true,
+          defaultRandomizeQuestions: true,
+          defaultRandomizeOptions: true,
+        },
       }),
     );
 
@@ -114,7 +128,11 @@ export class ExamService {
           departmentId: subject.departmentId,
           title: dto.title,
           examType: dto.examType,
-          durationSeconds: 0,
+          durationSeconds: school.defaultExamDurationSeconds ?? 0,
+          attemptLimit: school.defaultAttemptLimit,
+          navigationPolicy: school.defaultNavigationPolicy,
+          randomizeQuestions: school.defaultRandomizeQuestions,
+          randomizeOptions: school.defaultRandomizeOptions,
           resultPolicy: school.resultPolicy,
           resultDetailVisibility: school.resultDetailVisibility,
           createdByMembershipId: schoolActor.membershipId,
@@ -191,7 +209,7 @@ export class ExamService {
     if (!decision.allowed && !this.isCreator(actor, exam)) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Exam not found.' });
     }
-    return toExamResponseDto(exam);
+    return toExamResponseDto(exam, await loadSchoolResultSettings(schoolId));
   }
 
   /** `GET /v1/exams/:id/available-questions` — the subject/level pair the
@@ -316,6 +334,16 @@ export class ExamService {
             : [];
         resolvedClassSubjectIds = resolved.map((c) => c.classSubjectId);
       }
+
+      // Bug audit P1-8: the check above ran against the exam as it stands.
+      // A move to another subject or other classes must also be one the
+      // actor could have made in the first place.
+      await this.assertMayRetarget(schoolId, actor, {
+        ownerMembershipId: exam.createdByMembershipId,
+        currentDepartmentId: exam.departmentId,
+        newDepartmentId,
+        newClassSubjectIds: resolvedClassSubjectIds,
+      });
 
       const updated = await tx.exam.updateMany({
         where: { id, status: 'DRAFT' },
@@ -586,6 +614,78 @@ export class ExamService {
    * alongside the real `evaluate()` decision, so authorship alone is always
    * enough to view (never to configure/publish/etc. — those still go
    * through the real `OWNED` grant on their own permission id). */
+  /**
+   * `editDraft` is OWNED for a Teacher and DEPARTMENT for an HOD, both
+   * evaluated against the exam's current subject. Moving the exam is held
+   * to the rules that applied when it was created:
+   * - a new department must be inside the actor's scope (an HOD cannot
+   *   move an exam into another department's subject);
+   * - new classes must include one the actor teaches, as `create()`
+   *   requires, unless the actor holds the exam by school or department
+   *   scope rather than only by owning it.
+   */
+  private async assertMayRetarget(
+    schoolId: string,
+    actor: AuthorizedActor,
+    params: {
+      ownerMembershipId: string;
+      currentDepartmentId: string | null;
+      newDepartmentId: string | null;
+      newClassSubjectIds: string[] | undefined;
+    },
+  ): Promise<void> {
+    const forbidden = () =>
+      new AppHttpException({
+        code: 'EXAM_OUT_OF_SCOPE',
+        message: 'You can only move this exam to subjects and classes within your own scope.',
+      });
+
+    if (params.newDepartmentId !== params.currentDepartmentId) {
+      const decision = await this.authz.evaluate(actor, 'exam.editDraft', {
+        schoolId,
+        ownerMembershipId: params.ownerMembershipId,
+        ...(params.newDepartmentId !== null && { departmentId: params.newDepartmentId }),
+      });
+      if (!decision.allowed) throw forbidden();
+    }
+
+    const newClassSubjectIds = params.newClassSubjectIds;
+    if (newClassSubjectIds === undefined) return;
+
+    // Allowed without owning the exam: School Admin, Moderator, or the HOD of
+    // the exam's (new) department. They need no teaching assignment. The nil
+    // owner makes OWNED fail (it passes when no owner is given at all).
+    const byScope = await this.authz.evaluate(actor, 'exam.editDraft', {
+      schoolId,
+      ownerMembershipId: NO_OWNER,
+      ...(params.newDepartmentId !== null && { departmentId: params.newDepartmentId }),
+    });
+    if (byScope.allowed) return;
+
+    const schoolActor = requireSchoolActor(actor);
+    const profile = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherProfile.findUnique({
+        where: {
+          schoolId_membershipId: { schoolId, membershipId: schoolActor.membershipId },
+        },
+        select: { id: true },
+      }),
+    );
+    if (!profile) throw forbidden();
+    const assignment = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherAssignment.findFirst({
+        where: {
+          schoolId,
+          teacherProfileId: profile.id,
+          status: 'ACTIVE',
+          classSubjectId: { in: newClassSubjectIds },
+        },
+        select: { id: true },
+      }),
+    );
+    if (!assignment) throw forbidden();
+  }
+
   private isCreator(actor: AuthorizedActor, exam: { createdByMembershipId: string }): boolean {
     return actor.kind === 'SCHOOL' && actor.membershipId === exam.createdByMembershipId;
   }

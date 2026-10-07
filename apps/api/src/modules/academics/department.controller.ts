@@ -38,7 +38,8 @@ export class DepartmentController {
   @ApiOperation({ summary: "List the school's departments (07 §6.3)." })
   @ApiOkResponse({ type: DepartmentListResponseDto })
   async list(@Req() req: FastifyRequest): Promise<DepartmentListResponseDto> {
-    const departments = await this.departments.list(currentUser(req).schoolId);
+    const user = currentUser(req);
+    const departments = await this.departments.list(user.schoolId, user.membershipId);
     return { departments };
   }
 

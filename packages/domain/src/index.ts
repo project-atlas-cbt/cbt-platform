@@ -59,8 +59,11 @@ export {
 export {
   RESULT_POLICIES,
   RESULT_DETAIL_VISIBILITIES,
+  effectiveResultSettings,
   type ResultPolicy,
   type ResultDetailVisibility,
+  type SchoolResultSettings,
+  type ExamResultSettings,
 } from './platform/result-policy.js';
 export {
   derivePalette,
@@ -162,6 +165,8 @@ export {
   type AttemptAnswerState,
   type AttemptEventType,
   type AttemptQuestionCorrectness,
+  MAX_EXAM_DURATION_SECONDS,
+  MAX_EXAM_ATTEMPT_LIMIT,
 } from './exams/constants.js';
 export {
   CANONICAL_AUDIT_ACTIONS,

@@ -4,6 +4,7 @@ import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { runUniqueGuarded } from '../academics/prisma-error.util.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { AuthLockoutService } from '../identity/auth-lockout.service.js';
 import { CredentialSheetService } from '../identity/credential-sheet.service.js';
 import { CredentialResetResponseDto } from './dto/credential-reset.dto.js';
 import type {
@@ -110,6 +111,7 @@ export class StudentService {
   constructor(
     private readonly audit: AuditService,
     private readonly credentialSheets: CredentialSheetService,
+    private readonly lockout: AuthLockoutService,
   ) {}
 
   /** F7 gap-closure: server-side search/sort/paginate (DoD item 1), plus
@@ -389,5 +391,30 @@ export class StudentService {
       loginIdentifier: row.loginIdentifier,
       initialPassword: row.initialPassword,
     };
+  }
+
+  /** P1-4: ends a sign-in lockout without changing the student's password.
+   * Five wrong guesses at a guessable student ID lock the account; staff
+   * clear it here so the student signs straight back in (mid-exam, their
+   * attempt timer is still running). */
+  async unlockSignIn(
+    schoolId: string,
+    studentProfileId: string,
+    actor: ActorContext,
+  ): Promise<void> {
+    const profile = await withTenant(prisma, schoolId, (tx) =>
+      tx.studentProfile.findUnique({ where: { id: studentProfileId }, include: INCLUDE }),
+    );
+    if (!profile) return notFound('Student');
+
+    await this.lockout.clear(schoolId, profile.membership.loginIdentifier);
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.actorUserId,
+      actorRole: actor.actorRole,
+      action: 'STUDENT_SIGN_IN_UNLOCKED',
+      entityType: 'StudentProfile',
+      entityId: studentProfileId,
+    });
   }
 }

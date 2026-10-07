@@ -2,24 +2,25 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 
 /**
  * F14 — a grade string (or `null` when the school has no grading scale
- * configured, ADR-0018) as a semantic badge, mirroring
- * `QuestionStatusBadge`'s `Record<value,{label,status}>` convention. Grade
- * letters aren't a fixed platform vocabulary (schools configure their own
- * scale), so this maps by leading letter rather than an exhaustive table —
- * `null`/anything unrecognised falls back to a plain neutral badge showing
- * the value (or "Ungraded").
+ * configured, ADR-0018) as a semantic badge. Grade letters aren't a fixed
+ * platform vocabulary (schools configure their own scale), so the colour
+ * comes from whether that grade's band is marked passing in the scale the
+ * result was graded against (P3-6: a school whose pass mark is "E" saw E in
+ * red). `passing` is `null`/absent when ungraded or unknown: neutral.
  */
-function statusForGrade(grade: string | null): BadgeProps['status'] {
-  if (!grade) return 'neutral';
-  const letter = grade.trim().charAt(0).toUpperCase();
-  if (letter === 'A' || letter === 'B') return 'success';
-  if (letter === 'C' || letter === 'D') return 'warning';
-  if (letter === 'E' || letter === 'F') return 'danger';
-  return 'neutral';
+function statusForGrade(grade: string | null, passing?: boolean | null): BadgeProps['status'] {
+  if (!grade || passing === null || passing === undefined) return 'neutral';
+  return passing ? 'success' : 'danger';
 }
 
-export function ResultGradeBadge({ grade }: { grade: string | null }) {
-  return <Badge status={statusForGrade(grade)}>{grade ?? 'Ungraded'}</Badge>;
+export function ResultGradeBadge({
+  grade,
+  passing,
+}: {
+  grade: string | null;
+  passing?: boolean | null | undefined;
+}) {
+  return <Badge status={statusForGrade(grade, passing)}>{grade ?? 'Ungraded'}</Badge>;
 }
 
 /**

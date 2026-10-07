@@ -8,8 +8,340 @@ Searching a full name ("Adaeze Okafor") in the Students, Teachers, HODs or Moder
 nothing, because the whole phrase was compared against the first name, the last name and the ID
 separately. The search now splits the text into words and a person matches when every word appears
 in one of those fields, in any order (`searchWords` in `apps/api/src/modules/users/person.util.ts`).
-Partial searches behave as before. Tested: the users integration suite (25 passing), with new
+Partial searches behave as before. Tested: the users integration suite (28 passing), with new
 full-name, reversed-order and non-matching cases for all four lists that fail on the old code.
+
+### 2026-10-07 — Tour video v4: no score on submit, teacher question import, student result, new sound
+
+Owner requests (2026-10-07): the submit scene still showed a score, which students no longer see
+on submitting; the teacher's question import and bulk send-for-review belong before the HOD
+approval; after publishing, a student should open their result; and the audio is redesigned to
+the owner's "quiet digital realism" brief (plan approved before it was built).
+
+- Submit now ends on the real confirmation ("Your answers have been marked…") with no score; its
+  caption says students see results only when the school publishes them.
+- New scenes: a teacher imports ten SS2 questions from a spreadsheet and sends them all for review
+  in one go; the HOD then opens and approves one of those same questions. After publishing, a
+  student who did well and has handed in the live test signs in, opens Results and their
+  Continuous Assessment (picked from the results table; `RESULT_STUDENT` overrides).
+- Sound: new `scripts/teaser/sound.py`, filtered noise only, no oscillator. A near-silent room
+  bed that varies by scene and drops back while the network is out; tik, tuk, zoom air, state
+  grains, a data texture under background work, a stutter for the outage and a sync texture for
+  the return, a settle after submit and a firm "final" on publish. The recorder places them on
+  actions (`click(…, { sound })`, `cue`, `data`). Measured on the mix: room about -40 dBFS,
+  loudest event -15.4 dBFS.
+- Length 78 s, the same as before even with three new scenes: dwells trimmed, one exam answer
+  instead of two.
+  The home page lead names the new steps.
+
+### 2026-10-07 — Sign-in, staff screens, results and ops: P2 and P3 bug audit fixes
+
+The P2 and P3 items of the bug audit (`/mnt/project-files/bug-audit/findings.md`) in sign-in, staff
+screens, results and operations:
+
+- **Results and exports (P2-11 to P2-20, P3-3):** CSV decimals and formula neutralisation (tab and
+  carriage return), the HOD student export keeps class and department filters together and lists
+  only active enrolments, exam result exports show real status, the results list shows the class
+  the student sat in (enrolment in the exam's session), class filter and search combine, stable
+  ordering, VOID_QUESTION must name a question of the exam, manual overrides skip voided results
+  and complete, per-result audit rows carry the adjuster's role, percentages are truncated, not
+  rounded up.
+- **P2-21 "Grade now" (Haneef's choice, 2026-10-06):** results that finalised Ungraded can be
+  graded once bands exist: a RECALCULATE with `ungradedOnly` grades only those results against
+  the current scale and stores that version, so ADR-0018's freeze then applies. Graded results are
+  never touched. Expand-only column `result_adjustment_operations.ungraded_only`. The results
+  screen shows the count and the action; the grading guide explains it.
+- **Staff screens:** moderator dashboard link (P2-22); analytics validation errors are 400, and the
+  teacher class page asks for its own subject's analytics from its own assignments (P2-23); school
+  hosts render times in the school's timezone and makeup expiry is read as school time (P2-24,
+  ADR-0027); results carry `gradePassing` and the badge colours by it (P3-6); full review marks
+  voided questions (P3-2); HOD Exams no longer requests the teacher list (P3-17).
+- **Notifications and scales:** each result is announced once, and a released result is announced
+  then (P3-4); grading scale saves are serialised and a scale keeps its level (P3-5).
+- **Sign-in:** reset tokens are claimed atomically (P3-14); MFA attempts are reserved with an
+  atomic counter (P3-15); new staff get an invitation email naming the school (P3-16).
+- **Ops:** the post-deploy smoke checks every school in `SCHOOLS`, and the runbook creates schools
+  before listing them (P2-25); off-site backups use `mc alias set` with keys passed by name, the
+  app storage user cannot delete object versions, and noncurrent versions expire after 35 days
+  (P2-26); bucket setup no longer ends in `|| true` (P3-11); the demo form refuses `Origin: null`
+  with 403 (P3-12); the invigilator guide names Exam Operations too (P3-13).
+
+Tested: typecheck, lint, format, unit tests, API and worker integration suites and the security
+suite locally, with a new test for each fix. The new `mc` steps in `deploy.sh` and `backup.sh` were
+not run against MinIO (no `mc` here, CI paused); the first deploy or the CI stack proves them.
+
+### 2026-10-06 — Imports and authoring: P2 and P3 bug audit fixes
+
+The P2 and P3 items of the bug audit in imports, authoring and their permissions:
+
+- **P2-4:** the exam Rules form leaves a blank duration out of the save instead of sending 0.
+- **P2-5:** the exam question picker lists each question as its latest approved revision, even
+  while a new draft of it exists, and matches the selection by question; the API refuses two
+  revisions of one question in an exam.
+- **P2-6:** login identifiers are unique per school regardless of case (a `lower()` unique
+  index, migration `20261007090000`), and the import duplicate checks ignore case too.
+- **P2-7:** CSV rows of nothing but commas are dropped; a file that is not UTF-8 fails with "save
+  as CSV UTF-8" instead of importing garbled names.
+- **P2-8:** import templates are headers only. The sample rows (01 §7's worked example) were
+  imported as real records when a school typed below them.
+- **P2-9:** a Teacher or Student reads only their own assignment or subject-registration list by
+  id (403 otherwise).
+- **P2-10:** the rollover screens no longer offer "Change Department", which the API refuses;
+  Promote into a class of the other department does it.
+- **P3-7:** exam duration (24 hours) and attempt limit (100) have maximums, on the exam and in
+  Assessment Rules.
+- **P3-9:** a True/False question must have exactly two options.
+
+**Tested:** unit tests (parser, validator, template, Rules form, question picker) and integration
+tests (picker and double binding, limits, case-insensitive student ID, own assignment list);
+typecheck, lint, unit suites and `test:security`.
+
+### 2026-10-06 — Imports and authoring: P0 and P1 bug audit fixes
+
+From the bug audit (`/mnt/project-files/bug-audit/findings.md`, project files), the imports, media
+and authoring items at P0 and P1:
+
+- **P0-1, uploaded page on the media host.** Import uploads accept only the types browsers really
+  declare for CSV and .xlsx (never `text/html`). Every signed download link now forces its type and
+  disposition: the sniffed image type inline for images, `application/octet-stream` as a download
+  for everything else, whatever the uploader's PUT said. `GET /media/:id/url` refuses import files
+  (404); only the import job reads them. The API's CORS no longer trusts `media`, `www` or `api`
+  under the root domain (`admin` stays), and the pilot's media host sends
+  `Content-Security-Policy: sandbox` and `X-Content-Type-Options: nosniff`.
+- **P1-10, CSV with ₦, × or smart quotes refused.** The upload sniff decodes its 4,100-byte
+  prefix as a stream, so a cut multi-byte character no longer fails it.
+- **P1-11, Excel imports.** A number in a padded format (`00000`, `"ST"000`) imports as shown
+  (`00123`), and any cell Excel turned into a date is an invalid row saying to format the column
+  as Text. The import guides say so too.
+- **P1-8, retargeting a draft exam.** Changing a draft's subject or classes is held to the scope
+  it was created under: a teacher only to classes they teach, an HOD only within their department.
+- **P1-9, revising a question.** A new revision keeps the source revision's images and diagrams.
+
+**Tested:** new unit tests (content sniff at every cut position, xlsx formats and dates, CORS
+hosts) and integration tests (media type forcing and import-link refusal, imports date row, exam
+retargeting, revision media); typecheck, lint, unit suites and `test:security`.
+
+### 2026-10-06 — Exam sitting fixes from the bug audit, second part (P2-2, P3-1, P3-8, P3-10)
+
+- **P2-2:** a makeup grant is refused for a student who has a running or submitted attempt for the
+  exam (they sat another batch). Retry stays the route for a deliberate second attempt. Still open:
+  the End Examination absentee list still includes such a student's other batch, which the rollup
+  already reports as attended.
+- **P3-1:** a repeat Start on an attempt past its time and grace finalises it to `AUTO_SUBMITTED`,
+  as `GET /attempts/:id` already did, instead of returning an in-progress package.
+- **P3-8:** opening an exam whose academic session is not the current one says so, instead of "must
+  be READY or OPEN".
+- **P3-10:** the service worker caches presigned media under its own `atlas-exam-media-sw-v1`
+  (expiring after an hour, at most 300 entries), and attempt cleanup deletes the attempt's signed
+  URLs from it. On activation, the new worker removes signed-URL entries earlier builds left in
+  `atlas-exam-media-v1`.
+
+**Tested:** new API integration tests for P2-2, P3-1 and P3-8 and a web test for P3-10; typecheck,
+lint, format, unit suites and the execution integration suites pass locally.
+
+### 2026-10-06 — Exam sitting fixes from the bug audit (P0-2, P1-1, P1-2, P1-5, P1-6, P2-1)
+
+Fixes from `bug-audit/findings.md` (dev at 5b16ecd) for the exam engine and the student's sitting,
+before the pilot school's first CA test.
+
+- **P0-2, unsynced answers lost at submit.** Every submit now flushes first and checks the device
+  for answers the server has not acknowledged. A manual submit tries three times, then refuses with
+  "N answers haven't reached the server yet" and keeps the dialog open. At expiry the runtime keeps
+  flushing for up to 40 s of the 60 s grace (ADR-0003), then submits; the expiry call and its retry
+  share one run. `clearAttemptData` no longer deletes `pending` or `in-flight` answers.
+- **P1-2, submit racing an answer save.** The `attempt_answers` guard trigger reads the attempt's
+  state `FOR SHARE` (migration `20261006200000`, function body only). A submit, auto-submit or staff
+  end now waits for an answer transaction already past the check, and a write arriving during a
+  submit is refused after it. Answer writes do not block each other; a heartbeat's `last_seen_at`
+  update can wait for one answer transaction. Not yet measured under the B21 load profile.
+- **P1-5, timer following the PC clock.** The countdown reads `lib/attempt/server-clock.ts`: server
+  time anchored at start/resume, on the reconnect check and on every heartbeat (the heartbeat now
+  returns `serverTime`), counted on `performance.now()` in between (ADR-0027's monotonic clock).
+- **P1-6, reload undoing "no going back".** The question on screen and the furthest reached are
+  saved on the device's attempt row and restored on reload (also from the server's answers on a
+  different PC); `SEQUENTIAL_NO_REVISIT` resumes at the furthest question. The server still does not
+  enforce navigation (Candidate / Deferred: refusing writes to locked questions needs the server to
+  know the furthest question, and offline batches arrive in no particular order).
+- **P1-1 and P2-1, student home.** `GET /student/assessment` offers the newest exam the student can
+  start by `start()`'s own clauses: an OPEN exam with attempt-limit headroom, or a live MAKEUP/RETRY
+  authorization (which also admits a COMPLETED exam). Makeup students now see their exam; a
+  submitted exam no longer shows "Available now" or hides another open exam.
+
+**Tested:** new API integration tests for each server fix (the P1-2 test fails with the old trigger
+body), web tests for the submit paths, the clock jump, re-anchoring and restored position.
+`pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm test:security`, the execution
+integration suites and the worker's auto-submit and marking integration suites pass locally. CI is
+blocked by GitHub Actions billing.
+
+### 2026-10-06 — Bug audit fixes: sign-in, HOD screens, results and expiry (P1)
+
+The P1 items from the full app bug audit (`/mnt/project-files/bug-audit/findings.md`) that sit in
+sign-in, HOD screens, results and operations:
+
+- **P1-4 sign-in lockout.** A credential reset, a password change and a completed reset now end a
+  lockout. School Admins and Moderators get **Unlock sign-in** on a student
+  (`POST /students/:id/unlock-sign-in`, permission `users.student.resetCredentials`, audited as
+  `STUDENT_SIGN_IN_UNLOCKED`). Invigilator guide and help updated.
+- **P1-12 HOD screens.** `GET /academics/departments` marks the caller's own department
+  (`headedByMe`); the HOD dashboard and Department Analytics use it, show an error when results
+  can't load, and say so when the HOD heads no department. The HOD Academics strip no longer
+  shows Rollover (owner request).
+- **P1-7 voids after marking.** A result finalised after a completed `VOID_QUESTION` has each
+  void applied at finalisation: ADJUSTED, with a child adjustment row per operation.
+- **P1-3 subscription expiry (ADR-0015).** Past the 14-day grace, exam and question writes,
+  imports, opening sessions and starting new attempts answer `SUBSCRIPTION_EXPIRED`
+  (`@AuthorizedWrite`); a running attempt still resumes. Schools with no subscription row
+  (seeded) are not gated.
+- **P1-13 restore.** `vps-pilot.md`'s restore runs TLS, migrations, stops the apps, then
+  `pg_restore --clean --if-exists --exit-on-error`; `ops:restore-verify` fails when either
+  platform audit policy is missing.
+
+**Tested:** typecheck, lint, format, all unit suites, `test:security` (9/9) and the integration
+suites pass, with new tests per fix. Two integration failures are this sandbox's, not the change:
+the unsigned-GET check in `media.integration.test.ts` (the local S3 stand-in allows it) and the
+migration reset test (PostgreSQL 16 has no `uuidv7()` after a reset). The restore order was
+rehearsed on PostgreSQL 16, not on the pilot server.
+
+### 2026-10-06 — Pilot server: nightly backups could not write their dump
+
+Bug audit P0-3, confirmed on the pilot server: `infra/vps/backups/` was owned by root, because
+nothing created it before the first `docker compose up` and Docker makes a missing bind-mount
+source as root. `bin/backup.sh` runs as `atlas` from cron, so every nightly run since the first
+deploy failed, and the cron line's own log redirect failed first, so nothing was logged.
+
+- **On the server:** the folder was chowned to `atlas`, and a hand-run `bin/backup.sh` wrote a
+  readable 512K dump. The off-site bucket (`BACKUP_S3_*`) is still empty, so dumps stay on the
+  server only until it is set.
+- **Scripts:** `deploy.sh` creates `backups/` as the deploying user before Compose starts (chowning
+  it to the checkout's owner when run as root) and stops with a message if it is still not
+  writable. The cron line `setup-server.sh` installs runs `mkdir -p backups` before the redirect.
+- **Still open from P0-3:** an alert to `OPS_ALERT_EMAILS` when a nightly backup fails.
+
+**Tested:** `bash -n` on both scripts; the server fix was checked by hand on the pilot server.
+
+### 2026-10-06 — Result settings lock covers both settings; no score before release
+
+Owner request: check that a locked "School Admin publishes" policy cannot be varied by teachers,
+and that "What students see" works on the student side. Findings:
+`/mnt/project-files/result-policy-check/findings.md` (project files). Two defects and one product
+decision followed:
+
+- **Lock bypass fixed.** A teacher could set their own draft exam to "Automatic" under a lock to
+  "School Admin publishes", and the worker then published results to students. Owner decision
+  ("Lock both"): the lock now fixes both who releases results and what students see, and while
+  locked every exam follows the school's values, older exams included. One domain rule
+  (`effectiveResultSettings`) is applied at configuration (403 for a teacher or HOD), publication,
+  the worker's auto-publish and the student result detail. ADR-0010 amendment.
+- **Score leak fixed.** The screen a student sees after submitting showed score and
+  correct/incorrect counts as soon as marking finished, before release and whatever the visibility
+  setting said (`GET /attempts/:id/status`). The endpoint now returns marking progress only, and the
+  screen shows `04 §59`'s "available according to your school's result policy" message.
+- **Teacher Rules screen:** both selects are disabled under a lock, with a line saying why, and the
+  save leaves them out. The Settings checkbox now reads "Lock these settings: teachers cannot change
+  who releases results or what students see on their own exams". Help guides and
+  `docs/user-guides/teacher.md` updated.
+- The Rules form's selects ignore an empty value from Radix Select, which jsdom showed overwriting
+  a loaded "School Admin releases results" with `''` on hydrate.
+
+Unchanged and confirmed working: with the lock off, teachers may change both settings while the
+exam is a draft; the three visibility options show score only, score plus counts, and per-question
+correctness on the student result page.
+
+**Tested:** see the PR.
+
+### 2026-10-06 — Assessment Rules: school defaults for new exams
+
+Owner report: Settings → Assessment Rules on the demo school still said the page was not built.
+F5 had deferred it until `B11` defined the exam rules; `B11` has long since shipped. Owner
+decision (2026-10-06): editable defaults, no lock.
+
+- `School` gains `defaultExamDurationSeconds` (nullable: no default), `defaultAttemptLimit`,
+  `defaultNavigationPolicy`, `defaultRandomizeQuestions` and `defaultRandomizeOptions`, defaulting
+  to what a new exam got before (expand-only migration `20261006120000_school_assessment_rules`).
+- `GET/PUT /v1/school/assessment-rules` (`schoolConfig.settings.view` / `.manage`, so Moderator
+  views, Teacher is denied), a partial merge like the result policy, audited as
+  `SCHOOL_ASSESSMENT_RULES_CHANGED` only when a value actually changes.
+- `ExamService.create` seeds a new exam's duration, attempts, navigation and randomisation from
+  them. Teachers can change every rule on the exam's Rules step; existing exams keep their own.
+- The settings page replaces the placeholder (plain-language labels from the Rules step), and the
+  school admin help gains "Set the default rules for new exams" (ADR-0035).
+
+**Tested:** API integration (`school-assessment-rules`, 11 tests including role and cross-school
+checks; `exam-builder` gains a seeding test), web component tests for the page, help guide tests,
+typecheck and lint. CI is still blocked by billing.
+
+### 2026-10-06 — Tour video: a bulk import, softer sound, no tones
+
+Owner feedback on the first cut: bulk import is a key selling point and must be in it, the clicks
+were too sharp, and the video and audio rule (never music, musical instruments or
+melodic tones; light non-instrumental ambience is welcome) applies to everything we make.
+
+- A new opening scene: a Moderator drags a 30-row class list (`.xlsx`, built from the app's own
+  student template) onto Import students; validation finds 29 valid rows and one student ID the
+  school already has; the 29 are imported. The recorder writes `skip` markers so the compositor
+  cuts the background job's wait, and the dragged file is drawn under the cursor. Imported IDs
+  cannot be deleted, so each take needs a new `IMPORT_BASE`.
+- Sound: the clicks and keys are now low-passed noise (no sine body), about 9 dB quieter at peak;
+  the approval, offline and online tones are gone. A quiet room tone runs throughout, with faint
+  distant typing during the lab scenes, all synthesised from filtered noise.
+- The student sign-in shot was dropped to keep it short: 79 seconds. Home page copy now names the
+  import.
+
+**Tested:** see the PR; playback still unchecked here (no H.264 decoder in the test Chromium).
+
+### 2026-10-06 — One-minute tour video on the home page
+
+Owner request: the teaser belongs on the website, and should feel interactive: a cursor doing the
+actions, the clicked spot highlighted, interface sounds and no music, and not too much animation.
+
+- `apps/marketing/scripts/teaser/` records the tour from the real app on the fictional demo
+  school (`record.mjs`), renders its cards and captions in the site's fonts (`cards.mjs`) and
+  composes it (`compose.py`). The recorder logs a timeline of cursor moves, clicks, typing, zooms
+  and captions beside the screencast frames; the compositor draws the cursor and a fading click
+  mark from it, applies a gentle zoom on the area in use, and synthesises quiet click, key and
+  confirmation tones. Headless screencast frames come at CSS pixel size unless Chromium runs with
+  `--force-device-scale-factor`, so the recorder sets it (1.5).
+- The story: an HOD approves a question; the Exam Control Center during a sitting, with quiet
+  computers flagged; a student signs in, sits the paper, loses the network and carries on, and
+  submits; the teacher publishes the results. About 75 seconds, captions burned in.
+- The home page has a "product in one minute" section after the hero (`TeaserVideo`): the video
+  plays only when pressed (`preload="none"`, no autoplay), so only the poster loads until then. A
+  browser check asserts that and that both files are served. `media-src 'self'` already allowed it.
+
+**Tested:** marketing lint and typecheck; unit tests (40) and browser tests (47, including axe on the home page and the new tour check) pass. Playback itself was not checked here: the test Chromium has no H.264 decoder.
+
+### 2026-10-06 — School admins can set grading bands (F5 DoD 7 closed)
+
+**Owner decisions (2026-10-06):** per-level scales are on the screen as well as the school-wide
+one; no grading step in the onboarding wizard for now; no automatic default scale for new schools
+(that would need an ADR-0018 amendment), but a warning while a scale is missing.
+
+- **Settings → Results → Grading scale** replaces the F5 placeholder that said it waited on B15.
+  It uses B15's existing `GET/PUT /v1/school/grading-scales` and `/versions`; no API, migration
+  or ADR change. A **Scale for** picker covers the school-wide scale and JSS1–SS3. The bands
+  (grade, From %, To %, Pass) are an editable table that starts from the default template when
+  the school has none, and a level's own scale starts from a copy of the school-wide bands. The
+  form checks the bands with `validateGradingBands` (the server's own rules) plus field checks
+  (labels up to 16 characters, numbers 0–100 with two decimals) before saving and lists every
+  problem; server errors show in the same place. The screen says that a save creates a new
+  version and never changes grades already given, and a version history marks the versions used
+  for grades. Read-only without `schoolConfig.settings.manage`. The page now registers one
+  combined dirty flag for both forms.
+- **Known limit, not changed:** the API cannot retire a level's own scale, so once saved it can be
+  changed but not removed. The screen says so before one is created.
+- **School admin dashboard:** a warning alert, linking to the screen, while any class level would
+  be finalised Ungraded (no school-wide scale and no own scale for that level).
+- Help guide `grading-scale` added (and the "cannot be set yet" note removed from
+  `result-policy`); `school-onboarding.md` step 5 now says where bands are set and that they must
+  be set before the first exam is marked. `docs/user-guides/` has no school admin guide, so it is
+  unchanged. Roadmap: F5 DoD 7, F5 Deferred and F15's open line marked closed. This closes the
+  2026-10-05 Help centre entry's grading Candidate.
+- Tested: unit tests for the form helpers, component tests for the section (default template,
+  gap/overlap/duplicate messages, save payloads for a new scale, a new version and a level's own
+  scale, server error, view-only, version history, load error) and the dashboard alert; web
+  typecheck, lint and the full web suite (1,108 tests) pass. The F20 axe scan now includes
+  `/school/settings/results` and passes against production builds; the screen was also driven in
+  Chromium against the real API (save, new version, a JSS1 scale) and screenshots reviewed.
 
 ### 2026-10-05 — Software Admin: System Configuration built (ADR-0036); Sign-in Security gaps filled
 
@@ -62,6 +394,20 @@ way to replace it (the gap `operator-access.md` recorded). Now:
   its order after MFA, other sessions ended, audit row, email without the password); the whole
   security suite; new `password-change-gate.test.tsx`; web and API typecheck and lint.
 - Not changed: school accounts still get no email after a password change (out of this ask).
+
+### 2026-10-06 — Deploy reloads Caddy so new schools are served
+
+Adding the demo schools to `SCHOOLS` and redeploying left their hosts without certificates: the
+smoke failed 18 checks with a TLS alert. `bin/deploy.sh` rewrote the Caddyfile, but it is a bind
+mount, so `docker compose up` left the running Caddy untouched, and Caddy reads its file only at
+start.
+
+- `infra/vps/bin/deploy.sh` now runs `caddy reload` before the smoke.
+- `tools/load/src/smoke.ts` retries a TLS handshake alert for up to a minute, so a host whose
+  certificate Let's Encrypt is still issuing does not fail the smoke. A host that never gets one
+  still does.
+- Tested: load typecheck, lint and format; shell syntax. The reload itself runs only on the
+  server (no Docker here).
 
 ### 2026-10-05 — Pilot server findings: admin sign-in route, demo form through ZeptoMail
 

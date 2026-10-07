@@ -71,27 +71,82 @@ export class StudentAssessmentService {
       };
     }
 
-    const participant = await withTenant(prisma, schoolId, (tx) =>
-      tx.examSessionParticipant.findFirst({
+    // Bug fix (audit P1-1, P2-1): offer the newest exam this student can
+    // actually start, judged by the same clauses `start()` uses — an OPEN
+    // exam with attempt-limit headroom, or a live MAKEUP/RETRY authorization
+    // for one of the student's open sessions (which also admits a COMPLETED
+    // exam). Before, only OPEN exams were offered, so a makeup student saw
+    // nothing, and an exam the student had already submitted kept showing
+    // as available, hiding any other open exam behind it.
+    const now = new Date();
+    const candidate = await withTenant(prisma, schoolId, async (tx) => {
+      const participants = await tx.examSessionParticipant.findMany({
         where: {
           schoolId,
           studentProfileId: studentProfile.id,
           status: 'AUTHORIZED',
-          session: { schoolId, status: 'OPEN', exam: { schoolId, status: 'OPEN' } },
+          session: {
+            schoolId,
+            status: 'OPEN',
+            exam: { schoolId, status: { in: ['OPEN', 'COMPLETED'] } },
+          },
         },
         orderBy: { authorizedAt: 'desc' },
         select: {
           examSessionId: true,
-          session: { select: { examId: true, exam: { select: { title: true } } } },
+          session: {
+            select: {
+              examId: true,
+              exam: { select: { title: true, status: true, attemptLimit: true } },
+            },
+          },
         },
-      }),
-    );
-    if (!participant) return NO_ACTIVE_ASSESSMENT;
+      });
+      if (participants.length === 0) return null;
+
+      const examIds = [...new Set(participants.map((p) => p.session.examId))];
+      const completed = await tx.examAttempt.groupBy({
+        by: ['examId'],
+        where: {
+          schoolId,
+          studentProfileId: studentProfile.id,
+          examId: { in: examIds },
+          state: { in: ['SUBMITTED', 'AUTO_SUBMITTED'] },
+        },
+        _count: { _all: true },
+      });
+      const authorizations = await tx.attemptAuthorization.findMany({
+        where: {
+          schoolId,
+          studentProfileId: studentProfile.id,
+          examId: { in: examIds },
+          status: 'AUTHORIZED',
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        select: { examId: true, examSessionId: true },
+      });
+      const completedByExam = new Map(completed.map((row) => [row.examId, row._count._all]));
+      const openSessionIds = new Set(participants.map((p) => p.examSessionId));
+      const authorizedExams = new Set(
+        authorizations
+          .filter((auth) => openSessionIds.has(auth.examSessionId))
+          .map((auth) => auth.examId),
+      );
+
+      return (
+        participants.find((p) => {
+          const { examId, exam } = p.session;
+          if (authorizedExams.has(examId)) return true;
+          return exam.status === 'OPEN' && (completedByExam.get(examId) ?? 0) < exam.attemptLimit;
+        }) ?? null
+      );
+    });
+    if (!candidate) return NO_ACTIVE_ASSESSMENT;
 
     return {
-      examId: participant.session.examId,
-      examTitle: participant.session.exam.title,
-      examSessionId: participant.examSessionId,
+      examId: candidate.session.examId,
+      examTitle: candidate.session.exam.title,
+      examSessionId: candidate.examSessionId,
       attemptId: null,
       state: 'NOT_STARTED',
     };

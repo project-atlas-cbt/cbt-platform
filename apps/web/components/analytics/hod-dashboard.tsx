@@ -14,7 +14,7 @@ import {
 import {
   useAcademicsContext,
   useClasses,
-  useDepartments,
+  useMyHodDepartment,
   useSubjects,
 } from '@/lib/academics/queries';
 import {
@@ -25,6 +25,8 @@ import {
 } from '@/lib/analytics';
 import { ReviewQueueWidget } from '@/components/question-review/review-queue-widget';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { ErrorState } from '@/components/ui/error-state';
+import { HodDepartmentState } from './hod-department-state';
 import { MetricTile } from './metric-tile';
 
 export function HodDashboard() {
@@ -32,8 +34,8 @@ export function HodDashboard() {
   const currentSession = contextQuery.data?.session;
   const currentTerm = contextQuery.data?.term;
 
-  const departmentsQuery = useDepartments();
-  const department = departmentsQuery.data?.departments?.[0];
+  const departmentQuery = useMyHodDepartment();
+  const department = departmentQuery.department;
   const departmentId = department?.id;
 
   const analyticsQuery = useDepartmentAnalytics(
@@ -48,16 +50,29 @@ export function HodDashboard() {
   const classesQuery = useClasses(currentSession?.id);
   const subjectsQuery = useSubjects();
 
-  const examsQuery = useExamsList({
-    ...(departmentId ? { departmentId } : {}),
-    ...(currentSession?.id ? { academicSessionId: currentSession.id } : {}),
-    ...(currentTerm?.id ? { academicTermId: currentTerm.id } : {}),
-  });
+  const examsQuery = useExamsList(
+    {
+      ...(departmentId ? { departmentId } : {}),
+      ...(currentSession?.id ? { academicSessionId: currentSession.id } : {}),
+      ...(currentTerm?.id ? { academicTermId: currentTerm.id } : {}),
+    },
+    { enabled: Boolean(departmentId) },
+  );
 
   const departmentSubjects = useMemo(() => {
     if (!departmentId || !subjectsQuery.data?.subjects) return [];
     return subjectsQuery.data.subjects.filter((s) => s.departmentId === departmentId);
   }, [departmentId, subjectsQuery.data]);
+
+  const departmentClasses = useMemo(() => {
+    if (!departmentId || !classesQuery.data?.classes) return [];
+    return classesQuery.data.classes.filter((c) => c.departmentId === departmentId);
+  }, [departmentId, classesQuery.data]);
+
+  // P1-12: no department to show (the list failed, or this HOD heads none)
+  // is said plainly rather than shown as empty results.
+  const departmentUnavailable =
+    departmentQuery.isError || (departmentQuery.isSuccess && !department);
 
   const examCounts = useMemo(() => {
     const items = examsQuery.data?.exams ?? [];
@@ -113,44 +128,54 @@ export function HodDashboard() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <MetricTile
-              label="Department Average"
-              value={
-                analyticsQuery.isPending
-                  ? '—'
-                  : formatPercentage(analyticsQuery.data?.averagePercentage)
-              }
-              subtitle="Score average"
-              icon={<TrendingUp className="h-4 w-4" />}
-              emphasis
-              isLoading={analyticsQuery.isPending && Boolean(departmentId)}
+          {departmentUnavailable ? (
+            <HodDepartmentState departmentQuery={departmentQuery} />
+          ) : analyticsQuery.isError ? (
+            <ErrorState
+              error={analyticsQuery.error}
+              onRetry={() => void analyticsQuery.refetch()}
+              title="Department results couldn't be loaded"
             />
-            <MetricTile
-              label="Department Subjects"
-              value={formatCount(departmentSubjects.length)}
-              icon={<BookOpen className="h-4 w-4" />}
-              isLoading={subjectsQuery.isPending}
-            />
-            <MetricTile
-              label="Department Classes"
-              value={formatCount(classesQuery.data?.classes?.length ?? 0)}
-              icon={<School className="h-4 w-4" />}
-              isLoading={classesQuery.isPending}
-            />
-            <MetricTile
-              label="Active Exams"
-              value={formatCount(examCounts.active)}
-              icon={<ClipboardList className="h-4 w-4" />}
-              isLoading={examsQuery.isPending}
-            />
-            <MetricTile
-              label="Completed Exams"
-              value={formatCount(examCounts.completed)}
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              isLoading={examsQuery.isPending}
-            />
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <MetricTile
+                label="Department Average"
+                value={
+                  analyticsQuery.isPending
+                    ? '—'
+                    : formatPercentage(analyticsQuery.data?.averagePercentage)
+                }
+                subtitle="Score average"
+                icon={<TrendingUp className="h-4 w-4" />}
+                emphasis
+                isLoading={analyticsQuery.isPending}
+              />
+              <MetricTile
+                label="Department Subjects"
+                value={formatCount(departmentSubjects.length)}
+                icon={<BookOpen className="h-4 w-4" />}
+                isLoading={subjectsQuery.isPending}
+              />
+              <MetricTile
+                label="Department Classes"
+                value={formatCount(departmentClasses.length)}
+                icon={<School className="h-4 w-4" />}
+                isLoading={classesQuery.isPending}
+              />
+              <MetricTile
+                label="Active Exams"
+                value={formatCount(examCounts.active)}
+                icon={<ClipboardList className="h-4 w-4" />}
+                isLoading={examsQuery.isPending}
+              />
+              <MetricTile
+                label="Completed Exams"
+                value={formatCount(examCounts.completed)}
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                isLoading={examsQuery.isPending}
+              />
+            </div>
+          )}
         </div>
       </ErrorBoundary>
 

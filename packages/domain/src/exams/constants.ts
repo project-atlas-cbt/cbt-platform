@@ -142,3 +142,9 @@ export const ATTEMPT_QUESTION_CORRECTNESS_VALUES = [
   'PARTIAL',
 ] as const;
 export type AttemptQuestionCorrectness = (typeof ATTEMPT_QUESTION_CORRECTNESS_VALUES)[number];
+
+/** Sanity bounds on an exam's duration and attempt limit (bug audit P3-7):
+ * far above any real school exam, low enough that a mistyped value is a
+ * validation error rather than an integer overflow in the database. */
+export const MAX_EXAM_DURATION_SECONDS = 24 * 60 * 60;
+export const MAX_EXAM_ATTEMPT_LIMIT = 100;

@@ -9,34 +9,54 @@ import type {
 /** Everything the staff results list and detail need in one query — the
  * student's identity, the class they sat the exam in, and the attempt's own
  * state and invalidation reason (ADR-0025 attaches the latter to a VOIDED
- * result rather than duplicating it onto the result row). */
-export const RESULT_LIST_INCLUDE = {
-  studentProfile: {
-    select: {
-      id: true,
-      studentId: true,
-      membership: { select: { user: { select: { displayName: true } } } },
-      enrollments: {
-        where: { status: 'ACTIVE' as const },
-        select: { classGroupSession: { select: { id: true, name: true } } },
-        take: 1,
+ * result rather than duplicating it onto the result row).
+ *
+ * P2-14: "the class they sat in" is the student's enrolment in the exam's
+ * own academic session, whatever its status now — after rollover the
+ * ACTIVE enrolment is next session's class, and past exams showed "—". */
+export function resultListInclude(examAcademicSessionId: string) {
+  return {
+    studentProfile: {
+      select: {
+        id: true,
+        studentId: true,
+        membership: { select: { user: { select: { displayName: true } } } },
+        enrollments: {
+          where: { academicSessionId: examAcademicSessionId },
+          orderBy: { startDate: 'desc' as const },
+          select: { classGroupSession: { select: { id: true, name: true } } },
+          take: 1,
+        },
       },
     },
-  },
-  attempt: {
-    select: {
-      id: true,
-      state: true,
-      submittedAt: true,
-      invalidationReason: true,
-      examSession: { select: { id: true } },
+    gradingScaleVersion: { select: { bands: { select: { label: true, isPassing: true } } } },
+    attempt: {
+      select: {
+        id: true,
+        state: true,
+        submittedAt: true,
+        invalidationReason: true,
+        examSession: { select: { id: true } },
+      },
     },
-  },
-} satisfies Prisma.ResultInclude;
+  } satisfies Prisma.ResultInclude;
+}
 
 export type ResultWithRelations = Prisma.ResultGetPayload<{
-  include: typeof RESULT_LIST_INCLUDE;
+  include: ReturnType<typeof resultListInclude>;
 }>;
+
+/** P3-6: whether a stored grade is a pass, read from the band with that
+ * label in the very scale version the result was graded against — so a later
+ * edit to the school's bands never restates it (ADR-0018), and a school whose
+ * pass mark is "E" sees E as a pass. `null` for an ungraded result. */
+export function gradePassing(
+  grade: string | null,
+  version: { bands: { label: string; isPassing: boolean }[] } | null,
+): boolean | null {
+  if (grade === null || !version) return null;
+  return version.bands.find((band) => band.label === grade)?.isPassing ?? null;
+}
 
 /** Prisma returns `Decimal` for the percentage column. Converted once, here,
  * so no downstream caller has to remember that `percentage` is not already a
@@ -65,6 +85,7 @@ export function toResultListItemDto(row: ResultWithRelations): ResultListItemDto
     unansweredCount: row.unansweredCount,
     partialCount: row.partialCount,
     grade: row.grade,
+    gradePassing: gradePassing(row.grade, row.gradingScaleVersion),
     withheld: row.withheld,
     withheldReason: row.withheldReason,
     // ADR-0025: "visible to authorized staff WITH the invalidation reason

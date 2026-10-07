@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { Authorized } from '../authorization/decorators.js';
+import { Authorized, AuthorizedWrite } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { QuestionReviewService } from './question-review.service.js';
@@ -56,7 +56,7 @@ export class QuestionReviewController {
 
   @Post('questions/:id/approve')
   @HttpCode(HttpStatus.OK)
-  @Authorized('questionBank.approve')
+  @AuthorizedWrite('questionBank.approve')
   @ApiOperation({ summary: 'Approve — an optional HOD note (DoD item 2).' })
   @ApiOkResponse({ type: QuestionReviewWorkspaceResponseDto })
   async approve(
@@ -72,7 +72,7 @@ export class QuestionReviewController {
 
   @Post('questions/:id/reject')
   @HttpCode(HttpStatus.OK)
-  @Authorized('questionBank.reject')
+  @AuthorizedWrite('questionBank.reject')
   @ApiOperation({ summary: 'Reject — reason mandatory (DoD item 3).' })
   @ApiOkResponse({ type: QuestionReviewWorkspaceResponseDto })
   async reject(
@@ -88,7 +88,7 @@ export class QuestionReviewController {
 
   @Post('questions/:id/request-changes')
   @HttpCode(HttpStatus.OK)
-  @Authorized('questionBank.requestChanges')
+  @AuthorizedWrite('questionBank.requestChanges')
   @ApiOperation({
     summary: 'Request changes — reason mandatory, behaves like reject (DoD item 4).',
   })

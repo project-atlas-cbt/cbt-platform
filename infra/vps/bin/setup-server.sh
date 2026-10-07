@@ -41,7 +41,7 @@ systemctl reload ssh || systemctl reload sshd
 echo 'atlas ALL=(root) NOPASSWD: /home/atlas/cbt-platform/infra/vps/bin/internal-tls.sh' > /etc/sudoers.d/atlas-tls
 chmod 440 /etc/sudoers.d/atlas-tls
 
-cron_line='30 1 * * * cd /home/atlas/cbt-platform/infra/vps && bin/backup.sh >> backups/backup.log 2>&1'
+cron_line='30 1 * * * cd /home/atlas/cbt-platform/infra/vps && mkdir -p backups && bin/backup.sh >> backups/backup.log 2>&1'
 # grep -v exits 1 when it keeps no lines (a fresh server has no crontab), which
 # set -e inside the subshell would turn into a silent early exit.
 ( crontab -u atlas -l 2>/dev/null | grep -vF 'bin/backup.sh' || true; echo "$cron_line" ) | crontab -u atlas -

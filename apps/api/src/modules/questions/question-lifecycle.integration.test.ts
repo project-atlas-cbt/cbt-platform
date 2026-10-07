@@ -610,6 +610,36 @@ describe('B8 Question Bank', () => {
     });
 
     it('DoD 5/7/6: approve directly (B9 stands in), revise, and prove DB-level immutability', async () => {
+      // Bug audit P1-9 fixture: a diagram on the draft before approval.
+      const diagramId = await withTenant(prisma, schoolId, async (tx) => {
+        const uploader = await tx.schoolMembership.findFirstOrThrow({ where: { schoolId } });
+        const assetId = randomUUID();
+        await tx.mediaAsset.createMany({
+          data: {
+            id: assetId,
+            schoolId,
+            type: 'QUESTION_DIAGRAM',
+            status: 'READY',
+            storageKey: `schools/${schoolId}/questions/${randomUUID()}/d.png`,
+            originalFilename: 'd.png',
+            declaredMimeType: 'image/png',
+            sniffedMimeType: 'image/png',
+            declaredSizeBytes: 68,
+            uploaderUserId: uploader.userId,
+            uploadUrlExpiresAt: new Date(),
+          },
+        });
+        await tx.questionMedia.createMany({
+          data: {
+            schoolId,
+            questionRevisionId: revisionId,
+            mediaAssetId: assetId,
+            displayOrder: 0,
+          },
+        });
+        return assetId;
+      });
+
       // B9 stands in: no B8 endpoint reaches APPROVED — construct it
       // directly, exactly as import-commit-resume/session-activation-
       // concurrency's own tests already establish this codebase's
@@ -629,6 +659,13 @@ describe('B8 Question Bank', () => {
       const revised = reviseRes.json<{ id: string; revisionNumber: number; status: string }>();
       expect(revised.revisionNumber).toBe(2);
       expect(revised.status).toBe('DRAFT');
+      // P1-9: the diagram carries over to the new revision, on a row of its own.
+      const carried = await withTenant(prisma, schoolId, (tx) =>
+        tx.questionMedia.findMany({ where: { schoolId, mediaAssetId: diagramId } }),
+      );
+      expect(carried.map((m) => m.questionRevisionId).sort()).toEqual(
+        [revisionId, revised.id].sort(),
+      );
 
       const after = await withTenant(prisma, schoolId, (tx) =>
         tx.questionRevision.findUniqueOrThrow({ where: { id: revisionId } }),

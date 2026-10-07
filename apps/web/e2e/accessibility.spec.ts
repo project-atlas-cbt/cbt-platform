@@ -33,6 +33,7 @@ const STAFF: { role: string; user: () => string; pages: string[] }[] = [
       '/school/analytics',
       '/school/reports',
       '/school/settings',
+      '/school/settings/results',
       '/school/help',
       '/school/help/rollover',
     ],

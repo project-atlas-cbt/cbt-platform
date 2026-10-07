@@ -10,7 +10,7 @@ export default function HodAcademicsLayout({ children }: { children: ReactNode }
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold text-text-primary">Academics</h1>
-      <AcademicsTabs basePath="/hod/academics" />
+      <AcademicsTabs basePath="/hod/academics" showRollover={false} />
       <div className="pt-2">{children}</div>
     </div>
   );

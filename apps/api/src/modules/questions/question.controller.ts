@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { Authorized } from '../authorization/decorators.js';
+import { Authorized, AuthorizedWrite } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { SubjectListResponseDto } from '../academics/dto/subject.dto.js';
@@ -53,7 +53,7 @@ export class QuestionController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @Authorized('questionBank.create')
+  @AuthorizedWrite('questionBank.create')
   @ApiOperation({ summary: 'Create a question + its initial draft revision (DoD items 1/2/8).' })
   @ApiOkResponse({ type: QuestionResponseDto })
   async create(
@@ -119,7 +119,7 @@ export class QuestionController {
 
   @Post(':id/archive')
   @HttpCode(HttpStatus.OK)
-  @Authorized('questionBank.archive')
+  @AuthorizedWrite('questionBank.archive')
   @ApiOperation({ summary: 'Archive a question — always allowed, never touches any revision row.' })
   @ApiOkResponse({ type: QuestionResponseDto })
   async archive(@Req() req: FastifyRequest, @Param('id') id: string): Promise<QuestionResponseDto> {
@@ -137,7 +137,7 @@ export class QuestionController {
   // transition it applies is the revision-level `submit()` unchanged.
   @Post('bulk-submit')
   @HttpCode(HttpStatus.OK)
-  @Authorized('questionBank.submitForReview')
+  @AuthorizedWrite('questionBank.submitForReview')
   @ApiOperation({
     summary:
       "Submit each question's current DRAFT revision for review, in bulk. Best-effort: " +

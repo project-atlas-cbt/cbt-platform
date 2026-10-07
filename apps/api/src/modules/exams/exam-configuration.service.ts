@@ -5,6 +5,7 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { loadSchoolResultSettings } from '../platform/school-result-settings.util.js';
 import { loadExamOrThrow } from './exam-mappers.js';
 import type { ExamResponseDto, UpdateExamConfigurationDto } from './dto/exam.dto.js';
 import { toExamResponseDtoFresh } from './exam.util.js';
@@ -57,6 +58,8 @@ export class ExamConfigurationService {
         message: 'Configuration can only be changed while the exam is in DRAFT.',
       });
     }
+
+    await this.assertResultSettingsNotLocked(schoolId, actor, dto);
 
     // Conditional updateMany (`WHERE status = 'DRAFT'`), not the plain
     // `update()` this originally used — the same idiom `ExamService
@@ -112,5 +115,43 @@ export class ExamConfigurationService {
     });
 
     return toExamResponseDtoFresh(schoolId, examId);
+  }
+
+  /**
+   * ADR-0010 (2026-10-06 amendment): while the school's result policy is
+   * locked, a teacher or HOD may not change either result setting on their
+   * exam — who releases results, or what students see. Sending the school's
+   * own value is accepted (a form resubmitting what it was shown is not an
+   * override). School Admins and Moderators are not constrained, matching
+   * `ResultPublicationService.assertPolicyPermits`.
+   */
+  private async assertResultSettingsNotLocked(
+    schoolId: string,
+    actor: AuthorizedActor,
+    dto: UpdateExamConfigurationDto,
+  ): Promise<void> {
+    if (dto.resultPolicy === undefined && dto.resultDetailVisibility === undefined) return;
+    if (
+      actor.kind === 'SCHOOL' &&
+      (actor.roles.includes('SCHOOL_ADMIN') || actor.roles.includes('MODERATOR'))
+    ) {
+      return;
+    }
+
+    const school = await loadSchoolResultSettings(schoolId);
+    if (!school.resultPolicyLocked) return;
+
+    const changesPolicy =
+      dto.resultPolicy !== undefined && dto.resultPolicy !== school.resultPolicy;
+    const changesVisibility =
+      dto.resultDetailVisibility !== undefined &&
+      dto.resultDetailVisibility !== school.resultDetailVisibility;
+    if (changesPolicy || changesVisibility) {
+      throw new AppHttpException({
+        code: 'FORBIDDEN',
+        message:
+          'This school has locked its result settings. Who releases results and what students see cannot be changed on this exam.',
+      });
+    }
   }
 }

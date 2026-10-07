@@ -33,9 +33,40 @@ export function useResultPolicy() {
   });
 }
 
+export function useAssessmentRules() {
+  return useQuery({
+    queryKey: ['school', 'assessment-rules'],
+    queryFn: () => unwrap(apiClient.GET('/school/assessment-rules', {})),
+  });
+}
+
 export function useSubscriptionStatus() {
   return useQuery({
     queryKey: ['school', 'subscription'],
     queryFn: () => unwrap(apiClient.GET('/school/subscription', {})),
+  });
+}
+
+/** ADR-0018 / B15 — the school's grading scales (current version's bands)
+ * plus the default template offered as a starting point. */
+export function useGradingScales() {
+  return useQuery({
+    queryKey: ['school', 'grading-scales'],
+    queryFn: () => unwrap(apiClient.GET('/school/grading-scales', {})),
+  });
+}
+
+/** Every version of one scale, newest first, each flagged `inUse` when a
+ * result was graded against it. Disabled until a scale exists. */
+export function useGradingScaleVersions(scaleId: string | undefined) {
+  return useQuery({
+    queryKey: ['school', 'grading-scales', scaleId, 'versions'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/school/grading-scales/{id}/versions', {
+          params: { path: { id: scaleId ?? '' } },
+        }),
+      ),
+    enabled: scaleId !== undefined,
   });
 }

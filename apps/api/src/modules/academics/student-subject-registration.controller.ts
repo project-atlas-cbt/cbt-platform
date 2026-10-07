@@ -3,7 +3,7 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
-import { resolveActorRole } from './actor.util.js';
+import { resolveActorRole, selfOnlyMembershipId } from './actor.util.js';
 import {
   StudentSubjectRegistrationListResponseDto,
   StudentSubjectRegistrationResponseDto,
@@ -32,9 +32,11 @@ export class StudentSubjectRegistrationController {
     @Req() req: FastifyRequest,
     @Param('id') studentProfileId: string,
   ): Promise<StudentSubjectRegistrationListResponseDto> {
+    const user = currentUser(req);
     const registrations = await this.registrations.listForStudent(
-      currentUser(req).schoolId,
+      user.schoolId,
       studentProfileId,
+      selfOnlyMembershipId(user),
     );
     return { registrations };
   }

@@ -39,13 +39,6 @@ const MARKING_NOT_APPLICABLE = {
     status: 'NOT_APPLICABLE',
     questionCount: 0,
     markedCount: 0,
-    correctCount: 0,
-    incorrectCount: 0,
-    unansweredCount: 0,
-    partialCount: 0,
-    awardedMarks: 0,
-    maximumMarks: 0,
-    percentage: null,
   },
 };
 
@@ -92,25 +85,17 @@ describe('SubmittedScreen', () => {
     expect(await screen.findByText(/being marked/i)).toBeInTheDocument();
   });
 
-  it('shows the score summary once marking is COMPLETE', async () => {
+  it('never shows a score or counts once marking is COMPLETE, only that results follow the school policy', async () => {
     mockGet.mockResolvedValue(
       ok({
         ...MARKING_NOT_APPLICABLE,
-        marking: {
-          status: 'COMPLETE',
-          questionCount: 10,
-          markedCount: 10,
-          correctCount: 8,
-          incorrectCount: 2,
-          unansweredCount: 0,
-          partialCount: 0,
-          awardedMarks: 16,
-          maximumMarks: 20,
-          percentage: 80,
-        },
+        marking: { status: 'COMPLETE', questionCount: 10, markedCount: 10 },
       }),
     );
     renderWithClient();
-    expect(await screen.findByText('16 / 20')).toBeInTheDocument();
+    expect(
+      await screen.findByText(/available according to your school.s result policy/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/score|correct|incorrect/i)).not.toBeInTheDocument();
   });
 });

@@ -123,6 +123,25 @@ export class AttemptAdministrationService {
           message: 'Makeup access can only be granted to students with a recorded absence.',
         });
       }
+      // Bug audit P2-2: with several batches, a student who sat one batch is
+      // recorded absent from another. That absence is not a missed exam, and
+      // a makeup would give them a second attempt. Retry is the route for
+      // a deliberate second attempt.
+      const sat = await tx.examAttempt.count({
+        where: {
+          schoolId,
+          examId,
+          studentProfileId: { in: dto.studentProfileIds },
+          state: { in: ['IN_PROGRESS', 'SUBMITTED', 'AUTO_SUBMITTED'] },
+        },
+      });
+      if (sat > 0) {
+        throw new AppHttpException({
+          code: 'CONFLICT',
+          message:
+            'Makeup access cannot be granted to a student who already sat this examination in another batch.',
+        });
+      }
       const session = await tx.examSession.create({
         data: { schoolId, examId, sessionType: 'MAKEUP', openedByMembershipId: actorMembershipId },
       });

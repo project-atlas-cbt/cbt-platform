@@ -29,7 +29,8 @@ import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
-import { ImportValidationService } from './import-validation.service.js';
+import ExcelJS from 'exceljs';
+import { EXCEL_DATE_MESSAGE, ImportValidationService } from './import-validation.service.js';
 import { ImportCommitService } from './import-commit.service.js';
 import { IMPORT_TEMPLATE_VERSION } from './import-templates.js';
 
@@ -394,6 +395,34 @@ describe('B7 — Bulk Import Pipeline', () => {
       );
       expect(auditEvents).toHaveLength(1);
       expect(auditEvents[0]?.metadata).toMatchObject({ committedRows: 2, totalRows: 4 });
+    });
+
+    it('bug audit P1-11: an Excel file keeps padded IDs and reports cells Excel made into dates', async () => {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Import');
+      sheet.addRow([`# template-version: ${IMPORT_TEMPLATE_VERSION}`]);
+      sheet.addRow(['Student ID', 'First Name', 'Last Name', 'Class', 'Department']);
+      const padded = sheet.addRow([RUN, 'Ada', 'Obi', 'SS1A', '']);
+      padded.getCell(1).numFmt = '"XL"00000';
+      sheet.addRow([`XL-D-${RUN}`, 'Bola', 'Ade', new Date(Date.UTC(2026, 0, 2)), '']);
+      const mediaAssetId = await uploadImportFile(
+        admin,
+        Buffer.from(await workbook.xlsx.writeBuffer()),
+      );
+      const job = (
+        await post(admin, '/imports/students', { mediaAssetId, academicSessionId: sessionId })
+      ).json<{ id: string }>();
+      await validation.validate(schoolId, job.id);
+
+      const rows = await withTenant(prisma, schoolId, (tx) =>
+        tx.importRow.findMany({ where: { importJobId: job.id }, orderBy: { rowNumber: 'asc' } }),
+      );
+      expect((rows[0]!.rawData as Record<string, string>)['Student ID']).toBe(
+        `XL${String(RUN).padStart(5, '0')}`,
+      );
+      expect(rows[0]!.status).toBe('VALID');
+      expect(rows[1]!.status).toBe('INVALID');
+      expect(rows[1]!.errors).toContainEqual({ field: 'Class', message: EXCEL_DATE_MESSAGE });
     });
 
     it('downloads a correctable, re-uploadable error CSV (DoD 6)', async () => {

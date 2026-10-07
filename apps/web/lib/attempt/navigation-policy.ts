@@ -44,3 +44,28 @@ export function isNavigationAllowed(
 export function nextFurthestIndex(currentFurthest: number, visitedIndex: number): number {
   return Math.max(currentFurthest, visitedIndex);
 }
+
+/**
+ * Audit P1-6: where a reloaded runtime resumes. The furthest question
+ * reached is the larger of what this device saved and the last question
+ * with an answer (the answers come back from the server on resume, so this
+ * also holds on a different PC). Under `SEQUENTIAL_NO_REVISIT` everything
+ * before the furthest question is locked, so the student resumes there.
+ */
+export function restoredPosition(params: {
+  policy: NavigationPolicy;
+  questionCount: number;
+  savedCurrentIndex: number | undefined;
+  savedFurthestIndex: number | undefined;
+  answeredIndexes: readonly number[];
+}): { currentIndex: number; furthestIndex: number } {
+  const { policy, questionCount, savedCurrentIndex, savedFurthestIndex, answeredIndexes } = params;
+  const last = Math.max(0, questionCount - 1);
+  const clamp = (value: number) => Math.min(Math.max(0, value), last);
+  const current = clamp(savedCurrentIndex ?? 0);
+  const furthest = clamp(Math.max(savedFurthestIndex ?? 0, current, ...answeredIndexes));
+  return {
+    currentIndex: policy === 'SEQUENTIAL_NO_REVISIT' ? furthest : current,
+    furthestIndex: furthest,
+  };
+}

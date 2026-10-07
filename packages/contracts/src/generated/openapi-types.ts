@@ -894,6 +894,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/school/assessment-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own school's default rules for new exams. */
+        get: operations["SchoolAssessmentRulesController_getAssessmentRules"];
+        /** Update the default rules for new exams (School Admin only). */
+        put: operations["SchoolAssessmentRulesController_updateAssessmentRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/school/onboarding": {
         parameters: {
             query?: never;
@@ -2905,6 +2923,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/{id}/unlock-sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a student's sign-in lockout after too many wrong passwords, without changing their password (audited). */
+        post: operations["StudentController_unlockSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teachers": {
         parameters: {
             query?: never;
@@ -4435,6 +4470,23 @@ export interface components {
             /** @description Whether a teacher may override the seeded resultPolicy on their own exams (B15 enforces this; F5 only stores the flag). */
             resultPolicyLocked?: boolean;
         };
+        SchoolAssessmentRulesResponseDto: {
+            defaultExamDurationSeconds: number | null;
+            defaultAttemptLimit: number;
+            /** @enum {string} */
+            defaultNavigationPolicy: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            defaultRandomizeQuestions: boolean;
+            defaultRandomizeOptions: boolean;
+        };
+        UpdateSchoolAssessmentRulesDto: {
+            /** @description Default exam duration in whole seconds; null means no default. */
+            defaultExamDurationSeconds?: number | null;
+            defaultAttemptLimit?: number;
+            /** @enum {string} */
+            defaultNavigationPolicy?: "FREE" | "SEQUENTIAL_NO_REVISIT" | "SEQUENTIAL_WITH_REVISIT";
+            defaultRandomizeQuestions?: boolean;
+            defaultRandomizeOptions?: boolean;
+        };
         OnboardingStatusResponseDto: {
             /** Format: date-time */
             completedAt: string | null;
@@ -4583,6 +4635,7 @@ export interface components {
             code: string;
             /** @enum {string} */
             status: "ACTIVE" | "INACTIVE";
+            headedByMe?: boolean;
         };
         DepartmentListResponseDto: {
             departments: components["schemas"]["DepartmentResponseDto"][];
@@ -4944,6 +4997,7 @@ export interface components {
             resultPolicy: "TEACHER" | "SCHOOL_ADMIN" | "AUTOMATIC";
             /** @enum {string} */
             resultDetailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
+            resultSettingsLocked: boolean;
             /** @enum {string} */
             accessMode: "OPEN_TO_ELIGIBLE" | "EXPLICIT_AUTHORIZATION";
             generalInstructions: string | null;
@@ -5181,6 +5235,18 @@ export interface components {
         SaveAnswerBatchResponseDto: {
             results: components["schemas"]["BatchAnswerResultDto"][];
         };
+        HeartbeatResponseDto: {
+            /**
+             * @example ok
+             * @enum {string}
+             */
+            status: "ok";
+            /**
+             * Format: date-time
+             * @description The server's current clock. The client counts the exam countdown from it on its own monotonic clock, never from the PC's wall clock.
+             */
+            serverTime: string;
+        };
         RecordAttemptEventDto: {
             /** @enum {string} */
             type: "WINDOW_BLUR" | "FULLSCREEN_EXIT" | "TAB_HIDDEN" | "RECONNECTED" | "RESUMED" | "BINDING_MISMATCH";
@@ -5211,15 +5277,6 @@ export interface components {
             status: "NOT_APPLICABLE" | "PENDING" | "COMPLETE";
             questionCount: number;
             markedCount: number;
-            correctCount: number;
-            incorrectCount: number;
-            unansweredCount: number;
-            /** @description Always 0 this phase — PARTIAL is reserved for a future non-objective type. */
-            partialCount: number;
-            awardedMarks: number;
-            maximumMarks: number;
-            /** @description null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE. */
-            percentage: number | null;
         };
         AttemptStatusResponseDto: {
             attemptId: string;
@@ -5457,6 +5514,7 @@ export interface components {
             unansweredCount: number;
             partialCount: number;
             grade: string | null;
+            gradePassing: boolean | null;
             withheld: boolean;
             withheldReason: string | null;
             voidedReason: string | null;
@@ -5474,6 +5532,7 @@ export interface components {
             highestPercentage: number | null;
             lowestPercentage: number | null;
             passRate: number | null;
+            ungradedCount: number;
         };
         ExamResultClassSummaryDto: {
             expectedStudentCount: number;
@@ -5485,6 +5544,7 @@ export interface components {
             highestPercentage: number | null;
             lowestPercentage: number | null;
             passRate: number | null;
+            ungradedCount: number;
             classId: string;
             className: string;
         };
@@ -5536,6 +5596,7 @@ export interface components {
             unansweredCount: number;
             partialCount: number;
             grade: string | null;
+            gradePassing: boolean | null;
             withheld: boolean;
             withheldReason: string | null;
             voidedReason: string | null;
@@ -5595,6 +5656,8 @@ export interface components {
             targetResultId?: string;
             /** @description MANUAL_OVERRIDE only — the earned-marks value set outright. */
             overrideEarnedMarks?: number;
+            /** @description RECALCULATE only — "Grade now": touch only results finalised without a grade, and grade them against the school's current scale. */
+            ungradedOnly?: boolean;
         };
         ResultAdjustmentOperationResponseDto: {
             id: string;
@@ -5622,6 +5685,7 @@ export interface components {
             earnedMarks: number;
             percentage: number;
             grade: string | null;
+            gradePassing: boolean | null;
             publishedAt: string | null;
         };
         StudentResultsResponseDto: {
@@ -5633,6 +5697,7 @@ export interface components {
             correctness: string;
             awardedMarks: number;
             maximumMarks: number;
+            voided: boolean;
         };
         StudentResultDetailDto: {
             id: string;
@@ -5644,6 +5709,7 @@ export interface components {
             earnedMarks: number;
             percentage: number;
             grade: string | null;
+            gradePassing: boolean | null;
             publishedAt: string | null;
             /** @enum {string} */
             detailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
@@ -7535,6 +7601,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchoolResultPolicyResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolAssessmentRulesController_getAssessmentRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolAssessmentRulesResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolAssessmentRulesController_updateAssessmentRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSchoolAssessmentRulesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolAssessmentRulesResponseDto"];
                 };
             };
         };
@@ -9566,7 +9674,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StatusResponseDto"];
+                    "application/json": components["schemas"]["HeartbeatResponseDto"];
                 };
             };
         };
@@ -10472,7 +10580,7 @@ export interface operations {
     StudentController_list: {
         parameters: {
             query?: {
-                /** @description Matches the entity's own identifier and first/last name. */
+                /** @description Each word must match the entity's own identifier, first name or last name, so a full name matches. */
                 q?: string;
                 page?: number;
                 pageSize?: number;
@@ -10647,10 +10755,29 @@ export interface operations {
             };
         };
     };
+    StudentController_unlockSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     TeacherController_list: {
         parameters: {
             query?: {
-                /** @description Matches the entity's own identifier and first/last name. */
+                /** @description Each word must match the entity's own identifier, first name or last name, so a full name matches. */
                 q?: string;
                 page?: number;
                 pageSize?: number;
@@ -10808,7 +10935,7 @@ export interface operations {
     HodController_list: {
         parameters: {
             query?: {
-                /** @description Matches the entity's own identifier and first/last name. */
+                /** @description Each word must match the entity's own identifier, first name or last name, so a full name matches. */
                 q?: string;
                 page?: number;
                 pageSize?: number;
@@ -10970,7 +11097,7 @@ export interface operations {
     ModeratorController_list: {
         parameters: {
             query?: {
-                /** @description Matches the entity's own identifier and first/last name. */
+                /** @description Each word must match the entity's own identifier, first name or last name, so a full name matches. */
                 q?: string;
                 page?: number;
                 pageSize?: number;

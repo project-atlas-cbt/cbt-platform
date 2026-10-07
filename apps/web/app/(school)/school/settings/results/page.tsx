@@ -28,6 +28,7 @@ import { useHasPermission } from '@/lib/nav';
 import { useResultPolicy } from '@/lib/school-settings/queries';
 import { useUpdateResultPolicy } from '@/lib/school-settings/mutations';
 import { useRegisterFormDirty } from '@/lib/forms/settings-dirty-context';
+import { GradingScaleSection } from '@/components/school-settings/grading-scale-section';
 
 const RESULT_POLICIES = ['TEACHER', 'SCHOOL_ADMIN', 'AUTOMATIC'] as const;
 const RESULT_POLICY_LABELS: Record<(typeof RESULT_POLICIES)[number], string> = {
@@ -51,14 +52,11 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 /**
- * `05 §47`/`§58`, ADR-0010 — F5/B3 gap-closure. These are *defaults* only:
- * no `Exam` exists yet (`B11`) to seed from them, and no `B15` marking/
- * publication logic exists yet to honour `resultPolicyLocked`. Saving here
- * stores the school's chosen defaults correctly and auditably, ahead of the
- * phases that will read them — DoD item 6 is real for the storage half,
- * honestly partial for the "applied to exams" half until `B11`/`B15` ship.
- * Grading Scale (`05 §46`) stays an honest placeholder — deferred alongside
- * Assessment Rules until `B15` exists, per this phase's own roadmap text.
+ * `05 §47`/`§58`, ADR-0010 — the school's result defaults. New exams copy
+ * both values; ticking the lock fixes both for teachers and HODs, and every
+ * exam then follows the school's values (ADR-0010 2026-10-06 amendment).
+ * Grading Scale (`05 §46`, ADR-0018) is its own section below, against
+ * B15's versioned grading-scale API (closes F5 DoD item 7).
  */
 export default function SchoolResultsSettingsPage() {
   const resultPolicy = useResultPolicy();
@@ -66,6 +64,7 @@ export default function SchoolResultsSettingsPage() {
   const canEdit = useHasPermission('schoolConfig.settings.manage');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [gradingDirty, setGradingDirty] = useState(false);
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -75,7 +74,8 @@ export default function SchoolResultsSettingsPage() {
       resultPolicyLocked: false,
     },
   });
-  useRegisterFormDirty(form.formState.isDirty);
+  // One registration for both sections: two would overwrite each other.
+  useRegisterFormDirty(form.formState.isDirty || gradingDirty);
 
   useEffect(() => {
     if (!resultPolicy.data) return;
@@ -100,7 +100,7 @@ export default function SchoolResultsSettingsPage() {
   }
 
   return (
-    <div className="max-w-xl space-y-8">
+    <div className="max-w-2xl space-y-8">
       <section>
         <h2 className="mb-3 text-sm font-medium text-text-secondary">
           Result publication defaults
@@ -173,7 +173,8 @@ export default function SchoolResultsSettingsPage() {
                   </FormControl>
                   <div>
                     <FormLabel className="font-normal">
-                      Lock this policy — teachers cannot override it on their own exams
+                      Lock these settings: teachers cannot change who releases results or what
+                      students see on their own exams
                     </FormLabel>
                     <FormMessage />
                   </div>
@@ -199,14 +200,7 @@ export default function SchoolResultsSettingsPage() {
         </Form>
       </section>
 
-      <section className="border-t border-border pt-6">
-        <h2 className="mb-2 text-sm font-medium text-text-secondary">Grading scale</h2>
-        <p className="text-sm text-text-muted">
-          Grading-band configuration waits on B15 (Results &amp; Publication), which defines the
-          versioned grading-scale entity these bands would populate. Deferred by design — raw marks
-          and percentages remain available regardless.
-        </p>
-      </section>
+      <GradingScaleSection canEdit={canEdit} onDirtyChange={setGradingDirty} />
     </div>
   );
 }

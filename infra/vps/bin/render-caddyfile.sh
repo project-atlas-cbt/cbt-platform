@@ -141,8 +141,15 @@ www.$ROOT_DOMAIN {
 	redir https://$ROOT_DOMAIN{uri} permanent
 }
 
+# Uploaded files are never pages: the API forces each signed link's type,
+# and these headers stop any object the browser does open as a document from
+# running script on this host, which shares the schools' site (P0-1).
 media.$ROOT_DOMAIN {
 	import common
+	header {
+		Content-Security-Policy "sandbox"
+		X-Content-Type-Options "nosniff"
+	}
 	request_body {
 		max_size 100MB
 	}
