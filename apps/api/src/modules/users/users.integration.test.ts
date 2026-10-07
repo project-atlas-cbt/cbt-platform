@@ -659,6 +659,18 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     expect(searchBody.total).toBe(1);
     expect(searchBody.students[0]?.firstName).toBe('Chidi');
 
+    // A full name matches word by word, in either order; a word that
+    // matches nothing on the person excludes them.
+    for (const fullName of ['Chidi PagTest', 'pagtest  chidi']) {
+      const fullRes = await get(admin, `/students?q=${encodeURIComponent(fullName)}`);
+      expect(fullRes.statusCode).toBe(200);
+      const fullBody = fullRes.json<{ students: { firstName: string }[]; total: number }>();
+      expect(fullBody.total).toBe(1);
+      expect(fullBody.students[0]?.firstName).toBe('Chidi');
+    }
+    const mismatch = await get(admin, `/students?q=${encodeURIComponent('Chidi Nobody')}`);
+    expect(mismatch.json<{ total: number }>().total).toBe(0);
+
     const outOfRange = await get(admin, '/students?page=999&pageSize=2');
     expect(outOfRange.statusCode).toBe(200);
     const outOfRangeBody = outOfRange.json<{ students: unknown[]; total: number }>();
@@ -680,6 +692,8 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
 
     const teacherList = await get(admin, '/teachers?q=Segun');
     expect(teacherList.statusCode).toBe(200);
+    const teacherFull = await get(admin, `/teachers?q=${encodeURIComponent('Segun PagTeacher')}`);
+    expect(teacherFull.json<{ total: number }>().total).toBe(1);
     const teacherBody = teacherList.json<{
       teachers: unknown[];
       total: number;
@@ -700,6 +714,8 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     const modList = await get(admin, '/moderators?q=Ngozi&sortBy=lastName&sortDir=desc');
     expect(modList.statusCode).toBe(200);
     expect(modList.json<{ total: number }>().total).toBe(1);
+    const modFull = await get(admin, `/moderators?q=${encodeURIComponent('Ngozi PagMod')}`);
+    expect(modFull.json<{ total: number }>().total).toBe(1);
 
     const hodPromote = await post(admin, '/hods', {
       membershipId: teacherRes.json<{ membershipId: string }>().membershipId,
@@ -708,6 +724,8 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     const hodList = await get(admin, '/hods?q=Segun');
     expect(hodList.statusCode).toBe(200);
     expect(hodList.json<{ total: number }>().total).toBe(1);
+    const hodFull = await get(admin, `/hods?q=${encodeURIComponent('PagTeacher Segun')}`);
+    expect(hodFull.json<{ total: number }>().total).toBe(1);
   });
 
   // Regression test for a real bug found during review: `HodService.list()`

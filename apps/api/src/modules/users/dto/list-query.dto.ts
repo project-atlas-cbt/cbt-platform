@@ -20,7 +20,8 @@ export type SortDirection = (typeof SORT_DIRECTIONS)[number];
 export class ListPeopleQueryDto {
   @ApiPropertyOptional({
     type: String,
-    description: "Matches the entity's own identifier and first/last name.",
+    description:
+      "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
   })
   @IsOptional()
   @IsString()
