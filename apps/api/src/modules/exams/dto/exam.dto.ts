@@ -19,6 +19,8 @@ import {
 import {
   EXAM_ACCESS_MODES,
   EXAM_NAVIGATION_POLICIES,
+  MAX_EXAM_ATTEMPT_LIMIT,
+  MAX_EXAM_DURATION_SECONDS,
   EXAM_READINESS_CHECK_CODES,
   EXAM_STATUSES,
   RESULT_DETAIL_VISIBILITIES,
@@ -178,16 +180,23 @@ export class SetExamQuestionsDto {
  * set either result setting to anything but the school's value (ADR-0010,
  * 2026-10-06 amendment). */
 export class UpdateExamConfigurationDto {
-  @ApiPropertyOptional({ type: Number, minimum: 1, description: 'Duration in whole seconds.' })
+  @ApiPropertyOptional({
+    type: Number,
+    minimum: 1,
+    maximum: MAX_EXAM_DURATION_SECONDS,
+    description: 'Duration in whole seconds.',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(MAX_EXAM_DURATION_SECONDS)
   durationSeconds?: number;
 
-  @ApiPropertyOptional({ type: Number, minimum: 1 })
+  @ApiPropertyOptional({ type: Number, minimum: 1, maximum: MAX_EXAM_ATTEMPT_LIMIT })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(MAX_EXAM_ATTEMPT_LIMIT)
   attemptLimit?: number;
 
   @ApiPropertyOptional({ type: String, enum: EXAM_NAVIGATION_POLICIES })

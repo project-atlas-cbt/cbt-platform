@@ -544,6 +544,31 @@ describe('B6 TeacherAssignment', () => {
     expect(adminSelfRes.json<{ assignments: unknown[] }>().assignments).toHaveLength(0);
   });
 
+  it("bug audit P2-9: a teacher reads their own assignment list by id, never another teacher's", async () => {
+    const { user, membership } = await seedUser({
+      schoolId,
+      loginIdentifier: 'nosy-teacher',
+      password: 'a-real-password-123',
+      role: 'TEACHER',
+    });
+    createdUserIds.push(user.id);
+    const own = await withTenant(prisma, schoolId, (tx) =>
+      tx.teacherProfile.create({
+        data: {
+          schoolId,
+          membershipId: membership.id,
+          staffId: `STF-NOSY-${randomUUID().slice(0, 6)}`,
+        },
+      }),
+    );
+    const ctx = await freshCtx(host, `10.${RUN}.4.9`);
+    await login(ctx, 'nosy-teacher', 'a-real-password-123');
+
+    expect((await get(ctx, `/teachers/${own.id}/assignments`)).statusCode).toBe(200);
+    expect((await get(ctx, `/teachers/${teacherProfileId}/assignments`)).statusCode).toBe(403);
+    expect((await get(admin, `/teachers/${teacherProfileId}/assignments`)).statusCode).toBe(200);
+  });
+
   it('cross-tenant: another school cannot see or modify this assignment set', async () => {
     const otherSchool = await createSchool();
     createdSchoolIds.push(otherSchool.id);

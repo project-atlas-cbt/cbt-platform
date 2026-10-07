@@ -208,3 +208,59 @@ describe('parseImportFile — unsupported type', () => {
     );
   });
 });
+
+describe('parseImportFile — .xlsx cell formats (bug audit P1-11)', () => {
+  it('keeps the leading zeros a padded number format shows, and flags date cells', async () => {
+    const workbook = new Workbook();
+    const sheet = workbook.addWorksheet('Import');
+    sheet.addRow(['# template-version: 1']);
+    sheet.addRow(['Student ID', 'First Name', 'Last Name', 'Class', 'Department']);
+    const padded = sheet.addRow([123, 'Ada', 'Obi', 'SS1A', '']);
+    padded.getCell(1).numFmt = '00000';
+    const prefixed = sheet.addRow([7, 'Bola', 'Ade', 'SS1A', '']);
+    prefixed.getCell(1).numFmt = '"ST"000';
+    sheet.addRow([45, 'Chi', 'Eze', 'SS1A', '']);
+    sheet.addRow(['ST010', 'Dayo', 'Ola', new Date(Date.UTC(2024, 0, 2)), '']);
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+
+    const parsed = await parseImportFile(buffer, XLSX_MIME_TYPE);
+    expect(parsed.rows.map((r) => r['Student ID'])).toEqual(['00123', 'ST007', '45', 'ST010']);
+    expect(parsed.rows[3]!.Class).toBe('2024-01-02');
+    expect(parsed.dateColumnsByRow).toEqual([[], [], [], ['Class']]);
+  });
+
+  it('reports no date columns for CSV', async () => {
+    const parsed = await parseImportFile(
+      csvBuffer(['# template-version: 1', 'Student ID,First Name', '1/2,Ada']),
+      'text/csv',
+    );
+    expect(parsed.rows[0]!['Student ID']).toBe('1/2');
+    expect(parsed.dateColumnsByRow).toEqual([[]]);
+  });
+});
+
+describe('parseImportFile — CSV saved from Excel (bug audit P2-7)', () => {
+  it('drops rows made only of commas', async () => {
+    const parsed = await parseImportFile(
+      csvBuffer([
+        '# template-version: 1',
+        'Student ID,First Name',
+        'ST1,Ada',
+        ',',
+        ' , ',
+        'ST2,Bo',
+      ]),
+      'text/csv',
+    );
+    expect(parsed.rows.map((r) => r['Student ID'])).toEqual(['ST1', 'ST2']);
+    expect(parsed.dateColumnsByRow).toHaveLength(2);
+  });
+
+  it('refuses a file that is not UTF-8, naming the Excel save option', async () => {
+    const latin1 = Buffer.from(
+      '# template-version: 1\r\nStudent ID,First Name\r\nST1,Zo\xe9\r\n',
+      'latin1',
+    );
+    await expect(parseImportFile(latin1, 'text/csv')).rejects.toThrow(/CSV UTF-8/);
+  });
+});

@@ -2,6 +2,109 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-06 — Imports and authoring: P2 and P3 bug audit fixes
+
+The P2 and P3 items of the bug audit in imports, authoring and their permissions:
+
+- **P2-4:** the exam Rules form leaves a blank duration out of the save instead of sending 0.
+- **P2-5:** the exam question picker lists each question as its latest approved revision, even
+  while a new draft of it exists, and matches the selection by question; the API refuses two
+  revisions of one question in an exam.
+- **P2-6:** login identifiers are unique per school regardless of case (a `lower()` unique
+  index, migration `20261007090000`), and the import duplicate checks ignore case too.
+- **P2-7:** CSV rows of nothing but commas are dropped; a file that is not UTF-8 fails with "save
+  as CSV UTF-8" instead of importing garbled names.
+- **P2-8:** import templates are headers only. The sample rows (01 §7's worked example) were
+  imported as real records when a school typed below them.
+- **P2-9:** a Teacher or Student reads only their own assignment or subject-registration list by
+  id (403 otherwise).
+- **P2-10:** the rollover screens no longer offer "Change Department", which the API refuses;
+  Promote into a class of the other department does it.
+- **P3-7:** exam duration (24 hours) and attempt limit (100) have maximums, on the exam and in
+  Assessment Rules.
+- **P3-9:** a True/False question must have exactly two options.
+
+**Tested:** unit tests (parser, validator, template, Rules form, question picker) and integration
+tests (picker and double binding, limits, case-insensitive student ID, own assignment list);
+typecheck, lint, unit suites and `test:security`.
+
+### 2026-10-06 — Imports and authoring: P0 and P1 bug audit fixes
+
+From the bug audit (`/mnt/project-files/bug-audit/findings.md`, project files), the imports, media
+and authoring items at P0 and P1:
+
+- **P0-1, uploaded page on the media host.** Import uploads accept only the types browsers really
+  declare for CSV and .xlsx (never `text/html`). Every signed download link now forces its type and
+  disposition: the sniffed image type inline for images, `application/octet-stream` as a download
+  for everything else, whatever the uploader's PUT said. `GET /media/:id/url` refuses import files
+  (404); only the import job reads them. The API's CORS no longer trusts `media`, `www` or `api`
+  under the root domain (`admin` stays), and the pilot's media host sends
+  `Content-Security-Policy: sandbox` and `X-Content-Type-Options: nosniff`.
+- **P1-10, CSV with ₦, × or smart quotes refused.** The upload sniff decodes its 4,100-byte
+  prefix as a stream, so a cut multi-byte character no longer fails it.
+- **P1-11, Excel imports.** A number in a padded format (`00000`, `"ST"000`) imports as shown
+  (`00123`), and any cell Excel turned into a date is an invalid row saying to format the column
+  as Text. The import guides say so too.
+- **P1-8, retargeting a draft exam.** Changing a draft's subject or classes is held to the scope
+  it was created under: a teacher only to classes they teach, an HOD only within their department.
+- **P1-9, revising a question.** A new revision keeps the source revision's images and diagrams.
+
+**Tested:** new unit tests (content sniff at every cut position, xlsx formats and dates, CORS
+hosts) and integration tests (media type forcing and import-link refusal, imports date row, exam
+retargeting, revision media); typecheck, lint, unit suites and `test:security`.
+
+### 2026-10-06 — Exam sitting fixes from the bug audit, second part (P2-2, P3-1, P3-8, P3-10)
+
+- **P2-2:** a makeup grant is refused for a student who has a running or submitted attempt for the
+  exam (they sat another batch). Retry stays the route for a deliberate second attempt. Still open:
+  the End Examination absentee list still includes such a student's other batch, which the rollup
+  already reports as attended.
+- **P3-1:** a repeat Start on an attempt past its time and grace finalises it to `AUTO_SUBMITTED`,
+  as `GET /attempts/:id` already did, instead of returning an in-progress package.
+- **P3-8:** opening an exam whose academic session is not the current one says so, instead of "must
+  be READY or OPEN".
+- **P3-10:** the service worker caches presigned media under its own `atlas-exam-media-sw-v1`
+  (expiring after an hour, at most 300 entries), and attempt cleanup deletes the attempt's signed
+  URLs from it. On activation, the new worker removes signed-URL entries earlier builds left in
+  `atlas-exam-media-v1`.
+
+**Tested:** new API integration tests for P2-2, P3-1 and P3-8 and a web test for P3-10; typecheck,
+lint, format, unit suites and the execution integration suites pass locally.
+
+### 2026-10-06 — Exam sitting fixes from the bug audit (P0-2, P1-1, P1-2, P1-5, P1-6, P2-1)
+
+Fixes from `bug-audit/findings.md` (dev at 5b16ecd) for the exam engine and the student's sitting,
+before the pilot school's first CA test.
+
+- **P0-2, unsynced answers lost at submit.** Every submit now flushes first and checks the device
+  for answers the server has not acknowledged. A manual submit tries three times, then refuses with
+  "N answers haven't reached the server yet" and keeps the dialog open. At expiry the runtime keeps
+  flushing for up to 40 s of the 60 s grace (ADR-0003), then submits; the expiry call and its retry
+  share one run. `clearAttemptData` no longer deletes `pending` or `in-flight` answers.
+- **P1-2, submit racing an answer save.** The `attempt_answers` guard trigger reads the attempt's
+  state `FOR SHARE` (migration `20261006200000`, function body only). A submit, auto-submit or staff
+  end now waits for an answer transaction already past the check, and a write arriving during a
+  submit is refused after it. Answer writes do not block each other; a heartbeat's `last_seen_at`
+  update can wait for one answer transaction. Not yet measured under the B21 load profile.
+- **P1-5, timer following the PC clock.** The countdown reads `lib/attempt/server-clock.ts`: server
+  time anchored at start/resume, on the reconnect check and on every heartbeat (the heartbeat now
+  returns `serverTime`), counted on `performance.now()` in between (ADR-0027's monotonic clock).
+- **P1-6, reload undoing "no going back".** The question on screen and the furthest reached are
+  saved on the device's attempt row and restored on reload (also from the server's answers on a
+  different PC); `SEQUENTIAL_NO_REVISIT` resumes at the furthest question. The server still does not
+  enforce navigation (Candidate / Deferred: refusing writes to locked questions needs the server to
+  know the furthest question, and offline batches arrive in no particular order).
+- **P1-1 and P2-1, student home.** `GET /student/assessment` offers the newest exam the student can
+  start by `start()`'s own clauses: an OPEN exam with attempt-limit headroom, or a live MAKEUP/RETRY
+  authorization (which also admits a COMPLETED exam). Makeup students now see their exam; a
+  submitted exam no longer shows "Available now" or hides another open exam.
+
+**Tested:** new API integration tests for each server fix (the P1-2 test fails with the old trigger
+body), web tests for the submit paths, the clock jump, re-anchoring and restored position.
+`pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm test:security`, the execution
+integration suites and the worker's auto-submit and marking integration suites pass locally. CI is
+blocked by GitHub Actions billing.
+
 ### 2026-10-06 — Bug audit fixes: sign-in, HOD screens, results and expiry (P1)
 
 The P1 items from the full app bug audit (`/mnt/project-files/bug-audit/findings.md`) that sit in

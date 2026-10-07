@@ -40,6 +40,13 @@ describe('isAllowedOrigin (ADR-0022)', () => {
     expect(isAllowedOrigin('https://under_score.atlas.app', WEB_ORIGIN, ROOT)).toBe(false);
   });
 
+  it('P0-1: rejects the media, www and api hosts but keeps the admin host', () => {
+    expect(isAllowedOrigin('https://media.atlas.app', WEB_ORIGIN, ROOT)).toBe(false);
+    expect(isAllowedOrigin('https://www.atlas.app', WEB_ORIGIN, ROOT)).toBe(false);
+    expect(isAllowedOrigin('https://api.atlas.app', WEB_ORIGIN, ROOT)).toBe(false);
+    expect(isAllowedOrigin('https://admin.atlas.app', WEB_ORIGIN, ROOT)).toBe(true);
+  });
+
   it('rejects a malformed origin rather than throwing', () => {
     expect(isAllowedOrigin('not-a-url', WEB_ORIGIN, ROOT)).toBe(false);
   });

@@ -141,11 +141,11 @@ export class ExamController {
       actor,
       id,
     );
-    const listQuery: ListQuestionsQueryDto = { ...query, subjectId, status: 'APPROVED' };
+    const listQuery: ListQuestionsQueryDto = { ...query, subjectId };
     if (level !== null) {
       listQuery.level = level as NonNullable<ListQuestionsQueryDto['level']>;
     }
-    return this.questionBank.list(user.schoolId, actor, listQuery);
+    return this.questionBank.listBindable(user.schoolId, actor, listQuery);
   }
 
   @Put(':id/questions')

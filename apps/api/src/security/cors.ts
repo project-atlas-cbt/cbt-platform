@@ -1,3 +1,5 @@
+import { RESERVED_SUBDOMAIN_LABELS } from '../common/subdomain.js';
+
 /**
  * ADR-0022: the API serves every school's web origin
  * (`<subdomain>.<PLATFORM_ROOT_DOMAIN>`) plus the platform-admin origin
@@ -63,5 +65,10 @@ export function isAllowedOrigin(
   // never provisioned (wildcard DNS/TLS covers one level, ADR-0005), so a
   // credentialed request from one is refused rather than trusted by suffix.
   const label = hostname.slice(0, -(root.length + 1));
+  // Bug audit P0-1: the reserved platform hosts other than `admin` serve no
+  // page that should call the API with the user's cookies. `media.<root>`
+  // serves uploaded files, so trusting it let an uploaded page act as
+  // whoever opened it; `www` only redirects and `api` is the API itself.
+  if (label !== 'admin' && RESERVED_SUBDOMAIN_LABELS.has(label)) return false;
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(label);
 }

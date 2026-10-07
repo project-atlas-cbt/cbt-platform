@@ -3,9 +3,23 @@ import { ApiError, NetworkError } from '@/lib/api';
 /** Mirrors `describeExamControlError`/`describeExamError`'s dispatch-on-
  * `error.code` pattern (`lib/exam-control/error-utils.ts`). */
 export function describeAttemptError(error: unknown): string {
+  if (error instanceof AnswersNotSyncedError) return error.message;
   if (error instanceof ApiError) return error.message;
   if (error instanceof NetworkError) return error.message;
   return 'Something went wrong. Please try again.';
+}
+
+/** Audit P0-2: a manual submit refused on the device because some answers
+ * have not reached the server yet. Submitting then would lose them. */
+export class AnswersNotSyncedError extends Error {
+  constructor(readonly unsyncedCount: number) {
+    super(
+      unsyncedCount === 1
+        ? "1 answer hasn't reached the server yet, so your assessment was not submitted."
+        : `${unsyncedCount} answers haven't reached the server yet, so your assessment was not submitted.`,
+    );
+    this.name = 'AnswersNotSyncedError';
+  }
 }
 
 export function isNetworkError(error: unknown): boolean {

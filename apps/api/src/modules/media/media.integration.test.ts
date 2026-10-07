@@ -57,7 +57,8 @@ function rawRequest(
   method: string,
   url: string,
   body?: Buffer,
-): Promise<{ status: number; body: Buffer }> {
+  contentType = 'application/octet-stream',
+): Promise<{ status: number; body: Buffer; headers: http.IncomingHttpHeaders }> {
   return new Promise((resolve, reject) => {
     const target = new URL(url);
     const req = http.request(
@@ -66,14 +67,18 @@ function rawRequest(
         port: target.port,
         path: target.pathname + target.search,
         method,
-        headers: body
-          ? { 'Content-Type': 'application/octet-stream', 'Content-Length': body.length }
-          : {},
+        headers: body ? { 'Content-Type': contentType, 'Content-Length': body.length } : {},
       },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks) }));
+        res.on('end', () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            body: Buffer.concat(chunks),
+            headers: res.headers,
+          }),
+        );
       },
     );
     req.on('error', reject);
@@ -244,6 +249,8 @@ describe('B4 — media upload/validate/sign pipeline (real MinIO)', () => {
     const fetched = await rawRequest('GET', signed.url);
     expect(fetched.status).toBe(200);
     expect(fetched.body.equals(REAL_PNG_1x1)).toBe(true);
+    // P0-1: the link forces the sniffed type, whatever the uploader sent.
+    expect(fetched.headers['content-type']).toBe('image/png');
 
     // DoD item 4, live: the raw bucket object with no signature is denied.
     const rawObjectUrl = new URL(signed.url);
@@ -354,6 +361,42 @@ describe('B4 — media upload/validate/sign pipeline (real MinIO)', () => {
     });
     expect(res.statusCode).toBe(422);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('MEDIA_TOO_LARGE');
+  });
+
+  it('P0-1: an import upload refuses an HTML declared type, and an import file never gets a link', async () => {
+    const school = await createSchool();
+    createdSchoolIds.push(school.id);
+    const host = `${school.subdomain}.${ROOT_DOMAIN}`;
+    const admin = await seedSchoolAdmin(school.id, `media-html-${RUN}`, 'CorrectHorseBattery1!');
+    createdUserIds.push(admin.id);
+    const ctx = await freshCtx(host, `10.${RUN}.1.9`);
+    await login(ctx, `media-html-${RUN}`, 'CorrectHorseBattery1!');
+
+    const page = Buffer.from('<html><script>alert(document.cookie)</script></html>');
+    const html = await post(ctx, '/imports/questions/upload-target', {
+      filename: 'questions.csv',
+      declaredMimeType: 'text/html',
+      declaredSizeBytes: page.length,
+    });
+    expect(html.json<{ error: { code: string } }>().error.code).toBe('MEDIA_CONTENT_TYPE_MISMATCH');
+
+    // Declared as CSV, stored as text/html by the PUT, accepted as text: the
+    // file is usable by the import job, but no link to it is ever issued.
+    const csv = await post(ctx, '/imports/questions/upload-target', {
+      filename: 'questions.csv',
+      declaredMimeType: 'text/csv',
+      declaredSizeBytes: page.length,
+    });
+    expect(csv.statusCode).toBe(201);
+    const target = csv.json<{ mediaAssetId: string; uploadUrl: string }>();
+    expect((await rawRequest('PUT', target.uploadUrl, page, 'text/html')).status).toBe(200);
+    const done = await post(
+      ctx,
+      `/imports/questions/upload-target/${target.mediaAssetId}/complete`,
+    );
+    expect(done.statusCode).toBe(201);
+    const urlRes = await get(ctx, `/media/${target.mediaAssetId}/url`);
+    expect(urlRes.statusCode).toBe(404);
   });
 
   it('a cross-school media fetch returns 404, even by primary key', async () => {

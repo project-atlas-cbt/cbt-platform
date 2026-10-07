@@ -5137,7 +5137,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
+                  "$ref": "#/components/schemas/HeartbeatResponseDto"
                 }
               }
             }
@@ -11894,7 +11894,8 @@
           },
           "defaultAttemptLimit": {
             "type": "number",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100
           },
           "defaultNavigationPolicy": {
             "type": "string",
@@ -14690,6 +14691,27 @@
         },
         "required": [
           "results"
+        ]
+      },
+      "HeartbeatResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The server's current clock. The client counts the exam countdown from it on its own monotonic clock, never from the PC's wall clock."
+          }
+        },
+        "required": [
+          "status",
+          "serverTime"
         ]
       },
       "RecordAttemptEventDto": {
@@ -18787,11 +18809,13 @@
           "durationSeconds": {
             "type": "number",
             "minimum": 1,
+            "maximum": 86400,
             "description": "Duration in whole seconds."
           },
           "attemptLimit": {
             "type": "number",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100
           },
           "navigationPolicy": {
             "type": "string",

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sendHeartbeat } from './events';
+import { serverNow } from './server-clock';
 
 const FIVE_MINUTES_MS = 5 * 60_000;
 const ONE_MINUTE_MS = 60_000;
@@ -23,14 +24,18 @@ export interface AttemptTimerState {
 }
 
 /**
- * F13 — the exam countdown (DoD 12/13/15). Clock skew is captured once by
- * the caller from a fresh server contact (start/resume — `serverTime` isn't
- * returned by heartbeat) and passed in as `clockSkewMs`; `remainingMs` is
- * always **recomputed fresh** from `expiresAt - (Date.now() + clockSkewMs)`,
- * never accumulated from a tick counter. This is what makes local clock
- * manipulation harmless (DoD 12): both the "now" term and the stored skew
- * move together, and the skew was captured before any manipulation could
- * occur.
+ * F13 — the exam countdown (DoD 12/13/15). `remainingMs` is always
+ * **recomputed fresh** from `expiresAt - serverNow()`, never accumulated
+ * from a tick counter.
+ *
+ * Audit P1-5: "now" is `server-clock.ts`'s monotonic server clock, not
+ * `Date.now() + clockSkewMs`. The PC's wall clock jumps when a lab machine
+ * resyncs its time, and the countdown used to jump with it (a forward jump
+ * ended the exam early, and the server accepted the submit). The server
+ * clock is anchored at start/resume and on every heartbeat and counted on
+ * `performance.now()` in between, so a wall-clock change moves nothing
+ * (DoD 12). `clockSkewMs` (stored with the attempt at the last server
+ * contact) only seeds that clock after a reload with no server contact yet.
  *
  * Ticks at 4 Hz while the tab is visible (always exact, since it
  * recomputes rather than decrements — F20 replaced the original
@@ -66,7 +71,7 @@ export function useAttemptTimer(
 
   const computeRemaining = useCallback((): number => {
     if (!expiresAt) return Number.POSITIVE_INFINITY;
-    return Date.parse(expiresAt) - (Date.now() + clockSkewMs);
+    return Date.parse(expiresAt) - serverNow(clockSkewMs);
   }, [expiresAt, clockSkewMs]);
 
   useEffect(() => {

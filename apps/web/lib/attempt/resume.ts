@@ -4,6 +4,7 @@ import { getAttemptDb, type AnswerRow, type QuestionRow } from './db';
 import { getDeviceId } from './device-id';
 import { buildMediaManifestFromPackage, downloadAllMedia } from './media-cache';
 import { decryptPrecachedMedia } from './media-precache';
+import { anchorServerClock } from './server-clock';
 
 type AttemptPackage = ApiComponents['schemas']['AttemptPackageResponseDto'];
 
@@ -20,6 +21,7 @@ export interface ReconciledAttempt {
  * rather than two separately-tested branches.
  */
 export async function reconcileAttemptOnLoad(attemptId: string): Promise<ReconciledAttempt> {
+  const sentAt = performance.now();
   const response = await unwrap(
     apiClient.GET('/attempts/{id}', {
       params: { path: { id: attemptId } },
@@ -34,12 +36,17 @@ export async function reconcileAttemptOnLoad(attemptId: string): Promise<Reconci
     return { package: response, isRunning };
   }
 
+  anchorServerClock(response.serverTime, sentAt);
   const db = getAttemptDb();
   const clockSkewMs = Date.parse(response.serverTime) - Date.now();
   const now = new Date().toISOString();
 
   await db.transaction('rw', [db.attemptPackages, db.questions, db.answers], async () => {
+    // Audit P1-6: the saved question position survives the rewrite.
+    const previous = await db.attemptPackages.get(response.attemptId);
     await db.attemptPackages.put({
+      ...(previous?.currentIndex !== undefined && { currentIndex: previous.currentIndex }),
+      ...(previous?.furthestIndex !== undefined && { furthestIndex: previous.furthestIndex }),
       attemptId: response.attemptId,
       examId: response.examId,
       examSessionId: response.examSessionId,

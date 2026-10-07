@@ -237,7 +237,7 @@ export function useStudents() {
 export interface RolloverQueryParams {
   page?: number;
   pageSize?: number;
-  outcome?: 'PROMOTE' | 'REPEAT' | 'CHANGE_DEPARTMENT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
+  outcome?: 'PROMOTE' | 'REPEAT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
   sourceClassId?: string;
   departmentId?: string;
   sourceLevel?: 'JSS1' | 'JSS2' | 'JSS3' | 'SS1' | 'SS2' | 'SS3';

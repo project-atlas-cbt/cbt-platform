@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
 import { AppHttpException } from '../../common/app-http-exception.js';
-import { ObjectStorageService } from '../../storage/object-storage.service.js';
+import { mediaResponseFor, ObjectStorageService } from '../../storage/object-storage.service.js';
 import { resolveLogoSignedUrl } from '../../storage/logo-resolver.js';
 import { CONTENT_LIMITS, validateContent } from './content-validation.js';
 import type {
@@ -22,6 +22,22 @@ import type {
 type AnyMediaType = MediaAssetUploadableType | 'SCHOOL_LOGO' | 'IMPORT_SOURCE';
 
 const UPLOAD_URL_TTL_SECONDS = 15 * 60;
+
+/** What browsers and OSes actually declare for a CSV or .xlsx file (Windows
+ * reports CSV as `application/vnd.ms-excel`; some browsers send nothing).
+ * Anything else, `text/html` above all, is refused before an upload URL is
+ * issued (bug audit P0-1). The sniff at complete() is still the authority. */
+const IMPORT_DECLARED_MIME_TYPES = new Set([
+  '',
+  'text/csv',
+  'text/plain',
+  'text/x-csv',
+  'application/csv',
+  'application/x-csv',
+  'application/vnd.ms-excel',
+  'application/octet-stream',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
 const QUESTION_MEDIA_DOWNLOAD_TTL_SECONDS = 15 * 60;
 
 const STORAGE_FOLDER: Record<AnyMediaType, string> = {
@@ -83,14 +99,15 @@ export class MediaService {
     // B20: an image type refuses any declared MIME type it could never
     // accept (e.g. image/svg+xml, text/html) before issuing an upload URL —
     // completeUpload()'s magic-byte sniff remains the authority; this just
-    // stops a hostile file ever reaching storage. Import types are exempt:
-    // browsers declare CSV inconsistently (text/csv, application/vnd.ms-excel,
-    // empty), so their sniff-at-complete check stands alone.
+    // stops a hostile file ever reaching storage. Import types accept the
+    // spellings browsers really use for CSV and .xlsx, and nothing else.
     const declared = declaredMimeType.trim().toLowerCase();
-    if (
-      limits.allowedMimeTypes.every((m) => m.startsWith('image/')) &&
-      !limits.allowedMimeTypes.includes(declared)
-    ) {
+    const declaredAccepted =
+      type === 'IMPORT_SOURCE'
+        ? IMPORT_DECLARED_MIME_TYPES.has(declared)
+        : !limits.allowedMimeTypes.every((m) => m.startsWith('image/')) ||
+          limits.allowedMimeTypes.includes(declared);
+    if (!declaredAccepted) {
       throw new AppHttpException({
         code: 'MEDIA_CONTENT_TYPE_MISMATCH',
         message: `Declared type "${declaredMimeType}" is not accepted for ${type}.`,
@@ -227,6 +244,12 @@ export class MediaService {
         message: 'Logo assets are served via GET /v1/tenant/resolve, not this endpoint.',
       });
     }
+    // An import file is read only by the import job, server-side. Nobody
+    // needs a link to it, and serving one is how an uploaded page reached
+    // other schools' users (bug audit P0-1). Same 404 as a missing asset.
+    if (asset.type === 'IMPORT_SOURCE') {
+      throw new AppHttpException({ code: 'MEDIA_UPLOAD_NOT_FOUND', message: 'No such asset.' });
+    }
     if (asset.status !== 'READY') {
       throw new AppHttpException({ code: 'MEDIA_NOT_READY', message: 'This asset is not ready.' });
     }
@@ -234,6 +257,7 @@ export class MediaService {
     const signed = await this.storage.createSignedDownloadUrl(
       asset.storageKey,
       QUESTION_MEDIA_DOWNLOAD_TTL_SECONDS,
+      mediaResponseFor(asset.sniffedMimeType),
     );
     return { url: signed.url, expiresAt: signed.expiresAt.toISOString() };
   }

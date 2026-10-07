@@ -15,9 +15,10 @@ describe('buildTemplateCsv', () => {
     expect(lines[1]).toBe(IMPORT_TEMPLATES.STUDENTS.columns.join(','));
   });
 
-  it("includes 01 §7's own worked example rows for students", () => {
-    const csv = buildTemplateCsv('STUDENTS');
-    expect(csv).toContain('ST001,Ahmed,Bello,SS1A,Science');
+  it('bug audit P2-8: carries no sample rows a school could import by mistake', () => {
+    for (const type of ['STUDENTS', 'TEACHERS', 'QUESTIONS'] as const) {
+      expect(buildTemplateCsv(type).trim().split('\r\n')).toHaveLength(2);
+    }
   });
 
   it('produces a teacher template with the minimal required columns', () => {

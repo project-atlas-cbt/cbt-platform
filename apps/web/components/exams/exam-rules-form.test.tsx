@@ -17,11 +17,11 @@ const mockUseHasPermission = vi.mocked(useHasPermission);
 const mockUseExam = vi.mocked(useExam);
 const mockUseSetExamConfiguration = vi.mocked(useSetExamConfiguration);
 
-function examData(resultSettingsLocked: boolean) {
+function examData(resultSettingsLocked: boolean, durationSeconds = 3600) {
   return {
     id: 'exam-1',
     status: 'DRAFT',
-    durationSeconds: 3600,
+    durationSeconds,
     attemptLimit: 1,
     navigationPolicy: 'FREE',
     randomizeQuestions: false,
@@ -39,9 +39,17 @@ function examData(resultSettingsLocked: boolean) {
 
 let mutateAsync: ReturnType<typeof vi.fn>;
 
-function setup({ locked, isAdmin }: { locked: boolean; isAdmin: boolean }) {
+function setup({
+  locked,
+  isAdmin,
+  durationSeconds,
+}: {
+  locked: boolean;
+  isAdmin: boolean;
+  durationSeconds?: number;
+}) {
   mockUseExam.mockReturnValue({
-    data: examData(locked),
+    data: examData(locked, durationSeconds),
     isPending: false,
     isError: false,
   } as unknown as ReturnType<typeof useExam>);
@@ -92,5 +100,14 @@ describe('RulesForm result settings lock (ADR-0010, 2026-10-06 amendment)', () =
     expect(screen.getByRole('combobox', { name: 'Result publication' })).toBeEnabled();
     expect(screen.getByRole('combobox', { name: 'What students see' })).toBeEnabled();
     expect(screen.queryByText(/your school has locked/i)).not.toBeInTheDocument();
+  });
+
+  it('bug audit P2-4: a blank duration is left out of the save instead of sent as 0', async () => {
+    setup({ locked: false, isAdmin: false, durationSeconds: 0 });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save rules' }));
+    const payload = mutateAsync.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('durationSeconds');
+    expect(payload).toHaveProperty('attemptLimit', 1);
   });
 });
