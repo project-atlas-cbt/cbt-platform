@@ -690,6 +690,18 @@ if (want('results')) {
   await signIn(p, o.teacher);
   await p.goto(url(`/teacher/results/${o.caExamId}`));
   await p.waitForLoadState('networkidle');
+  // a retake: take back an earlier take's publication off camera
+  const unpub = p.getByRole('button', { name: 'Unpublish' });
+  if (await unpub.isVisible().catch(() => false)) {
+    await unpub.click();
+    const dialog = p.getByRole('dialog');
+    await dialog.getByLabel('Reason').fill('Recording the product tour again.');
+    await dialog.getByRole('button', { name: 'Unpublish results' }).click();
+    await p.getByRole('button', { name: 'Publish results' }).waitFor({ timeout: 20000 });
+    // clears the "Unpublished" notice, which belongs to the retake, not the story
+    await p.reload();
+    await p.waitForLoadState('networkidle');
+  }
   await sleep(1200);
   const s = new Scene(p, 'results', [VW * 0.6, VH * 0.7]);
   await s.start();
@@ -705,9 +717,14 @@ if (want('results')) {
   await s.move(pub, 900);
   await sleep(500);
   await s.click(null);
-  await sleep(2600);
+  s.caption('One click releases them to students.');
+  // rest on the confirmation, not on the Unpublish button that replaces Publish
+  const done = p.getByText('Published', { exact: true }).first();
+  await done.waitFor({ timeout: 20000 });
+  await s.move(done, 800);
+  await sleep(2000);
   await s.unzoom(700);
-  await sleep(700);
+  await sleep(500);
   await s.stop();
   await p.context().close();
 }
