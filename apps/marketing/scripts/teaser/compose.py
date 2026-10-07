@@ -294,15 +294,17 @@ def apply_caption(frame, seg, t):
 
 # --- the cut -----------------------------------------------------------------------
 PLAN = [
-    ('card', 'title', 3.6),
+    ('card', 'title', 3.2),
     ('scene', 'import', 0.2, 0.2),
+    ('scene', 'qimport', 0.2, 0.1),
+    ('scene', 'qsubmit', 0.2, 0.1),
     ('scene', 'review', 0.2, 0.2),
     ('scene', 'control', 0.2, 0.1),
     ('scene', 'exam', 0.2, 0.1),
     ('scene', 'offline', 0.0, 0.1),
     ('scene', 'submit', 0.0, 0.2),
     ('scene', 'results', 0.2, 0.2),
-    ('card', 'end', 4.6),
+    ('card', 'end', 4.4),
 ]
 only = os.environ.get('ONLY')
 segs = []
