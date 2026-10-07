@@ -79,8 +79,8 @@ export default function HomePage() {
             <SectionHeading
               id="tour-title"
               eyebrow="The product in a minute"
-              title="Watch it work, from class list to published result"
-              lead="A moderator imports a class list from a spreadsheet, an HOD approves a question, a teacher watches the sitting live, a student loses the network mid-paper and carries on, and the results are published."
+              title="Watch it work, from class list to a student's result"
+              lead="A moderator imports a class list from a spreadsheet, a teacher imports questions and sends them for review, an HOD approves one, the sitting is watched live, a student loses the network mid-paper and carries on, and once the results are published each student opens their own."
             />
             <p className="mt-6 text-[0.9375rem] leading-relaxed text-ink-muted">
               Recorded in {site.name} itself, using a fictional school. The video has captions and

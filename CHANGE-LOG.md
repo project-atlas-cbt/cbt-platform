@@ -2,6 +2,29 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-07 — Tour video v4: no score on submit, teacher question import, student result, new sound
+
+Owner requests (2026-10-07): the submit scene still showed a score, which students no longer see
+on submitting; the teacher's question import and bulk send-for-review belong before the HOD
+approval; after publishing, a student should open their result; and the audio is redesigned to
+the owner's "quiet digital realism" brief (plan approved before it was built).
+
+- Submit now ends on the real confirmation ("Your answers have been marked…") with no score; its
+  caption says students see results only when the school publishes them.
+- New scenes: a teacher imports ten SS2 questions from a spreadsheet and sends them all for review
+  in one go; the HOD then opens and approves one of those same questions. After publishing, a
+  student who did well and has handed in the live test signs in, opens Results and their
+  Continuous Assessment (picked from the results table; `RESULT_STUDENT` overrides).
+- Sound: new `scripts/teaser/sound.py`, filtered noise only, no oscillator. A near-silent room
+  bed that varies by scene and drops back while the network is out; tik, tuk, zoom air, state
+  grains, a data texture under background work, a stutter for the outage and a sync texture for
+  the return, a settle after submit and a firm "final" on publish. The recorder places them on
+  actions (`click(…, { sound })`, `cue`, `data`). Measured on the mix: room about -40 dBFS,
+  loudest event -15.4 dBFS.
+- Length 78 s, the same as before even with three new scenes: dwells trimmed, one exam answer
+  instead of two.
+  The home page lead names the new steps.
+
 ### 2026-10-07 — Sign-in, staff screens, results and ops: P2 and P3 bug audit fixes
 
 The P2 and P3 items of the bug audit (`/mnt/project-files/bug-audit/findings.md`) in sign-in, staff
