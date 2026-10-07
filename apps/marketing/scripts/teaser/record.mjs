@@ -154,7 +154,8 @@ class Scene {
     }
     [this.cx, this.cy] = [x, y];
   }
-  async click(target, { ms = 650, dx, dy, sound = 'click' } = {}) {
+  /** sound: 'tik' for an ordinary click, 'tuk' for an important action (see sound.py). */
+  async click(target, { ms = 650, dx, dy, sound = 'tik' } = {}) {
     if (target) await this.move(target, ms, dx, dy);
     await sleep(140);
     this.log({ kind: 'click', x: this.cx, y: this.cy, sound });
@@ -183,6 +184,14 @@ class Scene {
   }
   unzoom(ms = 900) {
     this.log({ kind: 'zoom', cx: VW / 2, cy: VH / 2, scale: 1, dur: ms / 1000 });
+  }
+  /** An interface sound at this moment (sound.py's POINT names). */
+  cue(name) {
+    this.log({ kind: 'sound', name });
+  }
+  /** Start or stop the quiet 'data' texture under a background job or a loading table. */
+  data(on) {
+    this.log({ kind: 'span', name: 'data', on });
   }
   /** A caption at the foot of the frame, or at its head when the action happens low down. */
   caption(text, place = 'bottom') {
@@ -291,6 +300,7 @@ if (want('import')) {
   await s.zoom([panel], 1.35, 1000);
   // compose.py draws the file under the cursor from 'drag' until 'drop'
   s.log({ kind: 'drag', file: IMPORT_FILE });
+  s.cue('tik');
   await sleep(300);
   const [zx, zy] = await s.point(zone);
   const halfway = s.move([zx + 120, zy + 30], 700);
@@ -300,11 +310,14 @@ if (want('import')) {
   await s.move([zx, zy], 500);
   await sleep(250);
   s.log({ kind: 'drop', x: s.cx, y: s.cy });
-  s.log({ kind: 'click', x: s.cx, y: s.cy, sound: 'click' });
+  s.log({ kind: 'click', x: s.cx, y: s.cy, sound: 'drop' });
+  s.data(true);
   await zone.dispatchEvent('drop', { dataTransfer: dt });
 
   const summary = p.getByTestId('import-summary-sentence');
   await summary.waitFor({ timeout: 30000 });
+  s.data(false);
+  s.cue('confirm');
   s.caption('Every row is checked before anything is saved.');
   await sleep(500);
   const confirm = p.getByRole('button', { name: /^Import \d+ valid rows?$/ });
@@ -318,19 +331,22 @@ if (want('import')) {
   );
   await sleep(500);
   await s.move(p.getByText(/already exists at this school/).first(), 900, 0.3);
-  await sleep(1500);
+  await sleep(1300);
   s.caption('Valid rows go in now. The one to fix is kept aside.');
-  await s.click(confirm, { ms: 800 });
+  await s.click(confirm, { ms: 800, sound: 'tuk' });
+  s.data(true);
   // the import runs in the background; compose.py cuts the wait after a moment of progress
-  await sleep(1600);
+  await sleep(1100);
   s.log({ kind: 'skip', on: true });
   await p.getByText('Import complete').waitFor({ timeout: 60000 });
   await sleep(400);
   s.log({ kind: 'skip', on: false });
+  s.data(false);
+  s.cue('confirm');
   const done = p.getByText('Import complete').locator('xpath=..');
   await s.zoom(done, 1.3, 800);
   await s.move(p.getByText(/students imported/).first(), 800);
-  await sleep(1600);
+  await sleep(1300);
   s.unzoom(700);
   await sleep(700);
   await s.stop();
@@ -457,12 +473,15 @@ if (want('qimport')) {
     800,
   );
   await sleep(700);
-  await s.click(confirm, { ms: 800 });
+  await s.click(confirm, { ms: 800, sound: 'tuk' });
+  s.data(true);
   await sleep(900);
   s.log({ kind: 'skip', on: true });
   await p.getByText('Import complete').waitFor({ timeout: 60000 });
   await sleep(400);
   s.log({ kind: 'skip', on: false });
+  s.data(false);
+  s.cue('confirm');
   await s.move(p.getByText(/questions imported/).first(), 700);
   await sleep(1700);
   await s.stop();
@@ -485,8 +504,12 @@ if (want('qsubmit')) {
   await s.zoom([[bb.x - 20, bb.y - 30, bb.width + 40, 330]], 1.35, 800);
   await s.click(all, { ms: 800 });
   await sleep(700);
-  await s.click(p.getByRole('button', { name: 'Submit selected for review' }), { ms: 700 });
+  await s.click(p.getByRole('button', { name: 'Submit selected for review' }), {
+    ms: 700,
+    sound: 'tuk',
+  });
   await p.getByText(/submitted for review\./).waitFor({ timeout: 20000 });
+  s.cue('confirm');
   await sleep(1800);
   await s.stop();
   await p.context().close();
@@ -509,6 +532,7 @@ if (want('review')) {
   await p.waitForURL(/question-review\/[0-9a-f-]{36}/, { timeout: 20000 });
   const q = p.getByText(REVIEWED, { exact: true }).first();
   await q.waitFor({ timeout: 20000 });
+  s.cue('state');
   s.unzoom(500);
   await sleep(600);
   const qb = await q.boundingBox();
@@ -520,8 +544,9 @@ if (want('review')) {
   await s.move(q, 800, 0.6, 0.5);
   await sleep(1300);
   await s.move(approve, 800);
+  s.cue('hover');
   await sleep(200);
-  await s.click(null);
+  await s.click(null, { sound: 'confirm' });
   await sleep(250);
   s.unzoom(800);
   await sleep(1800);
@@ -539,9 +564,12 @@ if (want('control')) {
   const s = new Scene(p, 'control', [VW * 0.5, VH * 0.6]);
   await s.start();
   s.caption('One screen shows every student in the sitting, live.');
+  s.cue('state');
+  s.data(true);
   await sleep(800);
+  s.data(false);
   await s.move(p.getByText(/^Submitted$/).first(), 900).catch(() => {});
-  await sleep(1900);
+  await sleep(1400);
   s.caption('A computer that goes quiet is flagged and listed first.');
   const flag = p.getByText(/disconnected/i).first();
   await p.evaluate(() => window.scrollTo({ top: 360, behavior: 'smooth' }));
@@ -555,7 +583,7 @@ if (want('control')) {
     1000,
   );
   await s.move(flag, 900);
-  await sleep(2200);
+  await sleep(1800);
   await s.unzoom(800);
   await sleep(500);
   await s.stop();
@@ -611,9 +639,10 @@ if (want('student')) {
   // after the click: a caption earlier would sit over the Start button
   s2.caption('Each student sits the paper on their own timer.');
   await p.getByRole('heading', { name: /question 1 of/i }).waitFor({ timeout: 30000 });
+  s2.cue('state');
   await sleep(700);
   await s2.zoom(p.locator('#exam-main'), 1.12, 900);
-  for (let n = 0; n < 2; n++) {
+  for (let n = 0; n < 1; n++) {
     await sleep(700);
     await s2.click(await correctOption(p), { ms: 600 });
     await sleep(650);
@@ -626,6 +655,7 @@ if (want('student')) {
   const s3 = new Scene(p, 'offline', [s2.cx, s2.cy]);
   await s3.start();
   await p.context().setOffline(true);
+  s3.cue('interrupt');
   s3.caption('If the network drops, answers are kept on the computer.');
   await sleep(700);
   const banner = p.getByText(/You.re offline/).first();
@@ -633,7 +663,7 @@ if (want('student')) {
   // the banner's words and the start of the question beneath them
   const top = [0, 0, Math.min(VW, bb.x + bb.width / 2 + 390), 330];
   await s3.zoom([top], 1.6, 800);
-  await sleep(1700);
+  await sleep(1300);
   await s3.unzoom(700);
   for (let n = 0; n < 1; n++) {
     await sleep(450);
@@ -644,8 +674,9 @@ if (want('student')) {
   await s3.zoom([top], 1.6, 700);
   await sleep(900);
   await p.context().setOffline(false);
+  s3.cue('sync');
   s3.caption('When it returns, they are sent to the server on their own.');
-  await sleep(2300);
+  await sleep(2000);
   await s3.unzoom(700);
   await sleep(500);
   await s3.stop();
@@ -669,17 +700,20 @@ if (want('student')) {
   await s4.click(p.getByRole('button', { name: 'Submit assessment' }), { ms: 800 });
   const dialog = p.getByRole('dialog');
   await dialog.waitFor({ timeout: 10000 });
+  s4.cue('state');
   await sleep(500);
   await s4.zoom(dialog, 1.3, 800);
-  await sleep(1300);
-  await s4.click(dialog.getByRole('button', { name: /^Submit/ }).last(), { ms: 700 });
+  await sleep(1000);
+  await s4.click(dialog.getByRole('button', { name: /^Submit/ }).last(), { ms: 700, sound: 'tuk' });
   // the confirmation says the paper is in and marked, and shows no score
   const marked = p.getByText(/Your answers have been marked/);
   await marked.waitFor({ timeout: 20000 });
+  s4.cue('confirm');
   await sleep(300);
+  s4.cue('settle');
   await s4.zoom([p.getByRole('heading', { name: /has been submitted/ }), marked], 1.4, 800);
   await s4.move(marked, 800, 0.3);
-  await sleep(2200);
+  await sleep(1900);
   await s4.stop();
   await p.context().close();
 }
@@ -706,24 +740,89 @@ if (want('results')) {
   const s = new Scene(p, 'results', [VW * 0.6, VH * 0.7]);
   await s.start();
   s.caption('Results are graded and kept until the school publishes them.');
-  await sleep(700);
+  s.data(true);
+  await sleep(500);
+  s.data(false);
   await s.click(p.getByText('SS2B', { exact: true }).first(), { ms: 900 });
-  await sleep(1600);
+  await sleep(1100);
   const pub = p.getByRole('button', { name: 'Publish results' });
   await pub.scrollIntoViewIfNeeded().catch(() => {});
   await sleep(300);
   const box = pub.locator('xpath=ancestor::*[contains(@class,"border")][1]');
   await s.zoom((await box.count()) ? box : pub, 1.4, 900);
   await s.move(pub, 900);
+  s.cue('hover');
   await sleep(500);
-  await s.click(null);
+  await s.click(null, { sound: 'final' });
   s.caption('One click releases them to students.');
   // rest on the confirmation, not on the Unpublish button that replaces Publish
   const done = p.getByText('Published', { exact: true }).first();
   await done.waitFor({ timeout: 20000 });
   await s.move(done, 800);
-  await sleep(2000);
+  await sleep(1500);
   await s.unzoom(700);
+  await sleep(500);
+  await s.stop();
+  // off camera: the next scene follows a student from this table who did well (scores vary
+  // from seed to seed) and has already handed in the live test, so their home page shows no
+  // paper still in progress
+  await p.getByText('All classes', { exact: true }).first().click();
+  await p.waitForLoadState('networkidle');
+  await sleep(800);
+  const rows = await p
+    .locator('tbody tr')
+    .evaluateAll((trs) =>
+      trs.map((tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.trim())),
+    );
+  const handedIn = new Set(o.students.filter((x) => x.state === 'submitted').map((x) => x.name));
+  const good = rows.find(
+    (cells) =>
+      handedIn.has(cells[0].split('\n')[0]) &&
+      cells.some((c) => /^\d+%$/.test(c) && parseInt(c, 10) >= 70 && parseInt(c, 10) <= 90),
+  );
+  if (good) writeFileSync(`${OUT}/result-student.txt`, good[0].split('\n')[0]);
+  await p.context().close();
+}
+
+// --- 8. A student opens their published result ------------------------------
+if (want('myresult')) {
+  // a student who sat the Continuous Assessment, whose results the scene before published
+  let name = process.env.RESULT_STUDENT;
+  try {
+    name ??= readFileSync(`${OUT}/result-student.txt`, 'utf8').trim();
+  } catch {
+    name ??= 'Aisha Bello';
+  }
+  const st = o.students.find((x) => x.name === name);
+  const p = await newPage();
+  await signIn(p, st.identifier);
+  await p.waitForLoadState('networkidle');
+  const nav = p.getByRole('link', { name: 'Results', exact: true }).first();
+  await nav.waitFor({ timeout: 20000 });
+  await sleep(1200);
+  const s = new Scene(p, 'myresult', [VW * 0.6, VH * 0.7]);
+  await s.start();
+  s.caption('Each student then sees their own result.');
+  await sleep(300);
+  await s.click(nav, { ms: 900 });
+  const item = p.getByRole('link', { name: /Continuous Assessment/ }).first();
+  await item.waitFor({ timeout: 20000 });
+  s.cue('state');
+  await sleep(700);
+  await s.click(item, { ms: 900 });
+  await p.waitForURL(/results\/[0-9a-f-]{36}/, { timeout: 20000 });
+  await p.waitForLoadState('networkidle');
+  s.cue('state');
+  await sleep(600);
+  // the paper's name, the score and the counts beneath it
+  await s.zoom(
+    [p.getByRole('heading', { name: /Continuous Assessment/ }), p.getByText('Unanswered')],
+    1.6,
+    900,
+  );
+  await s.move(p.getByText(/^\d+ \/ \d+$/).first(), 800);
+  await sleep(1700);
+  s.unzoom(700);
   await sleep(500);
   await s.stop();
   await p.context().close();
