@@ -36,11 +36,21 @@ function toResponseDto(department: {
 export class DepartmentService {
   constructor(private readonly audit: AuditService) {}
 
-  async list(schoolId: string): Promise<DepartmentResponseDto[]> {
-    const departments = await withTenant(prisma, schoolId, (tx) =>
-      tx.department.findMany({ where: { schoolId }, orderBy: { name: 'asc' } }),
+  async list(schoolId: string, membershipId?: string): Promise<DepartmentResponseDto[]> {
+    const [departments, headed] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.department.findMany({ where: { schoolId }, orderBy: { name: 'asc' } }),
+        // A break-glass Software Admin has no membership: nothing is theirs.
+        membershipId
+          ? tx.hODAssignment.findMany({
+              where: { schoolId, membershipId, status: 'ACTIVE' },
+              select: { departmentId: true },
+            })
+          : Promise.resolve([]),
+      ]),
     );
-    return departments.map(toResponseDto);
+    const headedIds = new Set(headed.map((a) => a.departmentId));
+    return departments.map((d) => ({ ...toResponseDto(d), headedByMe: headedIds.has(d.id) }));
   }
 
   async get(schoolId: string, id: string): Promise<DepartmentResponseDto> {

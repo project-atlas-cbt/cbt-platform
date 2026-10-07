@@ -59,6 +59,21 @@ export function parseLead(form: FormData): ParseResult {
 }
 
 /** Best-effort limit per client: a lead form has no business seeing bursts. */
+/**
+ * Whether a form POST's Origin header is this site's own. A missing header
+ * is allowed (older browsers omit it). P3-12: `Origin: null` (a sandboxed
+ * frame, a file, a privacy redirect) or any value that is not a URL is
+ * refused like another site's form, instead of throwing a 500.
+ */
+export function isOwnOrigin(origin: string | null, siteUrl: string): boolean {
+  if (origin === null) return true;
+  try {
+    return new URL(origin).host === new URL(siteUrl).host;
+  } catch {
+    return false;
+  }
+}
+
 export class RateLimiter {
   private readonly hits = new Map<string, number[]>();
 

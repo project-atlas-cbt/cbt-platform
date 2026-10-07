@@ -40,6 +40,12 @@ export class DepartmentResponseDto {
 
   @ApiProperty({ type: String, enum: DEPARTMENT_STATUSES })
   status!: DepartmentStatus;
+
+  /** P1-12: set on the list only — whether the caller holds an active HOD
+   * assignment for this department, so an HOD's screens open their own
+   * department rather than the first one alphabetically. */
+  @ApiPropertyOptional({ type: Boolean })
+  headedByMe?: boolean;
 }
 
 export class DepartmentListResponseDto {

@@ -27,6 +27,7 @@ export class UsersAuditActionRegistrationProvider implements OnModuleInit {
       // 07 §11.1 canonical alias (USER_DEACTIVATED).
       'STUDENT_DEACTIVATED',
       'STUDENT_REACTIVATED',
+      'STUDENT_SIGN_IN_UNLOCKED',
       'TEACHER_CREATED',
       'TEACHER_UPDATED',
       'TEACHER_CREDENTIALS_RESET',

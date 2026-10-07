@@ -7030,6 +7030,30 @@
         ]
       }
     },
+    "/students/{id}/unlock-sign-in": {
+      "post": {
+        "operationId": "StudentController_unlockSignIn",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "End a student's sign-in lockout after too many wrong passwords, without changing their password (audited).",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/teachers": {
       "get": {
         "operationId": "TeacherController_list",
@@ -12452,6 +12476,9 @@
               "ACTIVE",
               "INACTIVE"
             ]
+          },
+          "headedByMe": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -15786,6 +15813,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "withheld": {
             "type": "boolean"
           },
@@ -15826,6 +15857,7 @@
           "unansweredCount",
           "partialCount",
           "grade",
+          "gradePassing",
           "withheld",
           "withheldReason",
           "voidedReason",
@@ -15867,6 +15899,9 @@
           "passRate": {
             "type": "number",
             "nullable": true
+          },
+          "ungradedCount": {
+            "type": "number"
           }
         },
         "required": [
@@ -15878,7 +15913,8 @@
           "averagePercentage",
           "highestPercentage",
           "lowestPercentage",
-          "passRate"
+          "passRate",
+          "ungradedCount"
         ]
       },
       "ExamResultClassSummaryDto": {
@@ -15915,6 +15951,9 @@
             "type": "number",
             "nullable": true
           },
+          "ungradedCount": {
+            "type": "number"
+          },
           "classId": {
             "type": "string"
           },
@@ -15932,6 +15971,7 @@
           "highestPercentage",
           "lowestPercentage",
           "passRate",
+          "ungradedCount",
           "classId",
           "className"
         ]
@@ -16122,6 +16162,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "withheld": {
             "type": "boolean"
           },
@@ -16187,6 +16231,7 @@
           "unansweredCount",
           "partialCount",
           "grade",
+          "gradePassing",
           "withheld",
           "withheldReason",
           "voidedReason",
@@ -16315,6 +16360,10 @@
           "overrideEarnedMarks": {
             "type": "number",
             "description": "MANUAL_OVERRIDE only — the earned-marks value set outright."
+          },
+          "ungradedOnly": {
+            "type": "boolean",
+            "description": "RECALCULATE only — \"Grade now\": touch only results finalised without a grade, and grade them against the school's current scale."
           }
         },
         "required": [
@@ -16425,6 +16474,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "publishedAt": {
             "type": "string",
             "nullable": true
@@ -16440,6 +16493,7 @@
           "earnedMarks",
           "percentage",
           "grade",
+          "gradePassing",
           "publishedAt"
         ]
       },
@@ -16474,6 +16528,9 @@
           },
           "maximumMarks": {
             "type": "number"
+          },
+          "voided": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -16481,7 +16538,8 @@
           "content",
           "correctness",
           "awardedMarks",
-          "maximumMarks"
+          "maximumMarks",
+          "voided"
         ]
       },
       "StudentResultDetailDto": {
@@ -16514,6 +16572,10 @@
           },
           "grade": {
             "type": "string",
+            "nullable": true
+          },
+          "gradePassing": {
+            "type": "boolean",
             "nullable": true
           },
           "publishedAt": {
@@ -16557,6 +16619,7 @@
           "earnedMarks",
           "percentage",
           "grade",
+          "gradePassing",
           "publishedAt",
           "detailVisibility",
           "correctCount",

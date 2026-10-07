@@ -2923,6 +2923,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/{id}/unlock-sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a student's sign-in lockout after too many wrong passwords, without changing their password (audited). */
+        post: operations["StudentController_unlockSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/teachers": {
         parameters: {
             query?: never;
@@ -4618,6 +4635,7 @@ export interface components {
             code: string;
             /** @enum {string} */
             status: "ACTIVE" | "INACTIVE";
+            headedByMe?: boolean;
         };
         DepartmentListResponseDto: {
             departments: components["schemas"]["DepartmentResponseDto"][];
@@ -5496,6 +5514,7 @@ export interface components {
             unansweredCount: number;
             partialCount: number;
             grade: string | null;
+            gradePassing: boolean | null;
             withheld: boolean;
             withheldReason: string | null;
             voidedReason: string | null;
@@ -5513,6 +5532,7 @@ export interface components {
             highestPercentage: number | null;
             lowestPercentage: number | null;
             passRate: number | null;
+            ungradedCount: number;
         };
         ExamResultClassSummaryDto: {
             expectedStudentCount: number;
@@ -5524,6 +5544,7 @@ export interface components {
             highestPercentage: number | null;
             lowestPercentage: number | null;
             passRate: number | null;
+            ungradedCount: number;
             classId: string;
             className: string;
         };
@@ -5575,6 +5596,7 @@ export interface components {
             unansweredCount: number;
             partialCount: number;
             grade: string | null;
+            gradePassing: boolean | null;
             withheld: boolean;
             withheldReason: string | null;
             voidedReason: string | null;
@@ -5634,6 +5656,8 @@ export interface components {
             targetResultId?: string;
             /** @description MANUAL_OVERRIDE only — the earned-marks value set outright. */
             overrideEarnedMarks?: number;
+            /** @description RECALCULATE only — "Grade now": touch only results finalised without a grade, and grade them against the school's current scale. */
+            ungradedOnly?: boolean;
         };
         ResultAdjustmentOperationResponseDto: {
             id: string;
@@ -5661,6 +5685,7 @@ export interface components {
             earnedMarks: number;
             percentage: number;
             grade: string | null;
+            gradePassing: boolean | null;
             publishedAt: string | null;
         };
         StudentResultsResponseDto: {
@@ -5672,6 +5697,7 @@ export interface components {
             correctness: string;
             awardedMarks: number;
             maximumMarks: number;
+            voided: boolean;
         };
         StudentResultDetailDto: {
             id: string;
@@ -5683,6 +5709,7 @@ export interface components {
             earnedMarks: number;
             percentage: number;
             grade: string | null;
+            gradePassing: boolean | null;
             publishedAt: string | null;
             /** @enum {string} */
             detailVisibility: "SCORE_ONLY" | "SCORE_AND_COUNTS" | "FULL_REVIEW";
@@ -10725,6 +10752,25 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CredentialResetResponseDto"];
                 };
+            };
+        };
+    };
+    StudentController_unlockSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

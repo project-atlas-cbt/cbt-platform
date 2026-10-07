@@ -13,7 +13,7 @@ import { AccessGateService } from '../platform/access-gate.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService, type AuthenticatedSession } from './session.service.js';
 import { AuthLockoutService } from './auth-lockout.service.js';
-import { PASSWORD_RESET_TEMPLATE_NAME } from './templates.js';
+import { PASSWORD_RESET_TEMPLATE_NAME, STAFF_INVITATION_TEMPLATE_NAME } from './templates.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { PlatformSettingsService } from '../../platform-settings/platform-settings.service.js';
 
@@ -285,6 +285,18 @@ export class IdentityService {
     };
   }
 
+  /** P1-4: a new password ends any sign-in lockout on this school's
+   * login identifier — the person has just proved who they are. */
+  private async clearLockoutFor(schoolId: string, userId: string): Promise<void> {
+    const membership = await withTenant(prisma, schoolId, (tx) =>
+      tx.schoolMembership.findFirst({
+        where: { schoolId, userId },
+        select: { loginIdentifier: true },
+      }),
+    );
+    if (membership) await this.lockout.clear(schoolId, membership.loginIdentifier);
+  }
+
   async changePassword(
     schoolId: string,
     userId: string,
@@ -317,6 +329,7 @@ export class IdentityService {
       where: { id: userId },
       data: { passwordHash, credentialState: 'OK' },
     });
+    await this.clearLockoutFor(schoolId, userId);
 
     // B20 (08 §16 revocable sessions): every other session issued against
     // the old credential ends now; the caller's own session survives.
@@ -417,6 +430,20 @@ export class IdentityService {
     );
 
     const resetUrl = await this.schoolResetUrl(schoolId, rawToken);
+    // P3-16: someone who has never signed in gets an invitation; a staff
+    // member whose credentials are being reset gets the reset text.
+    if (user.status === 'INVITED') {
+      const school = await prisma.school.findUniqueOrThrow({
+        where: { id: schoolId },
+        select: { name: true },
+      });
+      await this.notifications.send({
+        to: user.email,
+        template: STAFF_INVITATION_TEMPLATE_NAME,
+        variables: { displayName: user.displayName, schoolName: school.name, resetUrl },
+      });
+      return;
+    }
     await this.notifications.send({
       to: user.email,
       template: PASSWORD_RESET_TEMPLATE_NAME,
@@ -463,6 +490,15 @@ export class IdentityService {
 
     const passwordHash = await this.passwords.hash(newPassword);
     await withTenant(prisma, schoolId, async (tx) => {
+      // P3-14: claim the token first, conditionally, so two requests sent at
+      // the same moment can't both redeem it. The loser updates nothing and
+      // its whole transaction (password included) rolls back.
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: token.id, usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw invalid();
+
       // Gap closure (2026-08-30): this endpoint is also where a freshly
       // invited staff member (B6's `issueStaffInvitation`, sharing this
       // exact token mechanism per its own doc comment) accepts their
@@ -487,15 +523,12 @@ export class IdentityService {
           ...(user.status === 'INVITED' ? { status: 'ACTIVE' as const } : {}),
         },
       });
-      await tx.passwordResetToken.update({
-        where: { id: token.id },
-        data: { usedAt: new Date() },
-      });
     });
 
     // B20: a reset is exactly the case where an attacker may hold a live
     // session — every session for this user at this school ends now.
     const revoked = await this.sessions.revokeAllForUser(schoolId, token.userId);
+    await this.clearLockoutFor(schoolId, token.userId);
     const membership = await withTenant(prisma, schoolId, (tx) =>
       tx.schoolMembership.findFirst({
         where: { schoolId, userId: token.userId },

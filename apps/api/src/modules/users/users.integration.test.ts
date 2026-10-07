@@ -329,6 +329,64 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
     expect(loginCtx.sessionCookie).toBeDefined();
   });
 
+  // P1-4: five wrong guesses at a guessable student ID lock the account;
+  // staff must be able to end that lock (mid-exam the timer keeps running).
+  async function lockedOutStudent(ip: string) {
+    const createRes = await post(admin, '/students', {
+      firstName: 'Locked',
+      lastName: 'Out',
+      studentId: `LK-${randomUUID().slice(0, 8)}`,
+    });
+    const created = createRes.json<{ studentProfileId: string; loginIdentifier: string }>();
+    const resetRes = await post(admin, `/students/${created.studentProfileId}/reset-credentials`);
+    const { initialPassword } = resetRes.json<{ initialPassword: string }>();
+    const maxAttempts = Number(process.env.AUTH_LOCKOUT_MAX_ATTEMPTS ?? 5);
+    for (let i = 0; i < maxAttempts; i++) {
+      const res = await login(await freshCtx(host, ip), created.loginIdentifier, 'wrong-guess');
+      expect(res.statusCode).toBe(401);
+    }
+    const lockedRes = await login(
+      await freshCtx(host, ip),
+      created.loginIdentifier,
+      initialPassword,
+    );
+    expect(lockedRes.statusCode).toBe(401);
+    return { ...created, initialPassword };
+  }
+
+  it('fresh credentials end a sign-in lockout (P1-4)', async () => {
+    const student = await lockedOutStudent(`10.${RUN}.2.6`);
+    const resetRes = await post(admin, `/students/${student.studentProfileId}/reset-credentials`);
+    expect(resetRes.statusCode).toBe(200);
+    const { initialPassword } = resetRes.json<{ initialPassword: string }>();
+
+    const res = await login(
+      await freshCtx(host, `10.${RUN}.2.7`),
+      student.loginIdentifier,
+      initialPassword,
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('Unlock sign-in ends a lockout without changing the password, audited (P1-4)', async () => {
+    const student = await lockedOutStudent(`10.${RUN}.2.8`);
+    const unlockRes = await post(admin, `/students/${student.studentProfileId}/unlock-sign-in`);
+    expect(unlockRes.statusCode).toBe(204);
+
+    const res = await login(
+      await freshCtx(host, `10.${RUN}.2.9`),
+      student.loginIdentifier,
+      student.initialPassword,
+    );
+    expect(res.statusCode).toBe(200);
+    const events = await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.findMany({
+        where: { schoolId, action: 'STUDENT_SIGN_IN_UNLOCKED', entityId: student.studentProfileId },
+      }),
+    );
+    expect(events).toHaveLength(1);
+  });
+
   it('rejects a duplicate studentId as a clean 409, not a raw 500', async () => {
     const first = await post(admin, '/students', {
       firstName: 'B',
@@ -419,6 +477,9 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
     // login attempt regardless of how correct the credential was.
     const logged = consoleLogSpy.mock.calls.map((c) => String(c[0])).join('\n');
     expect(logged).toContain(`to=${email}`);
+    // P3-16: a new staff member gets an invitation, not "Reset your password".
+    expect(logged).toContain('has created a staff account for you');
+    expect(logged).not.toContain('Reset your password');
     const match = /token=([\w-]+)/.exec(logged);
     expect(match).not.toBeNull();
     const token = match![1];
@@ -564,6 +625,8 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
       studentId: 'SEC-001',
     });
     expect(res.statusCode).toBe(403);
+    const unlockRes = await post(teacherCtx, `/students/${studentProfileId}/unlock-sign-in`);
+    expect(unlockRes.statusCode).toBe(403);
   });
 
   it('a Moderator cannot create another Moderator (05 §14 — School Admin only)', async () => {

@@ -1,10 +1,14 @@
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import {
+  applyResultAdjustment,
+  computePercentage,
   computeResultTotals,
   effectiveResultSettings,
   resolveGradeBand,
+  toAdjustableValues,
   type GradingBand,
   type ResultQuestionMarking,
+  type ResultTotals,
 } from '@atlas/domain';
 
 /**
@@ -133,6 +137,16 @@ export async function finalizeResultAfterMarking(
     },
   });
 
+  await applyCompletedVoids(
+    tx,
+    schoolId,
+    attempt.examId,
+    result.id,
+    totals,
+    questionResults,
+    scale,
+  );
+
   // ADR-0010 (2026-10-06 amendment): while the school's policy is locked,
   // its own "who releases" wins over the exam's stored copy — otherwise a
   // teacher could set their exam to AUTOMATIC and release results the
@@ -152,6 +166,81 @@ export async function finalizeResultAfterMarking(
 }
 
 /**
+ * P1-7: a question voided by a completed VOID_QUESTION operation is off the
+ * paper for the whole exam. That operation only rewrote the results that
+ * were final while it ran, so a result finalised later (a makeup, a retry, a
+ * late auto-submit) has each such void applied here, in the marking
+ * transaction: the result becomes ADJUSTED with one child adjustment row
+ * per operation, exactly as if the operation had reached it — so it stays
+ * traceable to the raw marking evidence. A void still running picks this
+ * result up itself (FINAL with no child row for it yet).
+ */
+async function applyCompletedVoids(
+  tx: Prisma.TransactionClient,
+  schoolId: string,
+  examId: string,
+  resultId: string,
+  totals: ResultTotals,
+  questionResults: readonly ResultQuestionMarking[],
+  scale: { versionId: string; bands: GradingBand[] } | null,
+): Promise<void> {
+  const operations = await tx.resultAdjustmentOperation.findMany({
+    where: {
+      schoolId,
+      examId,
+      type: 'VOID_QUESTION',
+      status: 'COMPLETED',
+      targetExamQuestionId: { not: null },
+    },
+    orderBy: [{ completedAt: 'asc' }, { id: 'asc' }],
+    select: { id: true, targetExamQuestionId: true, reason: true, createdByMembershipId: true },
+  });
+  if (operations.length === 0) return;
+
+  let current = toAdjustableValues(totals);
+  const voided: string[] = [];
+  for (const operation of operations) {
+    const next = applyResultAdjustment(
+      current,
+      { type: 'VOID_QUESTION', targetExamQuestionId: operation.targetExamQuestionId },
+      questionResults,
+      voided,
+    );
+    await tx.resultAdjustment.create({
+      data: {
+        schoolId,
+        operationId: operation.id,
+        resultId,
+        adjustmentType: 'VOID_QUESTION',
+        oldValue: current as unknown as Prisma.InputJsonValue,
+        newValue: next as unknown as Prisma.InputJsonValue,
+        reason: operation.reason,
+        authorizedByMembershipId: operation.createdByMembershipId,
+      },
+    });
+    voided.push(operation.targetExamQuestionId!);
+    current = next;
+  }
+
+  const percentage = computePercentage(current.earnedMarks, current.totalMarks);
+  const grade = scale ? resolveGradeBand(scale.bands, percentage) : null;
+  await tx.result.update({
+    where: { id: resultId },
+    data: {
+      totalMarks: current.totalMarks,
+      earnedMarks: current.earnedMarks,
+      percentage,
+      correctCount: current.correctCount,
+      incorrectCount: current.incorrectCount,
+      unansweredCount: current.unansweredCount,
+      partialCount: current.partialCount,
+      grade: grade?.label ?? null,
+      state: 'ADJUSTED',
+    },
+  });
+}
+
+/**
  * ADR-0018's optional level scoping: the scale for the student's own class
  * level if the school configured one, else its school-wide default, else
  * nothing at all — which is a supported state, not an error (05 §46 keeps
@@ -161,7 +250,7 @@ export async function finalizeResultAfterMarking(
  * performs on the API side; duplicated for the same cross-app-import reason
  * as the rest of this file.
  */
-async function resolveGradingScaleVersion(
+export async function resolveGradingScaleVersion(
   tx: Prisma.TransactionClient,
   schoolId: string,
   level: string | null,

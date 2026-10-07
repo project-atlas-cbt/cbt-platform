@@ -25,6 +25,7 @@ export interface StaffResultRow {
   totalMarks: number;
   percentage: number;
   grade: string | null;
+  gradePassing?: boolean | null;
   withheld: boolean;
   withheldReason: string | null;
   voidedReason: string | null;
@@ -112,7 +113,11 @@ export function ExamResultsTable({
       sortable: true,
       cell: (row) => formatResultPercentage(row.percentage),
     },
-    { id: 'grade', header: 'Grade', cell: (row) => <ResultGradeBadge grade={row.grade} /> },
+    {
+      id: 'grade',
+      header: 'Grade',
+      cell: (row) => <ResultGradeBadge grade={row.grade} passing={row.gradePassing} />,
+    },
     {
       id: 'state',
       header: 'State',

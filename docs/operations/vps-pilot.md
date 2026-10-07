@@ -83,7 +83,9 @@ What stays the same:
 
    This writes `.env` (Compose: domain and infrastructure passwords) and `app.env` (application
    secrets), each with fresh random secrets and mode 600. Then fill in:
-   - `.env`: `SCHOOLS` (comma-separated school labels), `ACME_EMAIL`, and the `BACKUP_S3_*` values.
+   - `.env`: `ACME_EMAIL` and the `BACKUP_S3_*` values. Leave `SCHOOLS` empty for now: the
+     post-deploy smoke checks that every listed school exists, and schools are created only after
+     the first deploy (see "Adding a school").
      `SUPPORT_EMAIL` and `SUPPORT_WHATSAPP` set the contacts on staff Help screens (ADR-0035); they
      are built into the web image, so changing them needs a rebuild. `MARKETING_LEAD_EMAIL_*`
      send the marketing site's demo requests (`apps/marketing/README.md`); left empty, the form
@@ -112,9 +114,10 @@ What stays the same:
 
 ## Adding a school
 
-Create the school in the Software Admin console, add its subdomain label to `SCHOOLS` in `.env`,
-and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the new certificates; the smoke
-waits up to a minute for them.
+Create the school in the Software Admin console first, then add its subdomain label to `SCHOOLS`
+in `.env` (comma-separated) and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the
+new certificates; the smoke waits up to a minute for them, then checks every school in `SCHOOLS`.
+A listed school that does not exist fails the smoke with a message naming it.
 
 ## Demo school (staging only)
 
@@ -172,22 +175,41 @@ real server, and refuses to run where `.env` belongs to another domain.
 ## Restore
 
 On a fresh server after setup steps 1 to 3 (with the old `.env` and `app.env`, which you must keep
-in a password manager: the database roles and MFA secrets depend on them):
+in a password manager: the database roles and MFA secrets depend on them). The order matters:
+PostgreSQL and Redis only start once their internal certificates exist, and the dump's security
+policies name the `atlas_app` and `atlas_audit_reader` roles, which the migrations create. A dump
+restored before those roles exist silently loses two audit policies, and every Software Admin
+password change, MFA and sign-out of other sessions then fails.
 
 ```sh
 cd ~/cbt-platform/infra/vps
+sudo bin/internal-tls.sh                      # 1. certificates (as root, or ssh root@ the server)
 docker compose up -d --wait postgres redis minio
-# fetch the latest dump from off-site storage into backups/, then:
-docker compose exec -T postgres pg_restore -U atlas -d atlas --clean --if-exists < backups/db-<stamp>.dump
-# copy media back:
-docker compose exec -T -e MC_HOST_local=... -e MC_HOST_offsite=... minio \
-  mc mirror offsite/<bucket>/media local/atlas-media
-bin/deploy.sh
+docker compose --profile ops run --rm ops     # 2. migrations: creates the database roles
+docker compose stop caddy web api worker 2>/dev/null || true   # 3. nothing writes during the restore
+# 4. fetch the latest dump from off-site storage into backups/, then:
+docker compose exec -T postgres pg_restore -U atlas -d atlas \
+  --clean --if-exists --exit-on-error < backups/db-<stamp>.dump
+# copy media back (keys passed by name from .env, as bin/backup.sh does):
+set -a; . ./.env; set +a
+docker compose exec -T -e BACKUP_S3_ENDPOINT -e BACKUP_S3_ACCESS_KEY_ID \
+  -e BACKUP_S3_SECRET_ACCESS_KEY -e BACKUP_S3_BUCKET minio sh -ec '
+  export MC_HOST_local="http://atlas-root:${MINIO_ROOT_PASSWORD}@localhost:9000"
+  mc alias set offsite "https://${BACKUP_S3_ENDPOINT#https://}" \
+    "$BACKUP_S3_ACCESS_KEY_ID" "$BACKUP_S3_SECRET_ACCESS_KEY" >/dev/null
+  mc mirror offsite/$BACKUP_S3_BUCKET/media local/atlas-media
+  mc alias remove offsite >/dev/null'
+bin/deploy.sh                                 # 5. reasserts grants, starts the apps
 ```
+
+If `pg_restore` stops on an error, nothing after it ran: fix the cause and run it again rather than
+carrying on. On a server that already holds data, step 3 is what keeps the running apps from
+writing into a half-restored database.
 
 Then run `ops:restore-verify` and `ops:attempts-affected` through the `ops` service as
 [backup-and-restore.md](backup-and-restore.md) describes, to list attempts that changed after
-the dump.
+the dump. `ops:restore-verify` fails if either audit policy is missing. Rehearse this whole
+restore once before the pilot (launch checklist section 0).
 
 ## Watching it
 

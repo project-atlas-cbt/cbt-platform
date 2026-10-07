@@ -54,4 +54,22 @@ describe('ops:restore-verify', () => {
     expect((await errors())['finalised attempts without a result']).toBe(1);
     expect((await verifyRestoredDatabase(db, { schoolIds: [school.schoolId] })).ok).toBe(false);
   });
+
+  it('fails when the platform audit policies did not survive the restore (P1-13)', async () => {
+    // pg_restore before atlas_app exists drops policies naming that role and
+    // carries on; the check must catch it.
+    await ownerPrisma().$executeRawUnsafe(
+      'DROP POLICY "audit_events_platform_insert" ON "audit_events"',
+    );
+    try {
+      expect(
+        (await errors())['audit policies missing (restored before the database roles existed)'],
+      ).toBe(1);
+    } finally {
+      await ownerPrisma().$executeRawUnsafe(
+        `CREATE POLICY "audit_events_platform_insert" ON "audit_events"
+           FOR INSERT TO atlas_app WITH CHECK (school_id IS NULL)`,
+      );
+    }
+  });
 });

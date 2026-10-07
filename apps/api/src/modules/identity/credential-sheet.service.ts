@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
+import { AuthLockoutService } from './auth-lockout.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService } from './session.service.js';
 
@@ -33,6 +34,7 @@ export class CredentialSheetService {
   constructor(
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
+    private readonly lockout: AuthLockoutService,
   ) {}
 
   /**
@@ -84,6 +86,9 @@ export class CredentialSheetService {
       if (existingUser.status !== 'INVITED') {
         await this.sessions.revokeAllForUser(schoolId, membership.userId);
       }
+      // P1-4: fresh credentials end any sign-in lockout, so a student
+      // locked out mid-exam can sign straight back in with them.
+      await this.lockout.clear(schoolId, membership.loginIdentifier);
       rows.push({
         studentId: membership.studentProfile.studentId,
         displayName: user.displayName,

@@ -95,6 +95,21 @@ describe('ExamListScreen', () => {
     expect(screen.queryByRole('columnheader', { name: /teacher/i })).not.toBeInTheDocument();
   });
 
+  it('P3-17: offers the Teacher filter only to roles that may list teachers', () => {
+    mockUseHasPermission.mockImplementation((resource) => resource !== 'users.teacher.view');
+    render(<ExamListScreen basePath="/hod/exams" scope="oversight" />);
+    expect(mockUseTeachers).toHaveBeenLastCalledWith({ enabled: false });
+    expect(screen.queryByLabelText('Teacher')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Department')).toBeInTheDocument();
+  });
+
+  it('shows the Teacher filter to School Admins and Moderators', () => {
+    mockUseHasPermission.mockReturnValue(true);
+    render(<ExamListScreen basePath="/school/exams" scope="oversight" />);
+    expect(mockUseTeachers).toHaveBeenLastCalledWith({ enabled: true });
+    expect(screen.getByLabelText('Teacher')).toBeInTheDocument();
+  });
+
   it('shows a loading state', () => {
     mockUseHasPermission.mockReturnValue(false);
     mockUseExamsPaginated.mockReturnValue({

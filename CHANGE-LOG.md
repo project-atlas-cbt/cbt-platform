@@ -2,6 +2,42 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-07 — Sign-in, staff screens, results and ops: P2 and P3 bug audit fixes
+
+The P2 and P3 items of the bug audit (`/mnt/project-files/bug-audit/findings.md`) in sign-in, staff
+screens, results and operations:
+
+- **Results and exports (P2-11 to P2-20, P3-3):** CSV decimals and formula neutralisation (tab and
+  carriage return), the HOD student export keeps class and department filters together and lists
+  only active enrolments, exam result exports show real status, the results list shows the class
+  the student sat in (enrolment in the exam's session), class filter and search combine, stable
+  ordering, VOID_QUESTION must name a question of the exam, manual overrides skip voided results
+  and complete, per-result audit rows carry the adjuster's role, percentages are truncated, not
+  rounded up.
+- **P2-21 "Grade now" (Haneef's choice, 2026-10-06):** results that finalised Ungraded can be
+  graded once bands exist: a RECALCULATE with `ungradedOnly` grades only those results against
+  the current scale and stores that version, so ADR-0018's freeze then applies. Graded results are
+  never touched. Expand-only column `result_adjustment_operations.ungraded_only`. The results
+  screen shows the count and the action; the grading guide explains it.
+- **Staff screens:** moderator dashboard link (P2-22); analytics validation errors are 400, and the
+  teacher class page asks for its own subject's analytics from its own assignments (P2-23); school
+  hosts render times in the school's timezone and makeup expiry is read as school time (P2-24,
+  ADR-0027); results carry `gradePassing` and the badge colours by it (P3-6); full review marks
+  voided questions (P3-2); HOD Exams no longer requests the teacher list (P3-17).
+- **Notifications and scales:** each result is announced once, and a released result is announced
+  then (P3-4); grading scale saves are serialised and a scale keeps its level (P3-5).
+- **Sign-in:** reset tokens are claimed atomically (P3-14); MFA attempts are reserved with an
+  atomic counter (P3-15); new staff get an invitation email naming the school (P3-16).
+- **Ops:** the post-deploy smoke checks every school in `SCHOOLS`, and the runbook creates schools
+  before listing them (P2-25); off-site backups use `mc alias set` with keys passed by name, the
+  app storage user cannot delete object versions, and noncurrent versions expire after 35 days
+  (P2-26); bucket setup no longer ends in `|| true` (P3-11); the demo form refuses `Origin: null`
+  with 403 (P3-12); the invigilator guide names Exam Operations too (P3-13).
+
+Tested: typecheck, lint, format, unit tests, API and worker integration suites and the security
+suite locally, with a new test for each fix. The new `mc` steps in `deploy.sh` and `backup.sh` were
+not run against MinIO (no `mc` here, CI paused); the first deploy or the CI stack proves them.
+
 ### 2026-10-06 — Imports and authoring: P2 and P3 bug audit fixes
 
 The P2 and P3 items of the bug audit in imports, authoring and their permissions:
@@ -104,6 +140,35 @@ body), web tests for the submit paths, the clock jump, re-anchoring and restored
 `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test`, `pnpm test:security`, the execution
 integration suites and the worker's auto-submit and marking integration suites pass locally. CI is
 blocked by GitHub Actions billing.
+
+### 2026-10-06 — Bug audit fixes: sign-in, HOD screens, results and expiry (P1)
+
+The P1 items from the full app bug audit (`/mnt/project-files/bug-audit/findings.md`) that sit in
+sign-in, HOD screens, results and operations:
+
+- **P1-4 sign-in lockout.** A credential reset, a password change and a completed reset now end a
+  lockout. School Admins and Moderators get **Unlock sign-in** on a student
+  (`POST /students/:id/unlock-sign-in`, permission `users.student.resetCredentials`, audited as
+  `STUDENT_SIGN_IN_UNLOCKED`). Invigilator guide and help updated.
+- **P1-12 HOD screens.** `GET /academics/departments` marks the caller's own department
+  (`headedByMe`); the HOD dashboard and Department Analytics use it, show an error when results
+  can't load, and say so when the HOD heads no department. The HOD Academics strip no longer
+  shows Rollover (owner request).
+- **P1-7 voids after marking.** A result finalised after a completed `VOID_QUESTION` has each
+  void applied at finalisation: ADJUSTED, with a child adjustment row per operation.
+- **P1-3 subscription expiry (ADR-0015).** Past the 14-day grace, exam and question writes,
+  imports, opening sessions and starting new attempts answer `SUBSCRIPTION_EXPIRED`
+  (`@AuthorizedWrite`); a running attempt still resumes. Schools with no subscription row
+  (seeded) are not gated.
+- **P1-13 restore.** `vps-pilot.md`'s restore runs TLS, migrations, stops the apps, then
+  `pg_restore --clean --if-exists --exit-on-error`; `ops:restore-verify` fails when either
+  platform audit policy is missing.
+
+**Tested:** typecheck, lint, format, all unit suites, `test:security` (9/9) and the integration
+suites pass, with new tests per fix. Two integration failures are this sandbox's, not the change:
+the unsigned-GET check in `media.integration.test.ts` (the local S3 stand-in allows it) and the
+migration reset test (PostgreSQL 16 has no `uuidv7()` after a reset). The restore order was
+rehearsed on PostgreSQL 16, not on the pilot server.
 
 ### 2026-10-06 — Pilot server: nightly backups could not write their dump
 

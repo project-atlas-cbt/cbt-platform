@@ -117,6 +117,14 @@ export class AuthLockoutService {
     }
   }
 
+  /** P1-4: a credential reset, a password change or a staff "Unlock
+   * sign-in" ends the lockout at once. Without this a student locked out
+   * mid-exam (five wrong guesses at a guessable student ID) waits out the
+   * whole window while their attempt timer runs. */
+  async clear(schoolId: string, loginIdentifier: string): Promise<void> {
+    await this.recordSuccess(schoolId, loginIdentifier);
+  }
+
   private memoryCount(key: string): number {
     const entry = this.memory.get(key);
     if (!entry) return 0;
