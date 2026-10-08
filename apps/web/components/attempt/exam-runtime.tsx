@@ -26,6 +26,7 @@ import { QuestionNavigator } from './question-navigator';
 import { TimerDisplay } from './timer-display';
 import { ConnectionBanner } from './connection-banner';
 import { GraceWindowBanner } from './grace-window-banner';
+import { FocusGuard } from './focus-guard';
 import { SubmitDialog } from './submit-dialog';
 import { ExamLockedElsewhereScreen } from './exam-locked-elsewhere-screen';
 import { InvalidatedScreen } from './invalidated-screen';
@@ -400,6 +401,7 @@ export function ExamRuntime({ attemptId }: { attemptId: string }) {
       </a>
       <ConnectionBanner />
       <GraceWindowBanner attemptId={attemptId} />
+      <FocusGuard enabled={isLeader} />
 
       <header className="flex items-center justify-between border-b border-border px-6 py-3">
         <h1 className="text-sm font-medium text-text-primary">Assessment in progress</h1>
