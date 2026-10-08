@@ -2,6 +2,18 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Students are told when they leave the exam window; lab lockdown guide
+
+Pilot finding: a new browser tab can be opened during an exam. A web page cannot prevent that. The
+leave events (`WINDOW_BLUR`, `TAB_HIDDEN`, `FULLSCREEN_EXIT`) were already recorded and counted in
+the Control Center (ADR-0020), but the student saw nothing. The runtime now shows a neutral notice
+when the student comes back (once per absence, with a running count) and a "Full screen" button
+while not in full screen (`FocusGuard`, `use-focus-guard.ts`; client only, no API or schema
+change). Prevention is a lab setup matter: `docs/operations/exam-lab-lockdown.md` (allow-list
+policy, kiosk mode). Owner decision: no auto-submit; the Control Center instead shows a "Check on
+student" badge once a student has left the window or full screen 3 times (`hasFrequentLeaves`;
+Tab hidden is not summed, since a tab switch fires both). A prompt for the invigilator, not a verdict.
+
 ### 2026-10-08 — Passwordless sign-in admits students whose slip was never generated
 
 A student account starts `INVITED` and became `ACTIVE` only when a password slip was generated
