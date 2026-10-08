@@ -19,6 +19,15 @@ set -a; . ./.env; set +a
 if [ "$(id -u)" = 0 ]; then bin/internal-tls.sh; else sudo "$PWD/bin/internal-tls.sh"; fi
 bin/render-caddyfile.sh
 
+# A build needs several GB; running out mid-build fails the deploy, and a
+# full disk also endangers the database (2026-10-08). Stop early instead.
+# DEPLOY_MIN_FREE_GB=0 skips it (the CI stack, whose runner disk is small).
+free_gb=$(df -P --block-size=1G . | awk 'NR==2 {print $4}')
+if [ "$free_gb" -lt "${DEPLOY_MIN_FREE_GB:-10}" ]; then
+  echo "only ${free_gb} GB free; free space first (vps-pilot.md, \"Disk space\")" >&2
+  exit 1
+fi
+
 echo "== building $RELEASE"
 docker compose build marketing web api ops
 
@@ -109,5 +118,19 @@ if ! docker compose --profile ops run --rm --no-deps \
   echo "smoke FAILED for $RELEASE; it is running. Roll back with: bin/deploy.sh $(tail -n 1 releases.log 2>/dev/null || echo '<previous ref>')" >&2
   exit 1
 fi
+previous=$(tail -n 1 releases.log 2>/dev/null || true)
 echo "$RELEASE" >> releases.log
+
+# Each release leaves about 8 GB of images; without this the disk filled
+# (2026-10-08). Keep this release's and the previous one's, drop the rest,
+# and drop build cache older than a week. Docker refuses to remove an image
+# a container still uses, so this cannot touch anything running.
+echo "== removing old release images"
+docker images --format '{{.Repository}}:{{.Tag}}' \
+  | grep -E '^atlas-(server|web|marketing|ops):' \
+  | grep -v -e ":$RELEASE\$" ${previous:+-e ":$previous\$"} \
+  | xargs -r docker rmi >/dev/null 2>&1 || true
+docker image prune -f >/dev/null
+docker builder prune -f --filter until=168h >/dev/null || true
+df -h . | awk 'NR==2 {print "disk: " $4 " free"}'
 echo "deployed $RELEASE"
