@@ -7,6 +7,11 @@ describe('sanitizeQuestionHtml', () => {
     expect(sanitizeQuestionHtml(html)).toBe(html);
   });
 
+  it('preserves subscript and superscript', () => {
+    const html = '<p>H<sub>2</sub>O and x<sup>2</sup></p>';
+    expect(sanitizeQuestionHtml(html)).toBe(html);
+  });
+
   it('preserves lists', () => {
     const html = '<ul><li>One</li><li>Two</li></ul>';
     expect(sanitizeQuestionHtml(html)).toBe(html);
