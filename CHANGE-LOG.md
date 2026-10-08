@@ -10,8 +10,9 @@ the Control Center (ADR-0020), but the student saw nothing. The runtime now show
 when the student comes back (once per absence, with a running count) and a "Full screen" button
 while not in full screen (`FocusGuard`, `use-focus-guard.ts`; client only, no API or schema
 change). Prevention is a lab setup matter: `docs/operations/exam-lab-lockdown.md` (allow-list
-policy, kiosk mode). Candidate / Deferred: auto-submitting or locking after N leaves (a product
-decision, ADR-0020 keeps signals as counts, not judgements).
+policy, kiosk mode). Owner decision: no auto-submit; the Control Center instead shows a "Check on
+student" badge once a student has left the window or full screen 3 times (`hasFrequentLeaves`;
+Tab hidden is not summed, since a tab switch fires both). A prompt for the invigilator, not a verdict.
 
 ### 2026-10-08 — Passwordless sign-in admits students whose slip was never generated
 
