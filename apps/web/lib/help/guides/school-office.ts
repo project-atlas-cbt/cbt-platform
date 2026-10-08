@@ -120,6 +120,7 @@ export function schoolOfficeGuides(): Guide[] {
       notes: [
         'Staff can also reset their own password with **Forgot your password?** on the sign-in page.',
         'After several wrong passwords a sign-in locks for a while. If the student knows their password, press **Unlock sign-in** on the student instead; a new password from **Reset credentials** also ends the lock.',
+        'Students who are locked out are listed at the top of **People > Students**, each with an **Unlock** button, so you do not have to find them by name.',
       ],
       screen: { label: 'People', href: 'people' },
       related: ['add-students', 'add-teachers'],

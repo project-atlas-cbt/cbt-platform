@@ -25,6 +25,7 @@ import { useStudentsPaginated } from '@/lib/people/queries';
 import { UserStatusBadge } from '../people-status-badges';
 import { StudentForm } from './student-form';
 import { PasswordlessSignInPanel } from './passwordless-sign-in-panel';
+import { LockedOutPanel } from './locked-out-panel';
 
 const PAGE_SIZE = 25;
 
@@ -158,6 +159,7 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
         </div>
       </div>
 
+      {canManageSignIn ? <LockedOutPanel basePath={basePath} /> : null}
       {canManageSignIn ? <PasswordlessSignInPanel /> : null}
 
       <div className="flex flex-wrap items-end gap-4">

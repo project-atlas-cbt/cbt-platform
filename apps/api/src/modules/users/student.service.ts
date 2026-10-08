@@ -393,6 +393,35 @@ export class StudentService {
     };
   }
 
+  /** Students whose sign-in is locked right now, so staff can unlock them
+   * from one list instead of finding each name (pilot follow-up
+   * 2026-10-08). Lockout counters are keyed by Login ID in Redis; they are
+   * matched to students case-insensitively, as sign-in does. */
+  async listLockedOut(schoolId: string): Promise<StudentResponseDto[]> {
+    const identifiers = await this.lockout.lockedIdentifiers(schoolId);
+    if (identifiers.length === 0) return [];
+    return withTenant(prisma, schoolId, async (tx) => {
+      const rows = await tx.studentProfile.findMany({
+        where: {
+          schoolId,
+          membership: {
+            OR: identifiers.map((id) => ({
+              loginIdentifier: { equals: id, mode: 'insensitive' as const },
+            })),
+          },
+        },
+        include: INCLUDE,
+        orderBy: { membership: { user: { lastName: 'asc' } } },
+      });
+      const enrollmentMap = await resolveCurrentEnrollments(
+        tx,
+        schoolId,
+        rows.map((row) => row.id),
+      );
+      return rows.map((row) => toResponseDto(row, enrollmentMap.get(row.id)));
+    });
+  }
+
   /** P1-4: ends a sign-in lockout without changing the student's password.
    * Five wrong guesses at a guessable student ID lock the account; staff
    * clear it here so the student signs straight back in (mid-exam, their

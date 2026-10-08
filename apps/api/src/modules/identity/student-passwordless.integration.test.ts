@@ -376,3 +376,57 @@ describe('Passwordless student sign-in', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('Student lockout visibility', () => {
+  let f: Fixture;
+  beforeAll(async () => {
+    f = await createFixture();
+    const put = await setSettings(f, 'admin', 'admin-password-123', {
+      allStudents: true,
+      classIds: [],
+    });
+    expect(put.statusCode).toBe(200);
+  });
+
+  it('says so on the failure that locks, and on every try after it', async () => {
+    const max = Number(process.env.AUTH_LOCKOUT_MAX_ATTEMPTS ?? 5);
+    for (let i = 0; i < max - 1; i++) {
+      const { res } = await studentSignIn(f.host, 'OLA/001', 'Wrong Name');
+      expect(res.statusCode).toBe(401);
+    }
+    const locking = await studentSignIn(f.host, 'OLA/001', 'Wrong Name');
+    expect(locking.res.statusCode).toBe(403);
+    expect(locking.res.json<{ error: { code: string } }>().error.code).toBe(
+      'STUDENT_SIGN_IN_LOCKED',
+    );
+    // Even the right name is refused while locked, with the same message.
+    const after = await studentSignIn(f.host, 'ola/001', 'Funmilayo Adebayo');
+    expect(after.res.statusCode).toBe(403);
+    expect(after.res.json<{ error: { code: string } }>().error.code).toBe('STUDENT_SIGN_IN_LOCKED');
+    // Another student is unaffected.
+    expect((await studentSignIn(f.host, 'OLA/002', 'Chiamaka Okafor')).res.statusCode).toBe(200);
+  });
+
+  it('lists locked-out students for staff, and Unlock removes them', async () => {
+    const admin = await passwordSignIn(f.host, 'admin', 'admin-password-123');
+    const list = await send(admin, 'GET', '/students/locked-out');
+    expect(list.statusCode).toBe(200);
+    const students = list.json<{
+      students: Array<{ studentProfileId: string; loginIdentifier: string }>;
+    }>().students;
+    expect(students.map((s) => s.loginIdentifier)).toEqual(['OLA/001']);
+
+    expect(
+      (await send(admin, 'POST', `/students/${students[0]!.studentProfileId}/unlock-sign-in`))
+        .statusCode,
+    ).toBe(204);
+    const after = await send(admin, 'GET', '/students/locked-out');
+    expect(after.json<{ students: unknown[] }>().students).toEqual([]);
+    expect((await studentSignIn(f.host, 'OLA/001', 'Funmilayo Adebayo')).res.statusCode).toBe(200);
+  });
+
+  it('is not available to a teacher', async () => {
+    const teacher = await passwordSignIn(f.host, 'teach', 'teach-password-123');
+    expect((await send(teacher, 'GET', '/students/locked-out')).statusCode).toBe(403);
+  });
+});

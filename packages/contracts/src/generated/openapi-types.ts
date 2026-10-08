@@ -2889,6 +2889,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/locked-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Students whose sign-in is locked right now (too many wrong tries), for one-click unlocking. Same permission as Unlock sign-in. */
+        get: operations["StudentController_listLockedOut"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/students/me": {
         parameters: {
             query?: never;
@@ -5879,6 +5896,9 @@ export interface components {
             total: number;
             page: number;
             pageSize: number;
+        };
+        LockedOutStudentsResponseDto: {
+            students: components["schemas"]["StudentResponseDto"][];
         };
         StudentOwnProfileResponseDto: {
             displayName: string;
@@ -10816,6 +10836,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StudentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentController_listLockedOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LockedOutStudentsResponseDto"];
                 };
             };
         };

@@ -6954,6 +6954,28 @@
         ]
       }
     },
+    "/students/locked-out": {
+      "get": {
+        "operationId": "StudentController_listLockedOut",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LockedOutStudentsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Students whose sign-in is locked right now (too many wrong tries), for one-click unlocking. Same permission as Unlock sign-in.",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/students/me": {
       "get": {
         "operationId": "StudentController_getOwnProfile",
@@ -17149,6 +17171,20 @@
           "total",
           "page",
           "pageSize"
+        ]
+      },
+      "LockedOutStudentsResponseDto": {
+        "type": "object",
+        "properties": {
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentResponseDto"
+            }
+          }
+        },
+        "required": [
+          "students"
         ]
       },
       "StudentOwnProfileResponseDto": {
