@@ -8,7 +8,7 @@ import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { formatDate } from '@/lib/format/date';
-import { useExamsPaginated } from '@/lib/exams/queries';
+import { useExamsPaginated, useOwnExamsFilter } from '@/lib/exams/queries';
 import { ExamStatusBadge } from '@/components/exams/exam-status-badge';
 
 const PAGE_SIZE = 25;
@@ -43,7 +43,9 @@ export function ResultsExamPickerScreen({ basePath }: { basePath: string }) {
   const searchParams = useSearchParams();
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
 
-  const exams = useExamsPaginated({ page, pageSize: PAGE_SIZE });
+  // Only an exam's author sees its results among teachers (ADR-0037).
+  const ownFilter = useOwnExamsFilter(basePath.startsWith('/teacher'));
+  const exams = useExamsPaginated({ page, pageSize: PAGE_SIZE, ...ownFilter });
   const rows: ExamRow[] = exams.data?.exams ?? [];
   const pageCount = Math.max(1, Math.ceil((exams.data?.total ?? 0) / PAGE_SIZE));
 

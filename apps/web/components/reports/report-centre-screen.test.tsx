@@ -8,6 +8,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({ me: { membership: { id: 'm-me' } } }),
+}));
+
 vi.mock('@/lib/api', () => ({
   apiClient: {
     GET: vi.fn(),

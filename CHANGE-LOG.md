@@ -2,6 +2,87 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Teachers see only their own exams (ADR-0037)
+
+Owner decision after a permissions review: a teacher who taught the same class and subject could
+list and open a colleague's exam, and open single results of it. The builder then offered edits
+that the server refused. Every action was already owner-only on the server.
+
+Now:
+
+- A Teacher sees an exam only if they created it or were delegated to run it. `exam.viewAll` and
+  `results.viewIndividualResult` are `OWNED` for Teacher, and the list filter matches.
+- An HOD who also teaches sees their department plus their own exams.
+- An exam whose subject has no department is for Admin, Moderator, its author and its delegates
+  only. The subjects screen marks those subjects "None set".
+- The builder shows non-owners who owns the exam and a link to Exam Control.
+- The teacher's Exams, Results, Reports and dashboard lists ask for own exams only.
+- The teacher guide (in-app and `docs/user-guides/teacher.md`) explains delegation.
+
+Tests: new `exam-visibility.integration.test.ts` (6; 4 fail without the change). The exams,
+results, analytics, reports and execution integration suites (144), the security suite (53), API
+unit tests (296), domain (158) and web (1,096) all pass, as do typecheck and lint.
+
+### 2026-10-08 — Class rosters and related lookups limited to the viewer's classes
+
+Found while confirming the export pickers respect teacher scope (owner question). The exports
+were already safe at both layers: a teacher's class picker lists only their own classes, and
+`ExportService.validateScope` refuses any other class ("Class is outside your assignment", checked
+against the demo school). But five `assignments.view` lookups checked only the route-level grant,
+and the SELF resolver allows any record when it is given no owner, so a Teacher, or a Student, could
+read any class's roster (names and Login IDs) by its id. Reproduced against the demo school: a
+student read their own class's and other classes' rosters. With passwordless sign-in on, a roster
+is enough to sign in as a classmate.
+
+`people-scope.util.ts` now applies the grants the permission table already states, before
+`GET /classes/:id/students`, `GET /classes/:id/teachers`, `GET /students/:id/enrollments`,
+`GET /students/:id/subject-registrations` and `GET /teachers/:id/assignments` answer: School
+Admin and Moderator see the whole school; an HOD sees classes of a department they head (the
+class's own department, or one of its subjects taught there), those classes' students, and
+teachers of their department's subjects; a Teacher sees the classes they teach, those classes'
+students and their own assignments; a Student sees only their own records and no roster. Anything
+else is 403. This also closes the HOD half of bug-audit P2-9 for these routes. No permission-table
+or UI change: the screens that read these lists (class detail, analytics class view, print class
+sheet) already show an error or "unknown" when a list is refused.
+
+Tested: 12 new integration tests (`people-scope.integration.test.ts`; 6 of them fail without the
+fix), the academics, analytics, users and reports integration suites (94 passing) and the security
+suites (53 passing).
+
+### 2026-10-08 — Exports and printable reports: pickers instead of raw IDs
+
+Pilot feedback (owner): the export dialog asked for an Exam ID, Class ID, Subject ID or
+Department ID, which meant copying a UUID out of the address bar. Every scope field is now a
+type-to-search picker (`components/ui/searchable-select.tsx`, a hand-rolled ARIA combobox like
+`TopicCombobox`, no new dependency): typing "J" lists JSS1A, JSS2A and so on, labels that start
+with the text first. The Report Centre's four print cards (broadsheet, item diagnostics, class
+sheet, student transcript) use the same pickers; the student transcript picks a class, then a
+student from its roster.
+
+The lists come from endpoints each role can already read (`lib/reports/pickers.ts`): School Admin
+and Moderator see the current session's classes and every subject; an HOD sees only the
+departments they head (filled in when they head one) and that department's classes and subjects;
+a teacher sees only their own classes, subjects and levels (`GET /teachers/me/assignments`,
+current session for classes). Exams are the 100 most recent the role can see. The server still
+checks every scope on submit; the pickers only stop users being offered something it would reject.
+Opening the export from an exam's results page shows the exam's title, not its ID. No API change.
+
+Tested: 5 new picker tests, 6 new export-dialog tests (exam search, "J" class search, whole-school
+export, teacher subject/level from assignments, HOD department auto-fill, exam title when opened
+from an exam), web typecheck and lint; checked in the real app against the demo school as School
+Admin and Teacher, including a Student Directory export for SS2A whose CSV starts with Login ID.
+
+### 2026-10-08 — Student Directory export: Login ID column
+
+Pilot feedback: the Student Directory export (People > Students > Export) had no way to give a
+school its students' Login IDs, only the optional Admission Number. The CSV now starts with a
+`Login ID` column (the school-unique `login_identifier`), followed by the existing columns. It is a
+read-only export, so unlike the class credential sheet it never issues or changes a password.
+Closes the "no Student ID column" item in `frontend-roadmap.md` (F21 pilot findings).
+
+Tested: API typecheck and lint; the existing `e2e/reports.spec.ts` row assertion still holds
+(Admission Number still precedes the name columns).
+
 ### 2026-10-08 — Students are told when they leave the exam window; lab lockdown guide
 
 Pilot finding: a new browser tab can be opened during an exam. A web page cannot prevent that. The

@@ -58,7 +58,9 @@ starts when **they** press Start, and the server keeps it.
 - Signals such as "left the exam window" appear as plain counts. They are not evidence of
   cheating; read them only alongside what the invigilator saw.
 - **Delegated administrators** lets another staff member run Exam Control for this exam (for
-  example the invigilator in the lab).
+  example the invigilator in the lab). The exam then shows under their Exam Control, but they
+  cannot edit it or see its results. Other teachers, even those teaching the same class and
+  subject, do not see your exams at all; your HOD and the school office do.
 
 Ending the exam, absence and makeups (Exam Control → Participation, Makeup):
 

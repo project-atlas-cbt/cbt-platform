@@ -398,8 +398,9 @@ export class ExportService {
         return {
           rows: rows.length,
           csv: csv([
-            ['Admission Number', 'First Name', 'Last Name', 'Email'],
+            ['Login ID', 'Admission Number', 'First Name', 'Last Name', 'Email'],
             ...rows.map((r) => [
+              r.membership.loginIdentifier,
               r.admissionNumber,
               r.membership.user.firstName,
               r.membership.user.lastName,

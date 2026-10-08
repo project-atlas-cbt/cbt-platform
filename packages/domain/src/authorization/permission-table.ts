@@ -1584,7 +1584,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
-      TEACHER: granted('ASSIGNED'),
+      // ADR-0037: own exams and exams delegated to them, not every exam for
+      // a class they teach (02 §5 said "Assigned").
+      TEACHER: granted('OWNED'),
       STUDENT: granted(
         'SELF',
         '"Available only" — ADR-0006\'s eligibility predicate; B12 wires the actual filter.',
@@ -2216,7 +2218,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
-      TEACHER: granted('ASSIGNED'),
+      // ADR-0037: a result of their own exam, not of a colleague's exam
+      // sat by a class they teach (02 §5 said "Assigned students").
+      TEACHER: granted('OWNED'),
       STUDENT: granted('SELF'),
     },
   },

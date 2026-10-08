@@ -334,7 +334,7 @@ export function schoolResultsGuides(): Guide[] {
       requires: ['reporting.exportStudentList'],
       steps: [
         'Open **Reports** and press **Request Export**.',
-        'Choose the dataset: **Student Directory**, **Class Groups & Levels** or **Teaching Staff Directory**. Leave the optional filters blank for the whole school.',
+        'Choose the dataset: **Student Directory**, **Class Groups & Levels** or **Teaching Staff Directory**. To limit it to one class, type the class name (for example JSS1) and pick it from the list; leave it blank for the whole school.',
         'Under **Recent Export Requests**, press **View Status**. The page updates by itself while the file is prepared.',
         'When it says **Export completed successfully**, press the download button.',
       ],

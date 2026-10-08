@@ -16,6 +16,7 @@ vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 vi.mock('@/lib/exams/queries', () => ({
   useExamsPaginated: vi.fn(),
   useMyTeacherAssignments: vi.fn(),
+  useOwnExamsFilter: (enabled: boolean) => (enabled ? { teacherMembershipId: 'm-me' } : {}),
 }));
 vi.mock('@/lib/academics/queries', () => ({
   useSubjects: vi.fn(),
@@ -69,6 +70,16 @@ describe('ExamListScreen', () => {
       isError: false,
       refetch: vi.fn(),
     } as never);
+  });
+
+  it("ADR-0037: a teacher's Exams screen asks only for their own exams; oversight does not", () => {
+    mockUseHasPermission.mockReturnValue(true);
+    const { rerender } = render(<ExamListScreen basePath="/teacher/exams" scope="own" />);
+    expect(mockUseExamsPaginated).toHaveBeenLastCalledWith(
+      expect.objectContaining({ teacherMembershipId: 'm-me' }),
+    );
+    rerender(<ExamListScreen basePath="/school/exams" scope="oversight" />);
+    expect(mockUseExamsPaginated.mock.lastCall?.[0]).not.toHaveProperty('teacherMembershipId');
   });
 
   it('shows "New exam" only for the Teacher root, and only when exam.create is granted', () => {

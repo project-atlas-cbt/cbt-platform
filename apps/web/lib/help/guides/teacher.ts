@@ -129,7 +129,11 @@ export const TEACHER_GUIDES: RoleGuideSet = {
         'Under **Delegated administrators**, press **Add delegate**.',
         'Search for the teacher by name or staff ID, choose them and press **Add delegate**.',
       ],
-      notes: ['Press **Revoke** on their row to take control back.'],
+      notes: [
+        'The exam then shows under their **Exam Control**. They cannot edit it or see its results.',
+        'Other teachers do not see your exams, even if they teach the same class and subject.',
+        'Press **Revoke** on their row to take control back.',
+      ],
       screen: { label: 'Exam Control', href: 'exam-control' },
       related: ['run-a-sitting'],
     },

@@ -4,6 +4,7 @@ import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { resolveActorRole, selfOnlyMembershipId } from './actor.util.js';
+import { assertCanViewClassPeople, assertCanViewTeacher } from './people-scope.util.js';
 import {
   ClassTeachersResponseDto,
   MyTeacherAssignmentsResponseDto,
@@ -55,6 +56,7 @@ export class TeacherAssignmentController {
     @Param('id') teacherProfileId: string,
   ): Promise<TeacherAssignmentListResponseDto> {
     const user = currentUser(req);
+    await assertCanViewTeacher(user, teacherProfileId);
     const assignments = await this.assignments.listForTeacher(
       user.schoolId,
       teacherProfileId,
@@ -108,7 +110,9 @@ export class TeacherAssignmentController {
     @Req() req: FastifyRequest,
     @Param('id') classId: string,
   ): Promise<ClassTeachersResponseDto> {
-    const teachers = await this.assignments.listForClass(currentUser(req).schoolId, classId);
+    const user = currentUser(req);
+    await assertCanViewClassPeople(user, classId);
+    const teachers = await this.assignments.listForClass(user.schoolId, classId);
     return { teachers };
   }
 }
