@@ -20,6 +20,9 @@ export interface AuthenticatedUser {
    * the same request (B2's AuthorizationService reads this, never a
    * decoded token — 09 §25). */
   roles: Role[];
+  /** Signed in with Login ID + name (StudentPasswordlessService), not a
+   * password: never asked to change it, and never allowed to. */
+  passwordless: boolean;
 }
 
 /** B3: Software Admin's authenticated identity — no schoolId/membershipId,
@@ -133,7 +136,9 @@ export class AuthGuard implements CanActivate {
       ALLOW_PENDING_PASSWORD_CHANGE_KEY,
       [context.getHandler(), context.getClass()],
     );
-    if (user.credentialState !== 'OK' && !allowPending) {
+    // A passwordless student session never sets a password, so the forced
+    // first change does not apply to it (StudentPasswordlessService).
+    if (user.credentialState !== 'OK' && !allowPending && !session.passwordless) {
       throw new AppHttpException({
         code: 'PASSWORD_CHANGE_REQUIRED',
         message: 'A password change is required before continuing.',
@@ -147,6 +152,7 @@ export class AuthGuard implements CanActivate {
       membershipId: membership.id,
       sessionId: session.id,
       roles: roleAssignments.map((r) => r.role),
+      passwordless: session.passwordless,
     };
     enrichLogContext({ userId: user.id });
     return true;

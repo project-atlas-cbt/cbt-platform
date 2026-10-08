@@ -26,6 +26,9 @@ the card at the end and keep it at the front desk.
 2. On each computer, open the school's address and sign out any previous user. Do not use
    private or incognito windows.
 3. Keep the spare computers signed out and ready.
+4. If students will sign in without a password, a School Admin or Moderator switches it on for
+   their classes under **People** > **Students** (**Sign-in without password**). Students then
+   type their name and Login ID.
 
 ## During the sitting
 
@@ -59,6 +62,8 @@ submitted, or **Disconnected**.
 - When this group is done, use **Close session** so nobody else can start in it. Students still writing finish their own time; the platform submits for them when it
   runs out.
 - Tell the exam officer about any failed computers and anything you wrote down.
+- If sign-in without a password was on, ask a School Admin or Moderator to press **Switch off**
+  once every student has submitted.
 
 ## If the platform itself is unavailable
 

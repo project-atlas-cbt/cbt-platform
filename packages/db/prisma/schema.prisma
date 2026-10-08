@@ -116,6 +116,11 @@ model School {
   defaultNavigationPolicy    ExamNavigationPolicy @default(FREE) @map("default_navigation_policy")
   defaultRandomizeQuestions  Boolean              @default(false) @map("default_randomize_questions")
   defaultRandomizeOptions    Boolean              @default(false) @map("default_randomize_options")
+  /// Passwordless student sign-in (owner decision 2026-10-08): while true,
+  /// every student of this school may sign in with Login ID + name instead
+  /// of a password. Students only; staff never. Stays on until a School
+  /// Admin or Moderator switches it off (which ends those sessions).
+  studentPasswordlessSignIn  Boolean              @default(false) @map("student_passwordless_sign_in")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -431,6 +436,10 @@ model Session {
   rotatedFromId String?   @unique @map("rotated_from_id") @db.Uuid
   userAgent     String?   @map("user_agent")
   ipAddress     String?   @map("ip_address") @db.VarChar(64)
+  /// Issued by passwordless student sign-in (Login ID + name). Such a
+  /// session skips the forced first password change, can never change the
+  /// password, and is revoked when the school or class switch goes off.
+  passwordless  Boolean   @default(false)
 
   school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1109,6 +1118,9 @@ model ClassGroup {
   level             ClassLevel
   arm               String           @db.VarChar(16)
   status            ClassGroupStatus @default(ACTIVE)
+  /// Passwordless student sign-in for this class only (see
+  /// School.studentPasswordlessSignIn).
+  passwordlessSignIn Boolean         @default(false) @map("passwordless_sign_in")
   createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 

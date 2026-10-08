@@ -1,6 +1,7 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { AuditActionRegistry } from '../operations/audit-action.registry.js';
 import { IDENTITY_AUDIT_ACTIONS } from './identity.service.js';
+import { STUDENT_PASSWORDLESS_AUDIT_ACTIONS } from './student-passwordless.service.js';
 
 /** B20: registers the identity audit actions (sign-in, lockout, password
  * change/reset) — same per-module registration idiom as every other
@@ -11,5 +12,6 @@ export class IdentityAuditActionRegistrationProvider implements OnModuleInit {
 
   onModuleInit(): void {
     this.registry.registerAll(Object.values(IDENTITY_AUDIT_ACTIONS));
+    this.registry.registerAll(Object.values(STUDENT_PASSWORDLESS_AUDIT_ACTIONS));
   }
 }

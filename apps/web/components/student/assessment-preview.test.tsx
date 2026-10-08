@@ -78,6 +78,23 @@ describe('AssessmentPreview', () => {
     expect(mockPost).toHaveBeenCalledTimes(1);
   });
 
+  it('pilot feedback — an already-submitted exam shows the confirmation and Go home, never Start', async () => {
+    mockGet.mockImplementation(((path: string) =>
+      path === '/student/assessment/{examId}/preview'
+        ? ok({ ...PREVIEW, submittedAttemptId: 'attempt-99' })
+        : ok({
+            attemptId: 'attempt-99',
+            examId: 'exam-1',
+            state: 'SUBMITTED',
+            submittedAt: new Date().toISOString(),
+            marking: { status: 'NOT_APPLICABLE', questionCount: 0, markedCount: 0 },
+          })) as never);
+    renderWithClient();
+    expect(await screen.findByText(/your assessment has been submitted/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /go home/i })).toHaveAttribute('href', '/student');
+    expect(screen.queryByRole('button', { name: /start assessment/i })).not.toBeInTheDocument();
+  });
+
   it('shows an error state on preview load failure', async () => {
     mockGet.mockResolvedValue({
       error: {

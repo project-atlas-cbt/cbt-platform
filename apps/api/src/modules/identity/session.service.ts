@@ -14,6 +14,8 @@ export interface AuthenticatedSession {
   sessionId: string;
   userId: string;
   schoolId: string;
+  /** Issued by passwordless student sign-in (StudentPasswordlessService). */
+  passwordless?: boolean;
 }
 
 /** A session row that exists, is not revoked and has not expired. */
@@ -47,7 +49,14 @@ export class SessionService {
   /** Creates a new session row and sets its cookie on `res`. */
   async issue(
     res: FastifyReply,
-    params: { userId: string; schoolId: string; rotatedFromId?: string; req?: FastifyRequest },
+    params: {
+      userId: string;
+      schoolId: string;
+      rotatedFromId?: string;
+      req?: FastifyRequest;
+      /** Passwordless student sign-in; carried across refresh rotations. */
+      passwordless?: boolean;
+    },
   ): Promise<AuthenticatedSession> {
     const rawToken = randomBytes(32).toString('base64url');
     const tokenHash = hashToken(rawToken);
@@ -72,12 +81,18 @@ export class SessionService {
           ...(params.rotatedFromId !== undefined ? { rotatedFromId: params.rotatedFromId } : {}),
           ...(userAgent !== undefined ? { userAgent } : {}),
           ...(ipAddress !== undefined ? { ipAddress } : {}),
+          ...(params.passwordless ? { passwordless: true } : {}),
         },
       }),
     );
 
     this.setCookie(res, rawToken, expiresAt);
-    return { sessionId: session.id, userId: session.userId, schoolId: session.schoolId };
+    return {
+      sessionId: session.id,
+      userId: session.userId,
+      schoolId: session.schoolId,
+      passwordless: session.passwordless,
+    };
   }
 
   /**
@@ -94,7 +109,12 @@ export class SessionService {
       tx.session.findUnique({ where: { tokenHash } }),
     );
     return isLiveSession(session)
-      ? { sessionId: session.id, userId: session.userId, schoolId: session.schoolId }
+      ? {
+          sessionId: session.id,
+          userId: session.userId,
+          schoolId: session.schoolId,
+          passwordless: session.passwordless,
+        }
       : null;
   }
 

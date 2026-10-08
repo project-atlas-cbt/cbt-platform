@@ -20,6 +20,9 @@ export interface AuthMe {
   membership: CurrentMembership;
   roles: Role[];
   effectiveSchoolId: string;
+  /** Signed in with name + Login ID, not a password: the password cannot
+   * be changed from this session. */
+  passwordless?: boolean;
 }
 
 /**
