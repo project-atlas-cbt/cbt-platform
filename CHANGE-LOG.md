@@ -2,6 +2,21 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Subjects added after students are enrolled now register those students
+
+Students imported (or enrolled by hand) into a class before a subject was offered to it were never
+registered for that subject, so they were not eligible for its exams even though the import
+succeeded. Enrolling registers a student for the class's offerings that exist at that moment
+(ADR-0011), but adding an offering afterwards registered nobody. `ClassSubjectService.create` now
+registers every active enrollment of the class in the same transaction as the new offering
+(`subject-registration-sync.util.ts`); existing registrations are left alone, so a deregistration
+from an elective stands. The school office guide already described this behaviour.
+
+Students affected before the fix are repaired by `ops:backfill-subject-registrations` (dry run by
+default, `--apply` to write, `--school <subdomain>` to limit it). It has not been run on the pilot
+server. Tested: the enrollment, academics and imports integration suites (51 passing), including a
+new late-offering case that fails on the old code and a backfill case that keeps a deregistration.
+
 ### 2026-10-07 — People search matches full names
 
 Searching a full name ("Adaeze Okafor") in the Students, Teachers, HODs or Moderators list returned

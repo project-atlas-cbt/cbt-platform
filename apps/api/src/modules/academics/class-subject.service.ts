@@ -5,6 +5,7 @@ import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { assertNoDependents } from './archival.util.js';
 import { runUniqueGuarded } from './prisma-error.util.js';
+import { registerEnrolledStudentsForOfferings } from './subject-registration-sync.util.js';
 import type { ClassSubjectResponseDto, CreateClassSubjectDto } from './dto/class-subject.dto.js';
 
 interface ActorContext {
@@ -60,18 +61,25 @@ export class ClassSubjectService {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Subject not found.' });
     }
 
+    // The offering and its registrations commit together: students already
+    // enrolled in the class (by hand or by bulk import) are registered for
+    // the new subject at once, so they are eligible for its exams (ADR-0011).
     const created = await runUniqueGuarded(
       () =>
-        withTenant(prisma, schoolId, (tx) =>
-          tx.classSubject.create({
+        withTenant(prisma, schoolId, async (tx) => {
+          const offering = await tx.classSubject.create({
             data: {
               schoolId,
               classId,
               subjectId: dto.subjectId,
               academicSessionId: classGroup.academicSessionId,
             },
-          }),
-        ),
+          });
+          await registerEnrolledStudentsForOfferings(tx, schoolId, {
+            classSubjectId: offering.id,
+          });
+          return offering;
+        }),
       'This subject is already offered to this class.',
     );
     await this.audit.record({
