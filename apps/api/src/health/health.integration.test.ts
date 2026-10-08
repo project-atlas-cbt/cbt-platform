@@ -5,10 +5,15 @@
  * Requires `docker compose up -d` and DATABASE_URL / REDIS_URL pointed at
  * it — see tests/integration/README.md.
  */
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { prisma } from '@atlas/db';
 import { AppModule } from '../app.module.js';
+import { ownerPrisma } from '../test-support/owner-prisma.js';
+
+const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 
 let app: NestFastifyApplication;
 
@@ -43,5 +48,49 @@ describe('health endpoints', () => {
         { name: 'storage', ok: true, critical: false },
       ]),
     );
+  });
+});
+
+describe('on-demand TLS check', () => {
+  let school: { id: string; subdomain: string };
+
+  beforeAll(async () => {
+    school = await prisma.school.create({
+      data: { name: `TLS Ask Test School ${randomUUID()}`, subdomain: `tls-${Date.now()}` },
+    });
+  });
+
+  afterAll(async () => {
+    await ownerPrisma().school.delete({ where: { id: school.id } });
+  });
+
+  const ask = (domain: string) =>
+    app.inject({ method: 'GET', url: '/health/tls-ask', query: { domain } });
+
+  it("allows an existing school's web and API hosts", async () => {
+    expect((await ask(`${school.subdomain}.${ROOT_DOMAIN}`)).statusCode).toBe(200);
+    expect((await ask(`${school.subdomain}.api.${ROOT_DOMAIN}`)).statusCode).toBe(200);
+    expect((await ask(`${school.subdomain.toUpperCase()}.${ROOT_DOMAIN}`)).statusCode).toBe(200);
+  });
+
+  it('refuses unknown schools, reserved labels, deeper names and other domains', async () => {
+    for (const domain of [
+      `no-such-school-${Date.now()}.${ROOT_DOMAIN}`,
+      `admin.${ROOT_DOMAIN}`,
+      `api.${ROOT_DOMAIN}`,
+      ROOT_DOMAIN,
+      `a.${school.subdomain}.${ROOT_DOMAIN}`,
+      `${school.subdomain}.example.com`,
+      '',
+    ]) {
+      const res = await ask(domain);
+      expect(res.statusCode, domain).toBe(404);
+      expect(res.json<{ error: { code: string } }>().error.code, domain).toBe('NOT_FOUND');
+    }
+  });
+
+  it('refuses a request with no domain', async () => {
+    const res = await app.inject({ method: 'GET', url: '/health/tls-ask' });
+    expect(res.statusCode).toBe(404);
   });
 });

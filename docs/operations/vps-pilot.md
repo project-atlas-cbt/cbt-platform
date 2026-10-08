@@ -85,7 +85,7 @@ What stays the same:
    secrets), each with fresh random secrets and mode 600. Then fill in:
    - `.env`: `ACME_EMAIL` and the `BACKUP_S3_*` values. Leave `SCHOOLS` empty for now: the
      post-deploy smoke checks that every listed school exists, and schools are created only after
-     the first deploy (see "Adding a school").
+     the first deploy (see "Adding a school", which needs no `SCHOOLS` entry).
      `SUPPORT_EMAIL` and `SUPPORT_WHATSAPP` set the contacts on staff Help screens (ADR-0035); they
      are built into the web image, so changing them needs a rebuild. `MARKETING_LEAD_EMAIL_*`
      send the marketing site's demo requests (`apps/marketing/README.md`); left empty, the form
@@ -114,10 +114,17 @@ What stays the same:
 
 ## Adding a school
 
-Create the school in the Software Admin console first, then add its subdomain label to `SCHOOLS`
-in `.env` (comma-separated) and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the
-new certificates; the smoke waits up to a minute for them, then checks every school in `SCHOOLS`.
-A listed school that does not exist fails the smoke with a message naming it.
+Create the school in the Software Admin console. Nothing on the server needs to change: its
+addresses (`<school>.<root>` and `<school>.api.<root>`) get their certificates on the first visit
+(Caddy's on-demand TLS), after the API confirms the school exists (`/v1/health/tls-ask`, which Caddy
+calls inside the network and which the public hosts refuse). The first visit to a new school
+therefore takes a few seconds longer while the certificate is fetched; an invented subdomain gets
+no certificate.
+
+Optionally, add the label to `SCHOOLS` in `.env` (comma-separated) and run `bin/deploy.sh`: Caddy
+then fetches the certificates at startup, and the smoke checks every listed school. A listed school
+that does not exist fails the smoke with a message naming it. Needs the wildcard `*` and `*.api` DNS
+records (DNS-only, not proxied).
 
 ## Demo school (staging only)
 
@@ -131,7 +138,8 @@ docker compose --profile ops run --rm --no-deps \
   ops pnpm --filter @atlas/load demo-school seed
 ```
 
-Then add `oakridge,riverside` to `SCHOOLS` and run `bin/deploy.sh`. The demo staff have
+Its schools work straight away (see "Adding a school"); add `oakridge,riverside` to `SCHOOLS` to
+have the deploy's smoke check them. The demo staff have
 `@….example` addresses; the email transports skip those reserved names, so no invitation is sent
 or bounces.
 
