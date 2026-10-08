@@ -5613,6 +5613,12 @@ export interface components {
             published: boolean;
             adjustmentInProgress: boolean;
         };
+        QuestionOptionReviewDto: {
+            optionId: string;
+            content: string;
+            correct: boolean;
+            selected: boolean;
+        };
         ResultQuestionBreakdownDto: {
             examQuestionId: string;
             displaySequence: number;
@@ -5621,6 +5627,7 @@ export interface components {
             awardedMarks: number;
             maximumMarks: number;
             voided: boolean;
+            options: components["schemas"]["QuestionOptionReviewDto"][];
         };
         ResultAdjustmentHistoryItemDto: {
             id: string;
@@ -5753,6 +5760,7 @@ export interface components {
             awardedMarks: number;
             maximumMarks: number;
             voided: boolean;
+            options: components["schemas"]["QuestionOptionReviewDto"][];
         };
         StudentResultDetailDto: {
             id: string;

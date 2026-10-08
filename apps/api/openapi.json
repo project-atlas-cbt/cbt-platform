@@ -16164,6 +16164,29 @@
           "adjustmentInProgress"
         ]
       },
+      "QuestionOptionReviewDto": {
+        "type": "object",
+        "properties": {
+          "optionId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "correct": {
+            "type": "boolean"
+          },
+          "selected": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "optionId",
+          "content",
+          "correct",
+          "selected"
+        ]
+      },
       "ResultQuestionBreakdownDto": {
         "type": "object",
         "properties": {
@@ -16187,6 +16210,12 @@
           },
           "voided": {
             "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOptionReviewDto"
+            }
           }
         },
         "required": [
@@ -16196,7 +16225,8 @@
           "correctness",
           "awardedMarks",
           "maximumMarks",
-          "voided"
+          "voided",
+          "options"
         ]
       },
       "ResultAdjustmentHistoryItemDto": {
@@ -16674,6 +16704,12 @@
           },
           "voided": {
             "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOptionReviewDto"
+            }
           }
         },
         "required": [
@@ -16682,7 +16718,8 @@
           "correctness",
           "awardedMarks",
           "maximumMarks",
-          "voided"
+          "voided",
+          "options"
         ]
       },
       "StudentResultDetailDto": {

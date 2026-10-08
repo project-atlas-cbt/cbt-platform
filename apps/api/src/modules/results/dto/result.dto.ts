@@ -147,6 +147,15 @@ export class ExamResultsResponseDto {
   @ApiProperty({ type: Boolean }) adjustmentInProgress!: boolean;
 }
 
+export class QuestionOptionReviewDto {
+  @ApiProperty({ type: String }) optionId!: string;
+  @ApiProperty({ type: String }) content!: string;
+  /** The option the answer key marks correct. */
+  @ApiProperty({ type: Boolean }) correct!: boolean;
+  /** The option this student chose. */
+  @ApiProperty({ type: Boolean }) selected!: boolean;
+}
+
 export class ResultQuestionBreakdownDto {
   @ApiProperty({ type: String }) examQuestionId!: string;
   @ApiProperty({ type: Number }) displaySequence!: number;
@@ -157,6 +166,11 @@ export class ResultQuestionBreakdownDto {
 
   /** `true` when an adjustment excluded this question from the score. */
   @ApiProperty({ type: Boolean }) voided!: boolean;
+
+  /** The options in the order this student saw them, with the correct one
+   * and the student's choice flagged (none selected when unanswered). */
+  @ApiProperty({ type: [QuestionOptionReviewDto] })
+  options!: QuestionOptionReviewDto[];
 }
 
 export class ResultAdjustmentHistoryItemDto {

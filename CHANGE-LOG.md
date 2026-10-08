@@ -2,6 +2,24 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Results: options, key and choice per question; result policy field fixed
+
+- **Staff result detail** now lists each question's options with the correct one and the student's
+  choice marked. **Student result detail** does the same under "Full per-question review" only
+  (ADR-0010 amendment of the same date; this reverses the earlier "no answer key" rule at the
+  owner's request). `ResultQuestionBreakdownDto` and `StudentResultQuestionDto` gain `options`
+  (`optionId`, `content`, `correct`, `selected`); the key comes from the attempt snapshot. The two
+  narrower policies return no per-question data, tested on the serialised response.
+- **Bug: Settings > Results showed an empty "What students see" after saving Score only or Full
+  per-question review.** UI-only: the server stored and returned both values correctly (the API
+  suite already covered `FULL_REVIEW`). The form started on its default (Score plus counts) and was
+  reset to the saved value after mounting, which left the closed Radix select blank for any value
+  other than that default. The form now mounts only once the saved values are loaded. "Who
+  releases results" had the same flaw for non-default values and is fixed by the same change.
+- No migration. The result settings lock and already-finalised results are unaffected.
+- Tested: results integration (27), web results and settings tests (new cases for both policies and
+  for the options views).
+
 ### 2026-10-08 — Bug audit follow-ups: sign-in bounce, "no going back", absentee list, "Grade now"
 
 Four items left open by the 2026-10-07 re-check of the bug audit

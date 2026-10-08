@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { QuestionOptionsReview } from '@/components/results/question-options-review';
 import { sanitizeQuestionHtml } from '@/lib/questions/sanitize-html';
 import { formatResultPercentage } from '@/lib/results/format';
 import { useStudentResult } from '@/lib/results/queries';
@@ -105,6 +106,11 @@ export function ResultDetailScreen({ resultId }: { resultId: string }) {
                 <div
                   className="mt-2 text-sm text-text-primary [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
                   dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(question.content) }}
+                />
+                <QuestionOptionsReview
+                  options={question.options}
+                  chosenLabel="Your answer"
+                  unansweredNote="You did not answer this question."
                 />
                 <p className="mt-2 text-xs text-text-muted">
                   {question.voided

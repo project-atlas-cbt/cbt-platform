@@ -64,6 +64,19 @@ describe('SchoolResultsSettingsPage', () => {
     expect(screen.getByText('Grading scale section (editable)')).toBeInTheDocument();
   });
 
+  it.each([
+    ['SCORE_ONLY', 'Score only'],
+    ['FULL_REVIEW', 'Full per-question review'],
+  ])('shows the saved "%s" visibility after load', (value, label) => {
+    mockUseResultPolicy.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { ...DEFAULTS, resultDetailVisibility: value },
+    } as never);
+    render(<SchoolResultsSettingsPage />);
+    expect(screen.getByRole('combobox', { name: /what students see/i })).toHaveTextContent(label);
+  });
+
   it('toggles the lock checkbox and saves', async () => {
     mockUseResultPolicy.mockReturnValue({
       isPending: false,
