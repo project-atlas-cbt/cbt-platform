@@ -4,6 +4,7 @@ import { ChangeOwnPasswordForm } from '@/components/account/change-own-password-
 import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOwnStudentProfile } from '@/lib/account/queries';
+import { useAuth } from '@/lib/auth';
 
 /**
  * F14 — `04 §62` Profile. Read-only identity display plus a working
@@ -15,6 +16,7 @@ import { useOwnStudentProfile } from '@/lib/account/queries';
  */
 export function StudentProfileScreen() {
   const query = useOwnStudentProfile();
+  const { me } = useAuth();
 
   if (query.isPending) {
     return (
@@ -62,7 +64,14 @@ export function StudentProfileScreen() {
       <div className="border-t border-border pt-6">
         <h2 className="text-sm font-medium text-text-primary">Change password</h2>
         <div className="mt-4">
-          <ChangeOwnPasswordForm />
+          {me?.passwordless ? (
+            <p className="text-sm text-text-secondary">
+              You signed in with your name and Login ID. To change your password, sign out and sign
+              in with your password.
+            </p>
+          ) : (
+            <ChangeOwnPasswordForm />
+          )}
         </div>
       </div>
     </div>

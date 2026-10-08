@@ -253,6 +253,7 @@ export class IdentityService {
       schoolId,
       rotatedFromId: current.sessionId,
       req,
+      passwordless: current.passwordless === true,
     });
   }
 
