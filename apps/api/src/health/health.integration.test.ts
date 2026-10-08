@@ -73,12 +73,17 @@ describe('on-demand TLS check', () => {
     expect((await ask(`${school.subdomain.toUpperCase()}.${ROOT_DOMAIN}`)).statusCode).toBe(200);
   });
 
-  it('refuses unknown schools, reserved labels, deeper names and other domains', async () => {
+  it("allows the platform's own hosts", async () => {
+    for (const label of ['admin', 'api', 'admin.api', 'media', 'www']) {
+      expect((await ask(`${label}.${ROOT_DOMAIN}`)).statusCode, label).toBe(200);
+    }
+  });
+
+  it('refuses unknown schools, the bare root, deeper names and other domains', async () => {
     for (const domain of [
       `no-such-school-${Date.now()}.${ROOT_DOMAIN}`,
-      `admin.${ROOT_DOMAIN}`,
-      `api.${ROOT_DOMAIN}`,
       ROOT_DOMAIN,
+      `x.media.${ROOT_DOMAIN}`,
       `a.${school.subdomain}.${ROOT_DOMAIN}`,
       `${school.subdomain}.example.com`,
       '',

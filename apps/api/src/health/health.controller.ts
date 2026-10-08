@@ -27,6 +27,9 @@ interface ReadinessCheck {
 /** A probe must answer quickly even when a dependency hangs. */
 const CHECK_TIMEOUT_MS = 2000;
 
+/** The platform hosts Caddy serves under the root domain (infra/vps/bin/render-caddyfile.sh). */
+const PLATFORM_HOST_LABELS = ['admin', 'api', 'admin.api', 'media', 'www'];
+
 /**
  * B22 (08 §25, 09 §33, B22 API work "health and readiness endpoints report
  * dependency status accurately for orchestration"):
@@ -106,12 +109,17 @@ export class HealthController {
   async tlsAsk(@Query('domain') domain: unknown) {
     // A school created in the console gets its certificate on the first
     // visit; anything else is refused so nobody can make the server request
-    // certificates for invented names (Let's Encrypt rate limits).
-    const host = typeof domain === 'string' && domain.length <= 253 ? domain : undefined;
-    const subdomain = parseTenantSubdomain(
-      host,
-      this.config.get('PLATFORM_ROOT_DOMAIN', { infer: true }),
-    );
+    // certificates for invented names (Let's Encrypt rate limits). The
+    // platform's own hosts are allowed too: Caddy merges their certificate
+    // policy with the wildcard sites' on-demand one, so their stored
+    // certificates are only served once this check says yes (2026-10-08).
+    const root = this.config.get('PLATFORM_ROOT_DOMAIN', { infer: true }).toLowerCase();
+    const host =
+      typeof domain === 'string' && domain.length <= 253 ? domain.toLowerCase().trim() : undefined;
+    if (host && PLATFORM_HOST_LABELS.some((label) => host === `${label}.${root}`)) {
+      return { status: 'ok' as const };
+    }
+    const subdomain = parseTenantSubdomain(host, root);
     const school = subdomain
       ? await prisma.school.findUnique({ where: { subdomain }, select: { id: true } })
       : null;
