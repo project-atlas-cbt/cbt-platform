@@ -3509,6 +3509,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/questions/bulk-archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive several questions in one call. Best-effort: each question is checked and archived independently under the single-archive rules, with per-question outcomes. */
+        post: operations["QuestionController_bulkArchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/questions/bulk-submit": {
         parameters: {
             query?: never;
@@ -6195,6 +6212,22 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        BulkArchiveQuestionsDto: {
+            /** @description Question ids to archive, each checked against the single-archive rules. */
+            questionIds: string[];
+        };
+        QuestionBulkArchiveItemDto: {
+            questionId: string;
+        };
+        QuestionBulkSubmitFailureDto: {
+            questionId: string;
+            code: string;
+            message: string;
+        };
+        BulkArchiveResultDto: {
+            archived: components["schemas"]["QuestionBulkArchiveItemDto"][];
+            failed: components["schemas"]["QuestionBulkSubmitFailureDto"][];
+        };
         BulkSubmitQuestionsDto: {
             /** @description Question ids whose *current* DRAFT revision should be submitted for review. */
             questionIds: string[];
@@ -6202,11 +6235,6 @@ export interface components {
         QuestionBulkSubmitItemDto: {
             questionId: string;
             revisionId: string;
-        };
-        QuestionBulkSubmitFailureDto: {
-            questionId: string;
-            code: string;
-            message: string;
         };
         BulkSubmitResultDto: {
             submitted: components["schemas"]["QuestionBulkSubmitItemDto"][];
@@ -11762,6 +11790,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionResponseDto"];
+                };
+            };
+        };
+    };
+    QuestionController_bulkArchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkArchiveQuestionsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkArchiveResultDto"];
                 };
             };
         };

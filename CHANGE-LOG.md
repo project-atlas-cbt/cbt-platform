@@ -2,6 +2,22 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Question bank: archive several questions at once
+
+Pilot feedback: a teacher could archive only one question at a time. The bank now has a checkbox
+column on every tab except Archived (draft and approved alike), a "Select all on this page"
+button, and an "Archive selected" button that opens a confirmation dialog. One request,
+`POST /questions/bulk-archive` (1–200 ids), archives the batch. It is best-effort like bulk
+submit: each question goes through the same `questionBank.archive` check as the single archive
+(a teacher can archive only their own questions), writes its own `QUESTION_ARCHIVED` audit row,
+and any question that cannot be archived (not yours, already archived, not found) comes back in
+`failed` with its reason and stays selected on screen. As with single archive, a question used by
+an exam can be archived: exams keep their approved revision, and archived questions drop out of
+the exam picker. Teachers can select only their own rows; HOD and School Admin can select any row.
+
+Tested: 3 new API integration tests (mixed batch, per-question failures, size limits), 2 new web
+tests, existing question web suites, security suites (53 passing).
+
 ### 2026-10-08 — Pilot server: platform hosts lost their certificates after the on-demand change
 
 The first deploy carrying the on-demand certificates (#63) left every host on the server without a
