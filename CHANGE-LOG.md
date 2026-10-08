@@ -2,6 +2,32 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Class rosters and related lookups limited to the viewer's classes
+
+Found while confirming the export pickers respect teacher scope (owner question). The exports
+were already safe at both layers: a teacher's class picker lists only their own classes, and
+`ExportService.validateScope` refuses any other class ("Class is outside your assignment", checked
+against the demo school). But five `assignments.view` lookups checked only the route-level grant,
+and the SELF resolver allows any record when it is given no owner, so a Teacher, or a Student, could
+read any class's roster (names and Login IDs) by its id. Reproduced against the demo school: a
+student read their own class's and other classes' rosters. With passwordless sign-in on, a roster
+is enough to sign in as a classmate.
+
+`people-scope.util.ts` now applies the grants the permission table already states, before
+`GET /classes/:id/students`, `GET /classes/:id/teachers`, `GET /students/:id/enrollments`,
+`GET /students/:id/subject-registrations` and `GET /teachers/:id/assignments` answer: School
+Admin and Moderator see the whole school; an HOD sees classes of a department they head (the
+class's own department, or one of its subjects taught there), those classes' students, and
+teachers of their department's subjects; a Teacher sees the classes they teach, those classes'
+students and their own assignments; a Student sees only their own records and no roster. Anything
+else is 403. This also closes the HOD half of bug-audit P2-9 for these routes. No permission-table
+or UI change: the screens that read these lists (class detail, analytics class view, print class
+sheet) already show an error or "unknown" when a list is refused.
+
+Tested: 12 new integration tests (`people-scope.integration.test.ts`; 6 of them fail without the
+fix), the academics, analytics, users and reports integration suites (94 passing) and the security
+suites (53 passing).
+
 ### 2026-10-08 — Exports and printable reports: pickers instead of raw IDs
 
 Pilot feedback (owner): the export dialog asked for an Exam ID, Class ID, Subject ID or

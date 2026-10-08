@@ -4,6 +4,7 @@ import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { resolveActorRole, selfOnlyMembershipId } from './actor.util.js';
+import { assertCanViewStudent } from './people-scope.util.js';
 import {
   StudentSubjectRegistrationListResponseDto,
   StudentSubjectRegistrationResponseDto,
@@ -33,6 +34,7 @@ export class StudentSubjectRegistrationController {
     @Param('id') studentProfileId: string,
   ): Promise<StudentSubjectRegistrationListResponseDto> {
     const user = currentUser(req);
+    await assertCanViewStudent(user, studentProfileId);
     const registrations = await this.registrations.listForStudent(
       user.schoolId,
       studentProfileId,

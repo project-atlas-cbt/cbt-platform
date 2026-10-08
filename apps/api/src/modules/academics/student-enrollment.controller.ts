@@ -4,6 +4,7 @@ import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { resolveActorRole } from './actor.util.js';
+import { assertCanViewClassPeople, assertCanViewStudent } from './people-scope.util.js';
 import {
   ClassRosterResponseDto,
   EnrollStudentDto,
@@ -56,10 +57,9 @@ export class StudentEnrollmentController {
     @Req() req: FastifyRequest,
     @Param('id') studentProfileId: string,
   ): Promise<StudentEnrollmentListResponseDto> {
-    const enrollments = await this.enrollments.listForStudent(
-      currentUser(req).schoolId,
-      studentProfileId,
-    );
+    const user = currentUser(req);
+    await assertCanViewStudent(user, studentProfileId);
+    const enrollments = await this.enrollments.listForStudent(user.schoolId, studentProfileId);
     return { enrollments };
   }
 
@@ -71,7 +71,9 @@ export class StudentEnrollmentController {
     @Req() req: FastifyRequest,
     @Param('id') classId: string,
   ): Promise<ClassRosterResponseDto> {
-    const students = await this.enrollments.rosterForClass(currentUser(req).schoolId, classId);
+    const user = currentUser(req);
+    await assertCanViewClassPeople(user, classId);
+    const students = await this.enrollments.rosterForClass(user.schoolId, classId);
     return { students };
   }
 }
