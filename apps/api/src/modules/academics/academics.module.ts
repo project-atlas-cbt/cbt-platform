@@ -22,6 +22,8 @@ import { StudentEnrollmentController } from './student-enrollment.controller.js'
 import { StudentEnrollmentService } from './student-enrollment.service.js';
 import { StudentSubjectRegistrationController } from './student-subject-registration.controller.js';
 import { StudentSubjectRegistrationService } from './student-subject-registration.service.js';
+import { SubjectChoiceGroupController } from './subject-choice-group.controller.js';
+import { SubjectChoiceGroupService } from './subject-choice-group.service.js';
 import { SubjectController } from './subject.controller.js';
 import { SubjectService } from './subject.service.js';
 import { TeacherAssignmentController } from './teacher-assignment.controller.js';
@@ -58,6 +60,7 @@ import { RolloverService } from './rollover.service.js';
     DepartmentController,
     ClassGroupController,
     SubjectController,
+    SubjectChoiceGroupController,
     ClassSubjectController,
     HodAssignmentController,
     StudentEnrollmentController,
@@ -73,6 +76,7 @@ import { RolloverService } from './rollover.service.js';
     DepartmentService,
     ClassGroupService,
     SubjectService,
+    SubjectChoiceGroupService,
     ClassSubjectService,
     HodAssignmentService,
     DepartmentScopeResolverProvider,

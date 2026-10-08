@@ -23,16 +23,18 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ApiError } from '@/lib/api';
-import { useDepartments } from '@/lib/academics/queries';
+import { useDepartments, useSubjectChoiceGroups } from '@/lib/academics/queries';
 import { useCreateSubject } from '@/lib/onboarding/mutations';
 import { useUpdateSubject } from '@/lib/academics/mutations';
 
 const NO_DEPARTMENT = '__none__';
+const NO_GROUP = '__none__';
 
 const schema = z.object({
   name: z.string().min(1, 'Enter a subject name, e.g. "Mathematics".'),
   code: z.string().min(1, 'Enter a short code, e.g. "MTH".'),
   departmentId: z.string(),
+  choiceGroupId: z.string(),
 });
 type Values = z.infer<typeof schema>;
 
@@ -43,10 +45,17 @@ export function SubjectForm({
   subject,
   onSaved,
 }: {
-  subject?: { id: string; name: string; code: string; departmentId: string | null };
+  subject?: {
+    id: string;
+    name: string;
+    code: string;
+    departmentId: string | null;
+    choiceGroupId: string | null;
+  };
   onSaved: () => void;
 }) {
   const departments = useDepartments();
+  const choiceGroups = useSubjectChoiceGroups();
   const createSubject = useCreateSubject();
   const updateSubject = useUpdateSubject(subject?.id ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -57,20 +66,28 @@ export function SubjectForm({
       name: subject?.name ?? '',
       code: subject?.code ?? '',
       departmentId: subject?.departmentId ?? NO_DEPARTMENT,
+      choiceGroupId: subject?.choiceGroupId ?? NO_GROUP,
     },
   });
 
   async function onSubmit(values: Values) {
     setError(null);
     const departmentId = values.departmentId !== NO_DEPARTMENT ? values.departmentId : null;
+    const choiceGroupId = values.choiceGroupId !== NO_GROUP ? values.choiceGroupId : null;
     try {
       if (subject) {
-        await updateSubject.mutateAsync({ name: values.name, code: values.code, departmentId });
+        await updateSubject.mutateAsync({
+          name: values.name,
+          code: values.code,
+          departmentId,
+          choiceGroupId,
+        });
       } else {
         await createSubject.mutateAsync({
           name: values.name,
           code: values.code,
           ...(departmentId ? { departmentId } : {}),
+          ...(choiceGroupId ? { choiceGroupId } : {}),
         });
       }
       onSaved();
@@ -134,6 +151,35 @@ export function SubjectForm({
               <FormDescription>
                 Without a department, no HOD sees this subject&rsquo;s questions, exams or results.
                 Only School Admins, Moderators and the exam&rsquo;s author do.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="choiceGroupId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Choice group (optional)</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value={NO_GROUP}>None</SelectItem>
+                  {(choiceGroups.data?.choiceGroups ?? []).map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                For subjects students choose between, such as CRS or IRS. The class subject grid
+                warns when a student&rsquo;s choices don&rsquo;t match the group&rsquo;s rule.
               </FormDescription>
               <FormMessage />
             </FormItem>

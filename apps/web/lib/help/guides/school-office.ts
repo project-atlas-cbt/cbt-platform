@@ -215,15 +215,45 @@ export function schoolOfficeGuides(): Guide[] {
       requires: ['schoolConfig.class.manage'],
       steps: [
         'Open **Academics**, then **Classes**, choose the academic session and press **Add class**. Choose the level and arm (for example SS2 and A).',
-        'Open the class and, under **Subjects offered**, press **Offer subject** for each subject it takes.',
+        'Open the class and, under **Subjects offered**, choose a subject, choose **Compulsory** or **Elective**, and press **Offer subject**.',
         'New subjects and departments are added on the **Subjects** and **Departments** tabs.',
       ],
       notes: [
         'Give every subject a department, or no HOD will review its questions.',
-        'Students in the class are registered for its offered subjects automatically; an elective can be deregistered on the student’s page.',
+        'Every student in the class is registered for a **compulsory** subject automatically. An **elective** is taken only by the students you choose.',
       ],
       screen: { label: 'Classes', href: 'academics/classes' },
-      related: ['assign-teachers'],
+      related: ['assign-teachers', 'choose-student-subjects'],
+    },
+    {
+      id: 'choose-student-subjects',
+      title: 'Choose which subjects each student takes',
+      summary:
+        'Set each student’s electives, such as Further Mathematics, CRS or IRS, or a trade subject.',
+      area: 'academics',
+      keywords: [
+        'elective',
+        'subject combination',
+        'register subject',
+        'deregister',
+        'crs',
+        'irs',
+        'trade subject',
+        'choice group',
+      ],
+      requires: ['assignments.studentToClass'],
+      steps: [
+        'Open **Academics**, then **Classes**, open the class and choose **Subject registrations**.',
+        'Tick the subjects each student takes. **All** and **None** under a subject tick or untick it for the whole class.',
+        'Press **Save**.',
+      ],
+      notes: [
+        'For subjects students choose between, add a choice group on the **Subjects** tab (for example Religion, choose 1) and put the subjects in it from their **Edit** form. A student who doesn’t match the rule is flagged, but you can still save.',
+        'One student’s subjects can also be changed on their page under People.',
+        'Changes apply to future exams only. A student who moves class or goes up a class keeps the subjects they took where the new class offers them.',
+      ],
+      screen: { label: 'Classes', href: 'academics/classes' },
+      related: ['classes-and-subjects', 'rollover'],
     },
     {
       id: 'rollover',

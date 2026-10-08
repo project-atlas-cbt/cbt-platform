@@ -25,10 +25,14 @@ vi.mock('@/lib/academics/queries', () => ({
   useDepartments: vi.fn(),
   useSession: vi.fn(),
   useSubjects: vi.fn(),
+  useClassRegistrationGrid: vi.fn(() => ({ isPending: true })),
+  useSubjectChoiceGroups: vi.fn(() => ({ data: { choiceGroups: [] } })),
 }));
 vi.mock('@/lib/academics/mutations', () => ({
   useAddClassSubject: vi.fn(),
   useRemoveClassSubject: vi.fn(),
+  useSetClassSubjectKind: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSaveClassRegistrations: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/lib/people/mutations', () => ({ useClassCredentialSheet: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));

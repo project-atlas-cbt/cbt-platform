@@ -142,8 +142,12 @@ export function useCreateClass() {
 export function useCreateSubject() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; code: string; departmentId?: string | null }) =>
-      unwrap(apiClient.POST('/academics/subjects', { body })),
+    mutationFn: (body: {
+      name: string;
+      code: string;
+      departmentId?: string | null;
+      choiceGroupId?: string | null;
+    }) => unwrap(apiClient.POST('/academics/subjects', { body })),
     onSuccess: () => invalidateAcademics(client),
   });
 }

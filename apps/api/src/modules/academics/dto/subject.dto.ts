@@ -22,6 +22,15 @@ export class CreateSubjectDto {
   @IsOptional()
   @IsUUID()
   departmentId?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'ADR-0038: the "pick N of these" choice group this subject belongs to.',
+  })
+  @IsOptional()
+  @IsUUID()
+  choiceGroupId?: string | null;
 }
 
 export class UpdateSubjectDto {
@@ -41,6 +50,15 @@ export class UpdateSubjectDto {
   @IsOptional()
   @IsUUID()
   departmentId?: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'ADR-0038: the "pick N of these" choice group this subject belongs to.',
+  })
+  @IsOptional()
+  @IsUUID()
+  choiceGroupId?: string | null;
 }
 
 export class SubjectResponseDto {
@@ -55,6 +73,9 @@ export class SubjectResponseDto {
 
   @ApiProperty({ type: String, nullable: true })
   departmentId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  choiceGroupId!: string | null;
 
   @ApiProperty({ type: String, enum: SUBJECT_STATUSES })
   status!: SubjectStatus;

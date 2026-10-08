@@ -2,6 +2,37 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Compulsory and elective subjects, choice rules, the class subject grid (ADR-0038, PR 1 of 3)
+
+Owner concern: every student was registered for every subject their class offers, which does not
+fit SS (subject combinations, trade subjects) and is awkward at JSS (CRS or IRS). Departments were
+also doing double duty as student streams. The owner approved one model for subjects, streams and
+departments (ADR-0038, design in `/mnt/project-files/departments-review/design.md`), built in three
+PRs. This is the first.
+
+- `ClassSubject.kind`: `COMPULSORY` (every student, the old behaviour and the migrated default) or
+  `ELECTIVE` (nobody until staff choose). Set when offering a subject and changeable on the
+  Subjects offered tab. Making an offering compulsory registers students without a registration;
+  making it elective changes no registration.
+- `SubjectChoiceGroup` ("Religion: choose 1") with subjects joined by `Subject.choiceGroupId`.
+  Breaking a rule is a warning on the grid and the student's page, never a block (owner decision).
+- The class subject grid: a Subject registrations tab on each class (School Admin, Moderator),
+  `GET`/`PUT /academics/classes/:id/subject-registrations`, saved in one transaction.
+- The student's page lists the class's electives they don't take and registers them.
+- A class move and rollover now carry the student's registered subjects into the new class where it
+  offers them, plus its compulsory subjects, instead of registering every offering. Offerings keep
+  their kind into the next session.
+- ADR-0001 and ADR-0011 amended; school-office help guide and `school-onboarding.md` updated.
+
+Tests: new `subject-offering-kinds.integration.test.ts` (9) and a rollover carry-forward case;
+`choice-rules.test.ts` (7); `class-registration-grid.test.tsx` (4). API integration 494 of 495 pass:
+`media.integration.test.ts` expects S3 to refuse an unsigned read, which the cloud container's
+s3rver allows (unrelated to this change). Security suite (53), API unit (296), domain (165), web
+(1,196), typecheck and lint pass. Screens checked against the demo school.
+
+Not yet: streams (PR 2) and the School Admin review fallback (PR 3). Exam readiness does not show
+choice-rule warnings yet. Elective columns in the student import come with streams.
+
 ### 2026-10-08 — Teachers see only their own exams (ADR-0037)
 
 Owner decision after a permissions review: a teacher who taught the same class and subject could

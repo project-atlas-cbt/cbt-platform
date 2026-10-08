@@ -11,12 +11,18 @@ import {
 } from '@/lib/academics/mutations';
 import { useHasPermission } from '@/lib/nav';
 
-vi.mock('@/lib/academics/queries', () => ({ useDepartments: vi.fn(), useSubjects: vi.fn() }));
+vi.mock('@/lib/academics/queries', () => ({
+  useDepartments: vi.fn(),
+  useSubjects: vi.fn(),
+  useSubjectChoiceGroups: () => ({ data: { choiceGroups: [] }, isPending: false, isError: false }),
+}));
 vi.mock('@/lib/onboarding/mutations', () => ({ useCreateSubject: vi.fn() }));
 vi.mock('@/lib/academics/mutations', () => ({
   useDeactivateSubject: vi.fn(),
   useDeleteSubject: vi.fn(),
   useUpdateSubject: vi.fn(),
+  useCreateChoiceGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteChoiceGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 

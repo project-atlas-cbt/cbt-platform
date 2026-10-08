@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
@@ -15,16 +16,23 @@ import {
 } from '@/components/ui/select';
 import { useHasPermission } from '@/lib/nav';
 import { useClassSubjects, useSubjects } from '@/lib/academics/queries';
-import { useAddClassSubject, useRemoveClassSubject } from '@/lib/academics/mutations';
+import {
+  useAddClassSubject,
+  useRemoveClassSubject,
+  useSetClassSubjectKind,
+  type ClassSubjectKind,
+} from '@/lib/academics/mutations';
 import { ConfirmActionDialog } from '../confirm-action-dialog';
 
+const KIND_LABEL: Record<ClassSubjectKind, string> = {
+  COMPULSORY: 'Compulsory',
+  ELECTIVE: 'Elective',
+};
+
 /**
- * The class's "Subjects offered" tab. The only backend surface is a
- * per-class list (`GET/POST /academics/classes/:id/subjects`, `DELETE
- * /academics/class-subjects/:id`) — there is no cross-class matrix/batch
- * endpoint, so this is deliberately a per-class list, not a matrix UI (see
- * this phase's plan for the full reasoning: a client-side matrix would mean
- * unatomic N-call toggles with no real backend support behind it).
+ * The class's "Subjects offered" tab: a per-class list. ADR-0038: each
+ * offering is compulsory (every student in the class is registered) or
+ * elective (staff choose who takes it on the Subject registrations tab).
  */
 export function ClassSubjectList({ classId }: { classId: string }) {
   const offerings = useClassSubjects(classId);
@@ -32,8 +40,11 @@ export function ClassSubjectList({ classId }: { classId: string }) {
   const canManage = useHasPermission('schoolConfig.subject.manage');
   const addOffering = useAddClassSubject(classId);
   const removeOffering = useRemoveClassSubject();
+  const setKind = useSetClassSubjectKind();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | undefined>(undefined);
+  const [newKind, setNewKind] = useState<ClassSubjectKind>('COMPULSORY');
+  const [kindError, setKindError] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<{ id: string; subjectName: string } | null>(null);
 
@@ -52,7 +63,7 @@ export function ClassSubjectList({ classId }: { classId: string }) {
     if (!selectedSubjectId) return;
     setAddError(null);
     try {
-      await addOffering.mutateAsync(selectedSubjectId);
+      await addOffering.mutateAsync({ subjectId: selectedSubjectId, kind: newKind });
       setSelectedSubjectId(undefined);
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Could not offer this subject.');
@@ -81,6 +92,15 @@ export function ClassSubjectList({ classId }: { classId: string }) {
               ))}
             </SelectContent>
           </Select>
+          <Select value={newKind} onValueChange={(v) => setNewKind(v as ClassSubjectKind)}>
+            <SelectTrigger className="w-40" aria-label="Who takes this subject">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="COMPULSORY">Compulsory</SelectItem>
+              <SelectItem value="ELECTIVE">Elective</SelectItem>
+            </SelectContent>
+          </Select>
           <Button
             variant="secondary"
             disabled={!selectedSubjectId}
@@ -94,6 +114,17 @@ export function ClassSubjectList({ classId }: { classId: string }) {
       {addError ? (
         <p role="alert" className="text-sm font-medium text-danger">
           {addError}
+        </p>
+      ) : null}
+      <p className="text-sm text-text-secondary">
+        A <strong className="font-medium text-text-primary">compulsory</strong> subject is taken by
+        every student in this class. An{' '}
+        <strong className="font-medium text-text-primary">elective</strong> is taken only by the
+        students you choose on the Subject registrations tab.
+      </p>
+      {kindError ? (
+        <p role="alert" className="text-sm font-medium text-danger">
+          {kindError}
         </p>
       ) : null}
 
@@ -114,18 +145,50 @@ export function ClassSubjectList({ classId }: { classId: string }) {
                 {offering.subjectName}{' '}
                 <span className="text-text-muted">({offering.subjectCode})</span>
               </span>
-              {canManage ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Remove ${offering.subjectName}`}
-                  onClick={() =>
-                    setRemoving({ id: offering.id, subjectName: offering.subjectName })
-                  }
-                >
-                  <X aria-hidden />
-                </Button>
-              ) : null}
+              <span className="flex items-center gap-2">
+                {canManage ? (
+                  <Select
+                    value={offering.kind}
+                    onValueChange={(v) => {
+                      setKindError(null);
+                      setKind
+                        .mutateAsync({ id: offering.id, kind: v as ClassSubjectKind })
+                        .catch((err: unknown) =>
+                          setKindError(
+                            err instanceof Error ? err.message : 'Could not change this subject.',
+                          ),
+                        );
+                    }}
+                  >
+                    <SelectTrigger
+                      className="h-8 w-36"
+                      aria-label={`Who takes ${offering.subjectName}`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="COMPULSORY">Compulsory</SelectItem>
+                      <SelectItem value="ELECTIVE">Elective</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge status={offering.kind === 'ELECTIVE' ? 'info' : 'neutral'}>
+                    {KIND_LABEL[offering.kind]}
+                  </Badge>
+                )}
+                {canManage ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Remove ${offering.subjectName}`}
+                    onClick={() =>
+                      setRemoving({ id: offering.id, subjectName: offering.subjectName })
+                    }
+                  >
+                    <X aria-hidden />
+                  </Button>
+                ) : null}
+              </span>
             </li>
           ))}
         </ul>

@@ -156,6 +156,28 @@ export function useClassSubjects(classId: string | undefined) {
   });
 }
 
+/** ADR-0038 — the class subject grid (students × offerings). */
+export function useClassRegistrationGrid(classId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', classId, 'subject-registrations'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/classes/{id}/subject-registrations', {
+          params: { path: { id: classId as string } },
+        }),
+      ),
+    enabled: Boolean(classId),
+  });
+}
+
+/** ADR-0038 — subject choice groups ("pick one of CRS or IRS"). */
+export function useSubjectChoiceGroups() {
+  return useQuery({
+    queryKey: ['academics', 'subject-choice-groups'],
+    queryFn: () => unwrap(apiClient.GET('/academics/subject-choice-groups')),
+  });
+}
+
 export function useDepartmentHodAssignments(departmentId: string | undefined) {
   return useQuery({
     queryKey: ['academics', 'departments', departmentId, 'hod-assignments'],

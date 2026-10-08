@@ -141,6 +141,7 @@ model School {
   // --- B5: academic structure back-relations.
   academicSessions    AcademicSession[]
   departments         Department[]
+  subjectChoiceGroups SubjectChoiceGroup[]
   exportJobs          ExportJob[]
 
   @@map("schools")
@@ -990,6 +991,12 @@ enum ClassSubjectStatus {
   INACTIVE
 }
 
+/// ADR-0038. STREAM is added with streams.
+enum ClassSubjectKind {
+  COMPULSORY
+  ELECTIVE
+}
+
 enum HODAssignmentStatus {
   ACTIVE
   ENDED
@@ -1110,19 +1117,19 @@ model Department {
 /// platform targets first; streaming into Science/Arts/Commercial starts at
 /// SS level.
 model ClassGroup {
-  id                String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId          String           @map("school_id") @db.Uuid
-  academicSessionId String           @map("academic_session_id") @db.Uuid
-  departmentId      String?          @map("department_id") @db.Uuid
-  name              String           @db.VarChar(32)
-  level             ClassLevel
-  arm               String           @db.VarChar(16)
-  status            ClassGroupStatus @default(ACTIVE)
+  id                 String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId           String           @map("school_id") @db.Uuid
+  academicSessionId  String           @map("academic_session_id") @db.Uuid
+  departmentId       String?          @map("department_id") @db.Uuid
+  name               String           @db.VarChar(32)
+  level              ClassLevel
+  arm                String           @db.VarChar(16)
+  status             ClassGroupStatus @default(ACTIVE)
   /// Passwordless student sign-in for this class only (see
   /// School.studentPasswordlessSignIn).
-  passwordlessSignIn Boolean         @default(false) @map("passwordless_sign_in")
-  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  passwordlessSignIn Boolean          @default(false) @map("passwordless_sign_in")
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   session                 AcademicSession     @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
   /// Restrict, not SetNull: a composite FK can't null just one of its two
@@ -1158,17 +1165,21 @@ model ClassGroup {
 /// outside every HOD's automatic review scope and requires explicit
 /// assignment.
 model Subject {
-  id           String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId     String        @map("school_id") @db.Uuid
-  departmentId String?       @map("department_id") @db.Uuid
-  name         String        @db.VarChar(128)
-  code         String        @db.VarChar(16)
-  status       SubjectStatus @default(ACTIVE)
-  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId      String        @map("school_id") @db.Uuid
+  departmentId  String?       @map("department_id") @db.Uuid
+  /// ADR-0038: the "pick N of these" rule this subject belongs to, if any.
+  choiceGroupId String?       @map("choice_group_id") @db.Uuid
+  name          String        @db.VarChar(128)
+  code          String        @db.VarChar(16)
+  status        SubjectStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   /// Restrict, not SetNull — same reasoning as ClassGroup.department.
-  department    Department?    @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  department    Department?         @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  /// Restrict: a group is deleted only once no subject is in it.
+  choiceGroup   SubjectChoiceGroup? @relation(fields: [schoolId, choiceGroupId], references: [schoolId, id], onDelete: Restrict)
   classSubjects ClassSubject[]
   // B8: Question/Topic back-relations.
   questions     Question[]
@@ -1182,7 +1193,31 @@ model Subject {
   @@index([schoolId])
   @@index([schoolId, departmentId])
   @@index([schoolId, status])
+  @@index([schoolId, choiceGroupId])
   @@map("subjects")
+}
+
+/// ADR-0038: a school-wide "pick between min and max of these subjects"
+/// rule, such as Religion (CRS or IRS, exactly one) or Trade subject. It
+/// applies to a student only where their class offers at least one of its
+/// subjects. A rule that is not met is a warning on the class subject grid,
+/// never a block (owner decision 2026-10-08).
+model SubjectChoiceGroup {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  name       String   @db.VarChar(64)
+  minChoices Int      @map("min_choices")
+  maxChoices Int      @map("max_choices")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subjects Subject[]
+
+  @@unique([schoolId, id])
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@map("subject_choice_groups")
 }
 
 /// "Mathematics taught to SS2A in 2026/2027" (07 §6.6) — the future
@@ -1198,6 +1233,9 @@ model ClassSubject {
   subjectId         String             @map("subject_id") @db.Uuid
   academicSessionId String             @map("academic_session_id") @db.Uuid
   status            ClassSubjectStatus @default(ACTIVE)
+  /// ADR-0038: who is registered automatically. COMPULSORY registers every
+  /// student in the class; ELECTIVE registers nobody, and staff choose.
+  kind              ClassSubjectKind   @default(COMPULSORY)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 

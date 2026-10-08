@@ -4,6 +4,7 @@ import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { runUniqueGuarded } from './prisma-error.util.js';
+import { registerNewEnrollment, registeredSubjectIds } from './subject-registration-sync.util.js';
 import type {
   ClassRosterEntryDto,
   EnrollStudentDto,
@@ -133,25 +134,16 @@ export class StudentEnrollmentService {
         'This student already has an active enrollment for this session.',
       );
 
-      // ADR-0011 reconciliation: auto-register the new enrollment for every
-      // ACTIVE ClassSubject of the new class. The old enrollment's own
-      // registrations are left exactly as they are — they're already
-      // historically frozen the moment their enrollment stops being
-      // ACTIVE, satisfying "close registrations for subjects the new class
-      // doesn't offer" by construction, with no explicit close-loop needed.
-      const offerings = await tx.classSubject.findMany({
-        where: { schoolId, classId: dto.classId, status: 'ACTIVE' },
-        select: { id: true },
-      });
-      if (offerings.length > 0) {
-        await tx.studentSubjectRegistration.createMany({
-          data: offerings.map((offering) => ({
-            schoolId,
-            studentEnrollmentId: created.id,
-            classSubjectId: offering.id,
-          })),
-        });
-      }
+      // ADR-0011 reconciliation, ADR-0038 rules: the new enrollment is
+      // registered for the new class's compulsory subjects, and on a move it
+      // keeps the subjects the student was registered for where the new
+      // class offers them. The old enrollment's own registrations are left
+      // exactly as they are: they're historically frozen the moment their
+      // enrollment stops being ACTIVE.
+      const carried = existing
+        ? await registeredSubjectIds(tx, schoolId, existing.id)
+        : new Set<string>();
+      await registerNewEnrollment(tx, schoolId, created, carried);
 
       // isMove: true when this call closed a prior ACTIVE enrollment for a
       // *different* class (07 §35's class-movement case) — distinct from a

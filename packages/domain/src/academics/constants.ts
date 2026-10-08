@@ -44,6 +44,11 @@ export type SubjectStatus = (typeof SUBJECT_STATUSES)[number];
 export const CLASS_SUBJECT_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
 export type ClassSubjectStatus = (typeof CLASS_SUBJECT_STATUSES)[number];
 
+/** ADR-0038: who an offering registers automatically. COMPULSORY: every
+ * student in the class. ELECTIVE: nobody; staff choose per student. */
+export const CLASS_SUBJECT_KINDS = ['COMPULSORY', 'ELECTIVE'] as const;
+export type ClassSubjectKind = (typeof CLASS_SUBJECT_KINDS)[number];
+
 export const HOD_ASSIGNMENT_STATUSES = ['ACTIVE', 'ENDED'] as const;
 export type HODAssignmentStatus = (typeof HOD_ASSIGNMENT_STATUSES)[number];
 

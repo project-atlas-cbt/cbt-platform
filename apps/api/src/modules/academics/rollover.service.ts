@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
+import { registerNewEnrollment, registeredSubjectIds } from './subject-registration-sync.util.js';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import type {
@@ -673,6 +674,16 @@ export class RolloverService {
         });
         classMap.set(draft.id, created.id);
       }
+      // ADR-0038: an offering keeps its kind (compulsory or elective) into
+      // the new session.
+      const sourceKinds = new Map(
+        (
+          await tx.classSubject.findMany({
+            where: { schoolId, id: { in: draftOfferings.map((d) => d.sourceClassSubjectId) } },
+            select: { id: true, kind: true },
+          })
+        ).map((o) => [o.id, o.kind]),
+      );
       const offeringMap = new Map<string, string>();
       for (const draft of draftOfferings) {
         const classId = classMap.get(draft.targetDraftClassId);
@@ -682,7 +693,13 @@ export class RolloverService {
             message: 'An included offering targets an excluded class.',
           });
         const created = await tx.classSubject.create({
-          data: { schoolId, academicSessionId: target.id, classId, subjectId: draft.subjectId },
+          data: {
+            schoolId,
+            academicSessionId: target.id,
+            classId,
+            subjectId: draft.subjectId,
+            kind: sourceKinds.get(draft.sourceClassSubjectId) ?? 'COMPULSORY',
+          },
         });
         offeringMap.set(`${draft.targetDraftClassId}:${draft.subjectId}`, created.id);
       }
@@ -732,18 +749,14 @@ export class RolloverService {
               startDate: new Date(),
             },
           });
-          const offerings = await tx.classSubject.findMany({
-            where: { schoolId, academicSessionId: target.id, classId, status: 'ACTIVE' },
-            select: { id: true },
-          });
-          if (offerings.length)
-            await tx.studentSubjectRegistration.createMany({
-              data: offerings.map((offering) => ({
-                schoolId,
-                studentEnrollmentId: enrollment.id,
-                classSubjectId: offering.id,
-              })),
-            });
+          // ADR-0038: the new class's compulsory subjects, plus the subjects
+          // the student took last session where the new class offers them.
+          await registerNewEnrollment(
+            tx,
+            schoolId,
+            enrollment,
+            await registeredSubjectIds(tx, schoolId, sourceEnrollment.id),
+          );
         } else if (decision.outcome === 'GRADUATE' || decision.outcome === 'WITHDRAW')
           await tx.studentProfile.update({
             where: { id: sourceEnrollment.studentProfileId },

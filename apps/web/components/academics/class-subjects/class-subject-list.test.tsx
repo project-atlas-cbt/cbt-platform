@@ -10,6 +10,7 @@ vi.mock('@/lib/academics/queries', () => ({ useClassSubjects: vi.fn(), useSubjec
 vi.mock('@/lib/academics/mutations', () => ({
   useAddClassSubject: vi.fn(),
   useRemoveClassSubject: vi.fn(),
+  useSetClassSubjectKind: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 
@@ -32,6 +33,7 @@ const OFFERINGS = [
     subjectCode: 'MTH',
     academicSessionId: 's1',
     status: 'ACTIVE',
+    kind: 'COMPULSORY',
   },
 ];
 
@@ -112,7 +114,7 @@ describe('ClassSubjectList', () => {
     await userEvent.click(screen.getByRole('combobox', { name: /choose a subject/i }));
     await userEvent.click(screen.getByRole('option', { name: 'Mathematics' }));
     await userEvent.click(screen.getByRole('button', { name: /offer subject/i }));
-    expect(addMutateAsync).toHaveBeenCalledWith('sub1');
+    expect(addMutateAsync).toHaveBeenCalledWith({ subjectId: 'sub1', kind: 'COMPULSORY' });
   });
 
   it('removing an offering shows a confirm dialog and calls the mutation', async () => {

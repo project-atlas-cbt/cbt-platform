@@ -118,6 +118,8 @@ describe('F6 structure creation', () => {
         }
         case '/academics/subjects':
           return ok({ subjects: state.subjects });
+        case '/academics/subject-choice-groups':
+          return ok({ choiceGroups: [] });
         case '/academics/classes/{id}/subjects':
           return ok({
             offerings: state.classSubjects.filter((cs) => cs.classId === opts.params?.path?.id),

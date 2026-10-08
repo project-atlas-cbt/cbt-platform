@@ -134,8 +134,12 @@ export function useDeleteClass() {
 export function useUpdateSubject(id: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name?: string; code?: string; departmentId?: string | null }) =>
-      unwrap(apiClient.PATCH('/academics/subjects/{id}', { params: { path: { id } }, body })),
+    mutationFn: (body: {
+      name?: string;
+      code?: string;
+      departmentId?: string | null;
+      choiceGroupId?: string | null;
+    }) => unwrap(apiClient.PATCH('/academics/subjects/{id}', { params: { path: { id } }, body })),
     onSuccess: () => invalidateAcademics(client),
   });
 }
@@ -160,15 +164,100 @@ export function useDeleteSubject() {
 
 // ---- ClassSubject (offerings) ----
 
+export type ClassSubjectKind = 'COMPULSORY' | 'ELECTIVE';
+
 export function useAddClassSubject(classId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (subjectId: string) =>
+    mutationFn: ({ subjectId, kind }: { subjectId: string; kind: ClassSubjectKind }) =>
       unwrap(
         apiClient.POST('/academics/classes/{id}/subjects', {
           params: { path: { id: classId } },
-          body: { subjectId },
+          body: { subjectId, kind },
         }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+/** ADR-0038: compulsory or elective. Compulsory registers every student
+ * without a registration; elective changes no registration. */
+export function useSetClassSubjectKind() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, kind }: { id: string; kind: ClassSubjectKind }) =>
+      unwrap(
+        apiClient.PATCH('/academics/class-subjects/{id}', {
+          params: { path: { id } },
+          body: { kind },
+        }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export interface RegistrationChange {
+  enrollmentId: string;
+  classSubjectId: string;
+  registered: boolean;
+}
+
+/** ADR-0038 — save the class subject grid's ticks in one request. */
+export function useSaveClassRegistrations(classId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (changes: RegistrationChange[]) =>
+      unwrap(
+        apiClient.PUT('/academics/classes/{id}/subject-registrations', {
+          params: { path: { id: classId } },
+          body: { changes },
+        }),
+      ),
+    onSuccess: () =>
+      Promise.all([
+        invalidateAcademics(client),
+        client.invalidateQueries({ queryKey: ['people'], exact: false }),
+      ]),
+  });
+}
+
+// ---- Subject choice groups (ADR-0038) ----
+
+export interface ChoiceGroupInput {
+  name: string;
+  minChoices: number;
+  maxChoices: number;
+}
+
+export function useCreateChoiceGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ChoiceGroupInput) =>
+      unwrap(apiClient.POST('/academics/subject-choice-groups', { body })),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateChoiceGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: ChoiceGroupInput & { id: string }) =>
+      unwrap(
+        apiClient.PATCH('/academics/subject-choice-groups/{id}', {
+          params: { path: { id } },
+          body,
+        }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeleteChoiceGroup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        apiClient.DELETE('/academics/subject-choice-groups/{id}', { params: { path: { id } } }),
       ),
     onSuccess: () => invalidateAcademics(client),
   });
