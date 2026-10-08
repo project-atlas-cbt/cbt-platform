@@ -18,6 +18,7 @@ import type {
   RevokeParticipantDto,
 } from './dto/exam-session.dto.js';
 import type { GrantExtraTimeDto, GrantLargerTextDto } from './dto/attempt.dto.js';
+import { computePendingAbsences } from './pending-absences.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -498,6 +499,11 @@ export class ExamSessionParticipantService {
         }
       }
 
+      // The End Examination dialog lists exactly these (bug audit P2-2).
+      const pendingAbsentStudents = new Set(
+        (await computePendingAbsences(tx, schoolId, examId)).map((p) => p.studentProfileId),
+      );
+
       const rows = [];
       for (const { studentProfile } of enrollments) {
         const eligibility = await evaluateExamEligibility(tx, {
@@ -516,6 +522,7 @@ export class ExamSessionParticipantService {
             (participant?.status as EligibleStudentsResponseDto['students'][number]['participantStatus']) ??
             null,
           examSessionId: participant?.examSessionId ?? null,
+          pendingAbsence: pendingAbsentStudents.has(studentProfile.id),
           // F20 (DoD 3): the accommodations staff grant from this roster.
           extraTimeSeconds: participant?.extraTimeSeconds ?? 0,
           largerText: participant?.largerText ?? false,

@@ -669,6 +669,57 @@ describe('B15 result adjustment worker (ADR-0025)', () => {
     expect(children[0]!.newValue).toMatchObject({ grade: 'P' });
   });
 
+  it('P2-21 "Grade now": a result no scale covers stays ungraded and is not marked adjusted', async () => {
+    const fixture = await createFixture(1);
+    schools.push(fixture.schoolId);
+    const resultId = await createFinalisedResult(fixture, fixture.studentProfileIds[0]!, 1);
+
+    // Bands exist only for a level this student is not in, and no
+    // school-wide set (the case the audit found).
+    await withTenant(prisma, fixture.schoolId, async (tx) => {
+      const scale = await tx.gradingScale.create({
+        data: { schoolId: fixture.schoolId, name: 'Other level', level: 'JSS3' },
+      });
+      const version = await tx.gradingScaleVersion.create({
+        data: { schoolId: fixture.schoolId, scaleId: scale.id, versionNumber: 1 },
+      });
+      await tx.gradingScaleBand.create({
+        data: {
+          schoolId: fixture.schoolId,
+          versionId: version.id,
+          label: 'P',
+          sortOrder: 1,
+          minPercentage: 0,
+          maxPercentage: 100,
+          isPassing: true,
+        },
+      });
+      await tx.gradingScale.update({
+        where: { id: scale.id },
+        data: { currentVersionId: version.id },
+      });
+    });
+
+    const operationId = await createOperation(fixture, {
+      type: 'RECALCULATE',
+      reason: 'Grading bands set after the first results finalised.',
+      ungradedOnly: true,
+      totalCount: 1,
+    });
+    await runResultAdjustment({}, { schoolId: fixture.schoolId, operationId });
+
+    const [result, children, operation] = await withTenant(prisma, fixture.schoolId, (tx) =>
+      Promise.all([
+        tx.result.findUniqueOrThrow({ where: { id: resultId } }),
+        tx.resultAdjustment.findMany({ where: { operationId } }),
+        tx.resultAdjustmentOperation.findUniqueOrThrow({ where: { id: operationId } }),
+      ]),
+    );
+    expect(result).toMatchObject({ grade: null, gradingScaleVersionId: null, state: 'FINAL' });
+    expect(children).toHaveLength(0);
+    expect(operation).toMatchObject({ status: 'COMPLETED', appliedCount: 0 });
+  });
+
   it("P2-17: per-result audit rows carry the adjuster's role, not a fixed SCHOOL_ADMIN", async () => {
     const fixture = await createFixture(1);
     schools.push(fixture.schoolId);

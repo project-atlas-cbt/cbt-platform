@@ -93,6 +93,13 @@ interface QuestionRow {
  * closing it) — recorded again here as Candidate/Deferred, not silently
  * dropped.
  *
+ * `hideCreate` (pilot feedback, 2026-10-08): the same reasoning for Create
+ * question. HOD and School Admin are denied `questionBank.create`, but a
+ * member who also teaches holds it through the TEACHER role, so the button
+ * showed in the HOD workspace and led to a `basePath/new` route that only
+ * exists under `/teacher/question-bank`. Authoring stays in the Teacher
+ * workspace.
+ *
  * `assignedSubjectsOnly` (gap closure, found via live testing): the Subject
  * *filter* dropdown had the identical root cause as F9's Subject-picker bug
  * — it called `useSubjects()` (`schoolConfig.subject.view`), denied to
@@ -109,11 +116,13 @@ export function QuestionBankScreen({
   basePath,
   pinnedStatus,
   hideImport = false,
+  hideCreate = false,
   assignedSubjectsOnly = false,
 }: {
   basePath: string;
   pinnedStatus?: string;
   hideImport?: boolean;
+  hideCreate?: boolean;
   assignedSubjectsOnly?: boolean;
 }) {
   const router = useRouter();
@@ -125,7 +134,7 @@ export function QuestionBankScreen({
   const difficulty = searchParams.get('difficulty') ?? '';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
 
-  const canCreate = useHasPermission('questionBank.create');
+  const canCreate = useHasPermission('questionBank.create') && !hideCreate;
   const canImport = useHasPermission('questionBank.import');
   const canExport = useHasPermission('questionBank.export');
   const canSubmitForReview = useHasPermission('questionBank.submitForReview');

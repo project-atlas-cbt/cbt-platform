@@ -174,6 +174,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/student-sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Student sign-in with Login ID + name, only while the school or the student's class has it switched on. */
+        post: operations["StudentPasswordlessController_signIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/school/student-passwordless-sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where students may currently sign in without a password. */
+        get: operations["StudentPasswordlessController_getSettings"];
+        /** Switch passwordless student sign-in on or off for the school or chosen classes (School Admin, Moderator). Switching off signs those students out. */
+        put: operations["StudentPasswordlessController_updateSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -3938,6 +3973,8 @@ export interface components {
             timezone: string;
             logoUrl: string | null;
             primaryColor: string | null;
+            /** @description Some students of this school may sign in with Login ID + name right now — the sign-in page offers the student form. */
+            studentPasswordlessSignIn: boolean;
         };
         TenantResolveResponseDto: {
             /** @description null when the request resolved no school (platform host, unrecognised subdomain, or the bare root domain). */
@@ -3977,6 +4014,8 @@ export interface components {
             /** @description Active RoleAssignment.role values for this membership (02). */
             roles: ("SOFTWARE_ADMIN" | "SCHOOL_ADMIN" | "MODERATOR" | "HOD" | "TEACHER" | "STUDENT")[];
             effectiveSchoolId: string;
+            /** @description Signed in with Login ID + name (passwordless student sign-in): no password change is asked for or allowed. */
+            passwordless: boolean;
         };
         PasswordChangeDto: {
             currentPassword?: string;
@@ -3989,6 +4028,18 @@ export interface components {
         PasswordResetConfirmDto: {
             token: string;
             newPassword: string;
+        };
+        StudentSignInDto: {
+            /** @description The student's Login ID. */
+            identifier: string;
+            /** @description First name and surname in any order and any capitals; middle names optional. */
+            name: string;
+        };
+        StudentPasswordlessSettingsDto: {
+            /** @description On for every student of the school. */
+            allStudents: boolean;
+            /** @description Classes switched on individually. A PUT replaces the whole list. */
+            classIds: string[];
         };
         RequestMediaUploadDto: {
             /** @enum {string} */
@@ -5162,6 +5213,8 @@ export interface components {
             /** @enum {string|null} */
             participantStatus: "AUTHORIZED" | "REVOKED" | null;
             examSessionId?: string | null;
+            /** @description End Examination will record this student absent: authorized, never started, and has not sat another batch. */
+            pendingAbsence: boolean;
             /** @description F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none). */
             extraTimeSeconds: number;
             /** @description F20 (DoD 3): larger-text accommodation on the student's latest participant row. */
@@ -5331,6 +5384,8 @@ export interface components {
             extraTimeSeconds: number;
             /** @description F20 (DoD 3): the caller's staff-granted larger-text accommodation (07 §9.7). */
             largerText: boolean;
+            /** @description Set when the caller has already submitted this exam and cannot start another attempt: their latest submitted attempt. The client shows the submission confirmation instead of Start. */
+            submittedAttemptId: string | null;
         };
         MediaManifestAssetDto: {
             mediaAssetId: string;
@@ -6572,6 +6627,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    StudentPasswordlessController_signIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentSignInDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    StudentPasswordlessController_getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentPasswordlessSettingsDto"];
+                };
+            };
+        };
+    };
+    StudentPasswordlessController_updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentPasswordlessSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentPasswordlessSettingsDto"];
                 };
             };
         };

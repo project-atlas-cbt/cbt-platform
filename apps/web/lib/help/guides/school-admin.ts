@@ -103,7 +103,7 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
       ],
       notes: [
         'Set the bands before the first exam is marked. A grade is worked out once, when a result is finalised, so results finalised with no scale show **Ungraded** and have no pass rate.',
-        'If results came out **Ungraded** because the bands were not set yet, set them, then open that exam under **Results** and press **Grade now**. Only the ungraded results are graded, with the bands in place now; results that already have a grade keep it.',
+        'If results came out **Ungraded** because the bands were not set yet, set them, then open that exam under **Results** and press **Grade now**. Only the ungraded results are graded, with the bands in place now; results that already have a grade keep it. A result is graded only when there are bands for its class level or for the whole school; any other stays ungraded until you add them.',
         'Saving creates a new version. Grades already given never change; only results finalised afterwards use the new bands. **Version history** shows which versions have been used for grades.',
         'Once a class level has its own scale it can be changed but not removed.',
       ],

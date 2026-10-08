@@ -20,6 +20,7 @@ function student(overrides: Partial<Record<string, unknown>>) {
     eligible: true,
     failedChecks: [],
     participantStatus: 'AUTHORIZED',
+    pendingAbsence: true,
     ...overrides,
   };
 }
@@ -34,7 +35,7 @@ describe('EndExaminationDialog', () => {
     mockUseCompleteExam.mockReturnValue({ mutateAsync: complete, isPending: false } as never);
   });
 
-  it("shows only the AUTHORIZED (pending) students by name, matching the server's own pending-set computation", () => {
+  it('shows only the students the server flags as pending absences', () => {
     mockUseEligibleStudents.mockReturnValue({
       data: {
         students: [
@@ -47,6 +48,14 @@ describe('EndExaminationDialog', () => {
             studentProfileId: 'sp2',
             studentName: 'Ada Okoye',
             participantStatus: 'REVOKED',
+            pendingAbsence: false,
+          }),
+          // Bug audit P2-2: sat batch 1, still AUTHORIZED for batch 2.
+          student({
+            studentProfileId: 'sp3',
+            studentName: 'Chidi Eze',
+            participantStatus: 'AUTHORIZED',
+            pendingAbsence: false,
           }),
         ],
       },
@@ -66,6 +75,7 @@ describe('EndExaminationDialog', () => {
     );
     expect(screen.getByText(/tunde bello/i)).toBeInTheDocument();
     expect(screen.queryByText(/ada okoye/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/chidi eze/i)).not.toBeInTheDocument();
   });
 
   it('blocks confirming and lists open sessions, delegating close to the parent, when any session is still open', async () => {

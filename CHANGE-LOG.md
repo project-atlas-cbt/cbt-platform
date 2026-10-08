@@ -27,6 +27,100 @@ A local Caddy run with an internal CA issued certificates on demand for an allow
 API hosts, refused the handshake for a name the check rejected, and answered 404 for the check's
 path on a public host.
 
+### 2026-10-08 — Bug audit follow-ups: sign-in bounce, "no going back", absentee list, "Grade now"
+
+Four items left open by the 2026-10-07 re-check of the bug audit
+(`/mnt/project-files/bug-audit/findings.md`):
+
+- **P2-3:** a reload while the network was down, or while the API restarted during a deploy (a 502
+  from Caddy), sent a student mid-exam to the sign-in page. Only a real 401 now means signed out.
+  A network error, 5xx, 408 or 429 from `/auth/me` gives the new `unavailable` auth status: the
+  page shows "Can't reach the server" and retries every 5 seconds (longer when a 503 sends
+  `Retry-After`) until it can carry on. A failed re-check after an earlier success keeps the
+  session (`lib/auth/auth-context.tsx`, `components/auth/server-unavailable.tsx`).
+- **P1-6:** "no going back" is now enforced by the server. Under `SEQUENTIAL_NO_REVISIT`, an answer
+  write to a question that comes before the furthest question the attempt has an answer for is
+  refused with the new `ATTEMPT_QUESTION_LOCKED` (409, non-retryable). Offline batches arrive in
+  no particular order, so a batch is applied in the attempt's question order, and a batch item
+  that fails for a retryable reason holds back the later items in that batch (reported INTERNAL,
+  so the client retries them). A forward-only offline sitting is therefore accepted whole. The
+  client marks a refused answer `locked`: final, not retried, not counted as answered, and it does
+  not hold Submit back (`no-revisit-lock.ts`, `attempt-answer.service.ts`). By default skipped
+  questions are locked too; the narrower rule (lock only answered questions) is one constant,
+  `NO_REVISIT_LOCK_MODE`, pending Haneef's choice.
+- **P2-2:** End Examination listed, and recorded absent, students who sat another batch. The
+  absentee set now has one definition, `computePendingAbsences`, used both by
+  `ExamCompletionService.complete()` and by the new `pendingAbsence` flag on
+  `GET /exams/:id/eligible-students`, which the dialog lists from. This also fixes a mismatch the
+  re-check found: the dialog listed every authorized student, including those who had sat, while
+  the server excluded them, so End Examination failed with `STALE_ABSENTEE_LIST` whenever anyone
+  had sat.
+- **P2-21:** "Grade now" checked only that some grading scale existed, so with bands for another
+  level and no school-wide set it marked results ADJUSTED while they stayed Ungraded. The API now
+  targets only ungraded results that a scale covers (their level's, or the school-wide one) and
+  refuses with the missing levels named when none is covered; the worker skips, without marking,
+  any result it still cannot grade (bands archived after the request).
+
+Tested: API integration suites for attempts, results and exam control (new cases for each item,
+which fail on the old code), worker result-adjustment suite, API and web unit suites, typecheck and
+lint.
+
+### 2026-10-08 — Question editor: save error, option typing, subscript and superscript
+
+Editing a draft always failed with "Option <id> does not belong to this revision", and an option
+accepted one character per click. Cause: react-hook-form's `useFieldArray` overwrote each option's
+server `id` with a generated key and regenerated every row key on `update()`, so the input remounted
+on each keystroke and the generated id went to the API. The editor now keys rows by index and never
+sends option ids (a save replaces the whole option set anyway). The rich text editor gained subscript
+and superscript (`<sub>`/`<sup>`, allowed by `sanitizeQuestionHtml`, which every student, review,
+result and print view already uses). Option text stays plain text; rich options are Candidate/Deferred.
+
+### 2026-10-08 — Students can sign in with name and Login ID; password fields show an eye
+
+For the OLA Maryway pilot, where many students are new to computers, a School Admin or Moderator
+can now switch on **sign-in without password** for the whole school or chosen classes (People >
+Students). Students then type their name and Login ID; staff always use a password. It stays on
+until switched off, and switching off signs those students out. Design, safeguards and the accepted
+risk are in the ADR-0019 amendment of the same date. Every password field now has a show/hide eye
+button (`components/ui/password-input.tsx`).
+
+- Expand-only migration `20261008040000_student_passwordless_sign_in` (two switches, one session
+  flag); `POST /auth/student-sign-in`, `GET/PUT /school/student-passwordless-sign-in`
+  (`users.student.resetCredentials`), `tenant/resolve` and `auth/me` gain one boolean each.
+- Help: new school office guide; student and invigilator user guides updated.
+- Tested: new integration suite (10), security suites (53), identity/users/common/reports
+  integration (60), API unit (292), web unit (210, including new sign-in, panel and eye tests),
+  and a browser check of the sign-in page, the student landing and the Students panel.
+
+### 2026-10-08 — Clickable option boxes, submitted assessments and HOD Create question
+
+Pilot feedback from Haneef. In the exam, the whole option box now selects the option, not only the
+circle or the text (`option-list.tsx`). A student who reopened an assessment they had already
+submitted (a bookmark, the back button) saw the preview and a Start the server refused; the preview
+response now carries `submittedAttemptId` when the student cannot start again (no running attempt,
+no live makeup/retry authorization, and the exam closed or its attempt limit used), and the page
+shows the existing submission confirmation instead. That confirmation now has a Go home button back
+to the Assessment screen, after an exam too. Create question is hidden in the HOD and School Admin
+question banks (`hideCreate`): those roles are denied `questionBank.create`, but a member who also
+teaches held it through the Teacher role, and only the Teacher workspace has the create screen.
+Tested: web unit tests for the option box, preview and confirmation; a new API integration case for
+`submittedAttemptId` (attempt suite, 52 passing).
+
+### 2026-10-08 — Subjects added after students are enrolled now register those students
+
+Students imported (or enrolled by hand) into a class before a subject was offered to it were never
+registered for that subject, so they were not eligible for its exams even though the import
+succeeded. Enrolling registers a student for the class's offerings that exist at that moment
+(ADR-0011), but adding an offering afterwards registered nobody. `ClassSubjectService.create` now
+registers every active enrollment of the class in the same transaction as the new offering
+(`subject-registration-sync.util.ts`); existing registrations are left alone, so a deregistration
+from an elective stands. The school office guide already described this behaviour.
+
+Students affected before the fix are repaired by `ops:backfill-subject-registrations` (dry run by
+default, `--apply` to write, `--school <subdomain>` to limit it). It has not been run on the pilot
+server. Tested: the enrollment, academics and imports integration suites (51 passing), including a
+new late-offering case that fails on the old code and a backfill case that keeps a deregistration.
+
 ### 2026-10-07 — People search matches full names
 
 Searching a full name ("Adaeze Okafor") in the Students, Teachers, HODs or Moderators list returned

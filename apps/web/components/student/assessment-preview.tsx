@@ -11,6 +11,7 @@ import { describeAttemptError } from '@/lib/attempt/error-utils';
 import { buildMediaManifestFromPackage } from '@/lib/attempt/media-cache';
 import { decryptPrecachedMedia } from '@/lib/attempt/media-precache';
 import { useMediaPrecache, type PrecacheState } from '@/lib/attempt/use-media-precache';
+import { SubmittedScreen } from '@/components/attempt/submitted-screen';
 import { MediaDownloadGate } from './media-download-gate';
 import { CompatibilityCheck } from './compatibility-check';
 
@@ -136,6 +137,12 @@ export function AssessmentPreview({ examId }: { examId: string }) {
   }
 
   const data = preview.data;
+  // Pilot feedback (2026-10-08): the student has already submitted and
+  // cannot start again, so show the confirmation, never a Start the server
+  // would refuse.
+  if (data.submittedAttemptId) {
+    return <SubmittedScreen attemptId={data.submittedAttemptId} embedded />;
+  }
   const minutes = Math.round(data.durationSeconds / 60);
   const extraMinutes = Math.round(data.extraTimeSeconds / 60);
   const mediaBytes = precache.state.status === 'ready' ? precache.state.totalBytes : 0;

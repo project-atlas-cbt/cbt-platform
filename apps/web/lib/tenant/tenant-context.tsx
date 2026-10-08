@@ -18,6 +18,9 @@ export interface TenantSchool {
   /** B4: "#rrggbb", or null if the school hasn't set one — see
    * `<TenantProvider>` below for how this reaches `<ThemeProvider>`. */
   primaryColor: string | null;
+  /** Some students may sign in with name + Login ID right now
+   * (passwordless student sign-in) — the sign-in page then offers it. */
+  studentPasswordlessSignIn?: boolean;
 }
 
 export interface TenantResolution {

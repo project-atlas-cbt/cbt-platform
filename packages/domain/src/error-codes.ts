@@ -370,6 +370,11 @@ export const BASE_ERROR_CODES = {
   // examQuestionId/selectedOptionId that does not appear in this attempt's
   // own frozen AttemptQuestionSnapshot.document — never silently accepted.
   ATTEMPT_QUESTION_NOT_IN_SNAPSHOT: { httpStatus: 400, retryable: false },
+  // ATTEMPT_QUESTION_LOCKED (bug audit P1-6): under SEQUENTIAL_NO_REVISIT,
+  // an answer write to a question that comes before the furthest question
+  // the server already holds an answer for. The student has moved past it,
+  // so it is locked. Non-retryable: the lock never lifts.
+  ATTEMPT_QUESTION_LOCKED: { httpStatus: 409, retryable: false },
   // EXAM_SESSION_PARTICIPANT_NOT_FOUND: POST .../extra-time (decision 2,
   // accommodations) named a student with no ExamSessionParticipant row for
   // this session at all — distinct from EXAM_SESSION_PARTICIPANT_NOT_

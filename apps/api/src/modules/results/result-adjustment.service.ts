@@ -93,30 +93,11 @@ export class ResultAdjustmentService {
       }
     }
 
-    if (dto.ungradedOnly) {
-      // P2-21 "Grade now": there must be bands to grade against, or the run
-      // would mark results adjusted while leaving them ungraded.
-      const scale = await withTenant(prisma, schoolId, (tx) =>
-        tx.gradingScale.findFirst({
-          where: { schoolId, archivedAt: null, currentVersionId: { not: null } },
-          select: { id: true },
-        }),
-      );
-      if (!scale) {
-        throw new AppHttpException({
-          code: 'CONFLICT',
-          message: 'Set up grading bands first, then grade these results.',
-        });
-      }
-    }
-
     const targetResults = await this.resolveTargets(schoolId, dto);
     if (targetResults.length === 0) {
       throw new AppHttpException({
         code: 'CONFLICT',
-        message: dto.ungradedOnly
-          ? 'Every finalised result for this exam already has a grade.'
-          : 'No finalised results match this adjustment.',
+        message: 'No finalised results match this adjustment.',
       });
     }
 
@@ -288,16 +269,98 @@ export class ResultAdjustmentService {
       return [{ id: result.id }];
     }
 
+    if (dto.ungradedOnly) return this.resolveGradableUngraded(schoolId, dto.examId);
+
     return withTenant(prisma, schoolId, (tx) =>
       tx.result.findMany({
-        where: {
-          schoolId,
-          examId: dto.examId,
-          state: { in: ['FINAL', 'ADJUSTED'] },
-          ...(dto.ungradedOnly && { gradingScaleVersionId: null }),
-        },
+        where: { schoolId, examId: dto.examId, state: { in: ['FINAL', 'ADJUSTED'] } },
         select: { id: true },
       }),
     );
+  }
+
+  /**
+   * P2-21 "Grade now": the ungraded results that bands exist for. A result is
+   * graded against the scale for the level the student sat the exam in, or
+   * the school-wide scale, exactly as the worker resolves it
+   * (`levelForResult` and `resolveGradingScaleVersion` in apps/worker). A
+   * result with no scale to grade against is left out, so the run never
+   * marks a result ADJUSTED while leaving it ungraded.
+   */
+  private async resolveGradableUngraded(
+    schoolId: string,
+    examId: string,
+  ): Promise<{ id: string }[]> {
+    const { results, scales, academicSessionId } = await withTenant(
+      prisma,
+      schoolId,
+      async (tx) => {
+        const exam = await tx.exam.findUniqueOrThrow({
+          where: { id: examId },
+          select: { academicSessionId: true },
+        });
+        return {
+          academicSessionId: exam.academicSessionId,
+          scales: await tx.gradingScale.findMany({
+            where: { schoolId, archivedAt: null, currentVersionId: { not: null } },
+            select: { level: true },
+          }),
+          results: await tx.result.findMany({
+            where: {
+              schoolId,
+              examId,
+              state: { in: ['FINAL', 'ADJUSTED'] },
+              gradingScaleVersionId: null,
+            },
+            select: {
+              id: true,
+              studentProfile: {
+                select: {
+                  enrollments: {
+                    orderBy: { startDate: 'desc' },
+                    select: {
+                      status: true,
+                      academicSessionId: true,
+                      classGroupSession: { select: { level: true } },
+                    },
+                  },
+                },
+              },
+            },
+          }),
+        };
+      },
+    );
+    if (results.length === 0) {
+      throw new AppHttpException({
+        code: 'CONFLICT',
+        message: 'Every finalised result for this exam already has a grade.',
+      });
+    }
+
+    const schoolWide = scales.some((scale) => scale.level === null);
+    const levels = new Set(scales.map((scale) => scale.level).filter((l) => l !== null));
+    const missingLevels = new Set<string>();
+    const gradable = results.filter((result) => {
+      const enrollments = result.studentProfile.enrollments;
+      const level =
+        (
+          enrollments.find((e) => e.academicSessionId === academicSessionId) ??
+          enrollments.find((e) => e.status === 'ACTIVE')
+        )?.classGroupSession.level ?? null;
+      if (schoolWide || (level !== null && levels.has(level))) return true;
+      if (level !== null) missingLevels.add(level);
+      return false;
+    });
+    if (gradable.length === 0) {
+      const named = [...missingLevels].sort().join(', ');
+      throw new AppHttpException({
+        code: 'CONFLICT',
+        message: named
+          ? `Set up grading bands for ${named} (or for the whole school) first, then grade these results.`
+          : 'Set up grading bands first, then grade these results.',
+      });
+    }
+    return gradable.map((result) => ({ id: result.id }));
   }
 }

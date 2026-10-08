@@ -296,3 +296,18 @@ export function useClassCredentialSheet() {
     },
   });
 }
+
+/** Replaces the passwordless student sign-in setting. Switching a class or
+ * the school off signs those students out (server side). */
+export function useUpdateStudentPasswordlessSettings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { allStudents: boolean; classIds: string[] }) =>
+      unwrap(apiClient.PUT('/school/student-passwordless-sign-in', { body })),
+    onSuccess: (data) => {
+      client.setQueryData(['people', 'student-passwordless-sign-in'], data);
+      // The sign-in page reads the on/off state from tenant/resolve.
+      return client.invalidateQueries({ queryKey: ['tenant'], exact: false });
+    },
+  });
+}

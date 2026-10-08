@@ -328,6 +328,90 @@
         ]
       }
     },
+    "/auth/student-sign-in": {
+      "post": {
+        "operationId": "StudentPasswordlessController_signIn",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudentSignInDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Student sign-in with Login ID + name, only while the school or the student's class has it switched on.",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/school/student-passwordless-sign-in": {
+      "get": {
+        "operationId": "StudentPasswordlessController_getSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentPasswordlessSettingsDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Where students may currently sign in without a password.",
+        "tags": [
+          "identity"
+        ]
+      },
+      "put": {
+        "operationId": "StudentPasswordlessController_updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudentPasswordlessSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentPasswordlessSettingsDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Switch passwordless student sign-in on or off for the school or chosen classes (School Admin, Moderator). Switching off signs those students out.",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_liveness",
@@ -9877,6 +9961,10 @@
           "primaryColor": {
             "type": "string",
             "nullable": true
+          },
+          "studentPasswordlessSignIn": {
+            "type": "boolean",
+            "description": "Some students of this school may sign in with Login ID + name right now — the sign-in page offers the student form."
           }
         },
         "required": [
@@ -9884,7 +9972,8 @@
           "subdomain",
           "timezone",
           "logoUrl",
-          "primaryColor"
+          "primaryColor",
+          "studentPasswordlessSignIn"
         ]
       },
       "TenantResolveResponseDto": {
@@ -10015,13 +10104,18 @@
           },
           "effectiveSchoolId": {
             "type": "string"
+          },
+          "passwordless": {
+            "type": "boolean",
+            "description": "Signed in with Login ID + name (passwordless student sign-in): no password change is asked for or allowed."
           }
         },
         "required": [
           "user",
           "membership",
           "roles",
-          "effectiveSchoolId"
+          "effectiveSchoolId",
+          "passwordless"
         ]
       },
       "PasswordChangeDto": {
@@ -10065,6 +10159,44 @@
         "required": [
           "token",
           "newPassword"
+        ]
+      },
+      "StudentSignInDto": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "The student's Login ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "First name and surname in any order and any capitals; middle names optional."
+          }
+        },
+        "required": [
+          "identifier",
+          "name"
+        ]
+      },
+      "StudentPasswordlessSettingsDto": {
+        "type": "object",
+        "properties": {
+          "allStudents": {
+            "type": "boolean",
+            "description": "On for every student of the school."
+          },
+          "classIds": {
+            "description": "Classes switched on individually. A PUT replaces the whole list.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "allStudents",
+          "classIds"
         ]
       },
       "RequestMediaUploadDto": {
@@ -14396,6 +14528,10 @@
             "type": "string",
             "nullable": true
           },
+          "pendingAbsence": {
+            "type": "boolean",
+            "description": "End Examination will record this student absent: authorized, never started, and has not sat another batch."
+          },
           "extraTimeSeconds": {
             "type": "number",
             "description": "F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none)."
@@ -14412,6 +14548,7 @@
           "eligible",
           "failedChecks",
           "participantStatus",
+          "pendingAbsence",
           "extraTimeSeconds",
           "largerText"
         ]
@@ -14973,6 +15110,11 @@
           "largerText": {
             "type": "boolean",
             "description": "F20 (DoD 3): the caller's staff-granted larger-text accommodation (07 §9.7)."
+          },
+          "submittedAttemptId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set when the caller has already submitted this exam and cannot start another attempt: their latest submitted attempt. The client shows the submission confirmation instead of Start."
           }
         },
         "required": [
@@ -14985,7 +15127,8 @@
           "questionCount",
           "totalMarks",
           "extraTimeSeconds",
-          "largerText"
+          "largerText",
+          "submittedAttemptId"
         ]
       },
       "MediaManifestAssetDto": {

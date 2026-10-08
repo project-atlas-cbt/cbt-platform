@@ -30,6 +30,12 @@ export function OptionBuilder({
   control: Control<QuestionFormValues>;
   error?: string;
 }) {
+  // `update()` regenerates every row's React key, so keying rows by
+  // `field.id` remounted the input on each keystroke (focus lost after one
+  // character). Rows are keyed by index instead — the inputs are fully
+  // controlled, so there is no per-row state to misplace on remove. The
+  // generated `id` also overwrites an option's server id, so ids are never
+  // read from the rows or sent on save.
   const { fields, append, remove, update } = useFieldArray({ control, name: 'options' });
 
   const correctIndex = fields.findIndex((o) => o.correctFlag);
@@ -48,7 +54,7 @@ export function OptionBuilder({
         onValueChange={(value) => setCorrect(Number(value))}
       >
         {fields.map((option, index) => (
-          <div key={option.id} className="flex items-center gap-2">
+          <div key={index} className="flex items-center gap-2">
             <RadioGroupItem
               value={String(index)}
               id={`option-correct-${index}`}

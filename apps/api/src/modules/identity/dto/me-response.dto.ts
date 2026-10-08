@@ -51,4 +51,11 @@ export class MeResponseDto {
 
   @ApiProperty({ type: String })
   effectiveSchoolId!: string;
+
+  @ApiProperty({
+    type: Boolean,
+    description:
+      'Signed in with Login ID + name (passwordless student sign-in): no password change is asked for or allowed.',
+  })
+  passwordless!: boolean;
 }

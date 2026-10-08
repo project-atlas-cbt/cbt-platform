@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/auth';
 import { newPasswordField } from '@/lib/auth/schemas';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import {
   Form,
   FormControl,
@@ -202,7 +203,7 @@ export function ActivateForm() {
             <FormItem>
               <FormLabel>New password</FormLabel>
               <FormControl>
-                <Input type="password" autoComplete="new-password" autoFocus {...field} />
+                <PasswordInput autoComplete="new-password" autoFocus {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -215,7 +216,7 @@ export function ActivateForm() {
             <FormItem>
               <FormLabel>Confirm new password</FormLabel>
               <FormControl>
-                <Input type="password" autoComplete="new-password" {...field} />
+                <PasswordInput autoComplete="new-password" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

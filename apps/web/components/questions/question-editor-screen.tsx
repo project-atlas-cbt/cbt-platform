@@ -163,7 +163,6 @@ export function QuestionEditorScreen({ questionId }: { questionId?: string }) {
       marks: current.marks,
       explanation: current.explanation ?? '',
       options: current.options.map((o) => ({
-        id: o.id,
         content: o.content,
         correctFlag: o.correctFlag,
       })),
@@ -317,7 +316,8 @@ export function QuestionEditorScreen({ questionId }: { questionId?: string }) {
           ...(currentValues.marks !== '' ? { marks: currentValues.marks } : {}),
           explanation: currentValues.explanation ?? '',
           options: currentValues.options.map((o) => ({
-            ...(o.id ? { id: o.id } : {}),
+            // No ids: a save replaces the whole option set (new ids), so an id
+            // from the previous load/save no longer exists server-side.
             content: o.content,
             correctFlag: o.correctFlag,
           })),

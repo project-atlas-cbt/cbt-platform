@@ -27,5 +27,5 @@ import { QuestionBankScreen } from '@/components/questions/question-bank-screen'
  * keeps the screen honest instead of surfacing a dead Import button.
  */
 export default function SchoolAdminQuestionsPage() {
-  return <QuestionBankScreen basePath="/school/questions" hideImport />;
+  return <QuestionBankScreen basePath="/school/questions" hideImport hideCreate />;
 }
