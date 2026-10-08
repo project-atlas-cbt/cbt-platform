@@ -274,7 +274,10 @@ export class StudentPasswordlessService {
     const ok =
       membership !== null &&
       user !== null &&
-      user.status === 'ACTIVE' &&
+      // INVITED: no password slip was ever generated for this student.
+      // Passwordless sign-in needs no password, so it is this account's
+      // first claim, as issuing the slip would have been.
+      (user.status === 'ACTIVE' || user.status === 'INVITED') &&
       (await this.isCovered(schoolId, membership.id)) &&
       nameMatches(name, user);
 
@@ -286,7 +289,13 @@ export class StudentPasswordlessService {
     }
 
     await this.lockout.recordSuccess(schoolId, identifier);
-    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        ...(user.status === 'INVITED' ? { status: 'ACTIVE' as const } : {}),
+      },
+    });
     const session = await this.sessions.issue(res, {
       userId: user.id,
       schoolId,

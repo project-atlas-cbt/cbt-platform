@@ -2,6 +2,16 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Passwordless sign-in admits students whose slip was never generated
+
+A student account starts `INVITED` and became `ACTIVE` only when a password slip was generated
+for it (`CredentialSheetService`). Passwordless sign-in (#66) required `ACTIVE`, so a student with
+no slip was refused with the generic message even with the right name and Login ID. It did not
+affect the OLA pilot (slips were generated), but a school using only passwordless sign-in would
+have been locked out entirely. Passwordless sign-in now accepts `INVITED` as well and activates the
+account on success, the same claim the slip would have made; `SUSPENDED`/`INACTIVE` stay refused.
+Integration test added (fails without the fix).
+
 ### 2026-10-08 — Student lockouts: locked-out list for staff, clear message for students
 
 Pilot feedback (OLA exam): students who typed a wrong name or Login ID five times were locked out,

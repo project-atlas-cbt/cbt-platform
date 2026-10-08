@@ -137,13 +137,14 @@ async function seedMember(
   role: 'STUDENT' | 'TEACHER' | 'MODERATOR' | 'SCHOOL_ADMIN',
   name: { firstName: string; lastName: string },
   password?: string,
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' = 'ACTIVE',
 ) {
   const user = await prisma.user.create({
     data: {
       firstName: name.firstName,
       lastName: name.lastName,
       displayName: `${name.firstName} ${name.lastName}`,
-      status: 'ACTIVE',
+      status,
       passwordHash: password ? await passwords.hash(password) : await passwords.hash(randomUUID()),
       credentialState: password ? 'OK' : 'MUST_CHANGE_PASSWORD',
     },
@@ -163,8 +164,16 @@ async function seedStudent(
   loginIdentifier: string,
   classId: string,
   name: { firstName: string; lastName: string },
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' = 'ACTIVE',
 ) {
-  const membership = await seedMember(f.schoolId, loginIdentifier, 'STUDENT', name);
+  const membership = await seedMember(
+    f.schoolId,
+    loginIdentifier,
+    'STUDENT',
+    name,
+    undefined,
+    status,
+  );
   await withTenant(prisma, f.schoolId, async (tx) => {
     const cls = await tx.classGroup.findUniqueOrThrow({ where: { id: classId } });
     const profile = await tx.studentProfile.create({
@@ -320,6 +329,27 @@ describe('Passwordless student sign-in', () => {
     expect((await studentSignIn(f.host, 'OLA/001', 'Chiamaka Okafor')).res.statusCode).toBe(401);
     // Class B is not switched on.
     expect((await studentSignIn(f.host, 'OLA/002', 'Chiamaka Okafor')).res.statusCode).toBe(401);
+  });
+
+  it('admits a student whose password slip was never generated, and activates them', async () => {
+    await seedStudent(f, 'OLA/003', f.classA, { firstName: 'Bisi', lastName: 'Ola' }, 'INVITED');
+    await seedStudent(f, 'OLA/004', f.classA, { firstName: 'Kemi', lastName: 'Ade' }, 'SUSPENDED');
+
+    const ok = await studentSignIn(f.host, 'OLA/003', 'Bisi Ola');
+    expect(ok.res.statusCode).toBe(200);
+    expect((await send(ok.ctx, 'GET', '/auth/me')).statusCode).toBe(200);
+    const user = await withTenant(prisma, f.schoolId, (tx) =>
+      tx.schoolMembership.findFirstOrThrow({
+        where: { schoolId: f.schoolId, loginIdentifier: 'OLA/003' },
+        select: { userId: true },
+      }),
+    );
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.userId } })).status).toBe(
+      'ACTIVE',
+    );
+
+    // A suspended account stays refused.
+    expect((await studentSignIn(f.host, 'OLA/004', 'Kemi Ade')).res.statusCode).toBe(401);
   });
 
   it('never lets a passwordless session set a password', async () => {
