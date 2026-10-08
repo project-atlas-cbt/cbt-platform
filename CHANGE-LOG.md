@@ -2,6 +2,22 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Pilot server: platform hosts lost their certificates after the on-demand change
+
+The first deploy carrying the on-demand certificates (#63) left every host on the server without a
+certificate (TLS "internal error"), including `media`, `admin` and the listed schools. Caddy merges
+the listed hosts' certificate policy into its catch-all, so the `*.<root>` on-demand policy matches
+them first, and it serves even a stored certificate only after the `ask` check allows the name. The
+check allowed only schools. It now also allows the platform's own hosts (`admin`, `api`,
+`admin.api`, `media`, `www`); everything else is unchanged. The owner restored the previous
+Caddyfile on the server until this is deployed.
+
+Tested: reproduced with Caddy 2.10.2 and a local ACME server (Pebble). The previous Caddyfile
+issued every certificate; reloading the #63 Caddyfile made every host fail the handshake; with the
+check allowing the platform hosts, every host was served from its stored certificate, a new school
+host got a fresh certificate, and an unknown name was still refused. Health integration suite: 6
+passing (new: platform hosts allowed).
+
 ### 2026-10-08 — Pilot server: new schools work without a redeploy
 
 On the pilot server a school created in the Software Admin console had no certificate, because
