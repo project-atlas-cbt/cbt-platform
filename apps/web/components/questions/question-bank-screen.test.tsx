@@ -231,6 +231,16 @@ describe('QuestionBankScreen', () => {
     expect(screen.queryByRole('link', { name: /^import$/i })).not.toBeInTheDocument();
   });
 
+  it('hideCreate suppresses Create question for an HOD who also teaches (pilot feedback)', () => {
+    mockUseQuestionsPaginated.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { questions: [], total: 0, page: 1, pageSize: 25 },
+    } as never);
+    render(<QuestionBankScreen basePath="/hod/question-bank" hideImport hideCreate />);
+    expect(screen.queryByRole('link', { name: /create question/i })).not.toBeInTheDocument();
+  });
+
   // Gap-closure (found via live testing): the Subject filter shared TEACHER's
   // Question Editor bug — it called `useSubjects()`, denied to TEACHER,
   // degrading to an empty filter. `assignedSubjectsOnly` switches the source

@@ -14,5 +14,5 @@ import { QuestionBankScreen } from '@/components/questions/question-bank-screen'
  * extending F8's own already-recorded deferral).
  */
 export default function HodQuestionBankPage() {
-  return <QuestionBankScreen basePath="/hod/question-bank" hideImport />;
+  return <QuestionBankScreen basePath="/hod/question-bank" hideImport hideCreate />;
 }

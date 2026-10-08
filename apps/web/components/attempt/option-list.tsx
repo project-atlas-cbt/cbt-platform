@@ -3,9 +3,9 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
 import { getAttemptDb } from '@/lib/attempt/db';
 import { sanitizeQuestionHtml } from '@/lib/questions/sanitize-html';
+import { cn } from '@/lib/utils';
 
 export interface OptionListOption {
   optionId: string;
@@ -58,21 +58,28 @@ export function OptionList({
       className="mt-4"
     >
       {sorted.map((option) => (
-        <div
+        // The whole box is the label, so a click anywhere in it selects the
+        // option, not only on the circle or the text (pilot feedback,
+        // 2026-10-08).
+        <label
           key={option.optionId}
-          className="flex items-start gap-3 rounded-md border border-border p-3"
+          htmlFor={`option-${option.optionId}`}
+          className={cn(
+            'flex items-start gap-3 rounded-md border border-border p-3',
+            'has-[[data-state=checked]]:border-brand-primary',
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-surface-muted',
+          )}
         >
           <RadioGroupItem
             value={option.optionId}
             id={`option-${option.optionId}`}
-            className="mt-0.5"
+            className="mt-0.5 shrink-0"
           />
-          <Label
-            htmlFor={`option-${option.optionId}`}
-            className="cursor-pointer text-sm text-text-primary [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
+          <span
+            className="text-sm text-text-primary [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
             dangerouslySetInnerHTML={{ __html: option.html }}
           />
-        </div>
+        </label>
       ))}
     </RadioGroup>
   );
