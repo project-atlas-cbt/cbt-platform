@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Writes infra/vps/Caddyfile from .env: one site per host, each with its own
 # Let's Encrypt certificate (HTTP-01, so no DNS API access is needed).
-# A school created in the Software Admin console needs no redeploy: any
-# <school>.<root> or <school>.api.<root> host gets its certificate on the
-# first visit (on-demand TLS), after the API confirms that school exists.
-# Schools listed in SCHOOLS get theirs at startup instead, and the deploy's
-# smoke checks them.
+# A school is added by appending its label to SCHOOLS and redeploying.
+#   CADDY_ON_DEMAND=1 (off by default) adds *.<root> and *.api.<root> sites
+#     with on-demand TLS, so a school created in the Software Admin console
+#     needs no redeploy; Caddy asks the API that the school exists first.
+#     Turned off after the first pilot deploys with it left every host
+#     without a certificate (2026-10-08); not to be enabled until that is
+#     understood on a test server.
 #   CADDY_LOCAL_CA=1 issues certificates from Caddy's own CA instead (testing),
 #     and adds wildcard sites so schools created during a test need no
 #     redeploy. CADDY_LOCAL_CA_ROOT=<dir inside the caddy container> makes
@@ -30,6 +32,8 @@ root_re=${ROOT_DOMAIN//./\\.}
 if [ "${CADDY_LOCAL_CA:-}" = 1 ]; then
   web_hosts="$web_hosts, *.$ROOT_DOMAIN"
   api_hosts="$api_hosts, *.api.$ROOT_DOMAIN"
+  on_demand_sites=""
+elif [ "${CADDY_ON_DEMAND:-}" != 1 ]; then
   on_demand_sites=""
 else
   # Exact hosts above take precedence over these wildcards.
@@ -58,7 +62,7 @@ fi
     printf '  pki {\n    ca local {\n      root {\n        cert %s/ca.crt\n        key %s/ca.key\n      }\n    }\n  }\n' \
       "$CADDY_LOCAL_CA_ROOT" "$CADDY_LOCAL_CA_ROOT"
   fi
-  if [ "${CADDY_LOCAL_CA:-}" != 1 ]; then
+  if [ -n "$on_demand_sites" ]; then
     # Caddy asks the API before requesting a certificate for an unlisted host,
     # so nobody can make it request certificates for invented names.
     printf '  on_demand_tls {\n    ask http://api:3001/v1/health/tls-ask\n  }\n'

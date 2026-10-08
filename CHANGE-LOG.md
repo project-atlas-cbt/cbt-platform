@@ -18,6 +18,21 @@ the exam picker. Teachers can select only their own rows; HOD and School Admin c
 Tested: 3 new API integration tests (mixed batch, per-question failures, size limits), 2 new web
 tests, existing question web suites, security suites (53 passing).
 
+### 2026-10-08 — Pilot server: on-demand school certificates turned off again
+
+The deploy with #70 failed its smoke the same way: right after Caddy reloaded the on-demand
+Caddyfile, the API's storage check could not complete a TLS handshake with `media`, although the
+API's `tls-ask` check answered 200 for `media` and `ola` when called from the Caddy container. The
+owner restored the previous Caddyfile again, and the pilot exam runs on it. The Pebble reproduction
+behind #70 used a global ACME CA override, which changes how Caddy groups certificate policies, so
+it did not match the server.
+
+On-demand sites are now opt-in (`CADDY_ON_DEMAND=1`, off by default), so `bin/deploy.sh` renders
+the Caddyfile that worked before #63 (same TLS automation, verified with `caddy adapt`). New
+schools need their label in `SCHOOLS` and a redeploy, as before (`vps-pilot.md`). The API's
+`tls-ask` check stays; it is unused while the option is off. Next: reproduce on a non-pilot server,
+capturing Caddy's log for the minute after the reload, before turning it on.
+
 ### 2026-10-08 — Pilot server: platform hosts lost their certificates after the on-demand change
 
 The first deploy carrying the on-demand certificates (#63) left every host on the server without a
