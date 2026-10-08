@@ -877,6 +877,9 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(scoreOnly.detailVisibility).toBe('SCORE_ONLY');
     expect(scoreOnly.correctCount).toBeNull();
     expect(scoreOnly.questions).toHaveLength(0);
+    // Checked on the wire, not just the typed fields: no per-question answer
+    // of any kind may travel under a narrower policy.
+    expect(JSON.stringify(scoreOnly)).not.toMatch(/"options"|"correct"|"selected"/);
     // Raw marks stay available regardless of grading/visibility config
     // (05 §46, DoD item 9).
     expect(scoreOnly.earnedMarks).toBe(4);
@@ -888,14 +891,36 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
 
     const fullReview = (await get(studentB, `/student/results/${fullReviewResult.resultId}`)).json<{
       correctCount: number;
-      questions: { content: string; correctness: string; voided: boolean }[];
+      questions: {
+        content: string;
+        correctness: string;
+        voided: boolean;
+        options: { optionId: string; content: string; correct: boolean; selected: boolean }[];
+      }[];
     }>();
     expect(fullReview.correctCount).toBe(2);
     expect(fullReview.questions).toHaveLength(2);
     expect(fullReview.questions.every((q) => !q.voided)).toBe(true);
-    // Question review, never an answer key — the snapshot's correctFlag does
-    // not leave the server (the X-05 boundary, extended to results).
+    // Full review: every option, the key, and the student's own pick. Both
+    // questions were answered correctly, so the pick is the key.
+    for (const q of fullReview.questions) {
+      expect(q.options.length).toBeGreaterThan(1);
+      expect(q.options.filter((o) => o.correct)).toHaveLength(1);
+      expect(q.options.filter((o) => o.selected)).toHaveLength(1);
+      expect(q.options.find((o) => o.selected)?.correct).toBe(true);
+    }
+    // The raw snapshot field name still never leaves the server.
     expect(JSON.stringify(fullReview)).not.toContain('correctFlag');
+
+    // Staff see the same breakdown with the choice and the key.
+    const staff = (await get(teacher, `/results/${fullReviewResult.resultId}`)).json<{
+      questions: { options: { correct: boolean; selected: boolean }[] }[];
+    }>();
+    expect(staff.questions).toHaveLength(2);
+    for (const q of staff.questions) {
+      expect(q.options.filter((o) => o.correct)).toHaveLength(1);
+      expect(q.options.find((o) => o.selected)?.correct).toBe(true);
+    }
 
     // P3-2: once a question is voided, the review marks it.
     const [voidedQuestion] = await withTenant(prisma, schoolId, (tx) =>
@@ -1072,6 +1097,7 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
     expect(detail.correctCount).toBe(1);
     expect(detail.incorrectCount).toBe(1);
     expect(detail.questions).toHaveLength(0);
+    expect(JSON.stringify(detail)).not.toMatch(/"options"|"correct"|"selected"/);
   });
 
   it('DoD 7: a teacher cannot publish when the school has locked its result policy', async () => {

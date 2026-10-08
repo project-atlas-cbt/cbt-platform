@@ -12,6 +12,7 @@ import {
   toAdjustmentHistoryItemDto,
   toResultListItemDto,
 } from './result-mappers.js';
+import { buildQuestionOptionReview } from './question-option-review.util.js';
 import { isExamCreator, resolveResultResourceContext } from './result-scope.util.js';
 import { aggregatableResultWhere } from './result-visibility.util.js';
 import type {
@@ -161,7 +162,7 @@ export class ResultQueryService {
     const exam = await loadExamOrThrow(schoolId, result.examId);
     await this.assertCanViewExamResults(schoolId, actor, exam, 'results.viewIndividualResult');
 
-    const [questionResults, snapshot, actorNames] = await Promise.all([
+    const [questionResults, snapshot, answers, actorNames] = await Promise.all([
       withTenant(prisma, schoolId, (tx) =>
         tx.attemptQuestionResult.findMany({
           where: { schoolId, attemptId: result.attemptId },
@@ -171,6 +172,12 @@ export class ResultQueryService {
         tx.attemptQuestionSnapshot.findUnique({
           where: { schoolId_attemptId: { schoolId, attemptId: result.attemptId } },
           select: { document: true },
+        }),
+      ),
+      withTenant(prisma, schoolId, (tx) =>
+        tx.attemptAnswer.findMany({
+          where: { schoolId, attemptId: result.attemptId },
+          select: { examQuestionId: true, selectedOptionId: true },
         }),
       ),
       resolveMembershipDisplayNames(
@@ -195,6 +202,7 @@ export class ResultQueryService {
       (document?.questions ?? []).map((q) => [q.examQuestionId, q] as const),
     );
 
+    const selectedByQuestion = new Map(answers.map((a) => [a.examQuestionId, a.selectedOptionId]));
     const questions: ResultQuestionBreakdownDto[] = questionResults
       .map((qr) => {
         const snapshotQuestion = questionsById.get(qr.examQuestionId);
@@ -206,6 +214,10 @@ export class ResultQueryService {
           awardedMarks: qr.awardedMarks,
           maximumMarks: qr.maximumMarks,
           voided: voidedQuestionIds.has(qr.examQuestionId),
+          options: buildQuestionOptionReview(
+            snapshotQuestion,
+            selectedByQuestion.get(qr.examQuestionId) ?? null,
+          ),
         };
       })
       .sort((a, b) => a.displaySequence - b.displaySequence);

@@ -70,6 +70,10 @@ const RESULT = {
       awardedMarks: 2,
       maximumMarks: 2,
       voided: false,
+      options: [
+        { optionId: 'o1', content: '<p>3</p>', correct: false, selected: true },
+        { optionId: 'o2', content: '<p>4</p>', correct: true, selected: false },
+      ],
     },
   ],
   adjustments: [],
@@ -117,6 +121,15 @@ describe('StaffResultDetailScreen', () => {
       isError: false,
       refetch: vi.fn(),
     } as never);
+  });
+
+  it("shows each question's options with the correct one and the student's choice", () => {
+    actAs('teacher');
+    renderScreen();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('Correct answer')).toBeInTheDocument();
+    expect(screen.getByText("Student's answer")).toBeInTheDocument();
   });
 
   it('shows a loading state', () => {

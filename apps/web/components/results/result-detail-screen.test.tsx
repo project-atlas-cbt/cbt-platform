@@ -99,9 +99,9 @@ describe('ResultDetailScreen', () => {
     expect(screen.queryByText(/question review/i)).not.toBeInTheDocument();
   });
 
-  // DoD item 5 + X-05: FULL_REVIEW shows the question breakdown, but never
-  // a correct-answer field — the DTO structurally has none to render.
-  it('shows the question-by-question review under FULL_REVIEW, never a correct answer', async () => {
+  // DoD item 5: FULL_REVIEW shows each question with its options, the
+  // correct option and the student's own choice.
+  it('shows the question-by-question review with options, key and choice under FULL_REVIEW', async () => {
     mockGet.mockResolvedValue(
       ok({
         ...BASE,
@@ -117,6 +117,10 @@ describe('ResultDetailScreen', () => {
             awardedMarks: 2,
             maximumMarks: 2,
             voided: false,
+            options: [
+              { optionId: 'o1', content: '<p>3</p>', correct: false, selected: false },
+              { optionId: 'o2', content: '<p>4</p>', correct: true, selected: true },
+            ],
           },
         ],
       }),
@@ -126,9 +130,42 @@ describe('ResultDetailScreen', () => {
     expect(screen.getByText('What is 2 + 2?')).toBeInTheDocument();
     // "Correct" also appears as the counts summary's <dt> label — scope to
     // the question-review list itself to assert the per-question badge.
-    expect(within(screen.getByRole('list')).getByText('Correct')).toBeInTheDocument();
+    expect(
+      within(screen.getAllByRole('list')[0]!).getByText('Correct', { selector: 'span' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('2 / 2 marks')).toBeInTheDocument();
-    expect(JSON.stringify(document.body.innerHTML)).not.toContain('correctAnswer');
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('Correct answer')).toBeInTheDocument();
+    expect(screen.getByText('Your answer')).toBeInTheDocument();
+  });
+
+  it('says so when a question was left unanswered', async () => {
+    mockGet.mockResolvedValue(
+      ok({
+        ...BASE,
+        detailVisibility: 'FULL_REVIEW',
+        correctCount: 0,
+        incorrectCount: 0,
+        unansweredCount: 1,
+        questions: [
+          {
+            displaySequence: 1,
+            content: '<p>Q</p>',
+            correctness: 'UNANSWERED',
+            awardedMarks: 0,
+            maximumMarks: 2,
+            voided: false,
+            options: [
+              { optionId: 'o1', content: '<p>3</p>', correct: false, selected: false },
+              { optionId: 'o2', content: '<p>4</p>', correct: true, selected: false },
+            ],
+          },
+        ],
+      }),
+    );
+    renderWithClient(<ResultDetailScreen resultId="result-1" />);
+    expect(await screen.findByText('You did not answer this question.')).toBeInTheDocument();
+    expect(screen.queryByText('Your answer')).not.toBeInTheDocument();
   });
 
   it('P3-2: marks a voided question instead of showing its marks', async () => {
@@ -147,6 +184,7 @@ describe('ResultDetailScreen', () => {
             awardedMarks: 0,
             maximumMarks: 2,
             voided: true,
+            options: [],
           },
         ],
       }),

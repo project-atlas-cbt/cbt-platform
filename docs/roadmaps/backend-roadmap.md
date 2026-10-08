@@ -3456,7 +3456,7 @@ B17 aggregates results and must exclude `VOIDED`. B18 exports results preserving
 12. ✅ Adjustment history replays to reproduce the original result — every child row carries the
     complete numeric before/after, so the original is the earliest child's `oldValue`.
 13. ✅ Students see only their own published results, with detail gated by the exam's own
-    `result_detail_visibility`. `FULL_REVIEW` shows question review, never an answer key.
+    `result_detail_visibility`. `FULL_REVIEW` shows question review with options, the correct option and the student's choice (ADR-0010 2026-10-08 amendment).
 14. ✅ Cross-tenant and cross-scope access denied — including a student reading another student's
     result by id (the P14 URL-manipulation expectation).
 
