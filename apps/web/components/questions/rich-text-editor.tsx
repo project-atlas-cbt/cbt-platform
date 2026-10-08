@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Mark } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
   Bold,
@@ -9,6 +9,8 @@ import {
   List,
   ListOrdered,
   RemoveFormatting,
+  Subscript as SubscriptIcon,
+  Superscript as SuperscriptIcon,
   Underline as UnderlineIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,14 +22,14 @@ import { useNonce } from '@/lib/security/nonce-context';
  * field uses, to satisfy `04 §39`/`05 §15.2`'s "rich editor"/"rich
  * formatting" wording directly).
  *
- * Enabled: bold, italic, underline, ordered/unordered lists, clear
+ * Enabled: bold, italic, underline, subscript/superscript, ordered/unordered lists, clear
  * formatting — `05 §15.2`'s content list ("Text / Image / Rich formatting")
  * doesn't call for document structure, so `StarterKit`'s other defaults
  * (headings, blockquotes, code blocks, horizontal rules, links) are
  * explicitly disabled below rather than left enabled-and-unused.
  *
- * Out of scope: equation/math notation (already deferred by F9's own
- * roadmap text) and inline images — all media goes through
+ * Out of scope: equation editors (sub/superscript marks cover simple
+ * notation) and inline images — all media goes through
  * `MediaUploader`/`QuestionMedia` (a separate attach/detach join row, not
  * an embedded `<img>` in `content`), so no image extension is added here.
  *
@@ -36,6 +38,32 @@ import { useNonce } from '@/lib/security/nonce-context';
  * treats `content` as flat text, and needs no schema-version field this
  * DTO doesn't have.
  */
+/** Maths notation (x², H₂O). Defined here rather than adding the two
+ * @tiptap packages: a mark is a few lines, and the stored HTML is just
+ * `<sub>`/`<sup>`, which `sanitize-html.ts` admits. Mutually exclusive. */
+function scriptMark(
+  name: 'subscript' | 'superscript',
+  tag: 'sub' | 'sup',
+  other: string,
+  key: string,
+) {
+  return Mark.create({
+    name,
+    excludes: other,
+    parseHTML() {
+      return [{ tag }];
+    },
+    renderHTML() {
+      return [tag, 0];
+    },
+    addKeyboardShortcuts() {
+      return { [key]: () => this.editor.commands.toggleMark(name) };
+    },
+  });
+}
+const Subscript = scriptMark('subscript', 'sub', 'superscript', 'Mod-,');
+const Superscript = scriptMark('superscript', 'sup', 'subscript', 'Mod-.');
+
 export interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
@@ -70,6 +98,8 @@ export function RichTextEditor({
         horizontalRule: false,
         link: false,
       }),
+      Subscript,
+      Superscript,
     ],
     content: value,
     editable: !disabled,
@@ -136,6 +166,20 @@ export function RichTextEditor({
           active={editor.isActive('underline')}
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
+        />
+        <ToolbarButton
+          label="Subscript"
+          icon={SubscriptIcon}
+          active={editor.isActive('subscript')}
+          disabled={disabled}
+          onClick={() => editor.chain().focus().toggleMark('subscript').run()}
+        />
+        <ToolbarButton
+          label="Superscript"
+          icon={SuperscriptIcon}
+          active={editor.isActive('superscript')}
+          disabled={disabled}
+          onClick={() => editor.chain().focus().toggleMark('superscript').run()}
         />
         <ToolbarButton
           label="Bulleted list"

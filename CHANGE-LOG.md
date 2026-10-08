@@ -40,6 +40,16 @@ Tested: API integration suites for attempts, results and exam control (new cases
 which fail on the old code), worker result-adjustment suite, API and web unit suites, typecheck and
 lint.
 
+### 2026-10-08 — Question editor: save error, option typing, subscript and superscript
+
+Editing a draft always failed with "Option <id> does not belong to this revision", and an option
+accepted one character per click. Cause: react-hook-form's `useFieldArray` overwrote each option's
+server `id` with a generated key and regenerated every row key on `update()`, so the input remounted
+on each keystroke and the generated id went to the API. The editor now keys rows by index and never
+sends option ids (a save replaces the whole option set anyway). The rich text editor gained subscript
+and superscript (`<sub>`/`<sup>`, allowed by `sanitizeQuestionHtml`, which every student, review,
+result and print view already uses). Option text stays plain text; rich options are Candidate/Deferred.
+
 ### 2026-10-08 — Students can sign in with name and Login ID; password fields show an eye
 
 For the OLA Maryway pilot, where many students are new to computers, a School Admin or Moderator
