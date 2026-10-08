@@ -43,7 +43,9 @@ import Dexie, { type Table } from 'dexie';
  * rows, not just trusting the type.
  */
 
-export type AnswerSyncStatus = 'synced' | 'pending' | 'in-flight' | 'window-closed';
+/** `'locked'` (bug audit P1-6): the server refused the write because "no
+ * going back" had already locked the question. Final, like `'window-closed'`. */
+export type AnswerSyncStatus = 'synced' | 'pending' | 'in-flight' | 'window-closed' | 'locked';
 export type MediaCacheStatus = 'pending' | 'cached' | 'stale-needs-refetch' | 'failed';
 export type OutboxKind = 'event' | 'heartbeat';
 export type OutboxSyncStatus = 'pending' | 'sent' | 'dropped';

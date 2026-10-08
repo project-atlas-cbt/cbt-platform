@@ -38,7 +38,12 @@ export function QuestionNavigator({
   // the true unanswered count the submit dialog reports.
   const answeredIds = new Set(
     (answers ?? [])
-      .filter((row) => row.selectedOptionId !== null && row.syncStatus !== 'window-closed')
+      .filter(
+        (row) =>
+          row.selectedOptionId !== null &&
+          row.syncStatus !== 'window-closed' &&
+          row.syncStatus !== 'locked',
+      )
       .map((row) => row.examQuestionId),
   );
 

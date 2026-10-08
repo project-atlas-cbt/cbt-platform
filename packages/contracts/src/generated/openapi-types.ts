@@ -5196,6 +5196,8 @@ export interface components {
             /** @enum {string|null} */
             participantStatus: "AUTHORIZED" | "REVOKED" | null;
             examSessionId?: string | null;
+            /** @description End Examination will record this student absent: authorized, never started, and has not sat another batch. */
+            pendingAbsence: boolean;
             /** @description F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none). */
             extraTimeSeconds: number;
             /** @description F20 (DoD 3): larger-text accommodation on the student's latest participant row. */

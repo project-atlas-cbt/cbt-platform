@@ -218,6 +218,29 @@ describe('AttemptSyncEngine', () => {
     expect(mockPost).not.toHaveBeenCalled();
   });
 
+  it('bug audit P1-6 — a locked-question rejection is final and does not hold Submit back', async () => {
+    mockPost.mockResolvedValue(
+      ok({
+        results: [
+          {
+            examQuestionId: 'q1',
+            accepted: false,
+            rejectionCode: 'ATTEMPT_QUESTION_LOCKED',
+            gradeWindowFlag: false,
+          },
+        ],
+      }),
+    );
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1');
+
+    expect(await engine.flushUntilSynced(() => true, 0)).toBe(0);
+    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('locked');
+    mockPost.mockClear();
+    await engine.flushNow();
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
   it('bug fix — two near-simultaneous selections for the same question never share a sequence number', async () => {
     // Reproduces the pre-fix race directly: two `recordAnswer` calls whose
     // reads interleave before either write commits (plausible on the slow/

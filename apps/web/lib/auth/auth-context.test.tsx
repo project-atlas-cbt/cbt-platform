@@ -93,4 +93,29 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('authenticated:A B'));
     expect(mockPost).not.toHaveBeenCalled();
   });
+
+  // Bug audit P2-3: a reload during a network drop or a deploy restart must
+  // not look like a signed-out session.
+  it('resolves to unavailable, not unauthenticated, when /auth/me gets a 502', async () => {
+    mockGet.mockImplementation(() => errorResponse('UNKNOWN_ERROR', 502));
+    renderWithProviders();
+
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('unavailable:'), {
+      timeout: 6000,
+    });
+  }, 10_000);
+
+  it('resolves to unavailable on a network error, then recovers once the server answers', async () => {
+    mockGet.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
+    renderWithProviders();
+
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('unavailable:'), {
+      timeout: 6000,
+    });
+    mockGet.mockImplementation(() => okResponse(ME_PAYLOAD));
+    await waitFor(
+      () => expect(screen.getByTestId('status').textContent).toBe('authenticated:A B'),
+      { timeout: 8000 },
+    );
+  }, 20_000);
 });

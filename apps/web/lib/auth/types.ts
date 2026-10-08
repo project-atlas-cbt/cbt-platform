@@ -33,7 +33,14 @@ export interface AuthMe {
  * successful response.
  */
 export type AuthStatus =
-  'loading' | 'authenticated' | 'unauthenticated' | 'password-change-required';
+  | 'loading'
+  | 'authenticated'
+  | 'unauthenticated'
+  | 'password-change-required'
+  /** The server couldn't be asked: a network drop, a 5xx (a deploy restart's
+   * 502) or a load-shed 503. Says nothing about the session, so the UI waits
+   * and retries instead of sending a student mid-exam to `/login`. */
+  | 'unavailable';
 
 /** Mirrors `PlatformAuthController_me`'s response shape
  * (apps/api/src/modules/platform/dto/platform-me-response.dto.ts) — the

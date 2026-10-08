@@ -1562,10 +1562,54 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
       reason: 'Grade now',
       ungradedOnly: true,
     });
-    await withTenant(prisma, schoolId, (tx) =>
-      tx.gradingScale.updateMany({ where: { id: { in: ids } }, data: { archivedAt: null } }),
-    );
+    // Audit P2-21 follow-up: bands only for another level, and no
+    // school-wide set, must be refused too; the run would otherwise mark the
+    // result ADJUSTED while it stays ungraded.
+    const otherLevelScaleId = await withTenant(prisma, schoolId, async (tx) => {
+      const scale = await tx.gradingScale.create({
+        data: { schoolId, name: 'Other level only', level: 'JSS3' },
+      });
+      const version = await tx.gradingScaleVersion.create({
+        data: { schoolId, scaleId: scale.id, versionNumber: 1 },
+      });
+      await tx.gradingScaleBand.create({
+        data: {
+          schoolId,
+          versionId: version.id,
+          label: 'P',
+          sortOrder: 1,
+          minPercentage: 0,
+          maxPercentage: 100,
+          isPassing: true,
+        },
+      });
+      await tx.gradingScale.update({
+        where: { id: scale.id },
+        data: { currentVersionId: version.id },
+      });
+      return scale.id;
+    });
+    const otherLevelOnly = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'RECALCULATE',
+      reason: 'Grade now',
+      ungradedOnly: true,
+    });
+    await withTenant(prisma, schoolId, async (tx) => {
+      await tx.gradingScale.update({
+        where: { id: otherLevelScaleId },
+        data: { archivedAt: new Date() },
+      });
+      await tx.gradingScale.updateMany({
+        where: { id: { in: ids } },
+        data: { archivedAt: null },
+      });
+    });
     expect(noBands.statusCode).toBe(409);
+    expect(otherLevelOnly.statusCode).toBe(409);
+    expect(otherLevelOnly.json<{ error: { message: string } }>().error.message).toMatch(
+      /grading bands/i,
+    );
 
     const op = await post(admin, '/results/adjustments', {
       examId,
