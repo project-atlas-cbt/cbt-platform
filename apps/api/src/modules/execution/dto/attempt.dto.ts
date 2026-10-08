@@ -176,6 +176,13 @@ export class AttemptPreviewResponseDto {
     description: "F20 (DoD 3): the caller's staff-granted larger-text accommodation (07 §9.7).",
   })
   largerText!: boolean;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Set when the caller has already submitted this exam and cannot start another attempt: their latest submitted attempt. The client shows the submission confirmation instead of Start.',
+  })
+  submittedAttemptId!: string | null;
 }
 
 /** F20 — one encrypted media object a lab pre-caches before Start. */

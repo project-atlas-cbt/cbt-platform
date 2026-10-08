@@ -5365,6 +5365,8 @@ export interface components {
             extraTimeSeconds: number;
             /** @description F20 (DoD 3): the caller's staff-granted larger-text accommodation (07 §9.7). */
             largerText: boolean;
+            /** @description Set when the caller has already submitted this exam and cannot start another attempt: their latest submitted attempt. The client shows the submission confirmation instead of Start. */
+            submittedAttemptId: string | null;
         };
         MediaManifestAssetDto: {
             mediaAssetId: string;

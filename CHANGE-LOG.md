@@ -19,6 +19,20 @@ button (`components/ui/password-input.tsx`).
   integration (60), API unit (292), web unit (210, including new sign-in, panel and eye tests),
   and a browser check of the sign-in page, the student landing and the Students panel.
 
+### 2026-10-08 — Clickable option boxes, submitted assessments and HOD Create question
+
+Pilot feedback from Haneef. In the exam, the whole option box now selects the option, not only the
+circle or the text (`option-list.tsx`). A student who reopened an assessment they had already
+submitted (a bookmark, the back button) saw the preview and a Start the server refused; the preview
+response now carries `submittedAttemptId` when the student cannot start again (no running attempt,
+no live makeup/retry authorization, and the exam closed or its attempt limit used), and the page
+shows the existing submission confirmation instead. That confirmation now has a Go home button back
+to the Assessment screen, after an exam too. Create question is hidden in the HOD and School Admin
+question banks (`hideCreate`): those roles are denied `questionBank.create`, but a member who also
+teaches held it through the Teacher role, and only the Teacher workspace has the create screen.
+Tested: web unit tests for the option box, preview and confirmation; a new API integration case for
+`submittedAttemptId` (attempt suite, 52 passing).
+
 ### 2026-10-08 — Subjects added after students are enrolled now register those students
 
 Students imported (or enrolled by hand) into a class before a subject was offered to it were never

@@ -55,6 +55,15 @@ describe('SubmittedScreen', () => {
     expect(mockClearAttemptData).toHaveBeenCalledWith('attempt-1');
   });
 
+  it('pilot feedback — offers Go home back to the Assessment screen', async () => {
+    mockGet.mockResolvedValue(ok(MARKING_NOT_APPLICABLE));
+    renderWithClient();
+    expect(await screen.findByRole('link', { name: /go home/i })).toHaveAttribute(
+      'href',
+      '/student',
+    );
+  });
+
   it('DoD 16 — confirms submission', async () => {
     mockGet.mockResolvedValue(ok(MARKING_NOT_APPLICABLE));
     renderWithClient();

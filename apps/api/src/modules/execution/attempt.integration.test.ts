@@ -2031,6 +2031,24 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     await post(studentA, `/attempts/${other.attemptId}/submit`, {});
   });
 
+  it('pilot feedback: the preview names the submitted attempt only once the student cannot start again', async () => {
+    await endRunningAttempts(studentAProfileId);
+    const examId = await buildReadyExam({ attemptLimit: 1 });
+    await openSession(examId);
+    const previewUrl = `/student/assessment/${examId}/preview`;
+    type Preview = { submittedAttemptId: string | null };
+    expect((await get(studentA, previewUrl)).json<Preview>().submittedAttemptId).toBeNull();
+
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await get(studentA, previewUrl)).json<Preview>().submittedAttemptId).toBeNull();
+    expect((await post(studentA, `/attempts/${pkg.attemptId}/submit`, {})).statusCode).toBe(200);
+    expect((await get(studentA, previewUrl)).json<Preview>().submittedAttemptId).toBe(
+      pkg.attemptId,
+    );
+    // Student B has not sat it and may still start.
+    expect((await get(studentB, previewUrl)).json<Preview>().submittedAttemptId).toBeNull();
+  });
+
   it('audit P1-1: a makeup student sees the completed exam on their home screen and can start it', async () => {
     await endRunningAttempts(studentAProfileId);
     const examId = await buildReadyExam();
