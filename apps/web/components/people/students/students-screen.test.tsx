@@ -14,7 +14,14 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
   useSearchParams: () => params,
 }));
-vi.mock('@/lib/people/queries', () => ({ useStudentsPaginated: vi.fn() }));
+vi.mock('@/lib/people/queries', () => ({
+  useStudentsPaginated: vi.fn(),
+  useStudentPasswordlessSettings: () => ({
+    isPending: false,
+    isError: false,
+    data: { allStudents: false, classIds: [] },
+  }),
+}));
 vi.mock('@/lib/academics/queries', () => ({ useAcademicsContext: vi.fn(), useClasses: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 

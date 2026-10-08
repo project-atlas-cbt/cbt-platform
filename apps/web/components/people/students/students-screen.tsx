@@ -24,6 +24,7 @@ import { useAcademicsContext, useClasses } from '@/lib/academics/queries';
 import { useStudentsPaginated } from '@/lib/people/queries';
 import { UserStatusBadge } from '../people-status-badges';
 import { StudentForm } from './student-form';
+import { PasswordlessSignInPanel } from './passwordless-sign-in-panel';
 
 const PAGE_SIZE = 25;
 
@@ -69,6 +70,7 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
   // permission table happens to grant both to the same actors.
   const canImport = useHasPermission('users.import.students');
   const canExport = useHasPermission('reporting.exportStudentList');
+  const canManageSignIn = useHasPermission('users.student.resetCredentials');
   const context = useAcademicsContext();
   const classes = useClasses(context.data?.session?.id);
 
@@ -155,6 +157,8 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
           ) : null}
         </div>
       </div>
+
+      {canManageSignIn ? <PasswordlessSignInPanel /> : null}
 
       <div className="flex flex-wrap items-end gap-4">
         <div>

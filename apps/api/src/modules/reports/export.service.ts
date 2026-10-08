@@ -98,6 +98,7 @@ export class ExportService {
     const scope = await this.validateScope(
       {
         kind: 'SCHOOL',
+        passwordless: false,
         userId,
         schoolId,
         membershipId: '__platform__',
@@ -159,6 +160,7 @@ export class ExportService {
     const result = await this.get(
       {
         kind: 'SCHOOL',
+        passwordless: false,
         userId,
         schoolId,
         membershipId: '__platform__',
@@ -219,6 +221,7 @@ export class ExportService {
     return this.download(
       {
         kind: 'SCHOOL',
+        passwordless: false,
         userId,
         schoolId,
         membershipId: '__platform__',

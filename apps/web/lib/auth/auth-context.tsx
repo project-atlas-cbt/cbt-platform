@@ -23,6 +23,8 @@ interface AuthContextValue {
   /** Human-readable reason the session bootstrap failed, if any. */
   error: string | null;
   login: (identifier: string, password: string) => Promise<void>;
+  /** Passwordless student sign-in: Login ID + name. */
+  studentSignIn: (identifier: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Re-runs the `/auth/me` bootstrap — used after a forced password change succeeds. */
   reload: () => Promise<void>;
@@ -115,6 +117,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [reload],
   );
 
+  const studentSignIn = useCallback(
+    async (identifier: string, name: string) => {
+      await unwrap(apiClient.POST('/auth/student-sign-in', { body: { identifier, name } }));
+      await reload();
+    },
+    [reload],
+  );
+
   const logout = useCallback(async () => {
     await unwrap(apiClient.POST('/auth/logout', {}));
     // The session cookie is now revoked server-side — re-running /auth/me
@@ -125,8 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, me, error, login, logout, reload }),
-    [status, me, error, login, logout, reload],
+    () => ({ status, me, error, login, studentSignIn, logout, reload }),
+    [status, me, error, login, studentSignIn, logout, reload],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

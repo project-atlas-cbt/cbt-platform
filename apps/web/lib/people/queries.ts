@@ -292,3 +292,13 @@ export function useAllClassSubjectsForSession(academicSessionId: string | undefi
 
   return { classes: classList, cells, isPending, isError };
 }
+
+/** Passwordless student sign-in (owner decision 2026-10-08): where students
+ * may sign in with name + Login ID instead of a password. */
+export function useStudentPasswordlessSettings(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['people', 'student-passwordless-sign-in'],
+    queryFn: () => unwrap(apiClient.GET('/school/student-passwordless-sign-in', {})),
+    enabled: options?.enabled ?? true,
+  });
+}

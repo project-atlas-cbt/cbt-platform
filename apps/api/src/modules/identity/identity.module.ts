@@ -2,6 +2,8 @@ import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import type { TemplateRegistry } from '@atlas/notifications';
 import { NOTIFICATION_TEMPLATE_REGISTRY } from '../../notifications/notifications.module.js';
 import { IdentityController } from './identity.controller.js';
+import { StudentPasswordlessController } from './student-passwordless.controller.js';
+import { StudentPasswordlessService } from './student-passwordless.service.js';
 import { IdentityService } from './identity.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService } from './session.service.js';
@@ -26,7 +28,7 @@ import { IdentityAuditActionRegistrationProvider } from './audit-action-registra
  * `apps/api/src/storage/logo-resolver.ts`.
  */
 @Module({
-  controllers: [IdentityController],
+  controllers: [IdentityController, StudentPasswordlessController],
   providers: [
     IdentityService,
     PasswordService,
@@ -35,6 +37,7 @@ import { IdentityAuditActionRegistrationProvider } from './audit-action-registra
     AuthGuard,
     CredentialSheetService,
     IdentityAuditActionRegistrationProvider,
+    StudentPasswordlessService,
   ],
   // SessionService is exported alongside AuthGuard (not otherwise part of
   // this module's public surface) because `@UseGuards(AuthGuard)` used

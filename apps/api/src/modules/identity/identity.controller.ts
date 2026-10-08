@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { prisma } from '@atlas/db';
+import { prisma, withTenant } from '@atlas/db';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { TenancyContextService } from '../../common/tenancy-context.service.js';
 import { createCsrfToken, PLATFORM_CSRF_USER_INFO } from '../../security/csrf.js';
@@ -71,6 +71,7 @@ export class IdentityController {
             timezone: true,
             logoMediaId: true,
             primaryColor: true,
+            studentPasswordlessSignIn: true,
           },
         })
       : null;
@@ -91,6 +92,11 @@ export class IdentityController {
               ? await resolveLogoSignedUrl(this.storage, schoolId!, row.logoMediaId)
               : null,
             primaryColor: row.primaryColor,
+            studentPasswordlessSignIn:
+              row.studentPasswordlessSignIn ||
+              (await withTenant(prisma, schoolId!, (tx) =>
+                tx.classGroup.count({ where: { schoolId: schoolId!, passwordlessSignIn: true } }),
+              )) > 0,
           };
 
     const csrfToken = createCsrfToken(req.csrfSecret!, schoolId ?? PLATFORM_CSRF_USER_INFO);
@@ -149,7 +155,10 @@ export class IdentityController {
   @ApiOkResponse({ type: MeResponseDto })
   async me(@Req() req: FastifyRequest): Promise<MeResponseDto> {
     const user = currentUser(req);
-    return this.identity.me(user.schoolId, user.userId, user.membershipId);
+    return {
+      ...(await this.identity.me(user.schoolId, user.userId, user.membershipId)),
+      passwordless: user.passwordless,
+    };
   }
 
   @Post('auth/password/change')
@@ -163,6 +172,14 @@ export class IdentityController {
     @Body() body: PasswordChangeDto,
   ): Promise<StatusResponseDto> {
     const user = currentUser(req);
+    // Signed in with Login ID + name: whoever holds this session never
+    // proved they know the account's password, so they may not set one.
+    if (user.passwordless) {
+      throw new AppHttpException({
+        code: 'FORBIDDEN',
+        message: 'Sign in with your password to change it.',
+      });
+    }
     await this.identity.changePassword(
       user.schoolId,
       user.userId,

@@ -2,6 +2,23 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Students can sign in with name and Login ID; password fields show an eye
+
+For the OLA Maryway pilot, where many students are new to computers, a School Admin or Moderator
+can now switch on **sign-in without password** for the whole school or chosen classes (People >
+Students). Students then type their name and Login ID; staff always use a password. It stays on
+until switched off, and switching off signs those students out. Design, safeguards and the accepted
+risk are in the ADR-0019 amendment of the same date. Every password field now has a show/hide eye
+button (`components/ui/password-input.tsx`).
+
+- Expand-only migration `20261008040000_student_passwordless_sign_in` (two switches, one session
+  flag); `POST /auth/student-sign-in`, `GET/PUT /school/student-passwordless-sign-in`
+  (`users.student.resetCredentials`), `tenant/resolve` and `auth/me` gain one boolean each.
+- Help: new school office guide; student and invigilator user guides updated.
+- Tested: new integration suite (10), security suites (53), identity/users/common/reports
+  integration (60), API unit (292), web unit (210, including new sign-in, panel and eye tests),
+  and a browser check of the sign-in page, the student landing and the Students panel.
+
 ### 2026-10-08 — Clickable option boxes, submitted assessments and HOD Create question
 
 Pilot feedback from Haneef. In the exam, the whole option box now selects the option, not only the

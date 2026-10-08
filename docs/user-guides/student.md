@@ -4,7 +4,9 @@ Read this aloud, or print it, before a sitting. It matches what students see on 
 they press Start.
 
 1. **Sign in** at your school's address with the Student ID and password on your sign-in slip.
-   The first time, you must choose a new password. Keep it to yourself.
+   The first time, you must choose a new password. Keep it to yourself. If your teacher says you
+   can sign in without a password, type your name (first name and surname) and your Login ID
+   instead.
 2. Open **Assessment**. Your exam appears there when your teacher has opened it for your group.
 3. Read the instructions on the screen. Wait until it says **This computer is ready for the
    exam**, then press **Start assessment**.
