@@ -514,3 +514,86 @@ describe('POST /questions/bulk-submit — teacher bulk submit for review', () =>
     expect(body.failed[0]?.code).toBe('QUESTION_OUT_OF_SCOPE');
   });
 });
+
+describe('POST /questions/bulk-archive — teacher bulk archive', () => {
+  let wiring: SchoolWiring;
+
+  beforeAll(async () => {
+    wiring = await seedSchool();
+  });
+
+  it('archives draft and approved questions in one call, auditing each', async () => {
+    const draft = await createDraft(wiring, wiring.teacherOne.ctx, 'Archive draft');
+    const approved = await createDraft(wiring, wiring.teacherOne.ctx, 'Archive approved');
+    await withTenant(prisma, wiring.schoolId, (tx) =>
+      tx.questionRevision.update({
+        where: { id: approved.revisionId },
+        data: { status: 'APPROVED' },
+      }),
+    );
+    const auditBefore = await withTenant(prisma, wiring.schoolId, (tx) =>
+      tx.auditEvent.count({ where: { schoolId: wiring.schoolId, action: 'QUESTION_ARCHIVED' } }),
+    );
+
+    const res = await post(wiring.teacherOne.ctx, '/questions/bulk-archive', {
+      questionIds: [draft.questionId, approved.questionId],
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ archived: { questionId: string }[]; failed: unknown[] }>();
+    expect(body.failed).toEqual([]);
+    expect(new Set(body.archived.map((a) => a.questionId))).toEqual(
+      new Set([draft.questionId, approved.questionId]),
+    );
+
+    const rows = await withTenant(prisma, wiring.schoolId, (tx) =>
+      tx.question.findMany({
+        where: { id: { in: [draft.questionId, approved.questionId] } },
+        select: { archivedAt: true },
+      }),
+    );
+    expect(rows.every((r) => r.archivedAt !== null)).toBe(true);
+    const auditAfter = await withTenant(prisma, wiring.schoolId, (tx) =>
+      tx.auditEvent.count({ where: { schoolId: wiring.schoolId, action: 'QUESTION_ARCHIVED' } }),
+    );
+    expect(auditAfter - auditBefore).toBe(2);
+  });
+
+  it("reports per-question failures: colleague's question, already archived, unknown", async () => {
+    const mine = await createDraft(wiring, wiring.teacherOne.ctx, 'Archive mine');
+    const theirs = await createDraft(wiring, wiring.teacherTwo.ctx, 'Archive theirs');
+    const already = await createDraft(wiring, wiring.teacherOne.ctx, 'Archive already');
+    await post(wiring.teacherOne.ctx, `/questions/${already.questionId}/archive`);
+    const unknownId = randomUUID();
+
+    const res = await post(wiring.teacherOne.ctx, '/questions/bulk-archive', {
+      questionIds: [mine.questionId, theirs.questionId, already.questionId, unknownId],
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      archived: { questionId: string }[];
+      failed: { questionId: string; code: string; message: string }[];
+    }>();
+    expect(body.archived.map((a) => a.questionId)).toEqual([mine.questionId]);
+    const byId = new Map(body.failed.map((f) => [f.questionId, f]));
+    expect(byId.get(theirs.questionId)?.code).toBe('FORBIDDEN');
+    expect(byId.get(already.questionId)?.code).toBe('CONFLICT');
+    expect(byId.get(unknownId)?.code).toBe('NOT_FOUND');
+
+    const stillActive = await withTenant(prisma, wiring.schoolId, (tx) =>
+      tx.question.findUniqueOrThrow({
+        where: { id: theirs.questionId },
+        select: { archivedAt: true },
+      }),
+    );
+    expect(stillActive.archivedAt).toBeNull();
+  });
+
+  it('rejects empty and oversized batches', async () => {
+    const empty = await post(wiring.teacherOne.ctx, '/questions/bulk-archive', { questionIds: [] });
+    expect(empty.statusCode).toBe(400);
+    const tooMany = await post(wiring.teacherOne.ctx, '/questions/bulk-archive', {
+      questionIds: Array.from({ length: 201 }, () => randomUUID()),
+    });
+    expect(tooMany.statusCode).toBe(400);
+  });
+});

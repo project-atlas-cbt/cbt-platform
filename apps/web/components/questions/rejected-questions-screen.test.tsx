@@ -21,6 +21,7 @@ vi.mock('@/lib/academics/queries', () => ({
 }));
 vi.mock('@/lib/questions/mutations', () => ({
   useBulkSubmitQuestions: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
+  useBulkArchiveQuestions: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn(() => true) }));
 

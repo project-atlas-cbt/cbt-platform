@@ -8565,6 +8565,38 @@
         ]
       }
     },
+    "/questions/bulk-archive": {
+      "post": {
+        "operationId": "QuestionController_bulkArchive",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkArchiveQuestionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkArchiveResultDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archive several questions in one call. Best-effort: each question is checked and archived independently under the single-archive rules, with per-question outcomes.",
+        "tags": [
+          "questions"
+        ]
+      }
+    },
     "/questions/bulk-submit": {
       "post": {
         "operationId": "QuestionController_bulkSubmit",
@@ -18432,6 +18464,73 @@
           "pageSize"
         ]
       },
+      "BulkArchiveQuestionsDto": {
+        "type": "object",
+        "properties": {
+          "questionIds": {
+            "maxItems": 200,
+            "description": "Question ids to archive, each checked against the single-archive rules.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "questionIds"
+        ]
+      },
+      "QuestionBulkArchiveItemDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId"
+        ]
+      },
+      "QuestionBulkSubmitFailureDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "code",
+          "message"
+        ]
+      },
+      "BulkArchiveResultDto": {
+        "type": "object",
+        "properties": {
+          "archived": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionBulkArchiveItemDto"
+            }
+          },
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionBulkSubmitFailureDto"
+            }
+          }
+        },
+        "required": [
+          "archived",
+          "failed"
+        ]
+      },
       "BulkSubmitQuestionsDto": {
         "type": "object",
         "properties": {
@@ -18461,25 +18560,6 @@
         "required": [
           "questionId",
           "revisionId"
-        ]
-      },
-      "QuestionBulkSubmitFailureDto": {
-        "type": "object",
-        "properties": {
-          "questionId": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "questionId",
-          "code",
-          "message"
         ]
       },
       "BulkSubmitResultDto": {
