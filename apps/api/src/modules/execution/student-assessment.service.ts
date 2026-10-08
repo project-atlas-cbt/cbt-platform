@@ -187,6 +187,12 @@ export class StudentAssessmentService {
       }),
     );
 
+    const submittedAttemptId = await this.finishedAttemptId(
+      schoolId,
+      schoolActor.membershipId,
+      exam,
+    );
+
     const questionCount = exam.sections.reduce((sum, s) => sum + s.questions.length, 0);
     const totalMarks = exam.sections.reduce(
       (sum, s) => sum + s.questions.reduce((qSum, q) => qSum + q.marks, 0),
@@ -208,6 +214,59 @@ export class StudentAssessmentService {
       totalMarks,
       extraTimeSeconds: participant?.extraTimeSeconds ?? 0,
       largerText: participant?.largerText ?? false,
+      submittedAttemptId,
     };
+  }
+
+  /** Pilot feedback (2026-10-08): a student who has already submitted can
+   * still open this exam's preview URL (a bookmark, the back button), and
+   * Start then fails on the server. Returns the latest submitted attempt
+   * when the student cannot start another one, judged by the same clauses
+   * `getActiveAssessment` uses: no running attempt, no live MAKEUP/RETRY
+   * authorization, and either the exam is no longer OPEN or its attempt
+   * limit is used. `null` whenever Start could still succeed. */
+  private async finishedAttemptId(
+    schoolId: string,
+    membershipId: string,
+    exam: { id: string; status: string; attemptLimit: number },
+  ): Promise<string | null> {
+    const now = new Date();
+    return withTenant(prisma, schoolId, async (tx) => {
+      const profile = await tx.studentProfile.findUnique({
+        where: { schoolId_membershipId: { schoolId, membershipId } },
+        select: { id: true },
+      });
+      if (!profile) return null;
+      const attempts = await tx.examAttempt.findMany({
+        where: { schoolId, studentProfileId: profile.id, examId: exam.id },
+        orderBy: { startedAt: 'desc' },
+        select: { id: true, state: true },
+      });
+      if (attempts.some((a) => a.state === 'IN_PROGRESS')) return null;
+      const submitted = attempts.filter(
+        (a) => a.state === 'SUBMITTED' || a.state === 'AUTO_SUBMITTED',
+      );
+      const latest = submitted[0];
+      if (!latest) return null;
+      if (exam.status === 'OPEN' && submitted.length < exam.attemptLimit) return null;
+      const authorization = await tx.attemptAuthorization.findFirst({
+        where: {
+          schoolId,
+          studentProfileId: profile.id,
+          examId: exam.id,
+          status: 'AUTHORIZED',
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          examSession: {
+            schoolId,
+            status: 'OPEN',
+            participants: {
+              some: { schoolId, studentProfileId: profile.id, status: 'AUTHORIZED' },
+            },
+          },
+        },
+        select: { id: true },
+      });
+      return authorization ? null : latest.id;
+    });
   }
 }
