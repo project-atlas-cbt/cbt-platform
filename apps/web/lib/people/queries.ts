@@ -302,3 +302,14 @@ export function useStudentPasswordlessSettings(options?: { enabled?: boolean }) 
     enabled: options?.enabled ?? true,
   });
 }
+
+/** Students whose sign-in is locked right now. Polled, so a lab invigilator
+ * sees new lockouts without reloading. */
+export function useLockedOutStudents(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['people', 'students', 'locked-out'],
+    queryFn: () => unwrap(apiClient.GET('/students/locked-out', {})),
+    enabled: options?.enabled ?? true,
+    refetchInterval: 15_000,
+  });
+}

@@ -47,8 +47,8 @@ submitted, or **Disconnected**.
   which computer failed. Turn it back on later and open the exam page once, so anything it had not
   sent yet is sent.
 - **A student cannot sign in** after several wrong passwords: the account locks for a while. Ask a
-  School Admin or Moderator to open the student under **People › Students** and press **Unlock
-  sign-in**; the student then signs in with their usual password and presses **Resume
+  School Admin or Moderator to open **People › Students**: locked-out students are listed at the
+  top with an **Unlock** button (or open the student and press **Unlock sign-in**); the student then signs in with their usual password and presses **Resume
   assessment**. If the student has forgotten the password, **Reset credentials** gives a new one
   and also ends the lock.
 - **Do not** reload the page, close the browser, clear browser data or restart a computer that is

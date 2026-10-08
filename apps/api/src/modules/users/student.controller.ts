@@ -19,6 +19,7 @@ import { CredentialResetResponseDto } from './dto/credential-reset.dto.js';
 import {
   CreateStudentDto,
   ListStudentsQueryDto,
+  LockedOutStudentsResponseDto,
   StudentListResponseDto,
   StudentOwnProfileResponseDto,
   StudentResponseDto,
@@ -48,6 +49,19 @@ export class StudentController {
     @Query() query: ListStudentsQueryDto,
   ): Promise<StudentListResponseDto> {
     return this.students.list(currentUser(req).schoolId, query);
+  }
+
+  // Literal path, registered before `:id` for the same reason as `me` below.
+  @Get('locked-out')
+  @Authorized('users.student.resetCredentials')
+  @ApiOperation({
+    summary:
+      'Students whose sign-in is locked right now (too many wrong tries), for one-click ' +
+      'unlocking. Same permission as Unlock sign-in.',
+  })
+  @ApiOkResponse({ type: LockedOutStudentsResponseDto })
+  async listLockedOut(@Req() req: FastifyRequest): Promise<LockedOutStudentsResponseDto> {
+    return { students: await this.students.listLockedOut(currentUser(req).schoolId) };
   }
 
   // F14 gap-closure — registered *before* `:id` below: 'me' is a literal

@@ -2,6 +2,22 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Student lockouts: locked-out list for staff, clear message for students
+
+Pilot feedback (OLA exam): students who typed a wrong name or Login ID five times were locked out,
+saw only "check your name and Login ID", and a teacher had to find each one to press Unlock
+sign-in. Two changes. (1) `GET /students/locked-out` (same permission as Unlock sign-in) lists the
+school's students locked right now, read from the Redis lockout counters (plus the per-process
+fallback while Redis is down); People > Students shows them in a panel above the table, refreshed
+every 15 seconds, with an Unlock button each. (2) On the student name + Login ID page only, the
+try that locks and every try after it return the new `STUDENT_SIGN_IN_LOCKED` (403) with "Too many
+tries. Please ask your teacher to unlock your sign-in." Owner decision: disclosing the locked state
+there is accepted because the teacher is in the lab. Password sign-in keeps its generic failure.
+No schema or migration change.
+
+Tested: 3 new API integration tests (message on the locking try and after, list and unlock,
+teacher refused), 2 new web tests, API unit and security suites, existing people web suites.
+
 ### 2026-10-08 — Pilot server: deploys clean up old images
 
 The pilot server's 96 GB disk filled on the morning of the first exam: every release left about 8 GB

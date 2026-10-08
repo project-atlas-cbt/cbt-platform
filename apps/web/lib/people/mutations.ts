@@ -76,9 +76,12 @@ export function useResetStudentCredentials() {
 /** P1-4 — ends a sign-in lockout (too many wrong passwords) without
  * changing the student's password. */
 export function useUnlockStudentSignIn() {
+  const client = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(apiClient.POST('/students/{id}/unlock-sign-in', { params: { path: { id } } })),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ['people', 'students', 'locked-out'], exact: true }),
   });
 }
 
