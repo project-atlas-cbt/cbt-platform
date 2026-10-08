@@ -90,3 +90,23 @@ used everywhere it applies:
 Found in the same check: `GET /attempts/:id/status` returned marks and correct/incorrect counts to
 the student as soon as marking finished, before any release and regardless of visibility. It now
 returns only marking progress, and the submitted screen shows `04 §59`'s message instead.
+
+## Amendment — 2026-10-08: full review shows the answer key
+
+**Decided by:** Haneef (project owner), by instruction in the project thread.
+
+`FULL_REVIEW` previously showed a student which questions were right or wrong, deliberately without
+the options or the key (`04 §61` offers "question review"). It now shows, per question, **all
+options, the correct option and the option the student chose**. Staff (result detail) see the same
+for any student they may view.
+
+- Student side: only through `GET /student/results/:id`, only after the result is released (the same
+  `studentVisibleResultWhere` rule as before), and only when the effective visibility is
+  `FULL_REVIEW`. Under `SCORE_ONLY` and `SCORE_AND_COUNTS` the response carries no per-question data
+  at all (integration-tested on the serialised payload).
+- The live attempt payload and the post-submit status still never carry the key (audit `X-05`).
+- The key is read from the frozen attempt snapshot, so a later edit to the question bank does not
+  change what a student or teacher sees.
+- Unchanged: the result settings lock and already-finalised results. Visibility is evaluated on
+  every read, so switching an exam (or the locked school value) to `FULL_REVIEW` applies at once to
+  results already finalised and released; nothing is stored per result.

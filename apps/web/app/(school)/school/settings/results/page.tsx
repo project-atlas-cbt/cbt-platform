@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -60,6 +60,21 @@ type Values = z.infer<typeof schema>;
  */
 export default function SchoolResultsSettingsPage() {
   const resultPolicy = useResultPolicy();
+  if (resultPolicy.isPending) return <Skeleton className="h-64 w-full" />;
+  if (resultPolicy.isError) {
+    return <ErrorState error={resultPolicy.error} onRetry={() => void resultPolicy.refetch()} />;
+  }
+  return <ResultsSettingsForm initial={resultPolicy.data} />;
+}
+
+/**
+ * Mounted only once the saved values are known, so the selects start on them.
+ * Resetting the form after mount left Radix's closed Select blank for any
+ * value other than the form's initial default (SCORE_AND_COUNTS), which is
+ * why "Score only" and "Full per-question review" looked unsaved after a
+ * refresh although the server had stored them.
+ */
+function ResultsSettingsForm({ initial }: { initial: Values }) {
   const updateResultPolicy = useUpdateResultPolicy();
   const canEdit = useHasPermission('schoolConfig.settings.manage');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -69,18 +84,13 @@ export default function SchoolResultsSettingsPage() {
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
-      resultPolicy: 'SCHOOL_ADMIN',
-      resultDetailVisibility: 'SCORE_AND_COUNTS',
-      resultPolicyLocked: false,
+      resultPolicy: initial.resultPolicy,
+      resultDetailVisibility: initial.resultDetailVisibility,
+      resultPolicyLocked: initial.resultPolicyLocked,
     },
   });
   // One registration for both sections: two would overwrite each other.
   useRegisterFormDirty(form.formState.isDirty || gradingDirty);
-
-  useEffect(() => {
-    if (!resultPolicy.data) return;
-    form.reset(resultPolicy.data);
-  }, [resultPolicy.data, form]);
 
   async function onSubmit(values: Values) {
     setSaveError(null);
@@ -92,11 +102,6 @@ export default function SchoolResultsSettingsPage() {
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : 'Could not save result policy.');
     }
-  }
-
-  if (resultPolicy.isPending) return <Skeleton className="h-64 w-full" />;
-  if (resultPolicy.isError) {
-    return <ErrorState error={resultPolicy.error} onRetry={() => void resultPolicy.refetch()} />;
   }
 
   return (
