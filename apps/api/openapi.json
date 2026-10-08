@@ -358,6 +358,31 @@
         ]
       }
     },
+    "/health/tls-ask": {
+      "get": {
+        "operationId": "HealthController_tlsAsk",
+        "parameters": [
+          {
+            "name": "domain",
+            "required": true,
+            "in": "query",
+            "description": "The host Caddy is about to certify.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "On-demand TLS: 200 when the host names an existing school (`<school>.<root>` or `<school>.api.<root>`), else 404.",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/media/uploads": {
       "post": {
         "operationId": "MediaController_requestUpload",

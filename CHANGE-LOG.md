@@ -2,6 +2,31 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Pilot server: new schools work without a redeploy
+
+On the pilot server a school created in the Software Admin console had no certificate, because
+Caddy only fetched certificates for the schools listed in `SCHOOLS`: the activation email's link
+to `ola.examkeep.com` failed with ERR_SSL_PROTOCOL_ERROR until the owner edited `.env` and
+redeployed. The owner chose to make this automatic (2026-10-07).
+
+- `render-caddyfile.sh` adds `*.<root>` and `*.api.<root>` wildcard sites with on-demand TLS: a
+  school's host gets its own Let's Encrypt certificate (HTTP-01, as before) on the first visit.
+  Listed and platform hosts still get theirs at startup; the exact hosts take precedence.
+- Before each on-demand certificate Caddy asks the API (`GET /v1/health/tls-ask?domain=`), which
+  answers 200 only when the host names an existing school, so invented names never reach Let's
+  Encrypt's rate limits. It is public in the route table (no session) but the Caddy API sites
+  refuse it from outside. The `CADDY_LOCAL_CA` test stack keeps its wildcard certificates.
+- `SCHOOLS` is now optional (it pre-fetches certificates and the smoke checks those schools);
+  `docs/operations/vps-pilot.md` "Adding a school" updated.
+
+Tested: the health integration suite (5 passing, three new: existing school web and API hosts,
+refusals for unknown, reserved, deeper and foreign names, and a missing domain). The rendered
+Caddyfile validates with Caddy 2.10.2; its adapted policies put every listed and platform host on
+the startup policy and only unlisted school hosts on demand, for `SCHOOLS` full, partial and empty.
+A local Caddy run with an internal CA issued certificates on demand for an allowed school's web and
+API hosts, refused the handshake for a name the check rejected, and answered 404 for the check's
+path on a public host.
+
 ### 2026-10-07 — People search matches full names
 
 Searching a full name ("Adaeze Okafor") in the Students, Teachers, HODs or Moderators list returned

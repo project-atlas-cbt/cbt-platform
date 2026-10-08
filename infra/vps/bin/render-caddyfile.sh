@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Writes infra/vps/Caddyfile from .env: one site per host, each with its own
 # Let's Encrypt certificate (HTTP-01, so no DNS API access is needed).
-# A school is added by appending its label to SCHOOLS and redeploying.
+# A school created in the Software Admin console needs no redeploy: any
+# <school>.<root> or <school>.api.<root> host gets its certificate on the
+# first visit (on-demand TLS), after the API confirms that school exists.
+# Schools listed in SCHOOLS get theirs at startup instead, and the deploy's
+# smoke checks them.
 #   CADDY_LOCAL_CA=1 issues certificates from Caddy's own CA instead (testing),
 #     and adds wildcard sites so schools created during a test need no
 #     redeploy. CADDY_LOCAL_CA_ROOT=<dir inside the caddy container> makes
@@ -26,6 +30,24 @@ root_re=${ROOT_DOMAIN//./\\.}
 if [ "${CADDY_LOCAL_CA:-}" = 1 ]; then
   web_hosts="$web_hosts, *.$ROOT_DOMAIN"
   api_hosts="$api_hosts, *.api.$ROOT_DOMAIN"
+  on_demand_sites=""
+else
+  # Exact hosts above take precedence over these wildcards.
+  on_demand_sites="
+*.$ROOT_DOMAIN {
+	tls {
+		on_demand
+	}
+	import web_site
+}
+
+*.api.$ROOT_DOMAIN {
+	tls {
+		on_demand
+	}
+	import api_site
+}
+"
 fi
 
 {
@@ -35,6 +57,11 @@ fi
   if [ "${CADDY_LOCAL_CA:-}" = 1 ] && [ -n "${CADDY_LOCAL_CA_ROOT:-}" ]; then
     printf '  pki {\n    ca local {\n      root {\n        cert %s/ca.crt\n        key %s/ca.key\n      }\n    }\n  }\n' \
       "$CADDY_LOCAL_CA_ROOT" "$CADDY_LOCAL_CA_ROOT"
+  fi
+  if [ "${CADDY_LOCAL_CA:-}" != 1 ]; then
+    # Caddy asks the API before requesting a certificate for an unlisted host,
+    # so nobody can make it request certificates for invented names.
+    printf '  on_demand_tls {\n    ask http://api:3001/v1/health/tls-ask\n  }\n'
   fi
   echo '}'
   cat <<CADDY
@@ -93,7 +120,7 @@ fi
 	}
 }
 
-$web_hosts {
+(web_site) {
 	import common
 	import maintenance_flag
 	handle @maintenance {
@@ -107,11 +134,15 @@ $web_hosts {
 	}
 }
 
-$api_hosts {
+(api_site) {
 	import common
 	import maintenance_flag
 	handle @maintenance {
 		import api_unavailable
+	}
+	# Caddy's own certificate check, never the public's.
+	handle /v1/health/tls-ask {
+		respond 404
 	}
 	handle {
 		# SSE (Exam Control Center) streams are flushed as they arrive.
@@ -124,6 +155,14 @@ $api_hosts {
 	}
 }
 
+$web_hosts {
+	import web_site
+}
+
+$api_hosts {
+	import api_site
+}
+$on_demand_sites
 # The public marketing site (ADR-0034) on the root domain; www redirects to
 # it. Not behind the maintenance flag: platform maintenance leaves it up.
 $ROOT_DOMAIN {
@@ -157,4 +196,4 @@ media.$ROOT_DOMAIN {
 }
 CADDY
 } > Caddyfile
-echo "Caddyfile written for: $ROOT_DOMAIN, www.$ROOT_DOMAIN (marketing) | $web_hosts | $api_hosts | media.$ROOT_DOMAIN"
+echo "Caddyfile written for: $ROOT_DOMAIN, www.$ROOT_DOMAIN (marketing) | $web_hosts | $api_hosts | media.$ROOT_DOMAIN${on_demand_sites:+ | other school hosts on demand}"

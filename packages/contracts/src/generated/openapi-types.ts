@@ -208,6 +208,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health/tls-ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** On-demand TLS: 200 when the host names an existing school (`<school>.<root>` or `<school>.api.<root>`), else 404. */
+        get: operations["HealthController_tlsAsk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/uploads": {
         parameters: {
             query?: never;
@@ -6579,6 +6596,26 @@ export interface operations {
     HealthController_readiness: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    HealthController_tlsAsk: {
+        parameters: {
+            query: {
+                /** @description The host Caddy is about to certify. */
+                domain: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

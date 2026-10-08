@@ -1,10 +1,14 @@
-import { Controller, Get, HttpStatus, Inject, Logger, Res } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, HttpStatus, Inject, Logger, Query, Res } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
 import { prisma } from '@atlas/db';
+import type { Env } from '@atlas/config';
+import { AppHttpException } from '../common/app-http-exception.js';
 import { withTimeout } from '../common/dependency-health.js';
+import { parseTenantSubdomain } from '../common/subdomain.js';
 import { isDraining } from '../common/lifecycle.js';
 import { PublicRoute } from '../modules/authorization/decorators.js';
 import { REDIS_CLIENT } from '../redis/redis.module.js';
@@ -48,6 +52,7 @@ export class HealthController {
   constructor(
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly storage: ObjectStorageService,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   @Get()
@@ -87,6 +92,33 @@ export class HealthController {
           ? ('ok' as const)
           : ('degraded' as const);
     return { status, checks };
+  }
+
+  @Get('tls-ask')
+  @PublicRoute(
+    "Caddy's on-demand TLS check, made before it requests a certificate; it carries no session (docs/operations/vps-pilot.md).",
+  )
+  @ApiOperation({
+    summary:
+      'On-demand TLS: 200 when the host names an existing school (`<school>.<root>` or `<school>.api.<root>`), else 404.',
+  })
+  @ApiQuery({ name: 'domain', type: String, description: 'The host Caddy is about to certify.' })
+  async tlsAsk(@Query('domain') domain: unknown) {
+    // A school created in the console gets its certificate on the first
+    // visit; anything else is refused so nobody can make the server request
+    // certificates for invented names (Let's Encrypt rate limits).
+    const host = typeof domain === 'string' && domain.length <= 253 ? domain : undefined;
+    const subdomain = parseTenantSubdomain(
+      host,
+      this.config.get('PLATFORM_ROOT_DOMAIN', { infer: true }),
+    );
+    const school = subdomain
+      ? await prisma.school.findUnique({ where: { subdomain }, select: { id: true } })
+      : null;
+    if (!school) {
+      throw new AppHttpException({ code: 'NOT_FOUND', message: 'No school at this host.' });
+    }
+    return { status: 'ok' as const };
   }
 
   private async check(
