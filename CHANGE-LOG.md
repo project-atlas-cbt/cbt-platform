@@ -2,6 +2,29 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Exports and printable reports: pickers instead of raw IDs
+
+Pilot feedback (owner): the export dialog asked for an Exam ID, Class ID, Subject ID or
+Department ID, which meant copying a UUID out of the address bar. Every scope field is now a
+type-to-search picker (`components/ui/searchable-select.tsx`, a hand-rolled ARIA combobox like
+`TopicCombobox`, no new dependency): typing "J" lists JSS1A, JSS2A and so on, labels that start
+with the text first. The Report Centre's four print cards (broadsheet, item diagnostics, class
+sheet, student transcript) use the same pickers; the student transcript picks a class, then a
+student from its roster.
+
+The lists come from endpoints each role can already read (`lib/reports/pickers.ts`): School Admin
+and Moderator see the current session's classes and every subject; an HOD sees only the
+departments they head (filled in when they head one) and that department's classes and subjects;
+a teacher sees only their own classes, subjects and levels (`GET /teachers/me/assignments`,
+current session for classes). Exams are the 100 most recent the role can see. The server still
+checks every scope on submit; the pickers only stop users being offered something it would reject.
+Opening the export from an exam's results page shows the exam's title, not its ID. No API change.
+
+Tested: 5 new picker tests, 6 new export-dialog tests (exam search, "J" class search, whole-school
+export, teacher subject/level from assignments, HOD department auto-fill, exam title when opened
+from an exam), web typecheck and lint; checked in the real app against the demo school as School
+Admin and Teacher, including a Student Directory export for SS2A whose CSV starts with Login ID.
+
 ### 2026-10-08 — Student Directory export: Login ID column
 
 Pilot feedback: the Student Directory export (People > Students > Export) had no way to give a

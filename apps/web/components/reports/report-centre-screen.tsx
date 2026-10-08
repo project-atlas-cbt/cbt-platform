@@ -17,10 +17,11 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Label } from '@/components/ui/label';
 import { ExportDialog } from './export/export-dialog';
 import { type ExportType, type ExportJob } from '@/lib/reports/types';
+import { useClassOptions, useExamOptions, useRosterOptions } from '@/lib/reports/pickers';
 
 export interface ReportCentreScreenProps {
   role: Role;
@@ -53,7 +54,7 @@ const EXPORT_CONFIGS: ExportTypeConfig[] = [
     type: 'STUDENTS',
     title: 'Student Directory',
     description:
-      'Enrolled students list with admission numbers, names, current active class arms, and contact details.',
+      'Enrolled students with Login IDs, admission numbers, names, and email, for the whole school or one class.',
     icon: GraduationCap,
   },
   {
@@ -84,10 +85,18 @@ export function ReportCentreScreen({ role, basePath }: ReportCentreScreenProps) 
   const [selectedType, setSelectedType] = useState<ExportType>('EXAM_RESULTS');
   const [recentJobs, setRecentJobs] = useState<ExportJob[]>([]);
 
-  // Print helper inputs
+  // Print helper pickers (never a raw ID box — 2026-10-08 pilot finding)
   const [printExamId, setPrintExamId] = useState('');
+  const [printPerfExamId, setPrintPerfExamId] = useState('');
   const [printClassId, setPrintClassId] = useState('');
+  const [printStudentClassId, setPrintStudentClassId] = useState('');
   const [printStudentId, setPrintStudentId] = useState('');
+  const examOptions = useExamOptions();
+  // An HOD can view every class (`schoolConfig.class.view` is SCHOOL for
+  // HOD), so the print pickers list the whole school; the print routes still
+  // limit what each report shows to the HOD's department.
+  const classOptions = useClassOptions(role === 'HOD' ? 'MODERATOR' : role);
+  const rosterOptions = useRosterOptions(printStudentClassId || undefined);
 
   // Filter datasets available for current role
   const availableExports = EXPORT_CONFIGS.filter((cfg) => {
@@ -221,22 +230,24 @@ export function ReportCentreScreen({ role, basePath }: ReportCentreScreenProps) 
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label htmlFor="print-exam-input" className="text-xs">
-                  Exam ID
+                  Exam
                 </Label>
                 <div className="flex gap-2">
-                  <Input
+                  <SearchableSelect
                     id="print-exam-input"
-                    value={printExamId}
-                    onChange={(e) => setPrintExamId(e.target.value)}
-                    placeholder="Enter Exam UUID"
-                    className="h-8 text-xs font-mono"
+                    {...examOptions}
+                    value={printExamId || undefined}
+                    onChange={(v) => setPrintExamId(v ?? '')}
+                    placeholder="Type an exam title, subject or class"
+                    emptyText="No exam matches."
+                    className="flex-1"
                   />
                   <Button
                     variant="primary"
                     size="sm"
-                    className="h-8 text-xs shrink-0"
-                    disabled={!printExamId.trim()}
-                    onClick={() => router.push(`/print/exams/${printExamId.trim()}/results`)}
+                    className="h-9 text-xs shrink-0"
+                    disabled={!printExamId}
+                    onClick={() => router.push(`/print/exams/${printExamId}/results`)}
                   >
                     <ExternalLink className="size-3.5 mr-1" />
                     Open
@@ -261,22 +272,24 @@ export function ReportCentreScreen({ role, basePath }: ReportCentreScreenProps) 
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label htmlFor="print-perf-exam-input" className="text-xs">
-                  Exam ID
+                  Exam
                 </Label>
                 <div className="flex gap-2">
-                  <Input
+                  <SearchableSelect
                     id="print-perf-exam-input"
-                    value={printExamId}
-                    onChange={(e) => setPrintExamId(e.target.value)}
-                    placeholder="Enter Exam UUID"
-                    className="h-8 text-xs font-mono"
+                    {...examOptions}
+                    value={printPerfExamId || undefined}
+                    onChange={(v) => setPrintPerfExamId(v ?? '')}
+                    placeholder="Type an exam title, subject or class"
+                    emptyText="No exam matches."
+                    className="flex-1"
                   />
                   <Button
                     variant="primary"
                     size="sm"
-                    className="h-8 text-xs shrink-0"
-                    disabled={!printExamId.trim()}
-                    onClick={() => router.push(`/print/exams/${printExamId.trim()}/performance`)}
+                    className="h-9 text-xs shrink-0"
+                    disabled={!printPerfExamId}
+                    onClick={() => router.push(`/print/exams/${printPerfExamId}/performance`)}
                   >
                     <ExternalLink className="size-3.5 mr-1" />
                     Open
@@ -301,22 +314,24 @@ export function ReportCentreScreen({ role, basePath }: ReportCentreScreenProps) 
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label htmlFor="print-class-input" className="text-xs">
-                  Class ID
+                  Class
                 </Label>
                 <div className="flex gap-2">
-                  <Input
+                  <SearchableSelect
                     id="print-class-input"
-                    value={printClassId}
-                    onChange={(e) => setPrintClassId(e.target.value)}
-                    placeholder="Enter Class UUID"
-                    className="h-8 text-xs font-mono"
+                    {...classOptions}
+                    value={printClassId || undefined}
+                    onChange={(v) => setPrintClassId(v ?? '')}
+                    placeholder="Type a class name, e.g. JSS1A"
+                    emptyText="No class matches."
+                    className="flex-1"
                   />
                   <Button
                     variant="primary"
                     size="sm"
-                    className="h-8 text-xs shrink-0"
-                    disabled={!printClassId.trim()}
-                    onClick={() => router.push(`/print/classes/${printClassId.trim()}/performance`)}
+                    className="h-9 text-xs shrink-0"
+                    disabled={!printClassId}
+                    onClick={() => router.push(`/print/classes/${printClassId}/performance`)}
                   >
                     <ExternalLink className="size-3.5 mr-1" />
                     Open
@@ -340,25 +355,44 @@ export function ReportCentreScreen({ role, basePath }: ReportCentreScreenProps) 
             </div>
             <div className="space-y-3">
               <div className="space-y-1">
+                <Label htmlFor="print-student-class-input" className="text-xs">
+                  Class
+                </Label>
+                <SearchableSelect
+                  id="print-student-class-input"
+                  {...classOptions}
+                  value={printStudentClassId || undefined}
+                  onChange={(v) => {
+                    setPrintStudentClassId(v ?? '');
+                    setPrintStudentId('');
+                  }}
+                  placeholder="Type the student's class, e.g. JSS1A"
+                  emptyText="No class matches."
+                />
+              </div>
+              <div className="space-y-1">
                 <Label htmlFor="print-student-input" className="text-xs">
-                  Student ID
+                  Student
                 </Label>
                 <div className="flex gap-2">
-                  <Input
+                  <SearchableSelect
                     id="print-student-input"
-                    value={printStudentId}
-                    onChange={(e) => setPrintStudentId(e.target.value)}
-                    placeholder="Enter Student UUID"
-                    className="h-8 text-xs font-mono"
+                    {...rosterOptions}
+                    value={printStudentId || undefined}
+                    onChange={(v) => setPrintStudentId(v ?? '')}
+                    placeholder={
+                      printStudentClassId ? 'Type a name or student ID' : 'Choose a class first'
+                    }
+                    emptyText="No student in this class matches."
+                    disabled={!printStudentClassId}
+                    className="flex-1"
                   />
                   <Button
                     variant="primary"
                     size="sm"
-                    className="h-8 text-xs shrink-0"
-                    disabled={!printStudentId.trim()}
-                    onClick={() =>
-                      router.push(`/print/students/${printStudentId.trim()}/performance`)
-                    }
+                    className="h-9 text-xs shrink-0"
+                    disabled={!printStudentId}
+                    onClick={() => router.push(`/print/students/${printStudentId}/performance`)}
                   >
                     <ExternalLink className="size-3.5 mr-1" />
                     Open

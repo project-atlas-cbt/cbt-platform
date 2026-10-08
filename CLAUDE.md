@@ -241,8 +241,8 @@ read those before resuming related work.
 
 Open items carried forward:
 
-- F21's pilot findings (the export dialog asks for raw IDs, staff invitations last one hour, print
-  gaps) are Candidate/Deferred in its roadmap Implementation notes.
+- F21's pilot findings (staff invitations last one hour, print gaps) are Candidate/Deferred in
+  its roadmap Implementation notes; the raw-ID export fields were replaced by pickers (2026-10-08).
 - `F12` operational alerts (DoD item 10) stay deferred; the disconnected flag and signal counts now
   show in the live table (B23).
 - Excused absence is intentionally deferred (`F16`).
