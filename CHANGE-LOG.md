@@ -2,6 +2,17 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Pilot server: deploys clean up old images
+
+The pilot server's 96 GB disk filled on the morning of the first exam: every release left about 8 GB
+of `atlas-*` images, and the deploy failed mid-build with "database or disk is full". A full disk
+also endangers PostgreSQL. `infra/vps/bin/deploy.sh` now stops before building when less than
+10 GB is free, and after a passing smoke removes every `atlas-*` image except the new and previous
+release's, dangling images, and build cache older than a week. Docker refuses to remove an image a
+container uses, so nothing running is touched. `vps-pilot.md` gains the manual cleanup and the
+`export RELEASE=…` step for ops scripts run by hand (without it compose used a stale `unset` image).
+Checked with `bash -n` and a mocked image list; it has not yet run on the server.
+
 ### 2026-10-08 — Question bank: archive several questions at once
 
 Pilot feedback: a teacher could archive only one question at a time. The bank now has a checkbox
