@@ -111,7 +111,9 @@ describe('SubjectsScreen', () => {
     await userEvent.click(screen.getAllByRole('button', { name: /add subject/i })[0]!);
     expect(screen.getByText(/department \(optional\)/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/falls outside every hod.s automatic review scope/i),
+      screen.getByText(
+        /without a department, no hod sees this subject.s questions, exams or results/i,
+      ),
     ).toBeInTheDocument();
   });
 

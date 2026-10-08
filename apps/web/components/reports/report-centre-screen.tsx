@@ -91,7 +91,7 @@ export function ReportCentreScreen({ role, basePath }: ReportCentreScreenProps) 
   const [printClassId, setPrintClassId] = useState('');
   const [printStudentClassId, setPrintStudentClassId] = useState('');
   const [printStudentId, setPrintStudentId] = useState('');
-  const examOptions = useExamOptions();
+  const examOptions = useExamOptions(role);
   // An HOD can view every class (`schoolConfig.class.view` is SCHOOL for
   // HOD), so the print pickers list the whole school; the print routes still
   // limit what each report shows to the HOD's department.

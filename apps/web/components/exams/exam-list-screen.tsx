@@ -10,7 +10,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { useHasPermission } from '@/lib/nav';
-import { useExamsPaginated, type ExamListFilters } from '@/lib/exams/queries';
+import { useExamsPaginated, useOwnExamsFilter, type ExamListFilters } from '@/lib/exams/queries';
 import { examStepPath } from '@/lib/exams/navigation';
 import { ExamStatusBadge } from './exam-status-badge';
 import { ExamStatusTabs } from './exam-status-tabs';
@@ -86,6 +86,10 @@ export function ExamListScreen({
     updateParams({ ...next, page: null });
   }
 
+  // A teacher's Exams screen opens the editing wizard, so it lists only the
+  // exams they wrote; exams delegated to them are run from Exam Control.
+  const ownFilter = useOwnExamsFilter(scope === 'own');
+  const ownMembershipId = ownFilter.teacherMembershipId;
   const filters: ExamListFilters = useMemo(
     () => ({
       page,
@@ -95,8 +99,9 @@ export function ExamListScreen({
       ...(classId ? { classId } : {}),
       ...(departmentId ? { departmentId } : {}),
       ...(teacherMembershipId ? { teacherMembershipId } : {}),
+      ...(ownMembershipId ? { teacherMembershipId: ownMembershipId } : {}),
     }),
-    [page, status, subjectId, classId, departmentId, teacherMembershipId],
+    [page, status, subjectId, classId, departmentId, teacherMembershipId, ownMembershipId],
   );
 
   const exams = useExamsPaginated(filters);

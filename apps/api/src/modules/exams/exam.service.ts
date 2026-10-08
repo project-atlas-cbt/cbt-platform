@@ -204,7 +204,7 @@ export class ExamService {
 
   async get(schoolId: string, actor: AuthorizedActor, id: string): Promise<ExamResponseDto> {
     const exam = await loadExamOrThrow(schoolId, id);
-    const resource = await this.resolveViewResourceContext(schoolId, actor, exam);
+    const resource = this.resolveViewResourceContext(schoolId, exam);
     const decision = await this.authz.evaluate(actor, 'exam.viewAll', resource);
     if (!decision.allowed && !this.isCreator(actor, exam)) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Exam not found.' });
@@ -225,7 +225,7 @@ export class ExamService {
     id: string,
   ): Promise<{ subjectId: string; level: string | null }> {
     const exam = await loadExamOrThrow(schoolId, id);
-    const resource = await this.resolveViewResourceContext(schoolId, actor, exam);
+    const resource = this.resolveViewResourceContext(schoolId, exam);
     const decision = await this.authz.evaluate(actor, 'exam.useApprovedQuestions', resource);
     if (!decision.allowed && !this.isCreator(actor, exam)) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Exam not found.' });
@@ -690,71 +690,35 @@ export class ExamService {
     return actor.kind === 'SCHOOL' && actor.membershipId === exam.createdByMembershipId;
   }
 
-  /** Builds the `ResourceContext` `get()`'s `exam.viewAll` check needs —
-   * `departmentId` (HOD DEPARTMENT) plus a best-effort `classSubjectId`
-   * (TEACHER ASSIGNED, resolved against ANY of the exam's own targeted
-   * classes — mirrors `QuestionService.resolveResourceContext`'s own
-   * precedent, widened from one class to N the same way
-   * `requireTeacherAssignedToAnyClass` widens creation's check). Authorship
-   * alone isn't encoded here — see `isCreator()`'s own doc comment for why
-   * that's checked as a separate fallback by each caller instead. */
-  private async resolveViewResourceContext(
+  /** Builds the `ResourceContext` `get()`'s `exam.viewAll` check needs:
+   * `departmentId` for HOD DEPARTMENT, the creator for TEACHER OWNED, and
+   * `examId` so an `ExamAdministrator` delegate passes OWNED too. Teaching
+   * one of the exam's classes grants nothing (owner decision 2026-10-08:
+   * an exam is private to its author, its delegates, the department's HOD
+   * and the school's Admin and Moderators), so no `classSubjectId` is
+   * resolved here; `exam.useApprovedQuestions`, still graded ASSIGNED,
+   * therefore falls through to `isCreator()` for a Teacher. */
+  private resolveViewResourceContext(
     schoolId: string,
-    actor: AuthorizedActor,
-    exam: {
-      createdByMembershipId: string;
-      departmentId: string | null;
-      classes: { classSubjectId: string }[];
-    },
-  ): Promise<{
-    schoolId: string;
-    ownerMembershipId: string;
-    departmentId?: string;
-    classSubjectId?: string;
-  }> {
-    let classSubjectId: string | undefined;
-    if (actor.kind === 'SCHOOL' && actor.roles.includes('TEACHER')) {
-      const teacherProfile = await withTenant(prisma, schoolId, (tx) =>
-        tx.teacherProfile.findUnique({
-          where: { schoolId_membershipId: { schoolId, membershipId: actor.membershipId } },
-          select: { id: true },
-        }),
-      );
-      if (teacherProfile) {
-        const examClassSubjectIds = exam.classes.map((c) => c.classSubjectId);
-        const assignment =
-          examClassSubjectIds.length > 0
-            ? await withTenant(prisma, schoolId, (tx) =>
-                tx.teacherAssignment.findFirst({
-                  where: {
-                    schoolId,
-                    teacherProfileId: teacherProfile.id,
-                    status: 'ACTIVE',
-                    classSubjectId: { in: examClassSubjectIds },
-                  },
-                  select: { classSubjectId: true },
-                }),
-              )
-            : null;
-        if (assignment) classSubjectId = assignment.classSubjectId;
-      }
-    }
-
+    exam: { id: string; createdByMembershipId: string; departmentId: string | null },
+  ): { schoolId: string; examId: string; ownerMembershipId: string; departmentId?: string } {
     return {
       schoolId,
+      examId: exam.id,
       ownerMembershipId: exam.createdByMembershipId,
       ...(exam.departmentId !== null && { departmentId: exam.departmentId }),
-      ...(classSubjectId !== undefined && { classSubjectId }),
     };
   }
 
-  /** Role-based server-side scoping for `list()` — mirrors `QuestionService
-   * .buildScopeFilter()`'s own precedent exactly (a per-row `evaluate()`
-   * call would be too slow for a list). TEACHER additionally always sees
-   * their own authored exams regardless of current assignment (an exam
-   * they created stays visible to them even if later reassigned away from
-   * every one of its targeted classes) — a safe superset, since it's their
-   * own resource either way. */
+  /** Role-based server-side scoping for `list()`, the list form of
+   * `get()`'s check (a per-row `evaluate()` would be too slow for a list).
+   * Owner decision 2026-10-08: an exam is private to its author. A Teacher
+   * sees the exams they created and those they were delegated to run
+   * (`ExamAdministrator`); teaching one of an exam's classes is not enough.
+   * An HOD sees their departments' exams. A user holding both roles gets
+   * the union, so an HOD who teaches keeps their own exams in any
+   * department. An exam whose subject has no department is seen only by its
+   * author, its delegates and the school's Admin and Moderators. */
   private async buildScopeFilter(
     schoolId: string,
     actor: AuthorizedActor,
@@ -763,6 +727,7 @@ export class ExamService {
     if (actor.roles.includes('SCHOOL_ADMIN') || actor.roles.includes('MODERATOR')) {
       return {};
     }
+    const visible: Prisma.ExamWhereInput[] = [];
     if (actor.roles.includes('HOD')) {
       const assignments = await withTenant(prisma, schoolId, (tx) =>
         tx.hODAssignment.findMany({
@@ -771,33 +736,19 @@ export class ExamService {
         }),
       );
       const departmentIds = assignments.map((a) => a.departmentId);
-      if (departmentIds.length === 0) return { id: { in: [] } };
-      return { departmentId: { in: departmentIds } };
+      if (departmentIds.length > 0) visible.push({ departmentId: { in: departmentIds } });
     }
     if (actor.roles.includes('TEACHER')) {
-      const teacherProfile = await withTenant(prisma, schoolId, (tx) =>
-        tx.teacherProfile.findUnique({
-          where: { schoolId_membershipId: { schoolId, membershipId: actor.membershipId } },
-          select: { id: true },
-        }),
+      visible.push(
+        { createdByMembershipId: actor.membershipId },
+        {
+          administrators: {
+            some: { schoolId, membershipId: actor.membershipId, status: 'ACTIVE' },
+          },
+        },
       );
-      if (!teacherProfile) return { createdByMembershipId: actor.membershipId };
-      const assignments = await withTenant(prisma, schoolId, (tx) =>
-        tx.teacherAssignment.findMany({
-          where: { schoolId, teacherProfileId: teacherProfile.id, status: 'ACTIVE' },
-          select: { classSubjectId: true },
-        }),
-      );
-      const classSubjectIds = assignments.map((a) => a.classSubjectId);
-      return {
-        OR: [
-          { createdByMembershipId: actor.membershipId },
-          ...(classSubjectIds.length > 0
-            ? [{ classes: { some: { classSubjectId: { in: classSubjectIds } } } }]
-            : []),
-        ],
-      };
     }
-    return { id: { in: [] } };
+    if (visible.length === 0) return { id: { in: [] } };
+    return { OR: visible };
   }
 }

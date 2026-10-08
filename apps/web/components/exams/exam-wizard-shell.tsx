@@ -7,6 +7,8 @@ import { Lock } from 'lucide-react';
 import type { ApiComponents } from '@atlas/contracts';
 import { cn } from '@/lib/utils';
 import { examStepPath, type ExamWizardStep } from '@/lib/exams/navigation';
+import { examControlPath } from '@/lib/exam-control/navigation';
+import { useAuth } from '@/lib/auth';
 import { HelpLink } from '@/components/help/help-link';
 
 type Exam = ApiComponents['schemas']['ExamResponseDto'];
@@ -40,7 +42,29 @@ export function ExamWizardShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const { me } = useAuth();
   const readOnly = Boolean(exam) && exam?.status !== 'DRAFT';
+  // Only the author edits an exam (ADR-0037). A colleague who reaches the
+  // builder by link is a delegate at most, and runs the exam from Exam Control.
+  if (exam && me && exam.createdByMembershipId !== me.membership.id) {
+    const controlBase = basePath.replace(/\/exams$/, '/exam-control');
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
+        <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
+        <p>
+          This exam belongs to <strong className="text-text-primary">{exam.createdByName}</strong>.
+          Only its author can change it.{' '}
+          <Link
+            href={examControlPath(controlBase, exam.id)}
+            className="font-medium text-text-primary underline"
+          >
+            Open it in Exam Control
+          </Link>{' '}
+          if you were asked to run it.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

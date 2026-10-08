@@ -2,6 +2,27 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Teachers see only their own exams (ADR-0037)
+
+Owner decision after a permissions review: a teacher who taught the same class and subject could
+list and open a colleague's exam, and open single results of it. The builder then offered edits
+that the server refused. Every action was already owner-only on the server.
+
+Now:
+
+- A Teacher sees an exam only if they created it or were delegated to run it. `exam.viewAll` and
+  `results.viewIndividualResult` are `OWNED` for Teacher, and the list filter matches.
+- An HOD who also teaches sees their department plus their own exams.
+- An exam whose subject has no department is for Admin, Moderator, its author and its delegates
+  only. The subjects screen marks those subjects "None set".
+- The builder shows non-owners who owns the exam and a link to Exam Control.
+- The teacher's Exams, Results, Reports and dashboard lists ask for own exams only.
+- The teacher guide (in-app and `docs/user-guides/teacher.md`) explains delegation.
+
+Tests: new `exam-visibility.integration.test.ts` (6; 4 fail without the change). The exams,
+results, analytics, reports and execution integration suites (144), the security suite (53), API
+unit tests (296), domain (158) and web (1,096) all pass, as do typecheck and lint.
+
 ### 2026-10-08 — Class rosters and related lookups limited to the viewer's classes
 
 Found while confirming the export pickers respect teacher scope (owner question). The exports

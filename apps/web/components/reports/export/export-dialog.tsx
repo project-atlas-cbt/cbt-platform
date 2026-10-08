@@ -266,7 +266,7 @@ export function ExportDialog({
               (initialScope?.examId ? (
                 <LockedExam examId={initialScope.examId} />
               ) : (
-                <ExamField value={examId} onChange={setExamId} />
+                <ExamField role={role} value={examId} onChange={setExamId} />
               ))}
 
             {needsDepartment && (
@@ -325,8 +325,16 @@ export function ExportDialog({
 
 // Each field loads its own list, so a dialog only fetches what its dataset needs.
 
-function ExamField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const exams = useExamOptions();
+function ExamField({
+  role,
+  value,
+  onChange,
+}: {
+  role: Role;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const exams = useExamOptions(role);
   return (
     <div className="space-y-1.5">
       <Label htmlFor="export-exam">Exam</Label>

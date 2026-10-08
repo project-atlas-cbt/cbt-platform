@@ -27,7 +27,8 @@ export function TeacherDashboard() {
   const user = me?.user;
   const assignmentsQuery = useTeacherMyAssignments();
   const questionCountsQuery = useQuestionCounts();
-  const examsQuery = useExamsList({});
+  // Own exams only: delegated exams are run from Exam Control (ADR-0037).
+  const examsQuery = useExamsList(me?.membership ? { teacherMembershipId: me.membership.id } : {});
 
   const teacherName = user?.displayName ? `, ${user.displayName}` : '';
 

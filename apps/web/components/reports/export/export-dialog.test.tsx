@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ExportDialog } from './export-dialog';
 import { apiClient } from '@/lib/api';
 
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({ me: { membership: { id: 'm-me' } } }),
+}));
+
 vi.mock('@/lib/api', () => ({
   apiClient: {
     POST: vi.fn(),

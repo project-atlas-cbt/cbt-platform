@@ -242,6 +242,44 @@ export class SecurityFixture {
     return identifiers;
   }
 
+  /** An extra Teacher (with a teacher profile) who signs in with the shared
+   * fixture password via `loginIdentifier`. */
+  async addTeacher(
+    school: FixtureSchool,
+    label: string,
+  ): Promise<{ identifier: string; membershipId: string; teacherProfileId: string }> {
+    const passwordHash = await passwords.hash(PASSWORD);
+    const identifier = `teacher-${label}-${randomUUID().slice(0, 6)}`;
+    const user = await prisma.user.create({
+      data: {
+        firstName: 'Teacher',
+        lastName: label,
+        displayName: `Teacher ${label}`,
+        passwordHash,
+        status: 'ACTIVE',
+        credentialState: 'OK',
+      },
+    });
+    this.userIds.push(user.id);
+    return withTenant(prisma, school.schoolId, async (tx) => {
+      const membership = await tx.schoolMembership.create({
+        data: {
+          schoolId: school.schoolId,
+          userId: user.id,
+          loginIdentifier: identifier,
+          status: 'ACTIVE',
+        },
+      });
+      await tx.roleAssignment.create({
+        data: { schoolId: school.schoolId, membershipId: membership.id, role: 'TEACHER' },
+      });
+      const profile = await tx.teacherProfile.create({
+        data: { schoolId: school.schoolId, membershipId: membership.id, staffId: identifier },
+      });
+      return { identifier, membershipId: membership.id, teacherProfileId: profile.id };
+    });
+  }
+
   /** B22: a sign-in attempt with any password (brute-force tests). */
   async loginWithPassword(
     app: NestFastifyApplication,

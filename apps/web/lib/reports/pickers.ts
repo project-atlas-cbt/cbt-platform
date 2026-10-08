@@ -10,7 +10,7 @@ import {
   useDepartments,
   useSubjects,
 } from '@/lib/academics/queries';
-import { useExamsPaginated, useMyTeacherAssignments } from '@/lib/exams/queries';
+import { useExamsPaginated, useMyTeacherAssignments, useOwnExamsFilter } from '@/lib/exams/queries';
 
 /**
  * Option lists for the export dialog and the printable-report pickers, so no
@@ -49,8 +49,10 @@ function list(
 const byLabel = (a: SearchableSelectOption, b: SearchableSelectOption) =>
   a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
 
-export function useExamOptions(): PickerList {
-  const exams = useExamsPaginated({ pageSize: 100 });
+export function useExamOptions(role?: Role): PickerList {
+  // A teacher exports only their own exams' results (ADR-0037), not exams
+  // they were delegated to run.
+  const exams = useExamsPaginated({ pageSize: 100, ...useOwnExamsFilter(role === 'TEACHER') });
   const options = useMemo(
     () =>
       (exams.data?.exams ?? []).map((exam) => ({

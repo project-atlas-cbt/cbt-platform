@@ -62,7 +62,18 @@ export function SubjectsScreen() {
       cell: (row) => <span className="font-medium text-text-primary">{row.name}</span>,
     },
     { id: 'code', header: 'Code', cell: (row) => row.code },
-    { id: 'department', header: 'Department', cell: (row) => departmentName(row.departmentId) },
+    {
+      id: 'department',
+      header: 'Department',
+      cell: (row) =>
+        row.departmentId ? (
+          departmentName(row.departmentId)
+        ) : (
+          <span className="text-warning-subtle-foreground" title="No HOD sees its exams or results">
+            None set
+          </span>
+        ),
+    },
     { id: 'status', header: 'Status', cell: (row) => <SubjectStatusBadge value={row.status} /> },
     ...(canManage
       ? [

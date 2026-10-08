@@ -132,7 +132,8 @@ export function SubjectForm({
                 </SelectContent>
               </Select>
               <FormDescription>
-                A subject with no department falls outside every HOD&rsquo;s automatic review scope.
+                Without a department, no HOD sees this subject&rsquo;s questions, exams or results.
+                Only School Admins, Moderators and the exam&rsquo;s author do.
               </FormDescription>
               <FormMessage />
             </FormItem>
