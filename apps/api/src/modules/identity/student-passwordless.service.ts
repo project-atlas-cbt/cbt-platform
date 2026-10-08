@@ -24,6 +24,15 @@ export interface StudentPasswordlessSettings {
 const GENERIC_FAILURE = () =>
   new AppHttpException({ code: 'UNAUTHENTICATED', message: 'Invalid credentials.' });
 
+// Owner decision 2026-10-08: on this page only, a locked identifier says so
+// (the teacher is in the lab and unlocks it). Password sign-in keeps the
+// enumeration-resistant generic failure.
+const LOCKED_FAILURE = () =>
+  new AppHttpException({
+    code: 'STUDENT_SIGN_IN_LOCKED',
+    message: 'Too many tries. Please ask your teacher to unlock your sign-in.',
+  });
+
 /** Lower-case words of a name: accents dropped, anything but letters and
  * digits treated as a separator ("O'Brien" → "o", "brien"; "Adé-Bayo" →
  * "ade", "bayo"). */
@@ -250,7 +259,7 @@ export class StudentPasswordlessService {
       });
     }
 
-    if (await this.lockout.isLocked(schoolId, identifier)) throw GENERIC_FAILURE();
+    if (await this.lockout.isLocked(schoolId, identifier)) throw LOCKED_FAILURE();
 
     const membership = await withTenant(prisma, schoolId, (tx) =>
       tx.schoolMembership.findFirst({
@@ -265,19 +274,28 @@ export class StudentPasswordlessService {
     const ok =
       membership !== null &&
       user !== null &&
-      user.status === 'ACTIVE' &&
+      // INVITED: no password slip was ever generated for this student.
+      // Passwordless sign-in needs no password, so it is this account's
+      // first claim, as issuing the slip would have been.
+      (user.status === 'ACTIVE' || user.status === 'INVITED') &&
       (await this.isCovered(schoolId, membership.id)) &&
       nameMatches(name, user);
 
     if (!ok || !membership || !user) {
       // Same cost profile as a password sign-in failure.
       await this.passwords.verifyDummy();
-      await this.lockout.recordFailure(schoolId, identifier);
-      throw GENERIC_FAILURE();
+      const { lockedNow } = await this.lockout.recordFailure(schoolId, identifier);
+      throw lockedNow ? LOCKED_FAILURE() : GENERIC_FAILURE();
     }
 
     await this.lockout.recordSuccess(schoolId, identifier);
-    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        ...(user.status === 'INVITED' ? { status: 'ACTIVE' as const } : {}),
+      },
+    });
     const session = await this.sessions.issue(res, {
       userId: user.id,
       schoolId,

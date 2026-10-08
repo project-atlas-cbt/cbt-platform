@@ -22,6 +22,7 @@ vi.mock('@/lib/people/queries', () => ({
     data: { allStudents: false, classIds: [] },
   }),
 }));
+vi.mock('./locked-out-panel', () => ({ LockedOutPanel: () => null }));
 vi.mock('@/lib/academics/queries', () => ({ useAcademicsContext: vi.fn(), useClasses: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 

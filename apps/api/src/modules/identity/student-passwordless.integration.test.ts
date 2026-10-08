@@ -137,13 +137,14 @@ async function seedMember(
   role: 'STUDENT' | 'TEACHER' | 'MODERATOR' | 'SCHOOL_ADMIN',
   name: { firstName: string; lastName: string },
   password?: string,
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' = 'ACTIVE',
 ) {
   const user = await prisma.user.create({
     data: {
       firstName: name.firstName,
       lastName: name.lastName,
       displayName: `${name.firstName} ${name.lastName}`,
-      status: 'ACTIVE',
+      status,
       passwordHash: password ? await passwords.hash(password) : await passwords.hash(randomUUID()),
       credentialState: password ? 'OK' : 'MUST_CHANGE_PASSWORD',
     },
@@ -163,8 +164,16 @@ async function seedStudent(
   loginIdentifier: string,
   classId: string,
   name: { firstName: string; lastName: string },
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' = 'ACTIVE',
 ) {
-  const membership = await seedMember(f.schoolId, loginIdentifier, 'STUDENT', name);
+  const membership = await seedMember(
+    f.schoolId,
+    loginIdentifier,
+    'STUDENT',
+    name,
+    undefined,
+    status,
+  );
   await withTenant(prisma, f.schoolId, async (tx) => {
     const cls = await tx.classGroup.findUniqueOrThrow({ where: { id: classId } });
     const profile = await tx.studentProfile.create({
@@ -322,6 +331,27 @@ describe('Passwordless student sign-in', () => {
     expect((await studentSignIn(f.host, 'OLA/002', 'Chiamaka Okafor')).res.statusCode).toBe(401);
   });
 
+  it('admits a student whose password slip was never generated, and activates them', async () => {
+    await seedStudent(f, 'OLA/003', f.classA, { firstName: 'Bisi', lastName: 'Ola' }, 'INVITED');
+    await seedStudent(f, 'OLA/004', f.classA, { firstName: 'Kemi', lastName: 'Ade' }, 'SUSPENDED');
+
+    const ok = await studentSignIn(f.host, 'OLA/003', 'Bisi Ola');
+    expect(ok.res.statusCode).toBe(200);
+    expect((await send(ok.ctx, 'GET', '/auth/me')).statusCode).toBe(200);
+    const user = await withTenant(prisma, f.schoolId, (tx) =>
+      tx.schoolMembership.findFirstOrThrow({
+        where: { schoolId: f.schoolId, loginIdentifier: 'OLA/003' },
+        select: { userId: true },
+      }),
+    );
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.userId } })).status).toBe(
+      'ACTIVE',
+    );
+
+    // A suspended account stays refused.
+    expect((await studentSignIn(f.host, 'OLA/004', 'Kemi Ade')).res.statusCode).toBe(401);
+  });
+
   it('never lets a passwordless session set a password', async () => {
     const { ctx } = await studentSignIn(f.host, 'OLA/001', 'Funmilayo Adebayo');
     const res = await send(ctx, 'POST', '/auth/password/change', { newPassword: 'taken-over-123' });
@@ -374,5 +404,59 @@ describe('Passwordless student sign-in', () => {
       classIds: [other.classA],
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('Student lockout visibility', () => {
+  let f: Fixture;
+  beforeAll(async () => {
+    f = await createFixture();
+    const put = await setSettings(f, 'admin', 'admin-password-123', {
+      allStudents: true,
+      classIds: [],
+    });
+    expect(put.statusCode).toBe(200);
+  });
+
+  it('says so on the failure that locks, and on every try after it', async () => {
+    const max = Number(process.env.AUTH_LOCKOUT_MAX_ATTEMPTS ?? 5);
+    for (let i = 0; i < max - 1; i++) {
+      const { res } = await studentSignIn(f.host, 'OLA/001', 'Wrong Name');
+      expect(res.statusCode).toBe(401);
+    }
+    const locking = await studentSignIn(f.host, 'OLA/001', 'Wrong Name');
+    expect(locking.res.statusCode).toBe(403);
+    expect(locking.res.json<{ error: { code: string } }>().error.code).toBe(
+      'STUDENT_SIGN_IN_LOCKED',
+    );
+    // Even the right name is refused while locked, with the same message.
+    const after = await studentSignIn(f.host, 'ola/001', 'Funmilayo Adebayo');
+    expect(after.res.statusCode).toBe(403);
+    expect(after.res.json<{ error: { code: string } }>().error.code).toBe('STUDENT_SIGN_IN_LOCKED');
+    // Another student is unaffected.
+    expect((await studentSignIn(f.host, 'OLA/002', 'Chiamaka Okafor')).res.statusCode).toBe(200);
+  });
+
+  it('lists locked-out students for staff, and Unlock removes them', async () => {
+    const admin = await passwordSignIn(f.host, 'admin', 'admin-password-123');
+    const list = await send(admin, 'GET', '/students/locked-out');
+    expect(list.statusCode).toBe(200);
+    const students = list.json<{
+      students: Array<{ studentProfileId: string; loginIdentifier: string }>;
+    }>().students;
+    expect(students.map((s) => s.loginIdentifier)).toEqual(['OLA/001']);
+
+    expect(
+      (await send(admin, 'POST', `/students/${students[0]!.studentProfileId}/unlock-sign-in`))
+        .statusCode,
+    ).toBe(204);
+    const after = await send(admin, 'GET', '/students/locked-out');
+    expect(after.json<{ students: unknown[] }>().students).toEqual([]);
+    expect((await studentSignIn(f.host, 'OLA/001', 'Funmilayo Adebayo')).res.statusCode).toBe(200);
+  });
+
+  it('is not available to a teacher', async () => {
+    const teacher = await passwordSignIn(f.host, 'teach', 'teach-password-123');
+    expect((await send(teacher, 'GET', '/students/locked-out')).statusCode).toBe(403);
   });
 });

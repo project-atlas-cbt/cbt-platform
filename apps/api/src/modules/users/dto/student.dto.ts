@@ -152,6 +152,11 @@ export class StudentListResponseDto {
   pageSize!: number;
 }
 
+export class LockedOutStudentsResponseDto {
+  @ApiProperty({ type: StudentResponseDto, isArray: true })
+  students!: StudentResponseDto[];
+}
+
 const STUDENT_LIST_SORT_FIELDS = ['studentId', 'lastName'] as const;
 type StudentListSortField = (typeof STUDENT_LIST_SORT_FIELDS)[number];
 

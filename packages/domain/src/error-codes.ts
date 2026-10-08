@@ -64,6 +64,12 @@ export const BASE_ERROR_CODES = {
   // exams, questions, imports, sessions and attempts are refused.
   SUBSCRIPTION_EXPIRED: { httpStatus: 403, retryable: false },
 
+  // Pilot follow-up (2026-10-08): the student name + Login ID page tells a
+  // locked-out student to ask their teacher, instead of the generic "check
+  // your details" text. Returned only by that page's endpoint (owner
+  // accepted the lockout disclosure there: the teacher is in the lab).
+  STUDENT_SIGN_IN_LOCKED: { httpStatus: 403, retryable: false },
+
   // B4 (Media, Storage & Branding).
   //
   // MEDIA_UPLOAD_NOT_FOUND is also the cross-school-media response (404,
