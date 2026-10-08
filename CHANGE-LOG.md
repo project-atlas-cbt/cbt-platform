@@ -2,6 +2,17 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Student Directory export: Login ID column
+
+Pilot feedback: the Student Directory export (People > Students > Export) had no way to give a
+school its students' Login IDs, only the optional Admission Number. The CSV now starts with a
+`Login ID` column (the school-unique `login_identifier`), followed by the existing columns. It is a
+read-only export, so unlike the class credential sheet it never issues or changes a password.
+Closes the "no Student ID column" item in `frontend-roadmap.md` (F21 pilot findings).
+
+Tested: API typecheck and lint; the existing `e2e/reports.spec.ts` row assertion still holds
+(Admission Number still precedes the name columns).
+
 ### 2026-10-08 — Question bank: archive several questions at once
 
 Pilot feedback: a teacher could archive only one question at a time. The bank now has a checkbox

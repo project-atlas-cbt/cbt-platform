@@ -3543,7 +3543,9 @@ says what happens when the connection drops (ADR-0003's grace window).
 
 - The export dialog asks for raw IDs (Exam ID, Subject ID, Class ID, Department ID) instead of
   pickers.
-- The Student Directory export has no Student ID column, and Admission Number is often empty.
+- ~~The Student Directory export has no Student ID column, and Admission Number is often empty.~~
+  Done 2026-10-08: the export now starts with a Login ID column (it reads only, no password is
+  touched).
 - A staff invitation link lasts one hour (it shares `PASSWORD_RESET_TOKEN_TTL_SECONDS`), and
   "Forgot password" does not work until it is used; the workaround is documented (Reset
   credentials). A longer, separate invitation lifetime is a candidate.
