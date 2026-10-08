@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ServerUnavailable } from '@/components/auth/server-unavailable';
 import { resolveLandingRoute, useAuth } from '@/lib/auth';
 import { useOnboardingStatus } from '@/lib/onboarding/queries';
 
@@ -26,7 +27,7 @@ import { useOnboardingStatus } from '@/lib/onboarding/queries';
  */
 export default function TenantEntryPage() {
   const router = useRouter();
-  const { status, me } = useAuth();
+  const { status, me, reload } = useAuth();
   const isSchoolAdmin = status === 'authenticated' && !!me?.roles.includes('SCHOOL_ADMIN');
   const onboarding = useOnboardingStatus();
 
@@ -51,6 +52,8 @@ export default function TenantEntryPage() {
       router.replace(resolveLandingRoute(me.roles) ?? '/login');
     }
   }, [status, me, isSchoolAdmin, onboarding.isPending, onboarding.data, router]);
+
+  if (status === 'unavailable') return <ServerUnavailable onRetry={() => void reload()} />;
 
   return (
     <div className="flex min-h-screen items-center justify-center">

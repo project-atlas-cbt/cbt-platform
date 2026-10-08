@@ -98,7 +98,10 @@ export async function reconcileAttemptOnLoad(attemptId: string): Promise<Reconci
             // discard path). A `'window-closed'` row is preserved exactly
             // as-is instead — that state is terminal by design (ADR-0003),
             // never resent.
-            syncStatus: existing.syncStatus === 'window-closed' ? 'window-closed' : 'pending',
+            syncStatus:
+              existing.syncStatus === 'window-closed' || existing.syncStatus === 'locked'
+                ? existing.syncStatus
+                : 'pending',
           }
         : {
             attemptId,

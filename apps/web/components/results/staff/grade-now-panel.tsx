@@ -46,7 +46,7 @@ export function GradeNowPanel({
         onOpenChange={setOpen}
         destructive={false}
         title="Grade ungraded results"
-        description={`Grades the ${ungradedCount} ungraded ${ungradedCount === 1 ? 'result' : 'results'} with the grading bands in place now. Results that already have a grade keep it. Students see the new grades once the run finishes.`}
+        description={`Grades the ${ungradedCount} ungraded ${ungradedCount === 1 ? 'result' : 'results'} with the grading bands in place now. A result is graded only when there are bands for its class level or for the whole school; any other stays ungraded and unchanged. Results that already have a grade keep it. Students see the new grades once the run finishes.`}
         placeholder="For example: grading bands were set after this exam was marked."
         confirmLabel="Grade now"
         onConfirm={async (reason) => {

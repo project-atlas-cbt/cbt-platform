@@ -2,6 +2,44 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-08 — Bug audit follow-ups: sign-in bounce, "no going back", absentee list, "Grade now"
+
+Four items left open by the 2026-10-07 re-check of the bug audit
+(`/mnt/project-files/bug-audit/findings.md`):
+
+- **P2-3:** a reload while the network was down, or while the API restarted during a deploy (a 502
+  from Caddy), sent a student mid-exam to the sign-in page. Only a real 401 now means signed out.
+  A network error, 5xx, 408 or 429 from `/auth/me` gives the new `unavailable` auth status: the
+  page shows "Can't reach the server" and retries every 5 seconds (longer when a 503 sends
+  `Retry-After`) until it can carry on. A failed re-check after an earlier success keeps the
+  session (`lib/auth/auth-context.tsx`, `components/auth/server-unavailable.tsx`).
+- **P1-6:** "no going back" is now enforced by the server. Under `SEQUENTIAL_NO_REVISIT`, an answer
+  write to a question that comes before the furthest question the attempt has an answer for is
+  refused with the new `ATTEMPT_QUESTION_LOCKED` (409, non-retryable). Offline batches arrive in
+  no particular order, so a batch is applied in the attempt's question order, and a batch item
+  that fails for a retryable reason holds back the later items in that batch (reported INTERNAL,
+  so the client retries them). A forward-only offline sitting is therefore accepted whole. The
+  client marks a refused answer `locked`: final, not retried, not counted as answered, and it does
+  not hold Submit back (`no-revisit-lock.ts`, `attempt-answer.service.ts`). By default skipped
+  questions are locked too; the narrower rule (lock only answered questions) is one constant,
+  `NO_REVISIT_LOCK_MODE`, pending Haneef's choice.
+- **P2-2:** End Examination listed, and recorded absent, students who sat another batch. The
+  absentee set now has one definition, `computePendingAbsences`, used both by
+  `ExamCompletionService.complete()` and by the new `pendingAbsence` flag on
+  `GET /exams/:id/eligible-students`, which the dialog lists from. This also fixes a mismatch the
+  re-check found: the dialog listed every authorized student, including those who had sat, while
+  the server excluded them, so End Examination failed with `STALE_ABSENTEE_LIST` whenever anyone
+  had sat.
+- **P2-21:** "Grade now" checked only that some grading scale existed, so with bands for another
+  level and no school-wide set it marked results ADJUSTED while they stayed Ungraded. The API now
+  targets only ungraded results that a scale covers (their level's, or the school-wide one) and
+  refuses with the missing levels named when none is covered; the worker skips, without marking,
+  any result it still cannot grade (bands archived after the request).
+
+Tested: API integration suites for attempts, results and exam control (new cases for each item,
+which fail on the old code), worker result-adjustment suite, API and web unit suites, typecheck and
+lint.
+
 ### 2026-10-08 — Question editor: save error, option typing, subscript and superscript
 
 Editing a draft always failed with "Option <id> does not belong to this revision", and an option

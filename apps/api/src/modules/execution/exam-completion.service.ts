@@ -11,6 +11,7 @@ import { toExamResponseDtoFresh } from '../exams/exam.util.js';
 import { loadParentExamOrThrow } from './exam-control-mappers.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
 import type { CompleteExamDto } from './dto/exam-control-center.dto.js';
+import { computePendingAbsences } from './pending-absences.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -137,38 +138,7 @@ export class ExamCompletionService {
       });
       if (openSessionCount > 0) return { kind: 'SESSIONS_STILL_OPEN' };
 
-      const sessions = await tx.examSession.findMany({
-        where: { schoolId, examId },
-        select: { id: true },
-      });
-      const sessionIds = sessions.map((s) => s.id);
-      const authorizedParticipants =
-        sessionIds.length === 0
-          ? []
-          : await tx.examSessionParticipant.findMany({
-              where: { schoolId, examSessionId: { in: sessionIds }, status: 'AUTHORIZED' },
-              orderBy: { authorizedAt: 'desc' },
-              select: { studentProfileId: true, examSessionId: true },
-            });
-      const existingParticipation = await tx.examParticipation.findMany({
-        where: { schoolId, examId },
-        select: { studentProfileId: true, examSessionId: true },
-      });
-      const startedAttempts = await tx.examAttempt.findMany({
-        where: { schoolId, examId },
-        select: { studentProfileId: true, examSessionId: true },
-      });
-      const alreadyMarked = new Set(
-        existingParticipation.map((p) => `${p.examSessionId}:${p.studentProfileId}`),
-      );
-      const started = new Set(
-        startedAttempts.map((attempt) => `${attempt.examSessionId}:${attempt.studentProfileId}`),
-      );
-      const pending = authorizedParticipants.filter(
-        (p) =>
-          !alreadyMarked.has(`${p.examSessionId}:${p.studentProfileId}`) &&
-          !started.has(`${p.examSessionId}:${p.studentProfileId}`),
-      );
+      const pending = await computePendingAbsences(tx, schoolId, examId);
       const pendingEntries = new Set(
         pending.map((p) => `${p.examSessionId}:${p.studentProfileId}`),
       );

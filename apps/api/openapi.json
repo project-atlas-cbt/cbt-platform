@@ -14503,6 +14503,10 @@
             "type": "string",
             "nullable": true
           },
+          "pendingAbsence": {
+            "type": "boolean",
+            "description": "End Examination will record this student absent: authorized, never started, and has not sat another batch."
+          },
           "extraTimeSeconds": {
             "type": "number",
             "description": "F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none)."
@@ -14519,6 +14523,7 @@
           "eligible",
           "failedChecks",
           "participantStatus",
+          "pendingAbsence",
           "extraTimeSeconds",
           "largerText"
         ]

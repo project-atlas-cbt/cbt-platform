@@ -27,10 +27,20 @@ export interface AttemptWriteContext {
   ownerUserId: string;
   /** examQuestionId → its option ids, from the immutable snapshot. */
   questions: ReadonlyMap<string, ReadonlySet<string>>;
+  /** examQuestionId → its 0-based position in this attempt's materialised
+   * question order (bug audit P1-6, the server's "no going back" check). */
+  order: ReadonlyMap<string, number>;
+  /** The exam's navigation policy, read fresh with the attempt. */
+  navigationPolicy: string;
+}
+
+interface CachedIndex {
+  questions: ReadonlyMap<string, ReadonlySet<string>>;
+  order: ReadonlyMap<string, number>;
 }
 
 const INDEX_CACHE_MAX_ENTRIES = 20_000;
-const indexCache = new Map<string, ReadonlyMap<string, ReadonlySet<string>>>();
+const indexCache = new Map<string, CachedIndex>();
 
 export function buildSnapshotIndex(
   document: AttemptSnapshotDocumentV1 | undefined,
@@ -42,7 +52,21 @@ export function buildSnapshotIndex(
   return index;
 }
 
-function remember(attemptId: string, index: ReadonlyMap<string, ReadonlySet<string>>): void {
+/** examQuestionId → 0-based rank by `displaySequence`. */
+export function buildSnapshotOrder(
+  document: AttemptSnapshotDocumentV1 | undefined,
+): ReadonlyMap<string, number> {
+  const sorted = [...(document?.questions ?? [])].sort(
+    (a, b) => a.displaySequence - b.displaySequence,
+  );
+  return new Map(sorted.map((question, rank) => [question.examQuestionId, rank]));
+}
+
+function buildCachedIndex(document: AttemptSnapshotDocumentV1 | undefined): CachedIndex {
+  return { questions: buildSnapshotIndex(document), order: buildSnapshotOrder(document) };
+}
+
+function remember(attemptId: string, index: CachedIndex): void {
   // Bounded by live attempts per process; when full, drop the oldest
   // (Map iterates in insertion order) — a later miss just re-reads.
   if (indexCache.size >= INDEX_CACHE_MAX_ENTRIES) {
@@ -70,6 +94,7 @@ export async function loadAttemptWriteContextOrThrow(
         schoolId: true,
         state: true,
         expiresAt: true,
+        exam: { select: { navigationPolicy: true } },
         studentProfile: { select: { membership: { select: { userId: true } } } },
         ...(cached === undefined && { snapshot: { select: { document: true } } }),
       },
@@ -78,13 +103,13 @@ export async function loadAttemptWriteContextOrThrow(
   if (!row || row.schoolId !== schoolId) {
     throw new AppHttpException({ code: 'NOT_FOUND', message: 'Attempt not found.' });
   }
-  let questions = cached;
-  if (questions === undefined) {
+  let index = cached;
+  if (index === undefined) {
     const snapshot = (row as { snapshot?: { document: unknown } | null }).snapshot;
-    questions = buildSnapshotIndex(snapshot?.document as AttemptSnapshotDocumentV1 | undefined);
+    index = buildCachedIndex(snapshot?.document as AttemptSnapshotDocumentV1 | undefined);
     // Only cache a real snapshot: an attempt row is always created with its
     // snapshot in one transaction (B13 DoD 1), but never cache emptiness.
-    if (snapshot) remember(attemptId, questions);
+    if (snapshot) remember(attemptId, index);
   }
   return {
     id: row.id,
@@ -92,7 +117,9 @@ export async function loadAttemptWriteContextOrThrow(
     state: row.state,
     expiresAt: row.expiresAt,
     ownerUserId: row.studentProfile.membership.userId,
-    questions,
+    questions: index.questions,
+    order: index.order,
+    navigationPolicy: row.exam.navigationPolicy,
   };
 }
 
@@ -103,7 +130,7 @@ export async function loadSnapshotIndex(
   attemptId: string,
 ): Promise<ReadonlyMap<string, ReadonlySet<string>> | undefined> {
   const cached = indexCache.get(attemptId);
-  if (cached) return cached;
+  if (cached) return cached.questions;
   const snapshot = await withTenant(prisma, schoolId, (tx) =>
     tx.attemptQuestionSnapshot.findUnique({
       where: { schoolId_attemptId: { schoolId, attemptId } },
@@ -111,7 +138,7 @@ export async function loadSnapshotIndex(
     }),
   );
   if (!snapshot) return undefined;
-  const index = buildSnapshotIndex(snapshot.document as unknown as AttemptSnapshotDocumentV1);
+  const index = buildCachedIndex(snapshot.document as unknown as AttemptSnapshotDocumentV1);
   remember(attemptId, index);
-  return index;
+  return index.questions;
 }

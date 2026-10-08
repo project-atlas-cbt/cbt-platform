@@ -82,14 +82,24 @@ export async function runResultAdjustment(
 
   let chunkIndex = 0;
   let failureReason: string | null = null;
+  // P2-21: "Grade now" results left untouched because no scale covers them
+  // (bands removed since the request). They get no child row, so they are
+  // excluded here to keep the loop finite.
+  const skipped = new Set<string>();
 
   try {
     for (;;) {
-      const pending = await loadPendingResultIds(schoolId, operation, RESULT_ADJUSTMENT_CHUNK_SIZE);
+      const pending = await loadPendingResultIds(
+        schoolId,
+        operation,
+        RESULT_ADJUSTMENT_CHUNK_SIZE,
+        skipped,
+      );
       if (pending.length === 0) break;
 
       deps.onBeforeChunk?.(chunkIndex);
-      await applyChunk(schoolId, operation, pending, previouslyVoided);
+      const notGraded = await applyChunk(schoolId, operation, pending, previouslyVoided);
+      for (const id of notGraded) skipped.add(id);
       await refreshClaim(schoolId, operationId);
       chunkIndex += 1;
     }
@@ -165,6 +175,7 @@ async function loadPendingResultIds(
     ungradedOnly: boolean;
   },
   take: number,
+  skipped: ReadonlySet<string>,
 ): Promise<string[]> {
   // P2-19: an override's one result may have been voided (attempt
   // invalidated) after the override was queued. VOIDED → ADJUSTED is refused
@@ -183,7 +194,13 @@ async function loadPendingResultIds(
 
   const rows = await withTenant(prisma, schoolId, (tx) =>
     tx.result.findMany({
-      where: { AND: [scope, { adjustments: { none: { operationId: operation.id } } }] },
+      where: {
+        AND: [
+          scope,
+          { adjustments: { none: { operationId: operation.id } } },
+          ...(skipped.size > 0 ? [{ id: { notIn: [...skipped] } }] : []),
+        ],
+      },
       select: { id: true },
       orderBy: { id: 'asc' },
       take,
@@ -228,10 +245,12 @@ async function applyChunk(
     markDelta: number | null;
     overrideEarnedMarks: number | null;
     createdByMembershipId: string;
+    ungradedOnly: boolean;
   },
   resultIds: readonly string[],
   previouslyVoided: readonly string[],
-): Promise<void> {
+): Promise<string[]> {
+  const notGraded: string[] = [];
   await withTenant(prisma, schoolId, async (tx) => {
     // P2-17: each per-result audit row carries the adjusting member's role
     // (the API's `auditRoleFor` precedence), not a fixed SCHOOL_ADMIN — a
@@ -320,6 +339,13 @@ async function applyChunk(
         versionId = (await resolveGradingScaleVersion(tx, schoolId, level))?.versionId ?? null;
         gradedNow = versionId !== null;
       }
+      // P2-21: "Grade now" never marks a result ADJUSTED that it could not
+      // grade. The API only targets gradable results, so this is the race
+      // where the bands were archived after the request.
+      if (operation.ungradedOnly && !gradedNow) {
+        notGraded.push(resultId);
+        continue;
+      }
       const grade = await resolveGradeForVersion(tx, schoolId, versionId, newValue.percentage);
 
       await tx.result.update({
@@ -387,9 +413,10 @@ async function applyChunk(
 
     await tx.resultAdjustmentOperation.update({
       where: { id: operation.id },
-      data: { appliedCount: { increment: resultIds.length } },
+      data: { appliedCount: { increment: resultIds.length - notGraded.length } },
     });
   });
+  return notGraded;
 }
 
 /** The class level the student sat the exam in: their enrolment in the
