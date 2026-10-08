@@ -49,6 +49,16 @@ export function describeSignals(signals: SignalCounts | null): string | null {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
+/** Leaves of the exam window at which a row is flagged for the invigilator to
+ * look at. A tab switch fires both Left window and Tab hidden, so only Left
+ * window and Left full screen are summed. A prompt to check, never a verdict. */
+export const FREQUENT_LEAVES_THRESHOLD = 3;
+
+export function hasFrequentLeaves(signals: SignalCounts | null): boolean {
+  if (!signals) return false;
+  return signals.WINDOW_BLUR + signals.FULLSCREEN_EXIT >= FREQUENT_LEAVES_THRESHOLD;
+}
+
 function fromLive(live: LiveAttempt): LiveAttemptTableRow {
   return {
     studentProfileId: live.studentProfileId,
@@ -239,7 +249,10 @@ export function LiveAttemptsTable({
       cell: (row) => {
         const text = describeSignals(row.signals);
         return text ? (
-          <span className="tabular-nums text-text-secondary">{text}</span>
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {hasFrequentLeaves(row.signals) && <Badge status="warning">Check on student</Badge>}
+            <span className="tabular-nums text-text-secondary">{text}</span>
+          </span>
         ) : (
           <span className="text-text-muted">—</span>
         );
