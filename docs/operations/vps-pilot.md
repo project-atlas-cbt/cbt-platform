@@ -153,6 +153,15 @@ or bounces.
   release runs against the newer schema; never roll a migration back by hand.
 - **Never during a sitting.** Deploying restarts API and worker; attempts tolerate it (offline
   queue, server-side timers), but do not deploy while an exam is running.
+- **Disk space.** Each release builds about 8 GB of images. A deploy stops before building when
+  less than 10 GB is free, and after a passing smoke it removes every `atlas-*` image except this
+  release's and the previous one's, plus build cache older than a week. To free space by hand,
+  keep the running release (`R=$(tail -n 1 releases.log)`):
+  `docker images --format '{{.Repository}}:{{.Tag}}' | grep '^atlas-' | grep -v ":$R" | xargs -r docker rmi`
+  then `docker builder prune -f`.
+- **Ops scripts by hand.** Images are tagged by release, and only `deploy.sh` sets it. Run
+  `export RELEASE=$(git rev-parse --short=12 HEAD)` first, or `docker compose --profile ops run`
+  uses (or builds) an image tagged `unset` instead of the deployed code.
 
 ## Maintenance page
 

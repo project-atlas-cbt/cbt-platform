@@ -16,6 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export COMPOSE_FILE=compose.yml:ci/compose.ci.yml
+export DEPLOY_MIN_FREE_GB=0
 ROOT=atlas.test
 
 setting() { # file key value — replace or append KEY=value
