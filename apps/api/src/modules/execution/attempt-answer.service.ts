@@ -20,6 +20,7 @@ import type {
 } from './dto/attempt.dto.js';
 import { CRITICAL_SPANS, withSpan } from '@atlas/observability';
 import { ExamTelemetryService } from './exam-telemetry.service.js';
+import { furthestAnsweredRank, isQuestionLocked, questionLocked } from './no-revisit-lock.js';
 
 interface UpsertOutcome {
   accepted: boolean;
@@ -30,6 +31,29 @@ interface UpsertOutcome {
 interface WritePlan {
   answerState: 'ANSWERED' | 'UNANSWERED';
   gradeWindowFlag: boolean;
+}
+
+/** Bug audit P1-6: an earlier question in the same flush failed for a
+ * retryable reason, so this later one is held back (reported INTERNAL, which
+ * the client retries) rather than stored ahead of it. */
+class HeldBehindEarlierAnswer extends Error {
+  constructor() {
+    super('An earlier answer in this upload could not be saved yet; this one will be retried.');
+  }
+}
+
+/** The server's "how far has the student got" under SEQUENTIAL_NO_REVISIT:
+ * every question this attempt holds an answer row for. */
+async function loadAnsweredQuestionIds(
+  tx: Prisma.TransactionClient,
+  schoolId: string,
+  attemptId: string,
+): Promise<Set<string>> {
+  const rows = await tx.attemptAnswer.findMany({
+    where: { schoolId, attemptId },
+    select: { examQuestionId: true },
+  });
+  return new Set(rows.map((row) => row.examQuestionId));
 }
 
 function staleSequence(): AppHttpException {
@@ -230,16 +254,32 @@ export class AttemptAnswerService {
     items: BatchAnswerItemDto[],
     receivedAt: Date,
   ): Promise<BatchAnswerResultDto[]> {
-    const planned: { item: BatchAnswerItemDto; plan?: WritePlan; error?: unknown }[] = [];
-    for (const item of items) {
+    const planned: {
+      item: BatchAnswerItemDto;
+      position: number;
+      plan?: WritePlan;
+      error?: unknown;
+    }[] = [];
+    for (const [position, item] of items.entries()) {
       try {
         planned.push({
           item,
+          position,
           plan: await this.validateWrite(schoolId, attempt, item.examQuestionId, item, receivedAt),
         });
       } catch (error) {
-        planned.push({ item, error });
+        planned.push({ item, position, error });
       }
+    }
+    // Bug audit P1-6: under "no going back", apply the flush in question
+    // order (an offline queue arrives in no particular order), so a
+    // legitimate forward-only sitting is accepted whole. Results still go
+    // back in request order.
+    const noRevisit = attempt.navigationPolicy === 'SEQUENTIAL_NO_REVISIT';
+    if (noRevisit) {
+      const rank = (entry: (typeof planned)[number]) =>
+        attempt.order.get(entry.item.examQuestionId) ?? Number.MAX_SAFE_INTEGER;
+      planned.sort((a, b) => rank(a) - rank(b) || a.position - b.position);
     }
 
     const reject = (item: BatchAnswerItemDto, error: unknown): BatchAnswerResultDto => ({
@@ -249,19 +289,41 @@ export class AttemptAnswerService {
       gradeWindowFlag: false,
     });
     const reason = (error: unknown) =>
-      error instanceof AppHttpException
+      error instanceof AppHttpException || error instanceof HeldBehindEarlierAnswer
         ? error.message
         : 'Unexpected error while saving this answer.';
 
     try {
       return await withTenant(prisma, schoolId, async (tx) => {
-        const results: BatchAnswerResultDto[] = [];
+        const results = new Array<BatchAnswerResultDto>(planned.length);
         const rejected: { item: BatchAnswerItemDto; error: unknown }[] = [];
-        for (const { item, plan, error } of planned) {
+        const answered = noRevisit
+          ? await loadAnsweredQuestionIds(tx, schoolId, attempt.id)
+          : new Set<string>();
+        let furthest = furthestAnsweredRank(answered, attempt.order);
+        let heldBack = false;
+        for (const { item, position, plan, error } of planned) {
           if (!plan) {
             rejected.push({ item, error });
-            results.push(reject(item, error));
+            results[position] = reject(item, error);
             continue;
+          }
+          const rank = attempt.order.get(item.examQuestionId) ?? -1;
+          if (noRevisit) {
+            const lockError = heldBack
+              ? new HeldBehindEarlierAnswer()
+              : isQuestionLocked({
+                    rank,
+                    furthestRank: furthest,
+                    alreadyAnswered: answered.has(item.examQuestionId),
+                  })
+                ? questionLocked()
+                : null;
+            if (lockError) {
+              rejected.push({ item, error: lockError });
+              results[position] = reject(item, lockError);
+              continue;
+            }
           }
           await tx.$executeRawUnsafe('SAVEPOINT answer_item');
           try {
@@ -277,19 +339,22 @@ export class AttemptAnswerService {
             await tx.$executeRawUnsafe('RELEASE SAVEPOINT answer_item');
             if (upserted === null) {
               rejected.push({ item, error: staleSequence() });
-              results.push(reject(item, staleSequence()));
+              results[position] = reject(item, staleSequence());
             } else {
-              results.push({
+              answered.add(item.examQuestionId);
+              furthest = Math.max(furthest, rank);
+              results[position] = {
                 examQuestionId: item.examQuestionId,
                 accepted: true,
                 gradeWindowFlag: plan.gradeWindowFlag,
-              });
+              };
             }
           } catch (itemError) {
             // e.g. the not-in-progress trigger after a concurrent submit.
             await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT answer_item');
             rejected.push({ item, error: itemError });
-            results.push(reject(item, itemError));
+            results[position] = reject(item, itemError);
+            heldBack = true;
           }
         }
         if (rejected.length > 0) {
@@ -324,7 +389,9 @@ export class AttemptAnswerService {
           reason(error),
         ).catch(() => undefined);
       }
-      return planned.map(({ item }) => reject(item, error));
+      return [...planned]
+        .sort((a, b) => a.position - b.position)
+        .map(({ item }) => reject(item, error));
     }
   }
 
@@ -378,9 +445,31 @@ export class AttemptAnswerService {
     receivedAt: Date,
   ): Promise<UpsertOutcome> {
     const plan = await this.validateWrite(schoolId, attempt, examQuestionId, dto, receivedAt);
-    const upserted = await withTenant(prisma, schoolId, (tx) =>
-      this.upsertInTransaction(tx, schoolId, attempt.id, examQuestionId, dto, receivedAt, plan),
-    );
+    const upserted = await withTenant(prisma, schoolId, async (tx) => {
+      // Bug audit P1-6: "no going back" is enforced here, not only in the
+      // browser.
+      if (attempt.navigationPolicy === 'SEQUENTIAL_NO_REVISIT') {
+        const answered = await loadAnsweredQuestionIds(tx, schoolId, attempt.id);
+        if (
+          isQuestionLocked({
+            rank: attempt.order.get(examQuestionId) ?? -1,
+            furthestRank: furthestAnsweredRank(answered, attempt.order),
+            alreadyAnswered: answered.has(examQuestionId),
+          })
+        ) {
+          throw questionLocked();
+        }
+      }
+      return this.upsertInTransaction(
+        tx,
+        schoolId,
+        attempt.id,
+        examQuestionId,
+        dto,
+        receivedAt,
+        plan,
+      );
+    });
     if (upserted === null) throw staleSequence();
     return {
       accepted: true,

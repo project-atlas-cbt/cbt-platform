@@ -47,7 +47,7 @@ export function OptionList({
   // question (ADR-0003), further selection is pointless — the server
   // would only reject it again with the same code. Every other question
   // remains fully answerable regardless.
-  const disabled = answer?.syncStatus === 'window-closed';
+  const disabled = answer?.syncStatus === 'window-closed' || answer?.syncStatus === 'locked';
 
   return (
     <RadioGroup

@@ -44,7 +44,11 @@ export function SubmitDialog({
         // will count as unanswered there (per `grace-window-banner.tsx`'s
         // own copy), so it must not count as answered here either, or this
         // "accurate unanswered count" (DoD 14) would understate it.
-        (row) => row.selectedOptionId !== null && row.syncStatus !== 'window-closed',
+        // A `'locked'` row (bug audit P1-6) was refused the same way.
+        (row) =>
+          row.selectedOptionId !== null &&
+          row.syncStatus !== 'window-closed' &&
+          row.syncStatus !== 'locked',
       ).length,
     [attemptId],
     0,

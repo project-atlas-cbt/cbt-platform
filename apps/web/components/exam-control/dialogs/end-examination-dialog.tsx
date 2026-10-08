@@ -24,10 +24,10 @@ type ExamSession = ApiComponents['schemas']['ExamSessionResponseDto'];
 
 /**
  * F12 — the largest dialog in this phase (`05 §42`'s "End Examination"
- * flow): shows the fetched pending-absentee list by name (every student
- * whose most-recently-touched `ExamSessionParticipant` row is `AUTHORIZED`
- * — confirmed to match `ExamCompletionService.complete()`'s own server-side
- * pending-set computation exactly, verified directly against its source),
+ * flow): shows the fetched pending-absentee list by name (every student the
+ * server flags `pendingAbsence`, computed by the same
+ * `computePendingAbsences` that `ExamCompletionService.complete()` checks
+ * the confirmed list against),
  * a "Refresh list" affordance, and two distinct 409 recoveries:
  *
  * - `STALE_ABSENTEE_LIST` (the list changed between fetch and submit):
@@ -66,7 +66,10 @@ export function EndExaminationDialog({
   const [serverBlockedBySessions, setServerBlockedBySessions] = useState(false);
 
   const pending = useMemo(
-    () => (eligible.data?.students ?? []).filter((s) => s.participantStatus === 'AUTHORIZED'),
+    // The server marks the exact set End Examination records absent
+    // (`computePendingAbsences`), so a student who sat another batch, or who
+    // sat this one, is never listed (bug audit P2-2).
+    () => (eligible.data?.students ?? []).filter((s) => s.pendingAbsence),
     [eligible.data],
   );
 

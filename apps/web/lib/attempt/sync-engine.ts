@@ -314,7 +314,7 @@ export class AttemptSyncEngine {
 
   /** Answers on this device the server has not acknowledged yet (`pending`
    * or `in-flight`). A `window-closed` row is final (ADR-0003), not
-   * counted. */
+   * counted; nor is a `locked` one (bug audit P1-6). */
   async unsyncedCount(): Promise<number> {
     const db = getAttemptDb();
     const pending = await db.answers
@@ -471,6 +471,18 @@ export class AttemptSyncEngine {
           syncStatus: 'window-closed',
           rejectionCode: result.rejectionCode,
           acknowledged: false,
+          lastAttemptedAt: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      if (result.rejectionCode === 'ATTEMPT_QUESTION_LOCKED') {
+        // Bug audit P1-6: "no going back" already locked this question on
+        // the server. Final, never retried (a retry could never succeed and
+        // would hold Submit back forever), and not counted as answered.
+        await db.answers.update([this.attemptId, result.examQuestionId], {
+          syncStatus: 'locked',
+          rejectionCode: result.rejectionCode,
           lastAttemptedAt: new Date().toISOString(),
         });
         continue;

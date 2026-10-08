@@ -39,6 +39,18 @@ describe('RouteGuard', () => {
     expect(replace).toHaveBeenCalledWith('/login');
   });
 
+  it('shows a retry state, not /login, when the server is unavailable (bug audit P2-3)', () => {
+    mockUseAuth.mockReturnValue({ status: 'unavailable', reload: vi.fn() } as never);
+    render(
+      <RouteGuard mode="requireAuthenticated">
+        <div>content</div>
+      </RouteGuard>,
+    );
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.queryByText('content')).not.toBeInTheDocument();
+    expect(screen.getByText(/can.t reach the server/i)).toBeInTheDocument();
+  });
+
   it('redirects password-change-required to /password/change under requireAuthenticated', () => {
     mockUseAuth.mockReturnValue({ status: 'password-change-required' } as never);
     render(

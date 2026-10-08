@@ -394,6 +394,7 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     attemptLimit?: number;
     randomizeQuestions?: boolean;
     randomizeOptions?: boolean;
+    navigationPolicy?: 'FREE' | 'SEQUENTIAL_NO_REVISIT' | 'SEQUENTIAL_WITH_REVISIT';
   }): Promise<string> {
     const termId = (await get(admin, '/academics/context')).json<{ term: { id: string } }>().term
       .id;
@@ -415,6 +416,7 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
       attemptLimit: opts?.attemptLimit ?? 1,
       randomizeQuestions: opts?.randomizeQuestions ?? false,
       randomizeOptions: opts?.randomizeOptions ?? false,
+      ...(opts?.navigationPolicy && { navigationPolicy: opts.navigationPolicy }),
       resultPolicy: 'TEACHER',
       resultDetailVisibility: 'SCORE_AND_COUNTS',
       generalInstructions: 'Answer all.',
@@ -970,6 +972,123 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
       }),
     );
     expect(q2Stored?.selectedOptionId).toBe(q2.options[0]!.optionId);
+  });
+
+  it('audit P1-6: "no going back" is enforced by the server, offline batches in any order', async () => {
+    const examId = await buildReadyExam({ navigationPolicy: 'SEQUENTIAL_NO_REVISIT' });
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const [first, second] = [...pkg.questions].sort(
+      (a, b) => a.displaySequence - b.displaySequence,
+    );
+    const answersUrl = `/attempts/${pkg.attemptId}/answers`;
+
+    // An offline queue flushed in reverse order is applied in question
+    // order, so a forward-only sitting is accepted whole.
+    const flush = await post(studentA, `${answersUrl}/batch`, {
+      answers: [
+        {
+          examQuestionId: second!.examQuestionId,
+          selectedOptionId: second!.options[0]!.optionId,
+          sequenceNumber: 1,
+          source: 'offline-replay',
+        },
+        {
+          examQuestionId: first!.examQuestionId,
+          selectedOptionId: first!.options[0]!.optionId,
+          sequenceNumber: 1,
+          source: 'offline-replay',
+        },
+      ],
+    });
+    expect(flush.statusCode).toBe(200);
+    const flushed = flush.json<{ results: { examQuestionId: string; accepted: boolean }[] }>()
+      .results;
+    // Results come back in request order.
+    expect(flushed.map((r) => r.examQuestionId)).toEqual([
+      second!.examQuestionId,
+      first!.examQuestionId,
+    ]);
+    expect(flushed.every((r) => r.accepted)).toBe(true);
+
+    // Going back to change the first answer is refused, by either route.
+    const back = await put(studentA, `${answersUrl}/${first!.examQuestionId}`, {
+      selectedOptionId: first!.options[1]!.optionId,
+      sequenceNumber: 2,
+    });
+    expect(back.statusCode).toBe(409);
+    expect(back.json<{ error: { code: string } }>().error.code).toBe('ATTEMPT_QUESTION_LOCKED');
+    const backInBatch = await post(studentA, `${answersUrl}/batch`, {
+      answers: [
+        {
+          examQuestionId: first!.examQuestionId,
+          selectedOptionId: first!.options[1]!.optionId,
+          sequenceNumber: 3,
+        },
+      ],
+    });
+    expect(
+      backInBatch.json<{ results: { rejectionCode?: string }[] }>().results[0]!.rejectionCode,
+    ).toBe('ATTEMPT_QUESTION_LOCKED');
+
+    // The furthest question stays open for changes.
+    const current = await put(studentA, `${answersUrl}/${second!.examQuestionId}`, {
+      selectedOptionId: second!.options[1]!.optionId,
+      sequenceNumber: 2,
+    });
+    expect(current.statusCode).toBe(200);
+
+    const stored = await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptAnswer.findUniqueOrThrow({
+        where: {
+          schoolId_attemptId_examQuestionId: {
+            schoolId,
+            attemptId: pkg.attemptId,
+            examQuestionId: first!.examQuestionId,
+          },
+        },
+      }),
+    );
+    expect(stored.selectedOptionId).toBe(first!.options[0]!.optionId);
+
+    // A skipped question is locked too, once a later one has an answer.
+    const pkgB = (await post(studentB, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const [firstB, secondB] = [...pkgB.questions].sort(
+      (a, b) => a.displaySequence - b.displaySequence,
+    );
+    expect(
+      (
+        await put(studentB, `/attempts/${pkgB.attemptId}/answers/${secondB!.examQuestionId}`, {
+          selectedOptionId: secondB!.options[0]!.optionId,
+          sequenceNumber: 1,
+        })
+      ).statusCode,
+    ).toBe(200);
+    const skipped = await put(
+      studentB,
+      `/attempts/${pkgB.attemptId}/answers/${firstB!.examQuestionId}`,
+      { selectedOptionId: firstB!.options[0]!.optionId, sequenceNumber: 1 },
+    );
+    expect(skipped.statusCode).toBe(409);
+  });
+
+  it('audit P1-6: free navigation still lets a student go back and change an answer', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const [first, second] = [...pkg.questions].sort(
+      (a, b) => a.displaySequence - b.displaySequence,
+    );
+    const answersUrl = `/attempts/${pkg.attemptId}/answers`;
+    await put(studentA, `${answersUrl}/${second!.examQuestionId}`, {
+      selectedOptionId: second!.options[0]!.optionId,
+      sequenceNumber: 1,
+    });
+    const back = await put(studentA, `${answersUrl}/${first!.examQuestionId}`, {
+      selectedOptionId: first!.options[0]!.optionId,
+      sequenceNumber: 1,
+    });
+    expect(back.statusCode).toBe(200);
   });
 
   it("rejects an answer naming a question/option not present in this attempt's own snapshot", async () => {
@@ -2080,6 +2199,34 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     ).not.toBe(examId);
   });
 
+  it('audit P2-2: End Examination does not list a student who sat another batch', async () => {
+    const examId = await buildReadyExam();
+    const batchOne = await openSession(examId);
+    const sat = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await post(studentA, `/attempts/${sat.attemptId}/submit`, {})).statusCode).toBe(200);
+    expect((await post(teacher, `/exam-sessions/${batchOne}/close`, {})).statusCode).toBe(200);
+    const batchTwo = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${batchTwo}/close`, {})).statusCode).toBe(200);
+
+    // The list the End Examination dialog shows.
+    const roster = (await get(teacher, `/exams/${examId}/eligible-students`)).json<{
+      students: { studentProfileId: string; pendingAbsence: boolean }[];
+    }>().students;
+    const pendingIds = roster.filter((s) => s.pendingAbsence).map((s) => s.studentProfileId);
+    expect(pendingIds).not.toContain(studentAProfileId);
+    expect(pendingIds).toContain(studentBProfileId);
+
+    // And the server accepts exactly that list.
+    const complete = await post(teacher, `/exams/${examId}/complete`, {
+      confirmedAbsentStudentProfileIds: pendingIds,
+    });
+    expect(complete.statusCode).toBe(200);
+    const absences = await withTenant(prisma, schoolId, (tx) =>
+      tx.examParticipation.findMany({ where: { schoolId, examId, status: 'ABSENT' } }),
+    );
+    expect(absences.map((a) => a.studentProfileId)).not.toContain(studentAProfileId);
+  });
+
   it('audit P2-2: makeup is refused for a student who sat the exam in another batch', async () => {
     const examId = await buildReadyExam();
     const batchOne = await openSession(examId);
@@ -2095,14 +2242,19 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
         sessions: { examSessionId: string; status: string; attemptId: string | null }[];
       }[];
     }>();
-    const pending = participation.students.flatMap((student) =>
-      student.sessions
-        .filter((session) => session.status === 'PENDING' && session.attemptId === null)
-        .map((session) => ({
-          examSessionId: session.examSessionId,
-          studentProfileId: student.studentProfileId,
-        })),
-    );
+    // End Examination no longer records a student who sat batch one as
+    // absent from batch two (audit P2-2), so only students with no attempt
+    // at all are pending.
+    const pending = participation.students
+      .filter((student) => student.sessions.every((session) => session.attemptId === null))
+      .flatMap((student) =>
+        student.sessions
+          .filter((session) => session.status === 'PENDING')
+          .map((session) => ({
+            examSessionId: session.examSessionId,
+            studentProfileId: student.studentProfileId,
+          })),
+      );
     expect(
       (
         await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
@@ -2110,6 +2262,25 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
         })
       ).statusCode,
     ).toBe(200);
+
+    // Absences recorded before that fix still exist on live data; the makeup
+    // grant must refuse those too.
+    await withTenant(prisma, schoolId, async (tx) => {
+      const membership = await tx.schoolMembership.findFirstOrThrow({
+        where: { schoolId, roleAssignments: { some: { role: 'TEACHER' } } },
+        select: { id: true },
+      });
+      await tx.examParticipation.create({
+        data: {
+          schoolId,
+          examId,
+          examSessionId: batchTwo,
+          studentProfileId: studentAProfileId,
+          status: 'ABSENT',
+          markedByMembershipId: membership.id,
+        },
+      });
+    });
 
     const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
       studentProfileIds: [studentAProfileId],
