@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -146,6 +147,7 @@ export function QuestionBankScreen({
   const level = searchParams.get('level') ?? '';
   const difficulty = searchParams.get('difficulty') ?? '';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
 
   const canCreate = useHasPermission('questionBank.create') && !hideCreate;
   const canImport = useHasPermission('questionBank.import');
@@ -217,17 +219,17 @@ export function QuestionBankScreen({
     const difficultyValue = difficulty ? asDifficulty(difficulty) : undefined;
     return {
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       ...(statusValue ? { status: statusValue } : {}),
       ...(subjectId ? { subjectId } : {}),
       ...(levelValue ? { level: levelValue } : {}),
       ...(difficultyValue ? { difficulty: difficultyValue } : {}),
     };
-  }, [page, status, subjectId, level, difficulty]);
+  }, [page, pageSize, status, subjectId, level, difficulty]);
 
   const questions = useQuestionsPaginated(filters);
   const rows: QuestionRow[] = questions.data?.questions ?? [];
-  const pageCount = Math.max(1, Math.ceil((questions.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((questions.data?.total ?? 0) / pageSize));
 
   const selectableRows = ownOnly ? rows.filter((row) => row.mine) : rows;
   const allSelectableSelected =
@@ -577,9 +579,15 @@ export function QuestionBankScreen({
           columns={columns}
           rows={rows}
           getRowId={(r) => r.id}
+          getRowHref={(row) => `${basePath}/${row.id}`}
           isLoading={questions.isPending}
           page={page}
           pageCount={pageCount}
+          total={questions.data?.total}
+          pageSize={pageSize}
+          onPageSizeChange={(next) =>
+            updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+          }
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             !hasFilters ? (

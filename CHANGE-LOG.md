@@ -2,17 +2,22 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
-### 2026-10-09 — Fixed header, collapsible sidebar, sticky pagination
+### 2026-10-09 — Fixed header, icon-rail sidebar, list improvements
 
 UI refinements Haneef asked for (2026-10-09), in every staff and student workspace shell:
 
-- The top bar stays fixed while the page scrolls; the offline banner sits inside it.
-- The sidebar stays beside the page with its own scroll. A button at the left of the top bar hides
-  or shows it, remembered per browser (`components/shell/sidebar-state.ts`). Below 768px wide it is
-  a drawer over the page that closes after a link is followed.
-- `DataTable`'s Previous/Next bar sticks to the bottom of the window while the table is in view,
-  so every paginated list (students, teachers, questions, exams, results, imports, platform
-  schools) gets it. Moving page from mid-list brings the new page's first row into view.
+- The top bar stays fixed while the page scrolls; the offline banner sits inside it. The logo stays
+  first at the top left.
+- The sidebar stays beside the page with its own scroll. **Collapse** at its foot shrinks it to an
+  icon rail (each icon keeps its name as a tooltip and for screen readers), remembered per browser
+  (`components/shell/sidebar-state.ts`). Below 768px wide it is a drawer opened from a menu button
+  at the end of the top bar, and closes after a link is followed.
+- `DataTable` lists: the Previous/Next bar sticks to the bottom of the window while the table is in
+  view, and moving page from mid-list returns to the first row. It shows "Showing 26–36 of 36" and,
+  on school lists, a 25/50/100 rows-per-page choice (`?size=`, `lib/query/page-size.ts`). Column
+  headings stay in view under the top bar (`Table stickyHeader`, which clips instead of scrolling
+  sideways whenever the table fits). Clicking anywhere on a row that has a detail page opens it
+  through the row's own link (`getRowHref`); the link stays the keyboard route.
 - The page still scrolls the window, so navigation's scroll-to-top is unchanged. The exam runtime
   has no shell and is unaffected.
 

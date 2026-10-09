@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import { useHasPermission } from '@/lib/nav';
 import { useExamsPaginated, useOwnExamsFilter, type ExamListFilters } from '@/lib/exams/queries';
 import { examStepPath } from '@/lib/exams/navigation';
@@ -68,6 +69,7 @@ export function ExamListScreen({
   const departmentId = searchParams.get('departmentId') ?? '';
   const teacherMembershipId = searchParams.get('teacherMembershipId') ?? '';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
 
   const hasCreateGrant = useHasPermission('exam.create');
   const canCreate = scope === 'own' && hasCreateGrant;
@@ -93,7 +95,7 @@ export function ExamListScreen({
   const filters: ExamListFilters = useMemo(
     () => ({
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       ...(status ? { status } : {}),
       ...(subjectId ? { subjectId } : {}),
       ...(classId ? { classId } : {}),
@@ -101,12 +103,21 @@ export function ExamListScreen({
       ...(teacherMembershipId ? { teacherMembershipId } : {}),
       ...(ownMembershipId ? { teacherMembershipId: ownMembershipId } : {}),
     }),
-    [page, status, subjectId, classId, departmentId, teacherMembershipId, ownMembershipId],
+    [
+      page,
+      pageSize,
+      status,
+      subjectId,
+      classId,
+      departmentId,
+      teacherMembershipId,
+      ownMembershipId,
+    ],
   );
 
   const exams = useExamsPaginated(filters);
   const rows: ExamRow[] = exams.data?.exams ?? [];
-  const pageCount = Math.max(1, Math.ceil((exams.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((exams.data?.total ?? 0) / pageSize));
 
   function rowHref(row: ExamRow): string {
     if (scope === 'oversight') return `${basePath}/${row.id}`;
@@ -202,9 +213,15 @@ export function ExamListScreen({
           columns={columns}
           rows={rows}
           getRowId={(r) => r.id}
+          getRowHref={(row) => rowHref(row)}
           isLoading={exams.isPending}
           page={page}
           pageCount={pageCount}
+          total={exams.data?.total}
+          pageSize={pageSize}
+          onPageSizeChange={(next) =>
+            updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+          }
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             !hasFilters ? (

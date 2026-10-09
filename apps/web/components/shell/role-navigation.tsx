@@ -26,7 +26,16 @@ import { cn } from '@/lib/utils';
  * for every role, so the Platform Admin sidebar's `GET /me/permissions`
  * call 401'd forever and the nav never rendered past its loading skeleton.
  */
-export function RoleNavigation({ role, navigation }: { role: Role; navigation: NavigationResult }) {
+export function RoleNavigation({
+  role,
+  navigation,
+  collapsed = false,
+}: {
+  role: Role;
+  navigation: NavigationResult;
+  /** Icon-only rail: each link keeps its name for screen readers and as a tooltip. */
+  collapsed?: boolean;
+}) {
   const { items } = navigation;
   const pathname = usePathname();
   const root = ROLE_WORKSPACES[role].root;
@@ -35,7 +44,7 @@ export function RoleNavigation({ role, navigation }: { role: Role; navigation: N
     return (
       <nav aria-label="Workspace navigation" className="flex flex-col gap-1 p-3">
         {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-9 w-full" />
+          <Skeleton key={i} className={collapsed ? 'mx-auto size-9' : 'h-9 w-full'} />
         ))}
       </nav>
     );
@@ -56,15 +65,17 @@ export function RoleNavigation({ role, navigation }: { role: Role; navigation: N
             key={item.id}
             href={href}
             aria-current={active ? 'page' : undefined}
+            title={collapsed ? item.label : undefined}
             className={cn(
               'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              collapsed && 'justify-center px-0',
               active
                 ? 'bg-brand-primary-subtle text-brand-primary'
                 : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
             )}
           >
             <Icon className="size-4 shrink-0" aria-hidden />
-            {item.label}
+            {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
           </Link>
         );
       })}

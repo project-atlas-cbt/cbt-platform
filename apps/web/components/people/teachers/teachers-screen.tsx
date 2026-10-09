@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn, type DataTableSort } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useHasPermission } from '@/lib/nav';
@@ -36,6 +37,7 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
   const sortColumn = searchParams.get('sortBy');
   const sortDir = searchParams.get('sortDir');
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
   const sort = useMemo<DataTableSort | null>(
     () =>
       sortColumn && (sortDir === 'asc' || sortDir === 'desc')
@@ -68,13 +70,13 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
   const teachers = useTeachersPaginated({
     q: search,
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     sortBy: sortColumn === 'staffId' || sortColumn === 'lastName' ? sortColumn : null,
     sortDir: sortDir === 'asc' || sortDir === 'desc' ? sortDir : null,
   });
 
   const rows: TeacherRow[] = teachers.data?.teachers ?? [];
-  const pageCount = Math.max(1, Math.ceil((teachers.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((teachers.data?.total ?? 0) / pageSize));
 
   const columns: DataTableColumn<TeacherRow>[] = [
     {
@@ -164,6 +166,7 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
           columns={columns}
           rows={rows}
           getRowId={(r) => r.teacherProfileId}
+          getRowHref={(row) => `${basePath}/teachers/${row.teacherProfileId}`}
           isLoading={teachers.isPending}
           sort={sort}
           onSortChange={(next) =>
@@ -171,6 +174,11 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
           }
           page={page}
           pageCount={pageCount}
+          total={teachers.data?.total}
+          pageSize={pageSize}
+          onPageSizeChange={(next) =>
+            updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+          }
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             !search ? (

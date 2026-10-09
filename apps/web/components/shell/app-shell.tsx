@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, Menu, X } from 'lucide-react';
 import type { Role } from '@atlas/domain';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { PlatformRouteGuard } from '@/components/auth/platform-route-guard';
@@ -12,6 +12,7 @@ import { PasswordChangeGate } from '@/components/platform/security/password-chan
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useAuth, usePlatformAuth } from '@/lib/auth';
+import { cn } from '@/lib/utils';
 import { useNavigation, usePlatformNavigation, type NavigationResult } from '@/lib/nav';
 import { ROLE_WORKSPACES } from '@/lib/nav/nav-model';
 import { RoleNavigation } from './role-navigation';
@@ -68,9 +69,10 @@ export interface AppShellProps {
  * already applies to self-service password change.
  *
  * The header stays fixed at the top while the page scrolls, and the sidebar
- * stays beside it with its own scroll. On a wide screen the sidebar can be
- * hidden (remembered per browser, `sidebar-state.ts`); on a narrow one it
- * is a drawer the menu button opens over the page. The page itself still
+ * stays beside it with its own scroll. On a wide screen the sidebar
+ * collapses to an icon rail from the button at its foot (remembered per
+ * browser, `sidebar-state.ts`); on a narrow one it is a drawer the menu
+ * button at the end of the top bar opens over the page. The page itself still
  * scrolls the window, so navigation's scroll-to-top and `position: sticky`
  * page parts (the pagination bar in `DataTable`) keep working; those read
  * `--shell-top` to sit below the header.
@@ -119,12 +121,6 @@ function ShellChrome({
     return () => observer.disconnect();
   }, []);
 
-  const sidebarOpen = wide ? !collapsed : drawerOpen;
-  function toggleSidebar() {
-    if (wide) setCollapsed(!collapsed);
-    else setDrawerOpen(!drawerOpen);
-  }
-
   return (
     <div
       className="flex min-h-screen flex-col"
@@ -133,26 +129,6 @@ function ShellChrome({
       <div ref={chromeTop} className="sticky top-0 z-30">
         <header className="flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="-ml-1 shrink-0"
-              onClick={toggleSidebar}
-              aria-expanded={sidebarOpen}
-              aria-controls={wide ? SIDEBAR_ID : undefined}
-              aria-label={sidebarOpen ? 'Hide navigation' : 'Show navigation'}
-              title={sidebarOpen ? 'Hide navigation' : 'Show navigation'}
-            >
-              {wide ? (
-                sidebarOpen ? (
-                  <PanelLeftClose aria-hidden />
-                ) : (
-                  <PanelLeftOpen aria-hidden />
-                )
-              ) : (
-                <Menu aria-hidden />
-              )}
-            </Button>
             <ProductMark className="size-8 shrink-0" />
             <span className="hidden shrink-0 text-sm font-semibold text-text-primary md:inline">
               {productName}
@@ -167,17 +143,63 @@ function ShellChrome({
             <GlobalSearch role={role} />
             {showNotifications ? <NotificationPanel /> : null}
             <ProfileMenu identity={identity} onLogout={onLogout} />
+            {wide ? null : (
+              // Narrow screens have no sidebar to hold its own toggle, so the
+              // menu opens from the end of the top bar, keeping the logo first.
+              <Button
+                variant="ghost"
+                size="icon"
+                className="-mr-1"
+                onClick={() => setDrawerOpen(true)}
+                aria-expanded={drawerOpen}
+                aria-label="Open navigation"
+              >
+                <Menu aria-hidden />
+              </Button>
+            )}
           </div>
         </header>
         <OfflineIndicator />
       </div>
       <div className="flex flex-1">
-        {wide && !collapsed ? (
+        {wide ? (
           <aside
             id={SIDEBAR_ID}
-            className="sticky top-(--shell-top) h-[calc(100dvh-var(--shell-top))] w-56 shrink-0 overflow-y-auto border-r border-border bg-surface"
+            aria-label="Sidebar"
+            className={cn(
+              'sticky top-(--shell-top) flex h-[calc(100dvh-var(--shell-top))] shrink-0 flex-col border-r border-border bg-surface',
+              collapsed ? 'w-16' : 'w-56',
+            )}
           >
-            <RoleNavigation role={role} navigation={navigation} />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <RoleNavigation role={role} navigation={navigation} collapsed={collapsed} />
+            </div>
+            {/* Collapse sits with what it collapses, at the foot of the
+                sidebar, as in most workspace apps; the top bar stays the
+                school's and the product's. */}
+            <div className="border-t border-border p-3">
+              <button
+                type="button"
+                onClick={() => setCollapsed(!collapsed)}
+                aria-controls={SIDEBAR_ID}
+                aria-expanded={!collapsed}
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={collapsed ? 'Expand sidebar' : undefined}
+                className={cn(
+                  'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-muted hover:text-text-primary',
+                  collapsed && 'justify-center px-0',
+                )}
+              >
+                {collapsed ? (
+                  <ChevronsRight className="size-4 shrink-0" aria-hidden />
+                ) : (
+                  <>
+                    <ChevronsLeft className="size-4 shrink-0" aria-hidden />
+                    Collapse
+                  </>
+                )}
+              </button>
+            </div>
           </aside>
         ) : null}
         <main className="min-w-0 flex-1 p-4 md:p-6">

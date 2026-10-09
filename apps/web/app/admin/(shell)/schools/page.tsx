@@ -201,6 +201,7 @@ export default function SchoolsListPage() {
           columns={columns}
           rows={rows}
           getRowId={(r) => r.id}
+          getRowHref={(row) => `/admin/schools/${row.id}`}
           isLoading={schools.isPending}
           sort={sort}
           onSortChange={(next) =>
@@ -208,6 +209,8 @@ export default function SchoolsListPage() {
           }
           page={page}
           pageCount={pageCount}
+          total={schools.data?.total}
+          pageSize={PAGE_SIZE}
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             statusFilter.length === 0 && !search ? (

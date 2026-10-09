@@ -99,7 +99,7 @@ describe('AppShell', () => {
     consoleSpy.mockRestore();
   });
 
-  it('hides and shows the sidebar, remembering the choice in this browser', async () => {
+  it('collapses the sidebar to an icon rail and back, remembering the choice in this browser', async () => {
     window.localStorage.removeItem('atlas.sidebar');
     mockUseAuth.mockReturnValue({ status: 'authenticated', me: ME } as never);
     const { unmount } = renderShell(<div>teacher content</div>);
@@ -107,18 +107,19 @@ describe('AppShell', () => {
       expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument(),
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
-    expect(screen.queryByRole('navigation', { name: 'Workspace navigation' })).toBeNull();
-    expect(screen.getByText('teacher content')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    // The rail keeps every link usable: its name stays for screen readers
+    // and shows as a tooltip.
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('title', 'Dashboard');
     expect(window.localStorage.getItem('atlas.sidebar')).toBe('collapsed');
 
-    // A later visit starts with it hidden.
+    // A later visit starts collapsed.
     unmount();
     renderShell(<div>teacher content</div>);
-    const show = screen.getByRole('button', { name: 'Show navigation' });
-    expect(show).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(show);
-    expect(screen.getByRole('navigation', { name: 'Workspace navigation' })).toBeInTheDocument();
+    const expand = screen.getByRole('button', { name: 'Expand sidebar' });
+    expect(expand).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(expand);
+    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('title');
     expect(window.localStorage.getItem('atlas.sidebar')).toBe('open');
   });
 });

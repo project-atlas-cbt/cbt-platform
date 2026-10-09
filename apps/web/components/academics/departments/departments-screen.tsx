@@ -156,6 +156,7 @@ export function DepartmentsScreen({ basePath }: { basePath: string }) {
         columns={columns}
         rows={rows}
         getRowId={(r) => r.id}
+        getRowHref={(row) => `${basePath}/departments/${row.id}`}
         isLoading={departments.isPending}
         emptyState={
           <EmptyState
