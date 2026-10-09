@@ -45,7 +45,11 @@ export function RoleNavigation({ role, navigation }: { role: Role; navigation: N
     <nav aria-label="Workspace navigation" className="flex flex-col gap-0.5 p-3">
       {items.map((item) => {
         const href = item.href ? `${root}/${item.href}` : root;
-        const active = pathname === href || pathname.startsWith(`${href}/`);
+        // The workspace home is active only on itself: every other page sits
+        // under its path.
+        const active = item.href
+          ? pathname === href || pathname.startsWith(`${href}/`)
+          : pathname === href;
         const Icon = item.icon;
         return (
           <Link
