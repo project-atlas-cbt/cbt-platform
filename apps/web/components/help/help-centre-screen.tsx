@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HelpText } from './help-text';
 import { SupportContact } from './support-contact';
+import { KeyboardShortcuts } from './keyboard-shortcuts';
 
 /**
  * Lists the guides a user can see for their role. While permissions load
@@ -138,6 +139,8 @@ export function HelpCentreScreen({ set }: { set: RoleGuideSet }) {
           );
         })
       )}
+
+      <KeyboardShortcuts role={set.role} />
 
       <SupportContact />
     </div>

@@ -7,7 +7,10 @@ import { useTenant } from '@/lib/tenant';
 export default function ModeratorLayout({ children }: { children: ReactNode }) {
   const { school } = useTenant();
   return (
-    <AppShell role="MODERATOR" {...(school?.name ? { schoolName: school.name } : {})}>
+    <AppShell
+      role="MODERATOR"
+      {...(school ? { schoolName: school.name, schoolLogoUrl: school.logoUrl } : {})}
+    >
       {children}
     </AppShell>
   );

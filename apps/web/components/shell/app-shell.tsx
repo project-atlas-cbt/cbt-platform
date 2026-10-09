@@ -22,6 +22,8 @@ import { ProfileMenu, type ProfileMenuIdentity } from './profile-menu';
 import { OfflineIndicator } from './offline-indicator';
 import { GlobalSearch } from '@/components/reports/search';
 import { ProductMark } from './product-mark';
+import { PoweredBy } from './powered-by';
+import { SchoolMark } from './school-mark';
 import { useSidebarCollapsed, useWideScreen } from './sidebar-state';
 
 const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
@@ -31,6 +33,8 @@ export interface AppShellProps {
   role: Role;
   /** Omitted for the platform-branded (Software Admin) shell. */
   schoolName?: string;
+  /** The school's uploaded logo (`tenant/resolve`), shown top left; initials stand in without one. */
+  schoolLogoUrl?: string | null;
   children: ReactNode;
 }
 
@@ -85,10 +89,13 @@ function ShellChrome({
   navigation,
   onLogout,
   showNotifications,
+  brand,
   children,
 }: {
   role: Role;
   schoolName?: string;
+  /** The school's mark for the top-left corner; omitted on the platform shell, which shows the product's. */
+  brand?: { name: string; logoUrl: string | null };
   roles: Role[];
   identity: ProfileMenuIdentity | null;
   navigation: NavigationResult;
@@ -129,10 +136,16 @@ function ShellChrome({
       <div ref={chromeTop} className="sticky top-0 z-30">
         <header className="flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
-            <ProductMark className="size-8 shrink-0" />
-            <span className="hidden shrink-0 text-sm font-semibold text-text-primary md:inline">
-              {productName}
-            </span>
+            {brand ? (
+              <SchoolMark name={brand.name} logoUrl={brand.logoUrl} />
+            ) : (
+              <>
+                <ProductMark className="size-8 shrink-0" />
+                <span className="hidden shrink-0 text-sm font-semibold text-text-primary md:inline">
+                  {productName}
+                </span>
+              </>
+            )}
             <ContextSwitcher
               currentRole={role}
               {...(schoolName ? { schoolName } : {})}
@@ -142,7 +155,6 @@ function ShellChrome({
           <div className="flex shrink-0 items-center gap-2">
             <GlobalSearch role={role} />
             {showNotifications ? <NotificationPanel /> : null}
-            <ProfileMenu identity={identity} onLogout={onLogout} />
             {wide ? null : (
               // Narrow screens have no sidebar to hold its own toggle, so the
               // menu opens from the end of the top bar, keeping the logo first.
@@ -168,37 +180,40 @@ function ShellChrome({
             aria-label="Sidebar"
             className={cn(
               'sticky top-(--shell-top) flex h-[calc(100dvh-var(--shell-top))] shrink-0 flex-col border-r border-border bg-surface',
-              collapsed ? 'w-16' : 'w-56',
+              collapsed ? 'w-16' : 'w-60',
             )}
           >
             <div className="min-h-0 flex-1 overflow-y-auto">
               <RoleNavigation role={role} navigation={navigation} collapsed={collapsed} />
             </div>
-            {/* Collapse sits with what it collapses, at the foot of the
-                sidebar, as in most workspace apps; the top bar stays the
-                school's and the product's. */}
-            <div className="border-t border-border p-3">
-              <button
-                type="button"
-                onClick={() => setCollapsed(!collapsed)}
-                aria-controls={SIDEBAR_ID}
-                aria-expanded={!collapsed}
-                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                title={collapsed ? 'Expand sidebar' : undefined}
+            {/* The foot holds who is signed in, the product credit and the
+                collapse control, as in most workspace apps; the top bar is
+                the school's. */}
+            <div className="flex flex-col gap-2 border-t border-border p-3">
+              <ProfileMenu identity={identity} onLogout={onLogout} compact={collapsed} />
+              <div
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-muted hover:text-text-primary',
-                  collapsed && 'justify-center px-0',
+                  'flex items-center gap-2',
+                  collapsed ? 'justify-center' : 'justify-between pl-2',
                 )}
               >
-                {collapsed ? (
-                  <ChevronsRight className="size-4 shrink-0" aria-hidden />
-                ) : (
-                  <>
-                    <ChevronsLeft className="size-4 shrink-0" aria-hidden />
-                    Collapse
-                  </>
-                )}
-              </button>
+                {collapsed || !brand ? null : <PoweredBy className="min-w-0" />}
+                <button
+                  type="button"
+                  onClick={() => setCollapsed(!collapsed)}
+                  aria-controls={SIDEBAR_ID}
+                  aria-expanded={!collapsed}
+                  aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                  className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-muted hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                >
+                  {collapsed ? (
+                    <ChevronsRight className="size-4" aria-hidden />
+                  ) : (
+                    <ChevronsLeft className="size-4" aria-hidden />
+                  )}
+                </button>
+              </div>
             </div>
           </aside>
         ) : null}
@@ -224,7 +239,13 @@ function ShellChrome({
                   </Button>
                 </DialogPrimitive.Close>
               </div>
-              <RoleNavigation role={role} navigation={navigation} />
+              <div className="min-h-0 flex-1">
+                <RoleNavigation role={role} navigation={navigation} />
+              </div>
+              <div className="flex flex-col gap-2 border-t border-border p-3">
+                <ProfileMenu identity={identity} onLogout={onLogout} />
+                {brand ? <PoweredBy className="pl-2" /> : null}
+              </div>
             </DialogPrimitive.Content>
           </DialogPrimitive.Portal>
         </DialogPrimitive.Root>
@@ -233,7 +254,7 @@ function ShellChrome({
   );
 }
 
-function SchoolAppShell({ role, schoolName, children }: AppShellProps) {
+function SchoolAppShell({ role, schoolName, schoolLogoUrl, children }: AppShellProps) {
   const router = useRouter();
   const { me, logout } = useAuth();
   const navigation = useNavigation(role);
@@ -257,6 +278,7 @@ function SchoolAppShell({ role, schoolName, children }: AppShellProps) {
         navigation={navigation}
         onLogout={handleLogout}
         showNotifications
+        brand={{ name: schoolName ?? '', logoUrl: schoolLogoUrl ?? null }}
       >
         {children}
       </ShellChrome>
@@ -307,12 +329,16 @@ function PlatformShellBody({ role, children }: Omit<AppShellProps, 'schoolName'>
   );
 }
 
-export function AppShell({ role, schoolName, children }: AppShellProps) {
+export function AppShell({ role, schoolName, schoolLogoUrl, children }: AppShellProps) {
   if (ROLE_WORKSPACES[role].variant === 'platform') {
     return <PlatformAppShell role={role}>{children}</PlatformAppShell>;
   }
   return (
-    <SchoolAppShell role={role} {...(schoolName ? { schoolName } : {})}>
+    <SchoolAppShell
+      role={role}
+      {...(schoolName ? { schoolName } : {})}
+      schoolLogoUrl={schoolLogoUrl ?? null}
+    >
       {children}
     </SchoolAppShell>
   );

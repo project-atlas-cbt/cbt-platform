@@ -38,21 +38,21 @@ describe('PrintLayout', () => {
 
     expect(screen.getAllByText('Official Term Results').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('2026/2027 Session').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Apex Model College')).toBeInTheDocument();
+    // In the letterhead and again in the footer, where the product name used to be.
+    expect(screen.getAllByText('Apex Model College')).toHaveLength(2);
     expect(screen.getByTestId('report-content')).toBeInTheDocument();
     expect(screen.getByText(/Principal \/ Exam Officer Stamp/i)).toBeInTheDocument();
   });
 
-  it('never hardcodes the product name or a fixed page count in the footer', () => {
+  it('carries the school, never the product name, and no fixed page count', () => {
     render(
       <PrintLayout title="Exam Report">
         <div>Content</div>
       </PrintLayout>,
     );
 
-    expect(
-      screen.getByText(process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform')).toBeNull();
+    expect(screen.queryByText(/Powered by/i)).toBeNull();
     expect(screen.queryByText(/Project Atlas/i)).toBeNull();
     expect(screen.queryByText(/Page \d+ of \d+/i)).toBeNull();
   });

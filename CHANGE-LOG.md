@@ -2,7 +2,7 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
-### 2026-10-09 — Fixed header, icon-rail sidebar, list improvements
+### 2026-10-09 — Fixed header, icon-rail sidebar, school-first branding, list improvements
 
 UI refinements Haneef asked for (2026-10-09), in every staff and student workspace shell:
 
@@ -18,6 +18,15 @@ UI refinements Haneef asked for (2026-10-09), in every staff and student workspa
   headings stay in view under the top bar (`Table stickyHeader`, which clips instead of scrolling
   sideways whenever the table fits). Clicking anywhere on a row that has a detail page opens it
   through the row's own link (`getRowHref`); the link stays the keyboard route.
+- School identity leads (Haneef chose "school first", 2026-10-09): the top-left corner shows the
+  school's uploaded logo, or its initials on its brand colour (`SchoolMark`), beside the school name
+  (truncated at a fixed width). The product appears only as a grey "Powered by ExamKeep" at the
+  sidebar foot and under the school sign-in form (`PoweredBy`), never on printed reports, whose
+  footer now names the school. The Software Admin shell keeps the product's own logo.
+- The top bar holds only a wider search box (no shortcut hint) and notifications. The account
+  menu (name, Login ID, Sign out) moved to the sidebar foot beside the collapse button. Keyboard
+  shortcuts are listed on each staff Help screen; the "own password" guide now says where Sign out
+  is.
 - The page still scrolls the window, so navigation's scroll-to-top is unchanged. The exam runtime
   has no shell and is unaffected.
 

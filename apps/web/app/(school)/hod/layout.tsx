@@ -7,7 +7,10 @@ import { useTenant } from '@/lib/tenant';
 export default function HodLayout({ children }: { children: ReactNode }) {
   const { school } = useTenant();
   return (
-    <AppShell role="HOD" {...(school?.name ? { schoolName: school.name } : {})}>
+    <AppShell
+      role="HOD"
+      {...(school ? { schoolName: school.name, schoolLogoUrl: school.logoUrl } : {})}
+    >
       {children}
     </AppShell>
   );

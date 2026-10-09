@@ -99,6 +99,18 @@ describe('AppShell', () => {
     consoleSpy.mockRestore();
   });
 
+  it('leads with the school, not the product: its initials top left, the product only as a quiet credit', async () => {
+    mockUseAuth.mockReturnValue({ status: 'authenticated', me: ME } as never);
+    renderShell(<div>teacher content</div>);
+    expect(screen.getByText('GC')).toBeInTheDocument();
+    expect(screen.getByText(/Powered by/)).toBeInTheDocument();
+    // The account menu lives in the sidebar foot, showing who is signed in.
+    expect(screen.getByRole('button', { name: /account menu/i })).toHaveTextContent('A B');
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument(),
+    );
+  });
+
   it('collapses the sidebar to an icon rail and back, remembering the choice in this browser', async () => {
     window.localStorage.removeItem('atlas.sidebar');
     mockUseAuth.mockReturnValue({ status: 'authenticated', me: ME } as never);

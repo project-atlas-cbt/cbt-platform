@@ -74,7 +74,9 @@ export const Table = forwardRef<HTMLTableElement, TableProps>(
           'w-full rounded-md border border-border',
           sticky?.fits ? 'overflow-x-clip' : 'overflow-x-auto',
         )}
-        style={sticky ? ({ '--table-sticky-top': sticky.top } as CSSProperties) : undefined}
+        // A box that scrolls sideways is its own scroll container, so the
+        // heading can only stick to its top; the offset would float it mid-table.
+        style={sticky?.fits ? ({ '--table-sticky-top': sticky.top } as CSSProperties) : undefined}
       >
         <table
           ref={(element) => {

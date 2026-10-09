@@ -16,11 +16,17 @@ describe('ProfileMenu', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows the signed-in identity’s name and secondary label', async () => {
+  it('shows the signed-in identity’s name and secondary label', () => {
     render(<ProfileMenu identity={IDENTITY} onLogout={onLogout} />);
+    // Both show on the sidebar-foot trigger itself.
     expect(screen.getByText('Ada B')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /account menu/i }));
     expect(screen.getByText('T042')).toBeInTheDocument();
+  });
+
+  it('shows only the icon in the collapsed rail, with the name as its tooltip', () => {
+    render(<ProfileMenu identity={IDENTITY} onLogout={onLogout} compact />);
+    expect(screen.queryByText('Ada B')).toBeNull();
+    expect(screen.getByRole('button', { name: /account menu/i })).toHaveAttribute('title', 'Ada B');
   });
 
   it('calls the provided onLogout when Sign out is selected — redirect target is the caller’s job', async () => {
