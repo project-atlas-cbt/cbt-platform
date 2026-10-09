@@ -22,6 +22,9 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { MetricTile } from './metric-tile';
+import { useClassRegistrationGrid, useMyFormClasses } from '@/lib/academics/queries';
+import { ApiError } from '@/lib/api';
+import { SubjectRoster } from '@/components/academics/class-subjects/subject-roster';
 import { ComparisonChart } from './comparison-chart';
 
 export interface ClassDetailViewProps {
@@ -54,8 +57,14 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
   const analyticsQuery = useClassAnalytics(classId, { subjectId }, { enabled: Boolean(subjectId) });
   const studentsQuery = useClassStudents(classId);
 
+  const formClassesQuery = useMyFormClasses();
+  const formClass = formClassesQuery.data?.classes.find((c) => c.classId === classId);
   const first = assignments[0];
-  const cls = first ? { name: first.className, level: first.level, arm: first.arm } : undefined;
+  const cls = first
+    ? { name: first.className, level: first.level, arm: first.arm }
+    : formClass
+      ? { name: formClass.className, level: formClass.level, arm: formClass.arm }
+      : undefined;
   const analytics = analyticsQuery.data;
   const analyticsLoading = Boolean(subjectId) && analyticsQuery.isPending;
   const students = studentsQuery.data?.students ?? [];
@@ -110,7 +119,7 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
         ) : null}
       </div>
 
-      {!assignmentsQuery.isPending && !first ? (
+      {!assignmentsQuery.isPending && !formClassesQuery.isPending && !cls ? (
         <p className="rounded-lg border border-border bg-surface p-5 text-sm text-text-muted">
           You don&apos;t teach a subject in this class.
         </p>
@@ -184,6 +193,8 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
         </ErrorBoundary>
       </div>
 
+      {cls ? <TeacherRegistrations classId={classId} isFormClass={Boolean(formClass)} /> : null}
+
       {/* Student Roster Table */}
       <ErrorBoundary>
         <div className="rounded-lg border border-border bg-surface p-5 space-y-3">
@@ -247,5 +258,28 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
         </div>
       </ErrorBoundary>
     </div>
+  );
+}
+
+/** ADR-0038 amendment: the electives this teacher may set in this class (the
+ * ones they teach, or all of them as form teacher). Hidden when there are
+ * none, which the server answers with 403. */
+function TeacherRegistrations({ classId, isFormClass }: { classId: string; isFormClass: boolean }) {
+  const grid = useClassRegistrationGrid(classId);
+  if (grid.isError && grid.error instanceof ApiError && grid.error.httpStatus === 403) return null;
+  return (
+    <ErrorBoundary>
+      <section className="space-y-3 rounded-lg border border-border bg-surface p-5">
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary">Subject registrations</h3>
+          <p className="text-xs text-text-muted">
+            {isFormClass
+              ? 'As form teacher you can set every elective for this class.'
+              : 'Choose who takes the electives you teach in this class.'}
+          </p>
+        </div>
+        <SubjectRoster classId={classId} />
+      </section>
+    </ErrorBoundary>
   );
 }

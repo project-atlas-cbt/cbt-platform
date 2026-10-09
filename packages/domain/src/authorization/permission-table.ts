@@ -1198,6 +1198,28 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     },
   },
   {
+    // ADR-0038 amendment (2026-10-09): owner decision. Registration decides
+    // who may sit an exam, so a Teacher's grant is ASSIGNED, narrowed by the
+    // registration service to elective offerings the teacher teaches, or
+    // every elective of a class they are form teacher of. Compulsory
+    // subjects stay with School Admin and Moderator.
+    id: 'registrations.manage',
+    section: 'Assignments',
+    label: "Set students' subject registrations",
+    action: 'UPDATE',
+    grants: {
+      SOFTWARE_ADMIN: breakGlassWrite(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: denied(),
+      TEACHER: granted(
+        'ASSIGNED',
+        'Electives they teach in a class, or every elective of a class they are form teacher of (ADR-0038).',
+      ),
+      STUDENT: denied(),
+    },
+  },
+  {
     id: 'assignments.view',
     section: 'Assignments',
     label: 'View assignments',

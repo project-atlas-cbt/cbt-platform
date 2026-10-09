@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Req,
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import {
   ClassSubjectListResponseDto,
   ClassSubjectResponseDto,
   CreateClassSubjectDto,
+  UpdateClassSubjectDto,
 } from './dto/class-subject.dto.js';
 
 function currentUser(req: FastifyRequest): AuthenticatedUser {
@@ -55,6 +57,22 @@ export class ClassSubjectController {
   ): Promise<ClassSubjectResponseDto> {
     const user = currentUser(req);
     return this.classSubjects.create(user.schoolId, classId, body, {
+      actorUserId: user.userId,
+      actorRole: resolveActorRole(user),
+    });
+  }
+
+  @Patch('class-subjects/:id')
+  @Authorized('schoolConfig.subject.manage')
+  @ApiOperation({ summary: 'Make an offering compulsory or elective (ADR-0038).' })
+  @ApiOkResponse({ type: ClassSubjectResponseDto })
+  async update(
+    @Req() req: FastifyRequest,
+    @Param('id') id: string,
+    @Body() body: UpdateClassSubjectDto,
+  ): Promise<ClassSubjectResponseDto> {
+    const user = currentUser(req);
+    return this.classSubjects.update(user.schoolId, id, body, {
       actorUserId: user.userId,
       actorRole: resolveActorRole(user),
     });

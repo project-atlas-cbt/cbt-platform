@@ -3,6 +3,13 @@ import { render, screen } from '@testing-library/react';
 import { useTeacherMyAssignments } from '@/lib/analytics';
 import { MyClassesView } from './my-classes-view';
 
+vi.mock('@/lib/academics/queries', () => ({
+  useMyFormClasses: vi.fn(() => ({ isPending: false, data: { classes: [] } })),
+  useClassRegistrationGrid: vi.fn(() => ({ isPending: true })),
+}));
+vi.mock('@/lib/academics/mutations', () => ({
+  useSaveClassRegistrations: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 vi.mock('@/lib/analytics', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/analytics')>();
   return {

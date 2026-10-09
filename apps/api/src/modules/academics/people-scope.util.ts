@@ -14,8 +14,9 @@ import type { AuthenticatedUser } from '../identity/auth.guard.js';
  * - HOD (DEPARTMENT): classes of a department they head, either the class's
  *   own department or a subject of that department taught in the class;
  *   students enrolled in such a class; teachers teaching a subject of it.
- * - Teacher: the classes they are assigned to teach, and those classes'
- *   current students; their own assignment record.
+ * - Teacher: the classes they are assigned to teach or are form teacher of
+ *   (ADR-0038), and those classes' current students; their own assignment
+ *   record.
  * - Student (SELF): their own records only; never a class roster.
  *
  * A user holding several roles gets the union. Refusals are FORBIDDEN, the
@@ -75,6 +76,17 @@ async function viewableClassIds(user: AuthenticatedUser, classIds: string[]): Pr
         select: { classSubject: { select: { classId: true } } },
       });
       for (const r of rows) allowed.add(r.classSubject.classId);
+      // ADR-0038 amendment: a form teacher sees their whole arm.
+      const formRows = await tx.formTeacherAssignment.findMany({
+        where: {
+          schoolId: user.schoolId,
+          status: 'ACTIVE',
+          teacherProfile: { membershipId: user.membershipId },
+          classId: { in: classIds },
+        },
+        select: { classId: true },
+      });
+      for (const r of formRows) allowed.add(r.classId);
     }
   });
   return allowed;

@@ -6,35 +6,29 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useHasPermission } from '@/lib/nav';
-import { useStudent, useStudentEnrollments } from '@/lib/people/queries';
+import { useStudent } from '@/lib/people/queries';
 import {
   useDeactivateStudent,
   useReactivateStudent,
   useUnlockStudentSignIn,
 } from '@/lib/people/mutations';
-import {
-  UserStatusBadge,
-  StudentProfileStatusBadge,
-  EnrollmentStatusBadge,
-} from '../people-status-badges';
+import { UserStatusBadge, StudentProfileStatusBadge } from '../people-status-badges';
 import { ConfirmActionDialog } from '@/components/academics/confirm-action-dialog';
 import { StudentForm } from './student-form';
 import { MoveClassDialog } from './move-class-dialog';
 import { RevealCredentialsDialog } from './reveal-credentials-dialog';
 import { SubjectRegistrationsPanel } from './subject-registrations-panel';
+import { AcademicHistory } from './academic-history';
 
-/** USR-S-02 (`05 §9.2`). DoD item 2: identity, academic history (enrollment
- * history + subject registrations), assessment history, and administrative
- * metadata. Assessment history is an honest "not yet available" placeholder
- * — no exam/attempt data exists until B8 (Question Bank)/B11+ (exams) ship,
- * matching this codebase's established precedent for this exact situation
- * (F6 Class Detail's Exams tab). */
+/** USR-S-02 (`05 §9.2`). DoD item 2: identity, subjects, academic history
+ * and administrative metadata. The history (2026-10-09 redesign) covers
+ * classes, moves, subject changes, rollover outcomes and exam counts per
+ * session, replacing the bare enrollment rows and the old "assessment
+ * history not yet available" placeholder. */
 export function StudentDetailScreen({ studentProfileId }: { studentProfileId: string }) {
   const student = useStudent(studentProfileId);
-  const enrollments = useStudentEnrollments(studentProfileId);
   const canManage = useHasPermission('users.student.edit');
   const canDeactivate = useHasPermission('users.student.deactivate');
   const canResetCredentials = useHasPermission('users.student.resetCredentials');
@@ -140,42 +134,13 @@ export function StudentDetailScreen({ studentProfileId }: { studentProfileId: st
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium text-text-primary">Academic history</h3>
-        {enrollments.isPending ? (
-          <Skeleton className="h-20 w-full" />
-        ) : enrollments.isError ? (
-          <ErrorState error={enrollments.error} onRetry={() => void enrollments.refetch()} />
-        ) : (enrollments.data?.enrollments ?? []).length === 0 ? (
-          <EmptyState title="No enrollment history yet" />
-        ) : (
-          <ul className="divide-y divide-border rounded-md border border-border">
-            {(enrollments.data?.enrollments ?? []).map((enrollment) => (
-              <li
-                key={enrollment.id}
-                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-              >
-                <span className="text-text-primary">
-                  {enrollment.startDate}
-                  {enrollment.endDate ? ` – ${enrollment.endDate}` : ' – present'}
-                </span>
-                <EnrollmentStatusBadge value={enrollment.status} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="space-y-2">
         <h3 className="text-sm font-medium text-text-primary">Subjects</h3>
         <SubjectRegistrationsPanel studentProfileId={studentProfileId} />
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-sm font-medium text-text-primary">Assessment history</h3>
-        <EmptyState
-          title="Not yet available"
-          description="Assessment history will appear here once the exam engine is built."
-        />
+        <h3 className="text-sm font-medium text-text-primary">Academic history</h3>
+        <AcademicHistory studentProfileId={studentProfileId} />
       </section>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

@@ -156,6 +156,28 @@ export function useClassSubjects(classId: string | undefined) {
   });
 }
 
+/** ADR-0038 — the class subject grid (students × offerings). */
+export function useClassRegistrationGrid(classId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', classId, 'subject-registrations'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/classes/{id}/subject-registrations', {
+          params: { path: { id: classId as string } },
+        }),
+      ),
+    enabled: Boolean(classId),
+  });
+}
+
+/** ADR-0038 — subject choice groups ("pick one of CRS or IRS"). */
+export function useSubjectChoiceGroups() {
+  return useQuery({
+    queryKey: ['academics', 'subject-choice-groups'],
+    queryFn: () => unwrap(apiClient.GET('/academics/subject-choice-groups')),
+  });
+}
+
 export function useDepartmentHodAssignments(departmentId: string | undefined) {
   return useQuery({
     queryKey: ['academics', 'departments', departmentId, 'hod-assignments'],
@@ -274,5 +296,28 @@ export function useRolloverPlan(
         }),
       ),
     enabled: isUuid(planId) && (options?.enabled ?? true),
+  });
+}
+
+/** ADR-0038 amendment — a class's current form teachers. */
+export function useFormTeachers(classId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', classId, 'form-teachers'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/classes/{id}/form-teachers', {
+          params: { path: { id: classId as string } },
+        }),
+      ),
+    enabled: Boolean(classId),
+  });
+}
+
+/** Teacher › My classes: the classes the caller is form teacher of. */
+export function useMyFormClasses(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['teachers', 'me', 'form-classes'],
+    queryFn: () => unwrap(apiClient.GET('/teachers/me/form-classes', {})),
+    enabled: options?.enabled ?? true,
   });
 }

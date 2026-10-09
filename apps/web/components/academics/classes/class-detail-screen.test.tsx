@@ -25,12 +25,35 @@ vi.mock('@/lib/academics/queries', () => ({
   useDepartments: vi.fn(),
   useSession: vi.fn(),
   useSubjects: vi.fn(),
+  useClassRegistrationGrid: vi.fn(() => ({ isPending: true })),
+  useSubjectChoiceGroups: vi.fn(() => ({ data: { choiceGroups: [] } })),
+  useFormTeachers: vi.fn(() => ({
+    isPending: false,
+    isError: false,
+    data: {
+      formTeachers: [
+        {
+          id: 'ft1',
+          teacherProfileId: 't9',
+          displayName: 'Mrs Bello',
+          staffId: 'STF9',
+          startDate: '2026-09-10',
+        },
+      ],
+    },
+  })),
 }));
 vi.mock('@/lib/academics/mutations', () => ({
   useAddClassSubject: vi.fn(),
   useRemoveClassSubject: vi.fn(),
+  useSetClassSubjectKind: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSaveClassRegistrations: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetFormTeachers: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/lib/people/mutations', () => ({ useClassCredentialSheet: vi.fn() }));
+vi.mock('@/lib/people/queries', () => ({
+  useTeachersPaginated: () => ({ isPending: false, data: { teachers: [] } }),
+}));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 vi.mock('./class-exams-table', () => ({
   ClassExamsTable: ({ classId }: { classId: string }) => <p>Exams for class {classId}</p>,
@@ -201,6 +224,9 @@ describe('ClassDetailScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Teachers' }));
     expect(screen.getByText('Ade Ola')).toBeInTheDocument();
     expect(screen.getByText(/Mathematics/)).toBeInTheDocument();
+    // ADR-0038 amendment: the form teacher sits above the subject teachers.
+    expect(screen.getByRole('heading', { name: 'Form teacher' })).toBeInTheDocument();
+    expect(screen.getByText('Mrs Bello')).toBeInTheDocument();
   });
 
   it('the Exams tab lists the exams for this class', async () => {

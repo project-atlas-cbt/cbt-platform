@@ -84,6 +84,7 @@ export {
   CLASS_GROUP_STATUSES,
   SUBJECT_STATUSES,
   CLASS_SUBJECT_STATUSES,
+  CLASS_SUBJECT_KINDS,
   HOD_ASSIGNMENT_STATUSES,
   ROLLOVER_PLAN_STATUSES,
   ROLLOVER_OUTCOMES,
@@ -94,10 +95,17 @@ export {
   type ClassGroupStatus,
   type SubjectStatus,
   type ClassSubjectStatus,
+  type ClassSubjectKind,
   type HODAssignmentStatus,
   type RolloverPlanStatus,
   type RolloverOutcome,
 } from './academics/constants.js';
+export {
+  choiceGroupWarnings,
+  describeRule,
+  type ChoiceGroupRule,
+  type ChoiceGroupWarning,
+} from './academics/choice-rules.js';
 export {
   USER_STATUSES,
   STUDENT_PROFILE_STATUSES,

@@ -206,6 +206,7 @@ export class QuestionService {
           name: s.name,
           code: s.code,
           departmentId: s.departmentId,
+          choiceGroupId: s.choiceGroupId,
           status: s.status,
         })),
     };

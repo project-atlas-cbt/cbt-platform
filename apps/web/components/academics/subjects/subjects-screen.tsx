@@ -14,10 +14,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useHasPermission } from '@/lib/nav';
-import { useDepartments, useSubjects } from '@/lib/academics/queries';
+import { useDepartments, useSubjectChoiceGroups, useSubjects } from '@/lib/academics/queries';
 import { useDeactivateSubject, useDeleteSubject } from '@/lib/academics/mutations';
 import { SubjectStatusBadge } from '../academic-status-badges';
 import { ConfirmActionDialog } from '../confirm-action-dialog';
+import { ChoiceGroupsPanel } from './choice-groups-panel';
 import { SubjectForm } from './subject-form';
 
 interface SubjectRow {
@@ -25,6 +26,7 @@ interface SubjectRow {
   name: string;
   code: string;
   departmentId: string | null;
+  choiceGroupId: string | null;
   status: 'ACTIVE' | 'INACTIVE';
 }
 
@@ -38,6 +40,7 @@ type ConfirmAction = { type: 'deactivate' | 'delete'; subject: SubjectRow };
 export function SubjectsScreen() {
   const subjects = useSubjects();
   const departments = useDepartments();
+  const choiceGroups = useSubjectChoiceGroups();
   const canManage = useHasPermission('schoolConfig.subject.manage');
   const deactivateSubject = useDeactivateSubject();
   const deleteSubject = useDeleteSubject();
@@ -73,6 +76,14 @@ export function SubjectsScreen() {
             None set
           </span>
         ),
+    },
+    {
+      id: 'choiceGroup',
+      header: 'Choice group',
+      cell: (row) =>
+        row.choiceGroupId
+          ? (choiceGroups.data?.choiceGroups.find((g) => g.id === row.choiceGroupId)?.name ?? '—')
+          : '—',
     },
     { id: 'status', header: 'Status', cell: (row) => <SubjectStatusBadge value={row.status} /> },
     ...(canManage
@@ -162,6 +173,8 @@ export function SubjectsScreen() {
           />
         }
       />
+
+      <ChoiceGroupsPanel />
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent>

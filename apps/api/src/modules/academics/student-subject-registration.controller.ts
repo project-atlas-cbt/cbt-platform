@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
@@ -6,8 +6,11 @@ import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { resolveActorRole, selfOnlyMembershipId } from './actor.util.js';
 import { assertCanViewStudent } from './people-scope.util.js';
 import {
+  ClassRegistrationGridResponseDto,
   StudentSubjectRegistrationListResponseDto,
   StudentSubjectRegistrationResponseDto,
+  UpdateClassRegistrationsDto,
+  UpdateClassRegistrationsResponseDto,
 } from './dto/student-subject-registration.dto.js';
 import { StudentSubjectRegistrationService } from './student-subject-registration.service.js';
 
@@ -35,12 +38,11 @@ export class StudentSubjectRegistrationController {
   ): Promise<StudentSubjectRegistrationListResponseDto> {
     const user = currentUser(req);
     await assertCanViewStudent(user, studentProfileId);
-    const registrations = await this.registrations.listForStudent(
+    return this.registrations.listForStudent(
       user.schoolId,
       studentProfileId,
       selfOnlyMembershipId(user),
     );
-    return { registrations };
   }
 
   @Post('students/:id/subject-registrations/:classSubjectId/deregister')
@@ -67,7 +69,10 @@ export class StudentSubjectRegistrationController {
   @Post('students/:id/subject-registrations/:classSubjectId/re-register')
   @HttpCode(HttpStatus.OK)
   @Authorized('assignments.studentToClass')
-  @ApiOperation({ summary: 'Re-register a student for a previously deregistered elective.' })
+  @ApiOperation({
+    summary:
+      'Register a student for a subject their class offers, including an elective they never had (ADR-0038).',
+  })
   @ApiOkResponse({ type: StudentSubjectRegistrationResponseDto })
   async reRegister(
     @Req() req: FastifyRequest,
@@ -76,6 +81,39 @@ export class StudentSubjectRegistrationController {
   ): Promise<StudentSubjectRegistrationResponseDto> {
     const user = currentUser(req);
     return this.registrations.reRegister(user.schoolId, studentProfileId, classSubjectId, {
+      actorUserId: user.userId,
+      actorRole: resolveActorRole(user),
+    });
+  }
+
+  @Get('academics/classes/:id/subject-registrations')
+  @Authorized('registrations.manage')
+  @ApiOperation({
+    summary:
+      "A class's current students and the offerings the caller may change (ADR-0038), with choice-group warnings.",
+  })
+  @ApiOkResponse({ type: ClassRegistrationGridResponseDto })
+  async grid(
+    @Req() req: FastifyRequest,
+    @Param('id') classId: string,
+  ): Promise<ClassRegistrationGridResponseDto> {
+    return this.registrations.classGrid(currentUser(req), classId);
+  }
+
+  @Put('academics/classes/:id/subject-registrations')
+  @Authorized('registrations.manage')
+  @ApiOperation({
+    summary:
+      'Save registration ticks for a class in one transaction. Effective for future exams only.',
+  })
+  @ApiOkResponse({ type: UpdateClassRegistrationsResponseDto })
+  async saveGrid(
+    @Req() req: FastifyRequest,
+    @Param('id') classId: string,
+    @Body() body: UpdateClassRegistrationsDto,
+  ): Promise<UpdateClassRegistrationsResponseDto> {
+    const user = currentUser(req);
+    return this.registrations.updateClassGrid(user, classId, body.changes, {
       actorUserId: user.userId,
       actorRole: resolveActorRole(user),
     });

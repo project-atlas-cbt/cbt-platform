@@ -29,8 +29,12 @@ session and at least one class (05 §5.2).
 2. **Branding**: logo and colour (optional).
 3. **Academic session and term**: create and activate the current ones.
 4. **Departments and subjects**, then **classes** (arms such as SS2A) and which subjects each class
-   offers. Students are registered for offered subjects automatically; electives can be
-   deregistered (ADR-0011).
+   offers, each as **compulsory** or **elective**. Students are registered for compulsory subjects
+   automatically; electives are ticked on the class's **Subject registrations** tab (pick a
+   subject, tick its students) or on each student's page, with choice groups such as "Religion:
+   choose 1" flagging gaps (ADR-0038). Each arm can have a **form teacher** (class **Teachers**
+   tab), who then sets that arm's electives from **My Classes**; subject teachers can set the
+   electives they teach. That spreads the work across staff in a large school.
 5. **Grading scale** and **result policy** (ADR-0018, ADR-0010), both in **School Settings →
    Results**; the wizard has no step for them. Set the grading bands before the first exam is
    marked: a grade is fixed when a result is finalised, so results finalised with no scale stay

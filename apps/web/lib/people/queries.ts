@@ -216,6 +216,20 @@ export function useStudentEnrollments(studentProfileId: string | undefined) {
 
 /** ADR-0011's elective-registration surface — the student profile's
  * "Subjects" panel. */
+/** A student's academic history by session (2026-10-09 redesign). */
+export function useStudentHistory(studentProfileId: string | undefined) {
+  return useQuery({
+    queryKey: ['people', 'students', studentProfileId, 'history'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/students/{id}/history', {
+          params: { path: { id: studentProfileId as string } },
+        }),
+      ),
+    enabled: Boolean(studentProfileId),
+  });
+}
+
 export function useStudentSubjectRegistrations(studentProfileId: string | undefined) {
   return useQuery({
     queryKey: ['people', 'students', studentProfileId, 'subject-registrations'],

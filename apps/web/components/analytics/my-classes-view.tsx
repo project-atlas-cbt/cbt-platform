@@ -4,17 +4,26 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowRight, School } from 'lucide-react';
 import { useTeacherMyAssignments } from '@/lib/analytics';
+import { useMyFormClasses } from '@/lib/academics/queries';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export function MyClassesView() {
   const assignmentsQuery = useTeacherMyAssignments();
+  const formClassesQuery = useMyFormClasses();
 
   const classes = useMemo(() => {
     const list = assignmentsQuery.data?.assignments ?? [];
     const map = new Map<
       string,
-      { id: string; name: string; level: string; arm: string; subjects: Set<string> }
+      {
+        id: string;
+        name: string;
+        level: string;
+        arm: string;
+        subjects: Set<string>;
+        isFormClass: boolean;
+      }
     >();
 
     for (const a of list) {
@@ -28,15 +37,31 @@ export function MyClassesView() {
           level: a.level,
           arm: a.arm,
           subjects: new Set([a.subjectName]),
+          isFormClass: false,
         });
       }
+    }
+    // ADR-0038 amendment: a form class shows even when the teacher teaches
+    // no subject in it.
+    for (const f of formClassesQuery.data?.classes ?? []) {
+      const existing = map.get(f.classId);
+      if (existing) existing.isFormClass = true;
+      else
+        map.set(f.classId, {
+          id: f.classId,
+          name: f.className,
+          level: f.level,
+          arm: f.arm,
+          subjects: new Set(),
+          isFormClass: true,
+        });
     }
 
     return Array.from(map.values()).map((c) => ({
       ...c,
       subjects: Array.from(c.subjects),
     }));
-  }, [assignmentsQuery.data]);
+  }, [assignmentsQuery.data, formClassesQuery.data]);
 
   if (assignmentsQuery.isPending) {
     return (
@@ -84,7 +109,9 @@ export function MyClassesView() {
                   <span className="rounded-md bg-brand-primary/10 px-2 py-0.5 text-xs font-bold text-brand-primary">
                     {cls.level}
                   </span>
-                  <span className="text-xs text-text-muted">Arm {cls.arm}</span>
+                  <span className="text-xs text-text-muted">
+                    {cls.isFormClass ? 'Form teacher · ' : ''}Arm {cls.arm}
+                  </span>
                 </div>
 
                 <div>
