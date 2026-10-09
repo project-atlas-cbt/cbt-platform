@@ -102,7 +102,7 @@ export function OverrideDecisionDialog({
     }
   }
 
-  // A department change is a Promote into a class of the other department
+  // A stream change is a Promote into a class of the other stream
   // (bug audit P2-10: the separate option was one the server refuses).
   const isContinuing = outcome === 'PROMOTE' || outcome === 'REPEAT';
   const isSingle = decisionIds.length === 1;

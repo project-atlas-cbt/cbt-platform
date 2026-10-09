@@ -64,7 +64,7 @@ const STUDENTS = [
     displayName: 'Ada Okoye',
     studentId: 'ST001',
     currentClassName: 'SS2A',
-    departmentName: 'Sciences',
+    streamName: 'Sciences',
     userStatus: 'ACTIVE',
   },
 ];
@@ -97,7 +97,7 @@ describe('StudentsScreen', () => {
     expect(screen.getByText('No students yet')).toBeInTheDocument();
   });
 
-  it('renders real rows with class, department, and status', () => {
+  it('renders real rows with class, stream, and status', () => {
     mockUseStudentsPaginated.mockReturnValue(result(STUDENTS) as never);
     renderWithClient(<StudentsScreen basePath="/school/people" />);
     expect(screen.getByRole('link', { name: 'Ada Okoye' })).toHaveAttribute(

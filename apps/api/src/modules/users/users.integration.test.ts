@@ -873,15 +873,15 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     });
     const sessionId = sessionRes.json<{ id: string }>().id;
 
-    const deptRes = await post(admin, '/academics/departments', {
-      name: 'F7 Dept',
-      code: `F7D-${randomUUID().slice(0, 6)}`,
+    const streamRes = await post(admin, '/academics/streams', {
+      name: `F7 Stream ${randomUUID().slice(0, 6)}`,
+      code: `F7S-${randomUUID().slice(0, 6)}`,
     });
-    const departmentId = deptRes.json<{ id: string }>().id;
+    const stream = streamRes.json<{ id: string; name: string }>();
 
     const classRes = await post(admin, '/academics/classes', {
       academicSessionId: sessionId,
-      departmentId,
+      defaultStreamId: stream.id,
       name: 'F7 Class',
       level: 'SS2',
       arm: 'A',
@@ -907,14 +907,15 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
       currentClassId: string | null;
       currentClassName: string | null;
       currentAcademicSessionId: string | null;
-      departmentId: string | null;
-      departmentName: string | null;
+      streamId: string | null;
+      streamName: string | null;
     }>();
     expect(detailBody.currentClassId).toBe(classId);
     expect(detailBody.currentClassName).toBe('F7 Class');
     expect(detailBody.currentAcademicSessionId).toBe(sessionId);
-    expect(detailBody.departmentId).toBe(departmentId);
-    expect(detailBody.departmentName).toBe('F7 Dept');
+    // ADR-0038: a new enrollment takes the class's default stream.
+    expect(detailBody.streamId).toBe(stream.id);
+    expect(detailBody.streamName).toBe(stream.name);
 
     const filtered = await get(admin, `/students?classId=${classId}`);
     expect(filtered.statusCode).toBe(200);
@@ -1037,7 +1038,7 @@ describe('F14 gap closure — GET /students/me', () => {
     return body;
   }
 
-  it("returns the signed-in student's own name, student ID, and null class/department before enrollment", async () => {
+  it("returns the signed-in student's own name, student ID, and null class/stream before enrollment", async () => {
     const student = await seedLoggedInStudent({
       firstName: 'Fola',
       lastName: 'MeRoute',
@@ -1056,29 +1057,29 @@ describe('F14 gap closure — GET /students/me', () => {
       displayName: string;
       studentId: string;
       currentClassName: string | null;
-      departmentName: string | null;
+      streamName: string | null;
     }>();
     expect(body.displayName).toBe(student.displayName);
     expect(body.studentId).toBe(student.studentId);
     expect(body.currentClassName).toBeNull();
-    expect(body.departmentName).toBeNull();
+    expect(body.streamName).toBeNull();
   });
 
-  it('reflects the current class and department once enrolled', async () => {
+  it('reflects the current class and stream once enrolled', async () => {
     const sessionRes = await post(admin, '/academics/sessions', {
       name: `F14 Session ${randomUUID().slice(0, 8)}`,
       startDate: '2026-09-01',
       endDate: '2027-07-31',
     });
     const sessionId = sessionRes.json<{ id: string }>().id;
-    const deptRes = await post(admin, '/academics/departments', {
-      name: 'F14 Dept',
-      code: `F14D-${randomUUID().slice(0, 6)}`,
+    const streamRes = await post(admin, '/academics/streams', {
+      name: `F14 Stream ${randomUUID().slice(0, 6)}`,
+      code: `F14S-${randomUUID().slice(0, 6)}`,
     });
-    const departmentId = deptRes.json<{ id: string }>().id;
+    const stream = streamRes.json<{ id: string; name: string }>();
     const classRes = await post(admin, '/academics/classes', {
       academicSessionId: sessionId,
-      departmentId,
+      defaultStreamId: stream.id,
       name: 'F14 Class',
       level: 'SS2',
       arm: 'A',
@@ -1099,9 +1100,9 @@ describe('F14 gap closure — GET /students/me', () => {
     await login(studentCtx, student.loginIdentifier, 'a-real-password-123');
     const res = await get(studentCtx, '/students/me');
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ currentClassName: string | null; departmentName: string | null }>();
+    const body = res.json<{ currentClassName: string | null; streamName: string | null }>();
     expect(body.currentClassName).toBe('F14 Class');
-    expect(body.departmentName).toBe('F14 Dept');
+    expect(body.streamName).toBe(stream.name);
   });
 
   it('denies a non-student actor (security boundary — this is a self-view route, not a directory read)', async () => {

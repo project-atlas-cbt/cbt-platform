@@ -26,6 +26,16 @@ import { cn } from '@/lib/utils';
 const cellKey = (enrollmentId: string, classSubjectId: string) =>
   `${enrollmentId}:${classSubjectId}`;
 
+// Radix Select items can't hold an empty value.
+const ALL_STREAMS = '__all__';
+const NO_STREAM = '__none__';
+
+function offeringKindLabel(o: { kind: 'COMPULSORY' | 'ELECTIVE'; streamNames: string[] }) {
+  if (o.kind === 'COMPULSORY') return 'Compulsory';
+  if (o.streamNames.length === 0) return 'Elective';
+  return `${o.streamNames.join(', ')} ${o.streamNames.length === 1 ? 'stream' : 'streams'}`;
+}
+
 /**
  * ADR-0038 — who takes each subject in one class. Pick a subject, then tick
  * the students who take it. A list runs down the page, so a class with 20
@@ -45,6 +55,8 @@ export function SubjectRoster({ classId }: { classId: string }) {
   const [pending, setPending] = useState<Map<string, boolean>>(new Map());
   const [chosen, setChosen] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  // ADR-0038: '' is every stream; NO_STREAM is students in none.
+  const [streamFilter, setStreamFilter] = useState('');
   const [saveError, setSaveError] = useState<ReactNode | null>(null);
 
   const saved = useMemo(() => {
@@ -81,13 +93,18 @@ export function SubjectRoster({ classId }: { classId: string }) {
     students.filter((s) => isTicked(s.enrollmentId, classSubjectId)).length;
 
   const needle = query.trim().toLowerCase();
-  const shown = needle
-    ? students.filter(
-        (s) =>
-          s.displayName.toLowerCase().includes(needle) ||
-          s.studentId.toLowerCase().includes(needle),
-      )
-    : students;
+  const streamNames = [
+    ...new Set(students.map((s) => s.streamName).filter((n): n is string => Boolean(n))),
+  ].sort();
+  const filtering = Boolean(needle) || streamFilter !== '';
+  const shown = students.filter(
+    (s) =>
+      (!needle ||
+        s.displayName.toLowerCase().includes(needle) ||
+        s.studentId.toLowerCase().includes(needle)) &&
+      (streamFilter === '' ||
+        (streamFilter === NO_STREAM ? !s.streamName : s.streamName === streamFilter)),
+  );
 
   function setTick(enrollmentId: string, value: boolean) {
     setPending((prev) => {
@@ -124,8 +141,9 @@ export function SubjectRoster({ classId }: { classId: string }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-prose text-sm text-text-secondary">
-          Pick a subject, then tick the students who take it. Changes apply to future exams only;
-          past exams and results don&apos;t change.
+          Pick a subject, then tick the students who take it. A stream subject is ticked for
+          everyone in its streams already. Changes apply to future exams only; past exams and
+          results don&apos;t change.
         </p>
         <div className="flex items-center gap-2">
           {pending.size > 0 ? (
@@ -207,7 +225,7 @@ export function SubjectRoster({ classId }: { classId: string }) {
                   <span>
                     <span className="block font-medium text-text-primary">{o.subjectName}</span>
                     <span className="block text-xs text-text-muted">
-                      {o.kind === 'ELECTIVE' ? 'Elective' : 'Compulsory'}
+                      {offeringKindLabel(o)}
                       {o.choiceRule ? ` · ${o.choiceRule}` : ''}
                     </span>
                   </span>
@@ -235,6 +253,7 @@ export function SubjectRoster({ classId }: { classId: string }) {
               </h3>
               <p className="text-xs text-text-muted">
                 {takers(offering.classSubjectId)} of {students.length} students take it
+                {offering.streamNames.length > 0 ? ` · ${offeringKindLabel(offering)}` : ''}
                 {offering.choiceRule ? ` · ${offering.choiceRule}` : ''}
               </p>
             </div>
@@ -244,34 +263,59 @@ export function SubjectRoster({ classId }: { classId: string }) {
                 size="sm"
                 onClick={() => shown.forEach((s) => setTick(s.enrollmentId, true))}
               >
-                {needle ? 'Tick shown' : 'Tick all'}
+                {filtering ? 'Tick shown' : 'Tick all'}
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => shown.forEach((s) => setTick(s.enrollmentId, false))}
               >
-                {needle ? 'Untick shown' : 'Untick all'}
+                {filtering ? 'Untick shown' : 'Untick all'}
               </Button>
             </div>
           </div>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-text-muted"
-              aria-hidden
-            />
-            <Input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name or student ID"
-              aria-label="Search students"
-              className="pl-8"
-            />
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-48 flex-1">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-text-muted"
+                aria-hidden
+              />
+              <Input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name or student ID"
+                aria-label="Search students"
+                className="pl-8"
+              />
+            </div>
+            {streamNames.length > 0 ? (
+              <Select
+                value={streamFilter === '' ? ALL_STREAMS : streamFilter}
+                onValueChange={(v) => setStreamFilter(v === ALL_STREAMS ? '' : v)}
+              >
+                <SelectTrigger className="w-44" aria-label="Show students in stream">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_STREAMS}>All streams</SelectItem>
+                  {streamNames.map((n) => (
+                    <SelectItem key={n} value={n}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NO_STREAM}>No stream</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : null}
           </div>
           {shown.length === 0 ? (
             <p className="rounded-md border border-border px-3 py-6 text-center text-sm text-text-muted">
-              No student matches &ldquo;{query}&rdquo;.
+              {needle ? (
+                <>No student matches &ldquo;{query}&rdquo;.</>
+              ) : (
+                'No student in this stream.'
+              )}
             </p>
           ) : (
             <ul
@@ -296,7 +340,10 @@ export function SubjectRoster({ classId }: { classId: string }) {
                     />
                     <label htmlFor={id} className="flex min-w-32 flex-1 cursor-pointer flex-col">
                       <span className="truncate text-sm text-text-primary">{s.displayName}</span>
-                      <span className="text-xs tabular-nums text-text-muted">{s.studentId}</span>
+                      <span className="text-xs tabular-nums text-text-muted">
+                        {s.studentId}
+                        {s.streamName ? ` · ${s.streamName}` : ''}
+                      </span>
                     </label>
                     {s.warnings.map((w) => (
                       <Badge key={w.choiceGroupId} status="warning" className="shrink-0">

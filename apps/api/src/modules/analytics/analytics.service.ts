@@ -275,8 +275,15 @@ export class AnalyticsService {
       }),
     );
     const examIds = exams.map((entry) => entry.id);
-    const departments = await withTenant(prisma, schoolId, (tx) =>
-      tx.department.findMany({ where: { schoolId }, select: { id: true, name: true } }),
+    const [departments, streams] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.department.findMany({ where: { schoolId }, select: { id: true, name: true } }),
+        tx.stream.findMany({
+          where: { schoolId },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        }),
+      ]),
     );
     const sessions = await withTenant(prisma, schoolId, (tx) =>
       tx.academicSession.findMany({
@@ -300,6 +307,16 @@ export class AnalyticsService {
           id: department.id,
           name: department.name,
           ...(await this.metricsFor(schoolId, { examIds, departmentId: department.id })),
+        })),
+      ),
+      streams: await Promise.all(
+        streams.map(async (stream) => ({
+          id: stream.id,
+          name: stream.name,
+          ...(await this.metricsFor(schoolId, {
+            examIds,
+            stream: { streamId: stream.id, sessionIds: sessions.map((s) => s.id) },
+          })),
         })),
       ),
       sessionTrends: await Promise.all(
@@ -421,13 +438,28 @@ export class AnalyticsService {
         message: 'subjectId is required for Teacher class analytics.',
       });
     const classSubject = subjects[0];
-    const decision = await this.authz.evaluate(actor, 'analytics.class', {
-      schoolId,
-      ...(classGroup.departmentId && { departmentId: classGroup.departmentId }),
-      ...(classSubject && { classSubjectId: classSubject.id }),
-    });
-    if (!decision.allowed)
-      throw new AppHttpException({ code: 'NOT_FOUND', message: 'Class not found.' });
+    // ADR-0038: classes no longer carry a department, so an HOD's access
+    // comes from the subjects taught in the class: the requested subject's
+    // department, or (with no subject) any department of the class's
+    // subjects.
+    const departmentIds = [
+      ...new Set(
+        subjects.map((s) => s.subject.departmentId).filter((id): id is string => id !== null),
+      ),
+    ];
+    let allowed = false;
+    for (const departmentId of departmentIds.length > 0 ? departmentIds : [undefined]) {
+      const decision = await this.authz.evaluate(actor, 'analytics.class', {
+        schoolId,
+        ...(departmentId && { departmentId }),
+        ...(classSubject && { classSubjectId: classSubject.id }),
+      });
+      if (decision.allowed) {
+        allowed = true;
+        break;
+      }
+    }
+    if (!allowed) throw new AppHttpException({ code: 'NOT_FOUND', message: 'Class not found.' });
     if (query.subjectId && subjects.length === 0)
       throw new AppHttpException({
         code: 'VALIDATION_ERROR',
@@ -662,6 +694,9 @@ export class AnalyticsService {
       classId?: string;
       subjectId?: string;
       departmentId?: string;
+      /** ADR-0038: results of students who were in this stream in the
+       * exam's own session (a student can change stream between years). */
+      stream?: { streamId: string; sessionIds: string[] };
     },
   ): Prisma.ResultWhereInput {
     return {
@@ -670,6 +705,16 @@ export class AnalyticsService {
       ...(filter.examIds && { examId: { in: filter.examIds } }),
       ...(filter.classId && {
         studentProfile: { enrollments: { some: { schoolId, classId: filter.classId } } },
+      }),
+      ...(filter.stream && {
+        OR: filter.stream.sessionIds.map((sessionId) => ({
+          exam: { academicSessionId: sessionId },
+          studentProfile: {
+            enrollments: {
+              some: { schoolId, academicSessionId: sessionId, streamId: filter.stream!.streamId },
+            },
+          },
+        })),
       }),
       ...(filter.subjectId || filter.departmentId
         ? {

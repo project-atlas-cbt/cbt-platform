@@ -134,7 +134,10 @@ export class ImportValidationService {
       const templateVersion = parsed.version;
 
       const def = IMPORT_TEMPLATES[job.type];
-      const missingColumns = def.columns.filter((column) => !parsed.headers.includes(column));
+      const optional = new Set(def.optionalColumns ?? []);
+      const missingColumns = def.columns.filter(
+        (column) => !optional.has(column) && !parsed.headers.includes(column),
+      );
       if (missingColumns.length > 0) {
         await this.fail(
           schoolId,
@@ -257,14 +260,21 @@ export class ImportValidationService {
           if (!job.targetAcademicSessionId) {
             throw new Error('This import job has no target academic session.');
           }
-          const [classes, departments] = await Promise.all([
+          const [classes, streams] = await Promise.all([
             tx.classGroup.findMany({
               where: { schoolId, academicSessionId: job.targetAcademicSessionId, status: 'ACTIVE' },
-              select: { id: true, name: true, departmentId: true },
+              select: {
+                id: true,
+                name: true,
+                classSubjects: {
+                  where: { status: 'ACTIVE' },
+                  select: { id: true, kind: true, subject: { select: { name: true, code: true } } },
+                },
+              },
             }),
-            tx.department.findMany({
+            tx.stream.findMany({
               where: { schoolId, status: 'ACTIVE' },
-              select: { id: true, name: true },
+              select: { id: true, name: true, code: true },
             }),
           ]);
           const ctx: StudentValidationContext = {
@@ -273,11 +283,25 @@ export class ImportValidationService {
             classesByName: new Map(
               classes.map((c) => [
                 c.name.toLowerCase(),
-                { id: c.id, departmentId: c.departmentId },
+                {
+                  id: c.id,
+                  offeringsByName: new Map(
+                    c.classSubjects.flatMap((o) => {
+                      const value = { classSubjectId: o.id, kind: o.kind };
+                      return [
+                        [o.subject.name.toLowerCase(), value],
+                        [o.subject.code.toLowerCase(), value],
+                      ] as const;
+                    }),
+                  ),
+                },
               ]),
             ),
-            departmentsByName: new Map(
-              departments.map((d) => [d.name.toLowerCase(), { id: d.id }]),
+            streamsByName: new Map(
+              streams.flatMap((st) => [
+                [st.name.toLowerCase(), { id: st.id }],
+                [st.code.toLowerCase(), { id: st.id }],
+              ]),
             ),
           };
           outcomes = parsed.rows.map((row, i) => ({

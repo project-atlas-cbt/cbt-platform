@@ -110,11 +110,12 @@ export class StudentResponseDto {
   @ApiProperty({ type: String, nullable: true })
   currentAcademicSessionId!: string | null;
 
+  /** ADR-0038: the current enrollment's stream (Science, Humanities…). */
   @ApiProperty({ type: String, nullable: true })
-  departmentId!: string | null;
+  streamId!: string | null;
 
   @ApiProperty({ type: String, nullable: true })
-  departmentName!: string | null;
+  streamName!: string | null;
 }
 
 /**
@@ -135,7 +136,7 @@ export class StudentOwnProfileResponseDto {
   currentClassName!: string | null;
 
   @ApiProperty({ type: String, nullable: true })
-  departmentName!: string | null;
+  streamName!: string | null;
 }
 
 export class StudentListResponseDto {

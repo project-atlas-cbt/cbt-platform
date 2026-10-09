@@ -87,8 +87,17 @@ beforeAll(async () => {
     const classA = await tx.classGroup.create({
       data: { schoolId: sid, academicSessionId: sessionId, name: 'SS1A', level: 'SS1', arm: 'A' },
     });
+    // ADR-0038: class B still carries the retired class department (old
+    // data). It must not give the HOD the class: only subjects do.
     const classB = await tx.classGroup.create({
-      data: { schoolId: sid, academicSessionId: sessionId, name: 'JSS3B', level: 'JSS3', arm: 'B' },
+      data: {
+        schoolId: sid,
+        academicSessionId: sessionId,
+        name: 'JSS3B',
+        level: 'JSS3',
+        arm: 'B',
+        departmentId: dept.id,
+      },
     });
     const csA = await tx.classSubject.create({
       data: {

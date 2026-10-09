@@ -3,8 +3,10 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import {
   CLASS_LEVELS,
   QUESTION_REVIEW_DECISIONS,
+  QUESTION_REVIEW_FALLBACK_REASONS,
   type ClassLevel,
   type QuestionReviewDecision,
+  type QuestionReviewFallbackReason,
 } from '@atlas/domain';
 import { QuestionRevisionResponseDto } from '../../questions/dto/question.dto.js';
 
@@ -68,6 +70,15 @@ export class QuestionReviewQueueItemDto {
 
   @ApiProperty({ type: QuestionRevisionResponseDto })
   revision!: QuestionRevisionResponseDto;
+
+  @ApiProperty({
+    type: String,
+    enum: QUESTION_REVIEW_FALLBACK_REASONS,
+    nullable: true,
+    description:
+      'ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can.',
+  })
+  fallbackReason!: QuestionReviewFallbackReason | null;
 }
 
 export class QuestionReviewQueueSubjectGroupDto {
@@ -148,4 +159,13 @@ export class QuestionReviewWorkspaceResponseDto {
 
   @ApiProperty({ type: QuestionReviewHistoryItemDto, isArray: true })
   history!: QuestionReviewHistoryItemDto[];
+
+  @ApiProperty({
+    type: String,
+    enum: QUESTION_REVIEW_FALLBACK_REASONS,
+    nullable: true,
+    description:
+      'ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can.',
+  })
+  fallbackReason!: QuestionReviewFallbackReason | null;
 }

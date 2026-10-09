@@ -39,12 +39,22 @@ export class ClassGroupController {
   @Authorized('schoolConfig.class.view')
   @ApiOperation({ summary: "List the school's classes (07 §6.4), optionally filtered by session." })
   @ApiQuery({ name: 'academicSessionId', required: false })
+  @ApiQuery({
+    name: 'departmentId',
+    required: false,
+    description: 'ADR-0038: only classes offering a subject in this department.',
+  })
   @ApiOkResponse({ type: ClassGroupListResponseDto })
   async list(
     @Req() req: FastifyRequest,
     @Query('academicSessionId', new ParseUUIDPipe({ optional: true })) academicSessionId?: string,
+    @Query('departmentId', new ParseUUIDPipe({ optional: true })) departmentId?: string,
   ): Promise<ClassGroupListResponseDto> {
-    const classes = await this.classes.list(currentUser(req).schoolId, academicSessionId);
+    const classes = await this.classes.list(
+      currentUser(req).schoolId,
+      academicSessionId,
+      departmentId,
+    );
     return { classes };
   }
 

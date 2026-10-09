@@ -18,6 +18,7 @@ import { useHasPermission } from '@/lib/nav';
 import { NetworkError } from '@/lib/api';
 
 vi.mock('@/lib/academics/queries', () => ({
+  useStreams: () => ({ data: { streams: [] }, isSuccess: true, isPending: false }),
   useClass: vi.fn(),
   useClassRoster: vi.fn(),
   useClassSubjects: vi.fn(),
@@ -261,6 +262,9 @@ describe('ClassDetailScreen', () => {
             subjectCode: 'MTH',
             academicSessionId: 's1',
             status: 'ACTIVE',
+            kind: 'COMPULSORY',
+            streamIds: [],
+            streamNames: [],
           },
         ],
       },

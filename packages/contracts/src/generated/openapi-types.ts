@@ -1473,6 +1473,60 @@ export interface paths {
         patch: operations["SubjectChoiceGroupController_update"];
         trace?: never;
     };
+    "/academics/streams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the school's student streams (ADR-0038). */
+        get: operations["StreamController_list"];
+        put?: never;
+        /** Create a stream. */
+        post: operations["StreamController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/streams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a stream that no class, student or offering uses. */
+        delete: operations["StreamController_remove"];
+        options?: never;
+        head?: never;
+        /** Rename a stream, or retire it (status INACTIVE). */
+        patch: operations["StreamController_update"];
+        trace?: never;
+    };
+    "/academics/standard-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What applying the standard setup would add or place (ADR-0038). */
+        get: operations["StandardSetupController_preview"];
+        put?: never;
+        /** Apply the ticked parts of the standard setup. */
+        post: operations["StandardSetupController_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/academics/classes/{id}/subjects": {
         parameters: {
             query?: never;
@@ -1572,6 +1626,23 @@ export interface paths {
         put?: never;
         /** Enroll a student into a class for a session, or move them to another class within a session they are already enrolled in (07 §35) — one endpoint serves both. */
         post: operations["StudentEnrollmentController_enroll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put a student's current enrollment in another stream (ADR-0038); registers the new stream's subjects and deregisters the old stream's, for future exams only. */
+        put: operations["StudentEnrollmentController_setStream"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4393,6 +4464,12 @@ export interface components {
             plan: string;
             /** @description Initial subscription period, in days. */
             initialPeriodDays: number;
+            /**
+             * @description STANDARD creates the standard departments, streams and subjects (ADR-0038); the school edits them after. EMPTY leaves setup to the school.
+             * @default EMPTY
+             * @enum {string}
+             */
+            startingStructure: "STANDARD" | "EMPTY";
         };
         CreateSchoolResponseDto: {
             id: string;
@@ -4862,7 +4939,8 @@ export interface components {
         ClassGroupResponseDto: {
             id: string;
             academicSessionId: string;
-            departmentId: string | null;
+            defaultStreamId: string | null;
+            defaultStreamName: string | null;
             name: string;
             /** @enum {string} */
             level: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
@@ -4875,8 +4953,8 @@ export interface components {
         };
         CreateClassGroupDto: {
             academicSessionId: string;
-            /** @description Null for classes with no department (e.g. JSS levels before streaming). */
-            departmentId?: string | null;
+            /** @description ADR-0038: the stream students joining this class take unless set otherwise. Null for a mixed arm and for JSS. */
+            defaultStreamId?: string | null;
             /** @example SS2A */
             name: string;
             /** @enum {string} */
@@ -4885,11 +4963,13 @@ export interface components {
             arm: string;
         };
         UpdateClassGroupDto: {
-            departmentId?: string | null;
+            defaultStreamId?: string | null;
             name?: string;
             /** @enum {string} */
             level?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
             arm?: string;
+            /** @description ADR-0038: with a new defaultStreamId, also put the class’s current students who are in no stream into it (registering its stream subjects). Students already in a stream keep it. */
+            placeStudentsWithoutStream?: boolean;
         };
         SubjectResponseDto: {
             id: string;
@@ -4943,6 +5023,93 @@ export interface components {
             minChoices?: number;
             maxChoices?: number;
         };
+        StreamResponseDto: {
+            id: string;
+            name: string;
+            code: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE";
+            classCount: number;
+            studentCount: number;
+        };
+        StreamListResponseDto: {
+            streams: components["schemas"]["StreamResponseDto"][];
+        };
+        CreateStreamDto: {
+            /** @example Science */
+            name: string;
+            /** @example SCI */
+            code: string;
+        };
+        UpdateStreamDto: {
+            name?: string;
+            code?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "INACTIVE";
+        };
+        StandardSetupDepartmentDto: {
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "NEW" | "PLACE" | "EXISTS";
+        };
+        StandardSetupStreamDto: {
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "NEW" | "PLACE" | "EXISTS";
+        };
+        StandardSetupSubjectDto: {
+            code: string;
+            /** @description The school's own name when it already has it. */
+            name: string;
+            departmentCode: string;
+            departmentName: string;
+            /** @enum {string} */
+            stage: "JSS" | "SS" | "JSS_AND_SS";
+            /** @description e.g. "Trade subject: choose 1". */
+            choiceGroupName: string | null;
+            /** @enum {string} */
+            status: "NEW" | "PLACE" | "EXISTS";
+        };
+        StandardSetupPreviewResponseDto: {
+            departments: components["schemas"]["StandardSetupDepartmentDto"][];
+            streams: components["schemas"]["StandardSetupStreamDto"][];
+            subjects: components["schemas"]["StandardSetupSubjectDto"][];
+        };
+        ApplyStandardSetupDto: {
+            /**
+             * @example [
+             *       "SCI",
+             *       "BUS",
+             *       "HUM"
+             *     ]
+             */
+            departmentCodes: string[];
+            /**
+             * @example [
+             *       "SCI",
+             *       "BUS",
+             *       "HUM"
+             *     ]
+             */
+            streamCodes: string[];
+            /**
+             * @example [
+             *       "MTH",
+             *       "ENG"
+             *     ]
+             */
+            subjectCodes: string[];
+        };
+        StandardSetupResultResponseDto: {
+            departmentsCreated: number;
+            streamsCreated: number;
+            subjectsCreated: number;
+            /** @description Existing subjects given their standard department. */
+            subjectsPlaced: number;
+            choiceGroupsCreated: number;
+        };
         ClassSubjectResponseDto: {
             id: string;
             classId: string;
@@ -4954,6 +5121,8 @@ export interface components {
             status: "ACTIVE" | "INACTIVE";
             /** @enum {string} */
             kind: "COMPULSORY" | "ELECTIVE";
+            streamIds: string[];
+            streamNames: string[];
         };
         ClassSubjectListResponseDto: {
             offerings: components["schemas"]["ClassSubjectResponseDto"][];
@@ -4965,10 +5134,12 @@ export interface components {
              * @enum {string}
              */
             kind?: "COMPULSORY" | "ELECTIVE";
+            streamIds?: string[];
         };
         UpdateClassSubjectDto: {
             /** @enum {string} */
-            kind: "COMPULSORY" | "ELECTIVE";
+            kind?: "COMPULSORY" | "ELECTIVE";
+            streamIds?: string[];
         };
         HodAssignmentResponseDto: {
             id: string;
@@ -4997,18 +5168,23 @@ export interface components {
         EnrollStudentDto: {
             academicSessionId: string;
             classId: string;
+            streamId?: string | null;
         };
         StudentEnrollmentResponseDto: {
             id: string;
             studentProfileId: string;
             academicSessionId: string;
             classId: string;
+            streamId: string | null;
             /** Format: date */
             startDate: string;
             /** Format: date */
             endDate: string | null;
             /** @enum {string} */
             status: "ACTIVE" | "TRANSFERRED" | "COMPLETED" | "WITHDRAWN";
+        };
+        SetStudentStreamDto: {
+            streamId: string | null;
         };
         StudentEnrollmentListResponseDto: {
             enrollments: components["schemas"]["StudentEnrollmentResponseDto"][];
@@ -5020,6 +5196,8 @@ export interface components {
             displayName: string;
             /** Format: date */
             startDate: string;
+            streamId: string | null;
+            streamName: string | null;
         };
         ClassRosterResponseDto: {
             students: components["schemas"]["ClassRosterEntryDto"][];
@@ -5107,6 +5285,8 @@ export interface components {
             enrollmentId: string | null;
             classId: string | null;
             className: string | null;
+            streamId: string | null;
+            streamName: string | null;
             registrations: components["schemas"]["StudentSubjectRegistrationResponseDto"][];
             availableOfferings: components["schemas"]["AvailableOfferingDto"][];
             warnings: components["schemas"]["ChoiceWarningDto"][];
@@ -5122,12 +5302,14 @@ export interface components {
             choiceGroupName: string | null;
             /** @description e.g. "Religion: choose 1". */
             choiceRule: string | null;
+            streamNames: string[];
         };
         GridStudentDto: {
             enrollmentId: string;
             studentProfileId: string;
             studentId: string;
             displayName: string;
+            streamName: string | null;
             registeredClassSubjectIds: string[];
             warnings: components["schemas"]["ChoiceWarningDto"][];
         };
@@ -5176,7 +5358,7 @@ export interface components {
             /** Format: date-time */
             at: string;
             /** @enum {string} */
-            kind: "ENROLLED" | "MOVED" | "STARTED_SESSION" | "SUBJECT_ADDED" | "SUBJECT_DROPPED" | "ACCOUNT";
+            kind: "ENROLLED" | "MOVED" | "STARTED_SESSION" | "SUBJECT_ADDED" | "SUBJECT_DROPPED" | "STREAM_CHANGED" | "ACCOUNT";
             /** @description What changed, e.g. "Moved SS1A → SS1B". */
             summary: string;
             /** @description Extra detail, e.g. subjects carried over. */
@@ -5201,6 +5383,7 @@ export interface components {
             sessionName: string;
             /** @description The class the student ended the session in, or is in now. */
             className: string;
+            streamName: string | null;
             current: boolean;
             /** @description Subjects taken in that class, by name. */
             subjects: string[];
@@ -5849,6 +6032,7 @@ export interface components {
             examCount: number;
             attemptCount: number;
             departments: components["schemas"]["ComparisonMetricDto"][];
+            streams: components["schemas"]["ComparisonMetricDto"][];
             sessionTrends: components["schemas"]["AnalyticsTrendDto"][];
         };
         StudentAnalyticsHistoryItemDto: {
@@ -6163,8 +6347,8 @@ export interface components {
             currentClassId: string | null;
             currentClassName: string | null;
             currentAcademicSessionId: string | null;
-            departmentId: string | null;
-            departmentName: string | null;
+            streamId: string | null;
+            streamName: string | null;
         };
         StudentListResponseDto: {
             students: components["schemas"]["StudentResponseDto"][];
@@ -6179,7 +6363,7 @@ export interface components {
             displayName: string;
             studentId: string;
             currentClassName: string | null;
-            departmentName: string | null;
+            streamName: string | null;
         };
         CreateStudentDto: {
             firstName: string;
@@ -6606,6 +6790,11 @@ export interface components {
              */
             submittedAt: string;
             revision: components["schemas"]["QuestionRevisionResponseDto"];
+            /**
+             * @description ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can.
+             * @enum {string|null}
+             */
+            fallbackReason: "NO_DEPARTMENT" | "NO_HOD" | "AUTHOR_IS_ONLY_HOD" | null;
         };
         QuestionReviewQueueSubjectGroupDto: {
             subjectId: string;
@@ -6636,6 +6825,11 @@ export interface components {
             authorName: string;
             currentRevision: components["schemas"]["QuestionRevisionResponseDto"];
             history: components["schemas"]["QuestionReviewHistoryItemDto"][];
+            /**
+             * @description ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can.
+             * @enum {string|null}
+             */
+            fallbackReason: "NO_DEPARTMENT" | "NO_HOD" | "AUTHOR_IS_ONLY_HOD" | null;
         };
         ApproveQuestionReviewDto: {
             /** @description An optional HOD note. */
@@ -8776,6 +8970,8 @@ export interface operations {
         parameters: {
             query?: {
                 academicSessionId?: string;
+                /** @description ADR-0038: only classes offering a subject in this department. */
+                departmentId?: string;
             };
             header?: never;
             path?: never;
@@ -9122,6 +9318,136 @@ export interface operations {
             };
         };
     };
+    StreamController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamListResponseDto"];
+                };
+            };
+        };
+    };
+    StreamController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStreamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamResponseDto"];
+                };
+            };
+        };
+    };
+    StreamController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
+            };
+        };
+    };
+    StreamController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStreamDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamResponseDto"];
+                };
+            };
+        };
+    };
+    StandardSetupController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardSetupPreviewResponseDto"];
+                };
+            };
+        };
+    };
+    StandardSetupController_apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyStandardSetupDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardSetupResultResponseDto"];
+                };
+            };
+        };
+    };
     ClassSubjectController_list: {
         parameters: {
             query?: never;
@@ -9312,6 +9638,31 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["EnrollStudentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentEnrollmentResponseDto"];
+                };
+            };
+        };
+    };
+    StudentEnrollmentController_setStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStudentStreamDto"];
             };
         };
         responses: {
@@ -9728,7 +10079,7 @@ export interface operations {
                 pageSize?: number;
                 outcome?: "PROMOTE" | "REPEAT" | "TRANSFER" | "GRADUATE" | "WITHDRAW";
                 sourceClassId?: string;
-                departmentId?: string;
+                streamId?: string;
                 sourceLevel?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
                 overriddenOnly?: boolean;
             };

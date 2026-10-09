@@ -17,6 +17,7 @@ const SECTIONS = [
   { slug: 'sessions', label: 'Sessions' },
   { slug: 'terms', label: 'Terms' },
   { slug: 'departments', label: 'Departments' },
+  { slug: 'streams', label: 'Streams' },
   { slug: 'classes', label: 'Classes' },
   { slug: 'subjects', label: 'Subjects' },
   { slug: 'rollover', label: 'Rollover' },

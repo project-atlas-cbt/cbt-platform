@@ -1,4 +1,5 @@
 import type { Prisma } from '@atlas/db';
+import type { QuestionReviewFallbackReason } from '@atlas/domain';
 import {
   QUESTION_REVISION_INCLUDE,
   toRevisionResponseDto,
@@ -39,8 +40,29 @@ export type QuestionForReviewWithRevision = QuestionForReview & {
   currentRevision: QuestionRevisionWithRelations;
 };
 
+/** ADR-0038: the active HODs of each department, by membership id. */
+export type ActiveHodsByDepartment = ReadonlyMap<string, ReadonlySet<string>>;
+
+/** ADR-0038 decision 6: why the School Admin may decide this question, or
+ * null when at least one active HOD other than the author can. */
+export function fallbackReasonFor(
+  question: QuestionForReview,
+  hods: ActiveHodsByDepartment,
+): QuestionReviewFallbackReason | null {
+  const departmentId = question.subject.departmentId;
+  if (departmentId === null) return 'NO_DEPARTMENT';
+  const departmentHods = hods.get(departmentId);
+  if (!departmentHods || departmentHods.size === 0) return 'NO_HOD';
+  const authorMembershipId = question.authorProfile.membership.id;
+  for (const membershipId of departmentHods) {
+    if (membershipId !== authorMembershipId) return null;
+  }
+  return 'AUTHOR_IS_ONLY_HOD';
+}
+
 export function toQueueItemDto(
   question: QuestionForReviewWithRevision,
+  fallbackReason: QuestionReviewFallbackReason | null,
 ): QuestionReviewQueueItemDto {
   return {
     questionId: question.id,
@@ -51,12 +73,14 @@ export function toQueueItemDto(
     authorName: question.authorProfile.membership.user.displayName,
     submittedAt: question.currentRevision.updatedAt.toISOString(),
     revision: toRevisionResponseDto(question.currentRevision),
+    fallbackReason,
   };
 }
 
 export function toWorkspaceResponseDto(
   question: QuestionForReviewWithRevision,
   history: QuestionReviewHistoryItemDto[],
+  fallbackReason: QuestionReviewFallbackReason | null,
 ): QuestionReviewWorkspaceResponseDto {
   return {
     questionId: question.id,
@@ -67,6 +91,7 @@ export function toWorkspaceResponseDto(
     authorName: question.authorProfile.membership.user.displayName,
     currentRevision: toRevisionResponseDto(question.currentRevision),
     history,
+    fallbackReason,
   };
 }
 

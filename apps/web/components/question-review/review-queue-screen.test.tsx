@@ -70,4 +70,51 @@ describe('ReviewQueue', () => {
       '/hod/question-review/q1',
     );
   });
+
+  it("the School Admin's queue lists only questions no HOD can review, with the reason (ADR-0038)", () => {
+    const item = (questionId: string, fallbackReason: string | null) => ({
+      questionId,
+      subjectId: 'math',
+      subjectName: 'Mathematics',
+      level: 'SS2',
+      authorTeacherProfileId: 'tp1',
+      authorName: `Author ${questionId}`,
+      submittedAt: new Date().toISOString(),
+      revision: { content: `<p>${questionId}</p>` },
+      fallbackReason,
+    });
+    mockUseReviewQueue.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: {
+        subjects: [
+          {
+            subjectId: 'math',
+            subjectName: 'Mathematics',
+            pendingCount: 2,
+            items: [item('q1', null), item('q2', 'NO_HOD')],
+          },
+        ],
+      },
+    } as never);
+    render(<ReviewQueue basePath="/school/question-review" fallbackOnly />);
+    expect(screen.queryByText('Author q1')).not.toBeInTheDocument();
+    expect(screen.getByText('Author q2')).toBeInTheDocument();
+    expect(screen.getByText(/its department has no hod/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 question awaiting review/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /open review/i })).toHaveAttribute(
+      'href',
+      '/school/question-review/q2',
+    );
+  });
+
+  it("the School Admin's queue explains an empty queue", () => {
+    mockUseReviewQueue.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { subjects: [] },
+    } as never);
+    render(<ReviewQueue fallbackOnly />);
+    expect(screen.getByText(/has an hod who can review it/i)).toBeInTheDocument();
+  });
 });

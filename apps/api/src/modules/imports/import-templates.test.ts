@@ -37,7 +37,7 @@ describe('buildErrorRowsCsv', () => {
           'First Name': 'A',
           'Last Name': 'B',
           Class: '',
-          Department: '',
+          Department: 'Science',
         },
         errors: [
           { field: 'Student ID', message: 'Student ID is required.' },
@@ -47,8 +47,10 @@ describe('buildErrorRowsCsv', () => {
     ]);
     const lines = csv.trim().split('\r\n');
     expect(lines[0]).toBe(templateVersionMarker(IMPORT_TEMPLATE_VERSION));
-    expect(lines[1]).toBe('Student ID,First Name,Last Name,Class,Department,Errors');
+    expect(lines[1]).toBe('Student ID,First Name,Last Name,Class,Stream,Electives,Errors');
     expect(lines[2]).toContain('Student ID: Student ID is required.; Class: Class is required.');
+    // An old file's Department value comes back under Stream.
+    expect(lines[2]).toContain(',A,B,,Science,,');
   });
 
   it('carries the version marker, so a hand-corrected copy is directly re-uploadable', () => {

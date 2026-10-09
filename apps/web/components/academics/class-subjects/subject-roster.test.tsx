@@ -18,6 +18,7 @@ const offering = (id: string, name: string, kind: 'COMPULSORY' | 'ELECTIVE', rul
   choiceGroupId: rule ? 'g1' : null,
   choiceGroupName: rule ? 'Religion' : null,
   choiceRule: rule ?? null,
+  streamNames: [] as string[],
 });
 
 const student = (n: number, name: string, registered: string[], warnings: string[] = []) => ({
@@ -25,6 +26,7 @@ const student = (n: number, name: string, registered: string[], warnings: string
   studentProfileId: `p${n}`,
   studentId: `ST00${n}`,
   displayName: name,
+  streamName: null,
   registeredClassSubjectIds: registered,
   warnings: warnings.map((message) => ({ choiceGroupId: 'g1', message })),
 });

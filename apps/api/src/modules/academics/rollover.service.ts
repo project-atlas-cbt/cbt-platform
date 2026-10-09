@@ -172,7 +172,7 @@ export class RolloverService {
             schoolId,
             rolloverPlanId: created.id,
             sourceClassId: c.id,
-            departmentId: c.departmentId,
+            defaultStreamId: c.defaultStreamId,
             name: c.name,
             level: c.level,
             arm: c.arm,
@@ -221,7 +221,7 @@ export class RolloverService {
                       d.included &&
                       d.level === NEXT_LEVEL[e.classGroupSession.level] &&
                       d.arm === e.classGroupSession.arm &&
-                      d.departmentId === e.classGroupSession.departmentId,
+                      d.defaultStreamId === e.classGroupSession.defaultStreamId,
                   )
                 : undefined;
             return {
@@ -328,6 +328,8 @@ export class RolloverService {
             })
           ).map((a) => a.departmentId)
         : null;
+      // ADR-0038: classes no longer carry a department, so an HOD reviews
+      // the classes taught a subject of a department they head.
       const allowedClassIds =
         departments === null
           ? null
@@ -336,13 +338,13 @@ export class RolloverService {
                 where: {
                   schoolId,
                   academicSessionId: plan.sourceAcademicSessionId,
-                  departmentId: { in: departments },
+                  classSubjects: { some: { subject: { departmentId: { in: departments } } } },
                 },
                 select: { id: true },
               })
             ).map((c) => c.id);
       const sourceClassFilter: Prisma.ClassGroupWhereInput = {
-        ...(query.departmentId !== undefined && { departmentId: query.departmentId }),
+        ...(query.streamId !== undefined && { defaultStreamId: query.streamId }),
         ...(query.sourceLevel !== undefined && {
           level: query.sourceLevel as Prisma.EnumClassLevelFilter,
         }),
@@ -353,7 +355,7 @@ export class RolloverService {
         ...(allowedClassIds !== null && { sourceClassId: { in: allowedClassIds } }),
         ...(query.outcome !== undefined && { outcome: query.outcome }),
         ...(query.sourceClassId !== undefined && { sourceClassId: query.sourceClassId }),
-        ...((query.departmentId !== undefined || query.sourceLevel !== undefined) && {
+        ...((query.streamId !== undefined || query.sourceLevel !== undefined) && {
           sourceClass: { is: sourceClassFilter },
         }),
         ...(query.overriddenOnly && { overriddenAt: { not: null } }),
@@ -398,7 +400,7 @@ export class RolloverService {
           where: {
             schoolId,
             rolloverPlanId: planId,
-            ...(departments !== null && { departmentId: { in: departments } }),
+            ...(allowedClassIds !== null && { sourceClassId: { in: allowedClassIds } }),
           },
         }),
         tx.rolloverOfferingDraft.findMany({ where: { schoolId, rolloverPlanId: planId } }),
@@ -666,7 +668,7 @@ export class RolloverService {
           data: {
             schoolId,
             academicSessionId: target.id,
-            departmentId: draft.departmentId,
+            defaultStreamId: draft.defaultStreamId,
             name: draft.name,
             level: draft.level,
             arm: draft.arm,
@@ -674,15 +676,15 @@ export class RolloverService {
         });
         classMap.set(draft.id, created.id);
       }
-      // ADR-0038: an offering keeps its kind (compulsory or elective) into
-      // the new session.
-      const sourceKinds = new Map(
+      // ADR-0038: an offering keeps its kind (compulsory or elective) and
+      // its automatic streams into the new session.
+      const sourceOfferings = new Map(
         (
           await tx.classSubject.findMany({
             where: { schoolId, id: { in: draftOfferings.map((d) => d.sourceClassSubjectId) } },
-            select: { id: true, kind: true },
+            select: { id: true, kind: true, streams: { select: { streamId: true } } },
           })
-        ).map((o) => [o.id, o.kind]),
+        ).map((o) => [o.id, o]),
       );
       const offeringMap = new Map<string, string>();
       for (const draft of draftOfferings) {
@@ -698,9 +700,18 @@ export class RolloverService {
             academicSessionId: target.id,
             classId,
             subjectId: draft.subjectId,
-            kind: sourceKinds.get(draft.sourceClassSubjectId) ?? 'COMPULSORY',
+            kind: sourceOfferings.get(draft.sourceClassSubjectId)?.kind ?? 'COMPULSORY',
           },
         });
+        const streams = sourceOfferings.get(draft.sourceClassSubjectId)?.streams ?? [];
+        if (streams.length > 0)
+          await tx.classSubjectStream.createMany({
+            data: streams.map((s) => ({
+              schoolId,
+              classSubjectId: created.id,
+              streamId: s.streamId,
+            })),
+          });
         offeringMap.set(`${draft.targetDraftClassId}:${draft.subjectId}`, created.id);
       }
       const draftLevel = new Map(draftClasses.map((draft) => [draft.id, draft]));
@@ -740,12 +751,17 @@ export class RolloverService {
               code: 'VALIDATION_ERROR',
               message: 'Student target class is excluded.',
             });
+          // ADR-0038: a student placed in a streamed arm takes its stream;
+          // in a mixed arm they keep the stream they had.
           const enrollment = await tx.studentEnrollment.create({
             data: {
               schoolId,
               studentProfileId: sourceEnrollment.studentProfileId,
               academicSessionId: target.id,
               classId,
+              streamId:
+                draftLevel.get(decision.targetDraftClassId!)?.defaultStreamId ??
+                sourceEnrollment.streamId,
               startDate: new Date(),
             },
           });

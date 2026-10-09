@@ -385,8 +385,18 @@ export class ExportService {
               ...(departmentId
                 ? [
                     {
+                      // ADR-0038: a department's students are those taking
+                      // its subjects, not those in a class of it.
                       enrollments: {
-                        some: { status: 'ACTIVE' as const, classGroupSession: { departmentId } },
+                        some: {
+                          status: 'ACTIVE' as const,
+                          registrations: {
+                            some: {
+                              status: 'REGISTERED' as const,
+                              classSubject: { subject: { departmentId } },
+                            },
+                          },
+                        },
                       },
                     },
                   ]
@@ -434,7 +444,13 @@ export class ExportService {
         const departmentId = this.stringScope(scope, 'departmentId');
         const classId = this.stringScope(scope, 'classId');
         const rows = await tx.classGroup.findMany({
-          where: { ...(departmentId && { departmentId }), ...(classId && { id: classId }) },
+          where: {
+            // ADR-0038: classes taught a subject of the department.
+            ...(departmentId && {
+              classSubjects: { some: { subject: { departmentId } } },
+            }),
+            ...(classId && { id: classId }),
+          },
         });
         return {
           rows: rows.length,
@@ -764,7 +780,10 @@ export class ExportService {
         const classGroup = await withTenant(prisma, user.schoolId, (tx) =>
           tx.classGroup.findUnique({
             where: { id: classId },
-            select: { id: true, departmentId: true },
+            select: {
+              id: true,
+              classSubjects: { select: { subject: { select: { departmentId: true } } } },
+            },
           }),
         );
         if (!classGroup)
@@ -772,7 +791,9 @@ export class ExportService {
         scope.classId = classGroup.id;
         if (isHod) {
           const departmentId = await requireDepartment();
-          if (classGroup.departmentId !== departmentId)
+          // ADR-0038: a class is in an HOD's scope when it is taught a
+          // subject of their department.
+          if (!classGroup.classSubjects.some((cs) => cs.subject.departmentId === departmentId))
             throw new AppHttpException({
               code: 'FORBIDDEN',
               message: 'Class is outside your department.',

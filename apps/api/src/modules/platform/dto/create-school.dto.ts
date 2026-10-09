@@ -1,5 +1,9 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsInt, IsString, Min, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+
+/** ADR-0038 amendment: how the school's academic structure starts. */
+export const SCHOOL_STARTING_STRUCTURES = ['STANDARD', 'EMPTY'] as const;
+export type SchoolStartingStructure = (typeof SCHOOL_STARTING_STRUCTURES)[number];
 
 /** `05 §3.2`'s required-field list exactly: "School name, Admin name, Admin
  * email/identifier, Subscription, Initial subscription period." No
@@ -46,4 +50,15 @@ export class CreateSchoolDto {
   @IsInt()
   @Min(1)
   initialPeriodDays!: number;
+
+  @ApiPropertyOptional({
+    type: String,
+    enum: SCHOOL_STARTING_STRUCTURES,
+    default: 'EMPTY',
+    description:
+      'STANDARD creates the standard departments, streams and subjects (ADR-0038); the school edits them after. EMPTY leaves setup to the school.',
+  })
+  @IsOptional()
+  @IsIn(SCHOOL_STARTING_STRUCTURES)
+  startingStructure?: SchoolStartingStructure;
 }

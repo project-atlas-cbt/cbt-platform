@@ -23,11 +23,15 @@ import { StudentEnrollmentService } from './student-enrollment.service.js';
 import { StudentSubjectRegistrationController } from './student-subject-registration.controller.js';
 import { StudentSubjectRegistrationService } from './student-subject-registration.service.js';
 import { SubjectChoiceGroupController } from './subject-choice-group.controller.js';
+import { StandardSetupController } from './standard-setup.controller.js';
+import { StandardSetupService } from './standard-setup.service.js';
+import { StreamController } from './stream.controller.js';
 import { FormTeacherController } from './form-teacher.controller.js';
 import { FormTeacherService } from './form-teacher.service.js';
 import { StudentHistoryController } from './student-history.controller.js';
 import { StudentHistoryService } from './student-history.service.js';
 import { SubjectChoiceGroupService } from './subject-choice-group.service.js';
+import { StreamService } from './stream.service.js';
 import { SubjectController } from './subject.controller.js';
 import { SubjectService } from './subject.service.js';
 import { TeacherAssignmentController } from './teacher-assignment.controller.js';
@@ -65,6 +69,8 @@ import { RolloverService } from './rollover.service.js';
     ClassGroupController,
     SubjectController,
     SubjectChoiceGroupController,
+    StreamController,
+    StandardSetupController,
     ClassSubjectController,
     HodAssignmentController,
     StudentEnrollmentController,
@@ -83,6 +89,8 @@ import { RolloverService } from './rollover.service.js';
     ClassGroupService,
     SubjectService,
     SubjectChoiceGroupService,
+    StreamService,
+    StandardSetupService,
     FormTeacherService,
     StudentHistoryService,
     ClassSubjectService,
@@ -112,6 +120,7 @@ import { RolloverService } from './rollover.service.js';
   // can call the real .enroll() (ADR-0011 auto-registration included)
   // rather than reimplementing it — same one-directional shape, no cycle.
   exports: [
+    StandardSetupService,
     HodAssignmentService,
     AcademicsContextService,
     ClassGroupService,

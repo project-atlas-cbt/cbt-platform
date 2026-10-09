@@ -1,0 +1,5 @@
+import { StreamsScreen } from '@/components/academics/streams/streams-screen';
+
+export default function HodAcademicsStreamsPage() {
+  return <StreamsScreen />;
+}

@@ -68,6 +68,7 @@ export class StudentHistoryService {
         where: { schoolId, studentProfileId },
         include: {
           classGroupSession: { select: { name: true } },
+          stream: { select: { name: true } },
           session: { select: { id: true, name: true, startDate: true, status: true } },
           registrations: {
             include: { classSubject: { select: { subject: { select: { name: true } } } } },
@@ -103,6 +104,13 @@ export class StudentHistoryService {
         select: { status: true, examId: true, exam: { select: { academicSessionId: true } } },
       });
 
+      const streamNames = new Map(
+        (await tx.stream.findMany({ where: { schoolId }, select: { id: true, name: true } })).map(
+          (s) => [s.id, s.name],
+        ),
+      );
+      const streamLabel = (id: unknown) =>
+        typeof id === 'string' ? (streamNames.get(id) ?? 'a stream') : 'no stream';
       const auditsFor = (entityId: string) => audits.filter((a) => a.entityId === entityId);
       const event = (
         at: Date,
@@ -133,6 +141,7 @@ export class StudentHistoryService {
             academicSessionId: e.academicSessionId,
             sessionName: e.session.name,
             className: e.classGroupSession.name,
+            streamName: e.stream?.name ?? null,
             current: e.session.status === 'CURRENT',
             subjects: [],
             events: [],
@@ -142,6 +151,7 @@ export class StudentHistoryService {
           sessions.set(e.academicSessionId, block);
         }
         block.className = e.classGroupSession.name;
+        block.streamName = e.stream?.name ?? null;
         block.subjects = subjectsAtEnd(e);
 
         // How the student came to be in this class, and with which subjects.
@@ -155,7 +165,7 @@ export class StudentHistoryService {
         ];
         if (notCarried.length > 0) detailParts.push(`not offered here: ${notCarried.join(', ')}`);
         const detail = detailParts.join('; ');
-        const own = auditsFor(e.id)[0];
+        const own = auditsFor(e.id).find((a) => a.action !== 'STUDENT_STREAM_CHANGED');
         const sameSession = prev?.academicSessionId === e.academicSessionId;
         if (prev && (sameSession || own?.action === 'CLASS_CHANGED')) {
           block.events.push(
@@ -185,6 +195,20 @@ export class StudentHistoryService {
           );
         }
 
+        // ADR-0038: stream changes, with the subjects they moved.
+        for (const a of auditsFor(e.id).filter((x) => x.action === 'STUDENT_STREAM_CHANGED')) {
+          const meta = (a.metadata ?? {}) as { fromStreamId?: unknown; toStreamId?: unknown };
+          block.events.push(
+            event(
+              a.occurredAt,
+              'STREAM_CHANGED',
+              `Stream changed: ${streamLabel(meta.fromStreamId)} → ${streamLabel(meta.toStreamId)}`,
+              null,
+              a,
+            ),
+          );
+        }
+
         // Subject changes after that.
         for (const r of e.registrations) {
           const name = r.classSubject.subject.name;
@@ -192,12 +216,14 @@ export class StudentHistoryService {
           if (regAudits.length > 0) {
             for (const a of regAudits) {
               const dropped = a.action === 'STUDENT_SUBJECT_DEREGISTERED';
+              const byStream =
+                (a.metadata as { reason?: unknown } | null)?.reason === 'STREAM_CHANGED';
               block.events.push(
                 event(
                   a.occurredAt,
                   dropped ? 'SUBJECT_DROPPED' : 'SUBJECT_ADDED',
                   `${name} ${dropped ? 'dropped' : 'added'}`,
-                  null,
+                  byStream ? 'With the stream change' : null,
                   a,
                 ),
               );

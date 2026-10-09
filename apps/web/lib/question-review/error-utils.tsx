@@ -20,6 +20,9 @@ export function describeReviewError(error: unknown): ReactNode {
   if (error instanceof ApiError && error.code === 'QUESTION_SELF_REVIEW_FORBIDDEN') {
     return SELF_REVIEW_FORBIDDEN_MESSAGE;
   }
+  if (error instanceof ApiError && error.code === 'QUESTION_REVIEW_HOD_AVAILABLE') {
+    return "This question now has an HOD who can review it, so it's theirs. Refresh the queue.";
+  }
   if (error instanceof ApiError && error.code === 'QUESTION_REVISION_NOT_SUBMITTED') {
     return 'This question was already decided — likely by another HOD, or its own resubmission — since you opened it. Refresh to see its current state.';
   }

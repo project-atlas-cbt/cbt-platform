@@ -156,7 +156,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Reset Teacher credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **View students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View own student profile / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
-- **View own student profile / STUDENT:** F14 gap-closure — GET /students/me (name, student ID, current class/department for the Profile screen, 04 §62). Distinct from users.student.view (the staff directory's broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.
+- **View own student profile / STUDENT:** F14 gap-closure — GET /students/me (name, student ID, current class/stream for the Profile screen, 04 §62). Distinct from users.student.view (the staff directory's broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.
 - **Create Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Deactivate Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
@@ -208,9 +208,9 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | Review submitted questions                  | —              | SCHOOL       | —         | DEPARTMENT | —        | —       |          |
 | Comment on question (derived split: view)   | —              | SCHOOL       | —         | DEPARTMENT | OWNED ⚠️ | —       |          |
 | Comment on question (derived split: create) | —              | —            | —         | DEPARTMENT | OWNED ⚠️ | —       |          |
-| Approve question                            | —              | —            | —         | DEPARTMENT | —        | —       |          |
-| Reject question                             | —              | —            | —         | DEPARTMENT | —        | —       |          |
-| Request changes                             | —              | —            | —         | DEPARTMENT | —        | —       |          |
+| Approve question                            | —              | SCHOOL ⚠️    | —         | DEPARTMENT | —        | —       |          |
+| Reject question                             | —              | SCHOOL ⚠️    | —         | DEPARTMENT | —        | —       |          |
+| Request changes                             | —              | SCHOOL ⚠️    | —         | DEPARTMENT | —        | —       |          |
 | Archive question                            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED ⚠️ | —       |          |
 | Import questions                            | 🔒 BREAK-GLASS | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       |          |
 | Export questions                            | PLATFORM ⚠️    | SCHOOL ⚠️    | SCHOOL    | DEPARTMENT | ASSIGNED | —       |          |
@@ -220,6 +220,9 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **View question bank / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **Comment on question (derived split: view) / TEACHER:** Comments on their own submitted question.
 - **Comment on question (derived split: create) / TEACHER:** "Respond to feedback" — replies on their own question's review thread, not an initiating review comment.
+- **Approve question / SCHOOL_ADMIN:** Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).
+- **Reject question / SCHOOL_ADMIN:** Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).
+- **Request changes / SCHOOL_ADMIN:** Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).
 - **Archive question / SOFTWARE_ADMIN:** R4: named explicitly in ADR-0012 as a break-glass example.
 - **Archive question / TEACHER:** "Own/assigned" — an author may archive their own question.
 - **Import questions / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.

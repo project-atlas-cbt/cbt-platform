@@ -80,6 +80,7 @@ export {
   ACADEMIC_SESSION_STATUSES,
   ACADEMIC_TERM_STATUSES,
   DEPARTMENT_STATUSES,
+  STREAM_STATUSES,
   CLASS_LEVELS,
   CLASS_GROUP_STATUSES,
   SUBJECT_STATUSES,
@@ -91,6 +92,7 @@ export {
   type AcademicSessionStatus,
   type AcademicTermStatus,
   type DepartmentStatus,
+  type StreamStatus,
   type ClassLevel,
   type ClassGroupStatus,
   type SubjectStatus,
@@ -106,6 +108,17 @@ export {
   type ChoiceGroupRule,
   type ChoiceGroupWarning,
 } from './academics/choice-rules.js';
+export {
+  STANDARD_CHOICE_GROUPS,
+  STANDARD_DEPARTMENTS,
+  STANDARD_STREAMS,
+  STANDARD_SUBJECTS,
+  type StandardChoiceGroup,
+  type StandardDepartment,
+  type StandardSetupStage,
+  type StandardStream,
+  type StandardSubject,
+} from './academics/standard-setup.js';
 export {
   USER_STATUSES,
   STUDENT_PROFILE_STATUSES,
@@ -135,6 +148,8 @@ export {
   QUESTION_DIFFICULTIES,
   QUESTION_REVISION_STATUSES,
   QUESTION_REVIEW_DECISIONS,
+  QUESTION_REVIEW_FALLBACK_REASONS,
+  type QuestionReviewFallbackReason,
   type QuestionType,
   type QuestionDifficulty,
   type QuestionRevisionStatus,

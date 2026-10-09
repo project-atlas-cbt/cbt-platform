@@ -34,3 +34,14 @@ export type QuestionRevisionStatus = (typeof QUESTION_REVISION_STATUSES)[number]
 /// vocabulary is what keeps the two distinguishable in review history.
 export const QUESTION_REVIEW_DECISIONS = ['APPROVED', 'REJECTED', 'REQUEST_CHANGES'] as const;
 export type QuestionReviewDecision = (typeof QUESTION_REVIEW_DECISIONS)[number];
+
+/// ADR-0038: why the School Admin may decide a question because no HOD can.
+/// NO_DEPARTMENT: the subject has no department. NO_HOD: its department has
+/// no active HOD. AUTHOR_IS_ONLY_HOD: every active HOD of it wrote the
+/// question, and nobody reviews their own.
+export const QUESTION_REVIEW_FALLBACK_REASONS = [
+  'NO_DEPARTMENT',
+  'NO_HOD',
+  'AUTHOR_IS_ONLY_HOD',
+] as const;
+export type QuestionReviewFallbackReason = (typeof QUESTION_REVIEW_FALLBACK_REASONS)[number];

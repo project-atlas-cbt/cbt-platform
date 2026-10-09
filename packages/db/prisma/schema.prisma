@@ -142,6 +142,7 @@ model School {
   academicSessions    AcademicSession[]
   departments         Department[]
   subjectChoiceGroups SubjectChoiceGroup[]
+  streams             Stream[]
   exportJobs          ExportJob[]
 
   @@map("schools")
@@ -959,6 +960,13 @@ enum DepartmentStatus {
   INACTIVE
 }
 
+/// ADR-0038: a stream (Science, Humanities, Business) can be retired but
+/// never deleted while a class or an enrollment names it.
+enum StreamStatus {
+  ACTIVE
+  INACTIVE
+}
+
 /// ADR-0001: "ClassGroup.level becomes load-bearing for authorization, so
 /// its values must be consistent within a school — level is now a
 /// controlled vocabulary, not free text." Fixed platform-wide enum
@@ -1121,7 +1129,14 @@ model ClassGroup {
   id                 String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
   schoolId           String           @map("school_id") @db.Uuid
   academicSessionId  String           @map("academic_session_id") @db.Uuid
+  /// ADR-0038: no longer written or read. Classes stopped carrying a
+  /// department; the migration copied each one to `defaultStreamId`. Kept
+  /// until a contract release drops it.
   departmentId       String?          @map("department_id") @db.Uuid
+  /// ADR-0038: the stream a student joining this class takes unless set
+  /// otherwise (an "SS1 Science" arm). A mixed arm, and every JSS class,
+  /// has none.
+  defaultStreamId    String?          @map("default_stream_id") @db.Uuid
   name               String           @db.VarChar(32)
   level              ClassLevel
   arm                String           @db.VarChar(16)
@@ -1140,6 +1155,7 @@ model ClassGroup {
   /// contradiction of "departmentId is nullable" (nullable only means a
   /// class *may be created* with no department).
   department              Department?             @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  defaultStream           Stream?                 @relation(fields: [schoolId, defaultStreamId], references: [schoolId, id], onDelete: Restrict)
   classSubjects           ClassSubject[]
   // B6: StudentEnrollment FKs against the (schoolId, id, academicSessionId)
   // unique below (the same D-10-style guarantee ClassSubject already uses).
@@ -1158,6 +1174,7 @@ model ClassGroup {
   @@index([schoolId])
   @@index([schoolId, academicSessionId])
   @@index([schoolId, departmentId])
+  @@index([schoolId, defaultStreamId])
   @@index([schoolId, status])
   @@map("class_groups")
 }
@@ -1222,6 +1239,49 @@ model SubjectChoiceGroup {
   @@map("subject_choice_groups")
 }
 
+/// ADR-0038 — a student stream (Science, Humanities, Business), separate
+/// from the teaching departments HODs head. Set per enrollment, with an
+/// optional default on a class. School-wide, not session-scoped.
+model Stream {
+  id        String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String       @map("school_id") @db.Uuid
+  name      String       @db.VarChar(64)
+  code      String       @db.VarChar(16)
+  status    StreamStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classGroups   ClassGroup[]
+  enrollments   StudentEnrollment[]
+  classSubjects ClassSubjectStream[]
+
+  @@unique([schoolId, id])
+  @@unique([schoolId, code])
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@map("streams")
+}
+
+/// ADR-0038 — an ELECTIVE offering's automatic streams. A student whose
+/// enrollment is in one of them is registered for it on enrollment, on a
+/// stream change, and when the stream is added here.
+model ClassSubjectStream {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  classSubjectId String   @map("class_subject_id") @db.Uuid
+  streamId       String   @map("stream_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  classSubject ClassSubject @relation(fields: [schoolId, classSubjectId], references: [schoolId, id], onDelete: Cascade)
+  stream       Stream       @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, classSubjectId, streamId])
+  @@index([schoolId])
+  @@index([schoolId, streamId])
+  @@map("class_subject_streams")
+}
+
 /// "Mathematics taught to SS2A in 2026/2027" (07 §6.6) — the future
 /// registration target for B6's StudentSubjectRegistration (ADR-0011).
 /// `academicSessionId` is redundant against `classId`'s own
@@ -1252,6 +1312,10 @@ model ClassSubject {
   registrations      StudentSubjectRegistration[]
   // B11: ExamClass rows targeting this class+subject+session.
   examClasses        ExamClass[]
+  /// ADR-0038: on an ELECTIVE offering, the streams whose students are
+  /// registered automatically ("Physics for Science"). Empty means staff
+  /// choose every student.
+  streams            ClassSubjectStream[]
 
   @@unique([schoolId, classId, subjectId])
   // Composite-FK target for TeacherAssignment/StudentSubjectRegistration
@@ -1319,6 +1383,9 @@ model StudentEnrollment {
   studentProfileId  String                  @map("student_profile_id") @db.Uuid
   academicSessionId String                  @map("academic_session_id") @db.Uuid
   classId           String                  @map("class_id") @db.Uuid
+  /// ADR-0038: the student's stream for this session. Per enrollment, so
+  /// a change at SS1 → SS2 leaves last year's stream in history.
+  streamId          String?                 @map("stream_id") @db.Uuid
   startDate         DateTime                @map("start_date") @db.Date
   endDate           DateTime?               @map("end_date") @db.Date
   status            StudentEnrollmentStatus @default(ACTIVE)
@@ -1334,6 +1401,7 @@ model StudentEnrollment {
   /// live or historical enrollment still references it — backstops
   /// ClassGroupService.delete()'s own dependent-count check.
   classGroupSession       ClassGroup                   @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Restrict)
+  stream                  Stream?                      @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
   registrations           StudentSubjectRegistration[]
   rolloverSourceDecisions RolloverDecision[]           @relation("RolloverDecisionSourceEnrollment")
   // DoD item 9 ("a student cannot be enrolled twice concurrently in one
@@ -1353,6 +1421,7 @@ model StudentEnrollment {
   @@index([schoolId, classId])
   @@index([schoolId, academicSessionId])
   @@index([schoolId, status])
+  @@index([schoolId, streamId])
   @@map("student_enrollments")
 }
 
@@ -1520,17 +1589,20 @@ model RolloverDecision {
 }
 
 model RolloverClassDraft {
-  id             String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId       String     @map("school_id") @db.Uuid
-  rolloverPlanId String     @map("rollover_plan_id") @db.Uuid
-  sourceClassId  String     @map("source_class_id") @db.Uuid
-  departmentId   String?    @map("department_id") @db.Uuid
-  name           String     @db.VarChar(32)
-  level          ClassLevel
-  arm            String     @db.VarChar(16)
-  included       Boolean    @default(true)
-  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId        String     @map("school_id") @db.Uuid
+  rolloverPlanId  String     @map("rollover_plan_id") @db.Uuid
+  sourceClassId   String     @map("source_class_id") @db.Uuid
+  /// ADR-0038: no longer written; see `defaultStreamId`.
+  departmentId    String?    @map("department_id") @db.Uuid
+  /// ADR-0038: copied from the source class; the new class gets it.
+  defaultStreamId String?    @map("default_stream_id") @db.Uuid
+  name            String     @db.VarChar(32)
+  level           ClassLevel
+  arm             String     @db.VarChar(16)
+  included        Boolean    @default(true)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([schoolId, rolloverPlanId, sourceClassId])
   @@unique([schoolId, rolloverPlanId, id])

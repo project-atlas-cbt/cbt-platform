@@ -25,7 +25,7 @@ import {
 import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { useRolloverPlan, useDepartments, type RolloverQueryParams } from '@/lib/academics/queries';
+import { useRolloverPlan, useStreams, type RolloverQueryParams } from '@/lib/academics/queries';
 import { useHasPermission } from '@/lib/nav';
 import { RolloverStepper } from './rollover-stepper';
 import { OverrideDecisionDialog, type RolloverOutcomeType } from './override-decision-dialog';
@@ -80,14 +80,14 @@ interface ClassDraftItem {
 
 export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScreenProps) {
   const canExecute = useHasPermission('progression.promote.execute');
-  const departmentsQuery = useDepartments();
+  const streamsQuery = useStreams();
 
   // Filters & Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [selectedOutcome, setSelectedOutcome] = useState<string>('ALL');
   const [selectedLevel, setSelectedLevel] = useState<string>('ALL');
-  const [selectedDept, setSelectedDept] = useState<string>('ALL');
+  const [selectedStream, setSelectedStream] = useState<string>('ALL');
   const [overriddenOnly, setOverriddenOnly] = useState(false);
 
   // Selection for batch actions
@@ -106,7 +106,7 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
     ...(selectedLevel !== 'ALL'
       ? { sourceLevel: selectedLevel as 'JSS1' | 'JSS2' | 'JSS3' | 'SS1' | 'SS2' | 'SS3' }
       : {}),
-    ...(selectedDept !== 'ALL' ? { departmentId: selectedDept } : {}),
+    ...(selectedStream !== 'ALL' ? { streamId: selectedStream } : {}),
     ...(overriddenOnly ? { overriddenOnly: true as const } : {}),
   };
 
@@ -259,29 +259,31 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
             </Select>
           </div>
 
-          {/* Department Filter */}
-          <div>
-            <label className="text-xs text-text-muted mb-1 block">Department</label>
-            <Select
-              value={selectedDept}
-              onValueChange={(val) => {
-                setSelectedDept(val);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All Departments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Departments</SelectItem>
-                {(departmentsQuery.data?.departments ?? []).map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Stream Filter (ADR-0038: by the source class's default stream) */}
+          {(streamsQuery.data?.streams ?? []).length > 0 ? (
+            <div>
+              <label className="text-xs text-text-muted mb-1 block">Stream</label>
+              <Select
+                value={selectedStream}
+                onValueChange={(val) => {
+                  setSelectedStream(val);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger aria-label="Stream">
+                  <SelectValue placeholder="All streams" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All streams</SelectItem>
+                  {(streamsQuery.data?.streams ?? []).map((st) => (
+                    <SelectItem key={st.id} value={st.id}>
+                      {st.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           {/* Outcome Filter */}
           <div>

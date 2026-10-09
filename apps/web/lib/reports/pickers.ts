@@ -88,7 +88,11 @@ export function useClassOptions(role: Role, departmentId?: string): PickerList {
   const isTeacher = role === 'TEACHER';
   const context = useAcademicsContext();
   const sessionId = context.data?.session?.id;
-  const classes = useClasses(sessionId, { enabled: !isTeacher && context.isSuccess });
+  const isHod = role === 'HOD';
+  const classes = useClasses(sessionId, {
+    enabled: !isTeacher && context.isSuccess && (!isHod || Boolean(departmentId)),
+    ...(isHod ? { departmentId } : {}),
+  });
   const assignments = useMyTeacherAssignments({ enabled: isTeacher });
 
   const options = useMemo(() => {
@@ -104,12 +108,10 @@ export function useClassOptions(role: Role, departmentId?: string): PickerList {
     }
     return (classes.data?.classes ?? [])
       .filter((c) => c.status !== 'ARCHIVED')
-      .filter((c) =>
-        role === 'HOD' ? Boolean(departmentId) && c.departmentId === departmentId : true,
-      )
+      .filter(() => !isHod || Boolean(departmentId))
       .map((c) => ({ value: c.id, label: c.name }))
       .sort(byLabel);
-  }, [isTeacher, assignments.data, classes.data, role, departmentId, sessionId]);
+  }, [isTeacher, isHod, assignments.data, classes.data, departmentId, sessionId]);
 
   const source = isTeacher ? assignments : classes;
   return {

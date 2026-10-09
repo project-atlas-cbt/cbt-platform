@@ -47,7 +47,10 @@ export function HodDashboard() {
     { enabled: Boolean(departmentId) },
   );
 
-  const classesQuery = useClasses(currentSession?.id);
+  const classesQuery = useClasses(currentSession?.id, {
+    enabled: Boolean(departmentId),
+    departmentId,
+  });
   const subjectsQuery = useSubjects();
 
   const examsQuery = useExamsList(
@@ -66,7 +69,7 @@ export function HodDashboard() {
 
   const departmentClasses = useMemo(() => {
     if (!departmentId || !classesQuery.data?.classes) return [];
-    return classesQuery.data.classes.filter((c) => c.departmentId === departmentId);
+    return classesQuery.data.classes.filter((c) => c.status !== 'ARCHIVED');
   }, [departmentId, classesQuery.data]);
 
   // P1-12: no department to show (the list failed, or this HOD heads none)

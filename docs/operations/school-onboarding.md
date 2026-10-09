@@ -11,11 +11,18 @@ these steps is `docs/03-school-lifecycle.md`.
 - Agree the subdomain: lowercase letters, digits and hyphens, for example `kingscollege`. The
   school will use `https://kingscollege.<root>`; `admin`, `api` and `www` are reserved.
 - Ask for the exam timetable for the first term, so on-call covers those sittings.
+- Ask how the school is organised. Most run three departments (Science, Business, Humanities),
+  with subjects every stream takes placed in one of them (Mathematics in Science, English in
+  Humanities) and the same three names as senior streams. If so, choose **Standard setup** when
+  creating the school; if not, choose **Start empty** (ADR-0038).
 
 ## Platform side (Software Admin, at `admin.<root>`)
 
 1. **Create the school** with its name, subdomain and timezone (`Africa/Lagos`), the school
-   admin's name and email, and the first subscription period (05 §3.2).
+   admin's name and email, the first subscription period (05 §3.2), and its **starting
+   structure**: **Standard setup** creates the three departments, three matching streams and the
+   usual JSS and SS subjects; **Start empty** leaves them to the school. Either way the school
+   edits its structure itself afterwards.
 2. The platform **emails the activation key** to the school admin. If it does not arrive, check the
    address, then re-issue from the school's key history; the old key stops working.
 3. Confirm the school appears as pending activation in the schools list.
@@ -28,9 +35,15 @@ session and at least one class (05 §5.2).
 1. **Activate** with the emailed key and set a password.
 2. **Branding**: logo and colour (optional).
 3. **Academic session and term**: create and activate the current ones.
-4. **Departments and subjects**, then **classes** (arms such as SS2A) and which subjects each class
-   offers, each as **compulsory** or **elective**. Students are registered for compulsory subjects
-   automatically; electives are ticked on the class's **Subject registrations** tab (pick a
+4. **Departments and subjects** (**Use standard setup** on the Departments step adds the usual
+   ones, which the school can untick first), then **classes** (arms such as SS2A) and which subjects each class
+   offers, each as **compulsory**, **elective**, or for one or more **streams**. Streams (Science,
+   Business, Humanities) are for students and are set up under **Academics → Streams**; a senior
+   class can default its students into one, and each student's stream can be changed on their page.
+   Departments are for staff: they decide which HOD reviews a subject, and every subject should
+   have one; questions in a subject with no department, or a department with no HOD, go to the
+   school admin's **Question Review** instead. Students are registered for
+   compulsory subjects and their stream's subjects automatically; electives are ticked on the class's **Subject registrations** tab (pick a
    subject, tick its students) or on each student's page, with choice groups such as "Religion:
    choose 1" flagging gaps (ADR-0038). Each arm can have a **form teacher** (class **Teachers**
    tab), who then sets that arm's electives from **My Classes**; subject teachers can set the
@@ -47,7 +60,8 @@ session and at least one class (05 §5.2).
    they set their password. The link works for one hour (`PASSWORD_RESET_TOKEN_TTL_SECONDS`); if
    it lapses, the school admin opens that person's page and uses **Reset credentials** to send a
    fresh one. "Forgot password" does not work until the invitation has been used.
-7. **Students**: import from the CSV template (Imports → Students). Download each class's
+7. **Students**: import from the CSV template (Imports → Students). Its **Stream** and **Electives**
+   columns are optional (electives separated by `;`). Download each class's
    credential sheet from the class's page and handle it as below; students change their password
    at first sign-in.
 8. **Questions**: teachers write or import questions; HODs review and approve them. Only approved

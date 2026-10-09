@@ -95,7 +95,8 @@ export class RolloverQueryDto {
   @IsIn(ROLLOVER_OUTCOMES)
   outcome?: (typeof ROLLOVER_OUTCOMES)[number];
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() sourceClassId?: string;
-  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() departmentId?: string;
+  /** ADR-0038: students whose source class has this default stream. */
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() streamId?: string;
   @ApiPropertyOptional({ enum: ['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'] })
   @IsOptional()
   @IsIn(['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'])
