@@ -16,7 +16,10 @@ import { useTenant } from '@/lib/tenant';
 export default function StudentShellLayout({ children }: { children: ReactNode }) {
   const { school } = useTenant();
   return (
-    <AppShell role="STUDENT" {...(school?.name ? { schoolName: school.name } : {})}>
+    <AppShell
+      role="STUDENT"
+      {...(school ? { schoolName: school.name, schoolLogoUrl: school.logoUrl } : {})}
+    >
       {children}
     </AppShell>
   );

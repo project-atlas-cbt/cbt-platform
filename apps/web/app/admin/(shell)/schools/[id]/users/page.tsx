@@ -241,6 +241,8 @@ export default function SchoolUsersPage() {
           }
           page={page}
           pageCount={pageCount}
+          total={users.data?.total}
+          pageSize={PAGE_SIZE}
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           caption={`${users.data?.total ?? 0} people at this school`}
           emptyState={

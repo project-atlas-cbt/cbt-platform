@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ClipboardCheck } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { parsePageSize, pageListHref as listHref } from '@/lib/query/page-size';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { useExamsPaginated } from '@/lib/exams/queries';
@@ -26,9 +27,10 @@ export function MakeupExamPickerScreen({ basePath }: { basePath: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
-  const exams = useExamsPaginated({ status: 'COMPLETED', page, pageSize: PAGE_SIZE });
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
+  const exams = useExamsPaginated({ status: 'COMPLETED', page, pageSize });
   const rows: Row[] = exams.data?.exams ?? [];
-  const pageCount = Math.max(1, Math.ceil((exams.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((exams.data?.total ?? 0) / pageSize));
   const columns: DataTableColumn<Row>[] = [
     {
       id: 'exam',
@@ -73,7 +75,11 @@ export function MakeupExamPickerScreen({ basePath }: { basePath: string }) {
         isLoading={exams.isPending}
         page={page}
         pageCount={pageCount}
-        onPageChange={(next) => router.replace(next > 1 ? `${basePath}?page=${next}` : basePath)}
+        onPageChange={(next) => router.replace(listHref(basePath, next, pageSize))}
+        total={exams.data?.total}
+        pageSize={pageSize}
+        onPageSizeChange={(next) => router.replace(listHref(basePath, 1, next))}
+        getRowHref={(row) => examControlMakeupPath(basePath, row.id)}
         caption="Completed exams available for makeup access"
         emptyState={
           <EmptyState

@@ -240,6 +240,7 @@ export function ClassesScreen({
         columns={columns}
         rows={rows}
         getRowId={(r) => r.id}
+        getRowHref={(row) => `${basePath}/classes/${row.id}`}
         isLoading={classes.isPending}
         emptyState={
           <EmptyState

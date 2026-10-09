@@ -2,6 +2,34 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-09 — Fixed header, icon-rail sidebar, school-first branding, list improvements
+
+UI refinements Haneef asked for (2026-10-09), in every staff and student workspace shell:
+
+- The top bar stays fixed while the page scrolls; the offline banner sits inside it. The logo stays
+  first at the top left.
+- The sidebar stays beside the page with its own scroll. **Collapse** at its foot shrinks it to an
+  icon rail (each icon keeps its name as a tooltip and for screen readers), remembered per browser
+  (`components/shell/sidebar-state.ts`). Below 768px wide it is a drawer opened from a menu button
+  at the end of the top bar, and closes after a link is followed.
+- `DataTable` lists: the Previous/Next bar sticks to the bottom of the window while the table is in
+  view, and moving page from mid-list returns to the first row. It shows "Showing 26–36 of 36" and,
+  on school lists, a 25/50/100 rows-per-page choice (`?size=`, `lib/query/page-size.ts`). Column
+  headings stay in view under the top bar (`Table stickyHeader`, which clips instead of scrolling
+  sideways whenever the table fits). Clicking anywhere on a row that has a detail page opens it
+  through the row's own link (`getRowHref`); the link stays the keyboard route.
+- School identity leads (Haneef chose "school first", 2026-10-09): the top-left corner shows the
+  school's uploaded logo, or its initials on its brand colour (`SchoolMark`), beside the school name
+  (truncated at a fixed width). The product appears only as a grey "Powered by ExamKeep" at the
+  sidebar foot and under the school sign-in form (`PoweredBy`), never on printed reports, whose
+  footer now names the school. The Software Admin shell keeps the product's own logo.
+- The top bar holds only a wider search box (no shortcut hint) and notifications. The account
+  menu (name, Login ID, Sign out) moved to the sidebar foot beside the collapse button. Keyboard
+  shortcuts are listed on each staff Help screen; the "own password" guide now says where Sign out
+  is.
+- The page still scrolls the window, so navigation's scroll-to-top is unchanged. The exam runtime
+  has no shell and is unaffected.
+
 ### 2026-10-09 — Standard setup and School Admin review fallback (ADR-0038, PR 3 of 3)
 
 Schools can now start from the standard structure a vice-principal described (Haneef, 2026-10-09):

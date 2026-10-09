@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { DataTableSort } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import {
   useExamResults,
   type ExamResultSortBy,
@@ -87,6 +88,7 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
   const sortBy = asSortBy(searchParams.get('sortBy'));
   const sortDir = searchParams.get('sortDir') === 'desc' ? 'desc' : 'asc';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
 
   /**
    * The operation id of an adjustment raised from this exam's result detail
@@ -120,13 +122,13 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
   const filters: ExamResultsFilters = useMemo(
     () => ({
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       ...(q ? { q } : {}),
       ...(classId ? { classId } : {}),
       ...(state ? { state } : {}),
       ...(sortBy ? { sortBy, sortDir } : {}),
     }),
-    [page, q, classId, state, sortBy, sortDir],
+    [page, pageSize, q, classId, state, sortBy, sortDir],
   );
 
   const results = useExamResults(examId, filters);
@@ -145,7 +147,7 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
 
   const data = results.data;
   const rows = data?.items ?? [];
-  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
 
   return (
     <div className="space-y-4">
@@ -261,6 +263,11 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
         }
         page={page}
         pageCount={pageCount}
+        total={data?.total}
+        pageSize={pageSize}
+        onPageSizeChange={(next) =>
+          updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+        }
         onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
         detailBasePath={screenPath}
         hasFilters={hasFilters}

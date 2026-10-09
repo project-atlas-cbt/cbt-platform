@@ -113,6 +113,8 @@ export default function SchoolExamsPage() {
           isLoading={exams.isPending}
           page={page}
           pageCount={pageCount}
+          total={exams.data?.total}
+          pageSize={PAGE_SIZE}
           onPageChange={(next) => updateFilterParams({ page: next > 1 ? String(next) : null })}
           caption={`${exams.data?.total ?? 0} exams at this school`}
           emptyState={

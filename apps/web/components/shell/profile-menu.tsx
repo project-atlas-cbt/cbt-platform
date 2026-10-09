@@ -10,9 +10,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 
 /**
- * `04 §4`'s header profile menu. Replaces F1's standalone `<LogoutButton>`
+ * `04 §4`'s profile menu, at the foot of the sidebar since 2026-10-09 (Haneef:
+ * the top bar holds only search and notifications). Replaces F1's standalone `<LogoutButton>`
  * (see its own now-removed doc comment: "until F2's real profile menu
  * exists") — sign-out now lives here.
  *
@@ -44,9 +46,12 @@ export interface ProfileMenuIdentity {
 export function ProfileMenu({
   identity,
   onLogout,
+  compact = false,
 }: {
   identity: ProfileMenuIdentity | null;
   onLogout: () => Promise<void>;
+  /** The collapsed sidebar rail: the icon alone, the name as a tooltip. */
+  compact?: boolean;
 }) {
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -64,15 +69,26 @@ export function ProfileMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+        className={cn(
+          'flex w-full min-w-0 items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+          compact && 'justify-center px-0',
+        )}
         aria-label="Account menu"
+        title={compact ? identity.displayName : undefined}
       >
-        <UserCircle className="size-6 text-text-muted" aria-hidden />
-        <span className="hidden max-w-32 truncate font-medium text-text-primary sm:inline">
-          {identity.displayName}
-        </span>
+        <UserCircle className="size-7 shrink-0 text-text-muted" strokeWidth={1.5} aria-hidden />
+        {compact ? null : (
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-text-primary">
+              {identity.displayName}
+            </span>
+            <span className="block truncate text-xs text-text-muted">
+              {identity.secondaryLabel}
+            </span>
+          </span>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent side="top" align="start" className="w-56">
         <DropdownMenuLabel>
           <p className="truncate font-medium text-text-primary">{identity.displayName}</p>
           <p className="truncate text-xs font-normal text-text-muted">{identity.secondaryLabel}</p>

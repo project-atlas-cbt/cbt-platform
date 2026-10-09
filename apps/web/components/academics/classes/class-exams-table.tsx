@@ -110,6 +110,7 @@ export function ClassExamsTable({ classId }: { classId: string }) {
       columns={columns}
       rows={rows}
       getRowId={(row) => row.id}
+      getRowHref={(row) => `${root}/exams/${row.id}`}
       isLoading={exams.isPending}
       page={page}
       pageCount={pageCount}

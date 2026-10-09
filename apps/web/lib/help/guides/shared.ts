@@ -174,7 +174,7 @@ export function ownAccountGuides(): Guide[] {
       keywords: ['password', 'forgot', 'change password', 'locked out', 'sign in', 'login'],
       requires: [],
       steps: [
-        'Sign out from the menu at the top right, or go to your school’s {product} address if you are not signed in.',
+        'Press your name at the bottom of the side menu and choose **Sign out**, or go to your school’s {product} address if you are not signed in.',
         'On the sign-in page, press **Forgot your password?** and enter your username or staff ID.',
         'Open the link emailed to you and choose a new password. The link opens on your school’s own address.',
       ],
