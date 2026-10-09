@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Role } from '@atlas/domain';
-import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingSplash } from '@/components/shell/loading-splash';
 import { resolveLandingRoute, useAuth } from '@/lib/auth';
 import { ServerUnavailable } from './server-unavailable';
 
@@ -70,11 +70,7 @@ export function RouteGuard({
   }, [status, mode, router, wrongRole, me]);
 
   if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Skeleton className="h-8 w-48" />
-      </div>
-    );
+    return <LoadingSplash />;
   }
 
   // Only a real 401 means signed out (bug audit P2-3).

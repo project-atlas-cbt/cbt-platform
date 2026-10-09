@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/error-state';
-import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingSplash } from '@/components/shell/loading-splash';
 import { usePlatformAuth } from '@/lib/auth';
 import { useMfaStatus } from '@/lib/platform/mfa';
 import { MfaEnrolmentFlow } from './mfa-enrolment-flow';
@@ -28,11 +28,7 @@ export function MfaEnrolmentGate({ children }: { children: ReactNode }) {
   const [gating, setGating] = useState(false);
 
   if (status.isPending) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Skeleton className="h-8 w-48" />
-      </div>
-    );
+    return <LoadingSplash />;
   }
   if (status.isError) {
     return (

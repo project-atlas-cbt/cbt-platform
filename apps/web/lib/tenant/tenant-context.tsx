@@ -123,3 +123,11 @@ export function useTenant(): TenantResolution {
   }
   return ctx;
 }
+
+/**
+ * `useTenant` for components that also render outside a school's subtree
+ * (the loading splash on the platform host): null there instead of a throw.
+ */
+export function useOptionalTenant(): TenantResolution | null {
+  return useContext(TenantContext);
+}

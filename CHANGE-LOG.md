@@ -2,6 +2,18 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-09 — School splash loading screen
+
+Haneef chose "Option A" (2026-10-09) to replace the single grey bar every workspace showed while
+the app checks who is signed in. `LoadingSplash` (`components/shell/loading-splash.tsx`) now shows
+the school's logo, or its initials on its brand colour, its name, a thin sliding bar in its colour
+and the grey "Powered by" credit. Long names stay on one line, capped at 20rem and cut off with an
+ellipsis, with the full name as a tooltip. Until `tenant/resolve` answers, the mark and name are
+grey placeholders so the platform blue never flashes first. The Software Admin console shows the
+product mark instead. Used by `RouteGuard`, `PlatformRouteGuard`, `MfaEnrolmentGate`,
+`OnboardingGuard`, the onboarding entry and `/` (which now brings its own `TenantProvider`).
+Frontend only; covered by `loading-splash.test.tsx`.
+
 ### 2026-10-09 — Middle names, register order and A to Z people lists (ADR-0039)
 
 Haneef asked (2026-10-09) for students A to Z by surname, a third name, and a fix for the pilot
