@@ -2,6 +2,31 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-09 — Standard setup and School Admin review fallback (ADR-0038, PR 3 of 3)
+
+Schools can now start from the standard structure a vice-principal described (Haneef, 2026-10-09):
+Science, Business and Humanities departments, matching streams, and the usual subjects placed in
+them, with Mathematics in Science and English in Humanities. A question no HOD can review now goes
+to the School Admin.
+
+- `GET`/`POST /academics/standard-setup`: preview, then apply the ticked items. It adds only what
+  is missing and places existing subjects that have no department. Shown on the setup Departments
+  step and on Academics › Departments and Subjects. Audited `STANDARD_SETUP_APPLIED`.
+- Create school (Software Admin) gains **Starting structure**: Standard setup (form default) or
+  Start empty (`startingStructure`, API default `EMPTY`).
+- Review fallback: School Admin may approve, reject or request changes only when the subject has no
+  department, the department has no active HOD, or the author is its only HOD
+  (`QUESTION_REVIEW_HOD_AVAILABLE` otherwise). The new School Admin **Question Review** lists only
+  those questions, with the reason. The audit row records `SCHOOL_ADMIN` and the reason.
+- Labels: screens say "department" for subjects and HOD review and "stream" for students; the
+  Subjects screen warns about subjects with no department.
+- Demo school (Oakridge) uses the standard setup, with SS2A–C in the Science, Business and
+  Humanities streams. Help guides `standard-setup` and `review-without-hod` are new, and the HOD and
+  setup guides, `school-onboarding.md` and `user-guides/teacher.md` are updated.
+- ADR-0038 amendment "the standard setup and the review fallback".
+- Tests: question-review integration +4, standard-setup integration (5), platform create-school
+  +1, domain +3, web +7. Full results are in the PR.
+
 ### 2026-10-09 — Student streams (ADR-0038, PR 2 of 3)
 
 Streams (Science, Business, Humanities) are now their own list, separate from staff departments,

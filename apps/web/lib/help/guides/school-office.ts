@@ -208,6 +208,37 @@ export function schoolOfficeGuides(): Guide[] {
       related: ['rollover'],
     },
     {
+      id: 'standard-setup',
+      title: 'Start from the standard departments and subjects',
+      summary:
+        'Add Science, Business and Humanities, matching streams and the usual JSS and SS subjects in one go.',
+      area: 'academics',
+      keywords: [
+        'standard setup',
+        'departments',
+        'subjects',
+        'science',
+        'business',
+        'humanities',
+        'general subject',
+        'mathematics',
+        'english',
+      ],
+      requires: ['schoolConfig.subject.manage'],
+      steps: [
+        'Open **Academics**, then **Departments**, and press **Use standard setup**. It is also on the **Subjects** tab and in the first-time setup.',
+        'Read the list. Anything you already have says **Already added**. An existing subject with no department says which department it will be put in.',
+        'Untick anything your school does not use, then press **Add**.',
+      ],
+      notes: [
+        'Departments decide which HOD reviews a subject’s questions. Students are not in departments; senior students are in streams.',
+        'A subject every student takes still sits in one department, the way schools usually do it: Mathematics in Science, English in Humanities. Change any subject’s department on the **Subjects** tab.',
+        'Nothing you already have is moved, renamed or removed.',
+      ],
+      screen: { label: 'Departments', href: 'academics/departments' },
+      related: ['classes-and-subjects', 'streams', 'make-hod'],
+    },
+    {
       id: 'classes-and-subjects',
       title: 'Add classes and choose the subjects they offer',
       summary: 'Set up arms such as SS2A and the subjects each one takes.',
@@ -220,7 +251,7 @@ export function schoolOfficeGuides(): Guide[] {
         'New subjects, departments and streams are added on the **Subjects**, **Departments** and **Streams** tabs.',
       ],
       notes: [
-        'Give every subject a department, or no HOD will review its questions.',
+        'Give every subject a department, even one every stream takes, so its HOD reviews its questions. A subject with no department goes to the School Admin for review instead.',
         'Every student in the class is registered for a **compulsory** subject automatically. A **stream** subject is taken by everyone in the streams you tick. An **elective** is taken only by the students you choose.',
       ],
       screen: { label: 'Classes', href: 'academics/classes' },

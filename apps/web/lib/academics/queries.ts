@@ -78,6 +78,15 @@ export function useStreams(options?: { enabled?: boolean }) {
   });
 }
 
+/** ADR-0038: what applying the standard setup would add or place. */
+export function useStandardSetupPreview(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['academics', 'standard-setup'],
+    queryFn: () => unwrap(apiClient.GET('/academics/standard-setup', {})),
+    enabled: options?.enabled ?? true,
+  });
+}
+
 /** P1-12: the department the signed-in HOD heads (the first, by name, if
  * they head several). `department` is undefined until loaded, and also when
  * they head none — check `isSuccess` to tell the two apart. */

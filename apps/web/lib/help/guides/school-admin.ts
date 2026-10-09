@@ -18,6 +18,7 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
       steps: [
         'After activating with the emailed key, sign in. The setup steps open by themselves.',
         'Work through them in order: profile, branding, academic session, terms, departments, classes, subjects, staff, students. **Skip for now** leaves an optional step for later.',
+        'On **Departments**, **Use standard setup** adds Science, Business and Humanities, matching streams and the usual subjects, which you can untick first.',
         'Review the summary and press **Complete Setup**. You need a current session and at least one class.',
       ],
       notes: [
@@ -25,6 +26,24 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
         'Before the first real exam, run a short practice exam in the lab with one class.',
       ],
       related: ['classes-and-subjects', 'add-teachers', 'add-students'],
+    },
+    {
+      id: 'review-without-hod',
+      title: 'Review questions that have no HOD',
+      summary: 'Approve or send back questions no HOD can review.',
+      area: 'questions',
+      keywords: ['review', 'approve', 'no hod', 'question review', 'fallback', 'pending'],
+      requires: ['questionBank.approve'],
+      steps: [
+        'Open **Question Review**. It lists only the questions no HOD can review, and why.',
+        'Press **Open review**, then **Approve**, **Reject** or **Request changes**, as an HOD would.',
+      ],
+      notes: [
+        'A question comes to you when its subject has no department, its department has no HOD, or the department’s only HOD wrote it.',
+        'To send future questions to an HOD, give the subject a department on **Academics › Subjects**, or make someone the department’s HOD.',
+      ],
+      screen: { label: 'Question Review', href: 'question-review' },
+      related: ['standard-setup', 'make-hod'],
     },
     {
       id: 'school-profile',

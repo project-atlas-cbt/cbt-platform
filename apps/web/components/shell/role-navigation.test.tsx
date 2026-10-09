@@ -5,7 +5,8 @@ import { RoleNavigation } from './role-navigation';
 import { ROLE_WORKSPACES, type NavItem } from '@/lib/nav/nav-model';
 import type { NavigationResult } from '@/lib/nav';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/teacher' }));
+const pathname = vi.hoisted(() => ({ current: '/teacher' }));
+vi.mock('next/navigation', () => ({ usePathname: () => pathname.current }));
 
 /**
  * Purely presentational since the F3-mirroring props refactor (fixing the
@@ -52,6 +53,14 @@ describe('RoleNavigation', () => {
 
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Exams' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('does not keep Dashboard active on the pages under it', () => {
+    pathname.current = '/teacher/exams/abc';
+    renderNav('TEACHER', { items: allItems('TEACHER'), isLoading: false, isError: false });
+    expect(screen.getByRole('link', { name: 'Exams' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current');
+    pathname.current = '/teacher';
   });
 
   it('shows a loading skeleton, not an empty sidebar, while items is null', () => {

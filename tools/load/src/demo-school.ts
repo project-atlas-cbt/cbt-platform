@@ -526,30 +526,30 @@ async function seed() {
   const admin = await Api.signIn(target, host, '10.240.0.1', 'fadeyemi', password);
   const { sessionId, termId } = await createSessionAndTerm(admin, true);
 
+  // ADR-0038: the standard setup — Science, Business and Humanities as
+  // departments and as streams, with the usual subjects placed in them.
+  await admin.call('POST', '/academics/standard-setup', {
+    departmentCodes: ['SCI', 'BUS', 'HUM'],
+    streamCodes: ['SCI', 'BUS', 'HUM'],
+    subjectCodes: ['MTH', 'ENG', 'PHY', 'CHM', 'BIO', 'ECO', 'COM', 'GOV', 'LIT', 'CIV'],
+  });
+  const { departments: departmentList } = await admin.call<{
+    departments: { id: string; code: string }[];
+  }>('GET', '/academics/departments');
   const departments = {
-    sciences: await admin.call<{ id: string }>('POST', '/academics/departments', {
-      name: 'Sciences',
-      code: 'SCI',
-    }),
-    languages: await admin.call<{ id: string }>('POST', '/academics/departments', {
-      name: 'Languages',
-      code: 'LANG',
-    }),
+    science: departmentList.find((d) => d.code === 'SCI')!,
   };
-  const maths = await admin.call<{ id: string }>('POST', '/academics/subjects', {
-    name: 'Mathematics',
-    code: 'MTH',
-  });
-  const english = await admin.call<{ id: string }>('POST', '/academics/subjects', {
-    name: 'English Language',
-    code: 'ENG',
-  });
-  await admin.call('PATCH', `/academics/subjects/${maths.id}`, {
-    departmentId: departments.sciences.id,
-  });
-  await admin.call('PATCH', `/academics/subjects/${english.id}`, {
-    departmentId: departments.languages.id,
-  });
+  const { subjects: subjectList } = await admin.call<{ subjects: { id: string; code: string }[] }>(
+    'GET',
+    '/academics/subjects',
+  );
+  const maths = subjectList.find((s) => s.code === 'MTH')!;
+  const english = subjectList.find((s) => s.code === 'ENG')!;
+  const { streams } = await admin.call<{ streams: { id: string; code: string }[] }>(
+    'GET',
+    '/academics/streams',
+  );
+  const streamFor = { A: 'SCI', B: 'BUS', C: 'HUM' } as const;
 
   const classIds: string[] = [];
   const mathOfferings: string[] = [];
@@ -560,6 +560,7 @@ async function seed() {
       name: `SS2${arm}`,
       level: 'SS2',
       arm,
+      defaultStreamId: streams.find((st) => st.code === streamFor[arm as 'A' | 'B' | 'C'])!.id,
     });
     classIds.push(cls.id);
     for (const subjectId of [maths.id, english.id]) {
@@ -598,7 +599,7 @@ async function seed() {
   });
   await admin.call('POST', '/hods', { membershipId: hod.membershipId });
   await admin.call('PUT', `/hods/${hod.membershipId}/department`, {
-    departmentId: departments.sciences.id,
+    departmentId: departments.science.id,
     academicSessionId: sessionId,
   });
   const moderator = await admin.call<{ membershipId: string; loginIdentifier: string }>(
@@ -799,13 +800,11 @@ async function seed() {
       arm,
     });
   }
-  for (const [name, code] of [
-    ['Sciences', 'SCI'],
-    ['Languages', 'LANG'],
-    ['Humanities', 'HUM'],
-  ] as const) {
-    await rAdmin.call('POST', '/academics/departments', { name, code });
-  }
+  await rAdmin.call('POST', '/academics/standard-setup', {
+    departmentCodes: ['SCI', 'BUS', 'HUM'],
+    streamCodes: [],
+    subjectCodes: [],
+  });
   await rAdmin.call('PUT', '/school/onboarding/progress', { currentStep: 6, skippedSteps: [2] });
   rAdmin.close();
 

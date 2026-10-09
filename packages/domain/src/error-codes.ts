@@ -222,6 +222,10 @@ export const BASE_ERROR_CODES = {
   // domain-rule failure distinct from the authorization engine's own
   // FORBIDDEN, mirroring QUESTION_OUT_OF_SCOPE's exact reasoning.
   QUESTION_SELF_REVIEW_FORBIDDEN: { httpStatus: 400, retryable: false },
+  // QUESTION_REVIEW_HOD_AVAILABLE (ADR-0038): a School Admin tried to decide
+  // a question its department's HOD can decide. The School Admin is only the
+  // fallback reviewer.
+  QUESTION_REVIEW_HOD_AVAILABLE: { httpStatus: 403, retryable: false },
 
   // B11 (Exam Builder & Readiness).
   //

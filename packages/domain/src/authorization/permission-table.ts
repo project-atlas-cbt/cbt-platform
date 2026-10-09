@@ -1376,7 +1376,10 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'EXECUTE',
     grants: {
       SOFTWARE_ADMIN: denied(),
-      SCHOOL_ADMIN: denied(),
+      SCHOOL_ADMIN: granted(
+        'SCHOOL',
+        'Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).',
+      ),
       MODERATOR: denied(),
       HOD: granted('DEPARTMENT'),
       TEACHER: denied(),
@@ -1385,6 +1388,8 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     // B9: POST /v1/reviews/questions/:id/approve. SOFTWARE_ADMIN is denied
     // outright, not breakGlass — ADR-0012 names question approval as one of
     // the few school-academic actions with no break-glass override at all.
+    // ADR-0038: SCHOOL_ADMIN is the fallback reviewer; the guard passes it
+    // and QuestionReviewService refuses it whenever an HOD can decide.
   },
   {
     id: 'questionBank.reject',
@@ -1393,7 +1398,10 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'EXECUTE',
     grants: {
       SOFTWARE_ADMIN: denied(),
-      SCHOOL_ADMIN: denied(),
+      SCHOOL_ADMIN: granted(
+        'SCHOOL',
+        'Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).',
+      ),
       MODERATOR: denied(),
       HOD: granted('DEPARTMENT'),
       TEACHER: denied(),
@@ -1408,7 +1416,10 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'EXECUTE',
     grants: {
       SOFTWARE_ADMIN: denied(),
-      SCHOOL_ADMIN: denied(),
+      SCHOOL_ADMIN: granted(
+        'SCHOOL',
+        'Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).',
+      ),
       MODERATOR: denied(),
       HOD: granted('DEPARTMENT'),
       TEACHER: denied(),

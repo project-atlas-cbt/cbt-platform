@@ -1509,6 +1509,24 @@ export interface paths {
         patch: operations["StreamController_update"];
         trace?: never;
     };
+    "/academics/standard-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What applying the standard setup would add or place (ADR-0038). */
+        get: operations["StandardSetupController_preview"];
+        put?: never;
+        /** Apply the ticked parts of the standard setup. */
+        post: operations["StandardSetupController_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/academics/classes/{id}/subjects": {
         parameters: {
             query?: never;
@@ -4446,6 +4464,12 @@ export interface components {
             plan: string;
             /** @description Initial subscription period, in days. */
             initialPeriodDays: number;
+            /**
+             * @description STANDARD creates the standard departments, streams and subjects (ADR-0038); the school edits them after. EMPTY leaves setup to the school.
+             * @default EMPTY
+             * @enum {string}
+             */
+            startingStructure: "STANDARD" | "EMPTY";
         };
         CreateSchoolResponseDto: {
             id: string;
@@ -5022,6 +5046,69 @@ export interface components {
             code?: string;
             /** @enum {string} */
             status?: "ACTIVE" | "INACTIVE";
+        };
+        StandardSetupDepartmentDto: {
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "NEW" | "PLACE" | "EXISTS";
+        };
+        StandardSetupStreamDto: {
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "NEW" | "PLACE" | "EXISTS";
+        };
+        StandardSetupSubjectDto: {
+            code: string;
+            /** @description The school's own name when it already has it. */
+            name: string;
+            departmentCode: string;
+            departmentName: string;
+            /** @enum {string} */
+            stage: "JSS" | "SS" | "JSS_AND_SS";
+            /** @description e.g. "Trade subject: choose 1". */
+            choiceGroupName: string | null;
+            /** @enum {string} */
+            status: "NEW" | "PLACE" | "EXISTS";
+        };
+        StandardSetupPreviewResponseDto: {
+            departments: components["schemas"]["StandardSetupDepartmentDto"][];
+            streams: components["schemas"]["StandardSetupStreamDto"][];
+            subjects: components["schemas"]["StandardSetupSubjectDto"][];
+        };
+        ApplyStandardSetupDto: {
+            /**
+             * @example [
+             *       "SCI",
+             *       "BUS",
+             *       "HUM"
+             *     ]
+             */
+            departmentCodes: string[];
+            /**
+             * @example [
+             *       "SCI",
+             *       "BUS",
+             *       "HUM"
+             *     ]
+             */
+            streamCodes: string[];
+            /**
+             * @example [
+             *       "MTH",
+             *       "ENG"
+             *     ]
+             */
+            subjectCodes: string[];
+        };
+        StandardSetupResultResponseDto: {
+            departmentsCreated: number;
+            streamsCreated: number;
+            subjectsCreated: number;
+            /** @description Existing subjects given their standard department. */
+            subjectsPlaced: number;
+            choiceGroupsCreated: number;
         };
         ClassSubjectResponseDto: {
             id: string;
@@ -6703,6 +6790,11 @@ export interface components {
              */
             submittedAt: string;
             revision: components["schemas"]["QuestionRevisionResponseDto"];
+            /**
+             * @description ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can.
+             * @enum {string|null}
+             */
+            fallbackReason: "NO_DEPARTMENT" | "NO_HOD" | "AUTHOR_IS_ONLY_HOD" | null;
         };
         QuestionReviewQueueSubjectGroupDto: {
             subjectId: string;
@@ -6733,6 +6825,11 @@ export interface components {
             authorName: string;
             currentRevision: components["schemas"]["QuestionRevisionResponseDto"];
             history: components["schemas"]["QuestionReviewHistoryItemDto"][];
+            /**
+             * @description ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can.
+             * @enum {string|null}
+             */
+            fallbackReason: "NO_DEPARTMENT" | "NO_HOD" | "AUTHOR_IS_ONLY_HOD" | null;
         };
         ApproveQuestionReviewDto: {
             /** @description An optional HOD note. */
@@ -9305,6 +9402,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StreamResponseDto"];
+                };
+            };
+        };
+    };
+    StandardSetupController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardSetupPreviewResponseDto"];
+                };
+            };
+        };
+    };
+    StandardSetupController_apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyStandardSetupDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StandardSetupResultResponseDto"];
                 };
             };
         };

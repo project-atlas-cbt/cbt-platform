@@ -22,7 +22,7 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
     ]);
   });
 
-  it('School Admin: Dashboard, People, Academics, Questions, Exams, Exam Operations, Results, Reports, School Settings, Help (04 §11 + F12 gap closure + ADR-0035)', () => {
+  it('School Admin: Dashboard, People, Academics, Questions, Question Review, Exams, Exam Operations, Results, Reports, School Settings, Help (04 §11 + F12 gap closure + ADR-0035 + ADR-0038)', () => {
     // `04 §11`'s own list doesn't name "Exam Operations" — School Admin's
     // real SCHOOL-scoped `examAdmin.*` grants (B12's Control Center) had no
     // nav item to reach them from before F12, even though Moderator's
@@ -35,6 +35,7 @@ describe('ROLE_WORKSPACES — 04 §68 conformance', () => {
       'People',
       'Academics',
       'Questions',
+      'Question Review',
       'Exams',
       'Exam Operations',
       'Results',

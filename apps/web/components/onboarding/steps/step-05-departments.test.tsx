@@ -10,6 +10,10 @@ vi.mock('@/lib/onboarding/mutations', () => ({
   useCreateDepartment: vi.fn(),
   useDeactivateDepartment: vi.fn(),
 }));
+vi.mock('@/components/academics/standard-setup/standard-setup-dialog', () => ({
+  StandardSetupDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog">Standard setup preview</div> : null,
+}));
 
 describe('Step05Departments', () => {
   const createMutateAsync = vi.fn();
@@ -25,13 +29,16 @@ describe('Step05Departments', () => {
     } as never);
   });
 
-  it('suggests Science/Business/Humanities in the empty state, not pre-created', () => {
+  it('offers the standard setup instead of pre-creating departments (ADR-0038)', async () => {
     vi.mocked(useDepartments).mockReturnValue({
       data: { departments: [] },
       isPending: false,
     } as never);
     render(<Step05Departments />);
-    expect(screen.getByText(/science, business, humanities/i)).toBeInTheDocument();
+    expect(screen.getByText(/no departments added yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/mathematics in\s+science/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /use standard setup/i }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Standard setup preview');
   });
 
   it('creates a department', async () => {

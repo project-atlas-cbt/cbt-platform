@@ -26,7 +26,9 @@ a place for notes, homework or messages.
   option columns as Text before typing, so an answer like 1/2 is not turned into a date.
 
 **HODs:** **Question Review** is a queue. For each question: **Approve**, **Reject** with a reason
-the teacher will read, or **Request changes**. Keyboard shortcuts are shown on the screen.
+the teacher will read, or **Request changes**. Keyboard shortcuts are shown on the screen. A
+question you wrote goes to another HOD of the department, or to the School Admin if you are its only
+HOD; so does any question in a subject with no department.
 
 ## 2. Exams
 

@@ -27,6 +27,20 @@ function invalidateAcademics(client: QueryClient) {
   ]);
 }
 
+// ---- Standard setup (ADR-0038) ----
+
+export function useApplyStandardSetup() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      departmentCodes: string[];
+      streamCodes: string[];
+      subjectCodes: string[];
+    }) => unwrap(apiClient.POST('/academics/standard-setup', { body })),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
 // ---- AcademicSession ----
 
 export function useUpdateSession(id: string) {

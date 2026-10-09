@@ -156,6 +156,16 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
         icon: BookOpen,
         match: ['questionBank.'],
       },
+      // ADR-0038: the School Admin reviews the questions no HOD can (a
+      // subject with no department, a department with no HOD, or the
+      // department's only HOD wrote it).
+      {
+        id: 'question-review',
+        label: 'Question Review',
+        href: 'question-review',
+        icon: ClipboardCheck,
+        match: ['questionBank.approve'],
+      },
       { id: 'exams', label: 'Exams', href: 'exams', icon: ClipboardList, match: ['exam.'] },
       // F12 gap closure: School Admin holds SCHOOL-scoped `examAdmin.*`
       // grants identical in shape to Moderator's own `exam-operations` item
