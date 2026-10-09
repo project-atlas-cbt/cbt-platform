@@ -169,14 +169,15 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 ## Assignments
 
-| Action                       | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER | STUDENT | Awaiting |
-| ---------------------------- | -------------- | ------------ | --------- | ---------- | ------- | ------- | -------- |
-| Assign teacher → subject     | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       |          |
-| Assign teacher → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       |          |
-| Assign HOD → department      | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       |          |
-| Assign student → class       | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —       | —       |          |
-| Move student between classes | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —       | —       |          |
-| View assignments             | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | SELF ⚠️ | SELF    |          |
+| Action                              | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER     | STUDENT | Awaiting |
+| ----------------------------------- | -------------- | ------------ | --------- | ---------- | ----------- | ------- | -------- |
+| Assign teacher → subject            | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —           | —       |          |
+| Assign teacher → class              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —           | —       |          |
+| Assign HOD → department             | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —           | —       |          |
+| Assign student → class              | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | —           | —       |          |
+| Move student between classes        | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | ⏸ DEFERRED | —           | —       |          |
+| Set students' subject registrations | 🔒 BREAK-GLASS | SCHOOL       | SCHOOL    | —          | ASSIGNED ⚠️ | —       |          |
+| View assignments                    | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | SELF ⚠️     | SELF    |          |
 
 <details><summary>Notes</summary>
 
@@ -188,6 +189,8 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Assign student → class / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Move student between classes / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Move student between classes / HOD:** R11: mechanism is ADR-0017's HOD request/approval subsystem, explicitly deferred (not part of the immediate implementation) — DENIED, fail-closed, until that phase lands.
+- **Set students' subject registrations / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
+- **Set students' subject registrations / TEACHER:** Electives they teach in a class, or every elective of a class they are form teacher of (ADR-0038).
 - **View assignments / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View assignments / TEACHER:** Their own assignment records, not the ASSIGNED-scope resources those assignments grant access to.
 
@@ -254,7 +257,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 
 | Action                          | SOFTWARE_ADMIN | SCHOOL_ADMIN | MODERATOR | HOD        | TEACHER  | STUDENT | Awaiting |
 | ------------------------------- | -------------- | ------------ | --------- | ---------- | -------- | ------- | -------- |
-| View all exams                  | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | ASSIGNED | SELF ⚠️ |          |
+| View all exams                  | PLATFORM ⚠️    | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | SELF ⚠️ |          |
 | Create exam                     | —              | —            | —         | —          | ASSIGNED | —       |          |
 | Edit draft exam                 | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
 | Delete draft exam               | —              | SCHOOL       | SCHOOL    | DEPARTMENT | OWNED    | —       |          |
@@ -342,7 +345,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 | ---------------------------------------- | -------------- | ------------ | ---------- | ---------- | ----------- | ------- | ----------------------------------- |
 | Automatic marking                        | SYSTEM         | SYSTEM       | SYSTEM     | SYSTEM     | SYSTEM      | —       |                                     |
 | View exam results                        | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | SELF ⚠️ |                                     |
-| View individual student result           | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | SELF    |                                     |
+| View individual student result           | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | OWNED       | SELF    |                                     |
 | View class performance                   | PLATFORM ⚠️    | SCHOOL       | SCHOOL     | DEPARTMENT | ASSIGNED    | —       | Result (B16/B17 analytics)          |
 | View subject performance                 | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT | DEPARTMENT | ASSIGNED ⚠️ | —       | Result (B16/B17 analytics)          |
 | View question performance                | PLATFORM ⚠️    | SCHOOL       | DEPARTMENT | DEPARTMENT | OWNED ⚠️    | —       | Result/Question analytics (B16/B17) |

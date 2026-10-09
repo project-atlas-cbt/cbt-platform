@@ -87,24 +87,24 @@ export class StudentSubjectRegistrationController {
   }
 
   @Get('academics/classes/:id/subject-registrations')
-  @Authorized('assignments.studentToClass')
+  @Authorized('registrations.manage')
   @ApiOperation({
     summary:
-      'The class subject grid (ADR-0038): every current student and offering, with choice-group warnings.',
+      "A class's current students and the offerings the caller may change (ADR-0038), with choice-group warnings.",
   })
   @ApiOkResponse({ type: ClassRegistrationGridResponseDto })
   async grid(
     @Req() req: FastifyRequest,
     @Param('id') classId: string,
   ): Promise<ClassRegistrationGridResponseDto> {
-    return this.registrations.classGrid(currentUser(req).schoolId, classId);
+    return this.registrations.classGrid(currentUser(req), classId);
   }
 
   @Put('academics/classes/:id/subject-registrations')
-  @Authorized('assignments.studentToClass')
+  @Authorized('registrations.manage')
   @ApiOperation({
     summary:
-      'Save ticks from the class subject grid in one transaction. Effective for future exams only.',
+      'Save registration ticks for a class in one transaction. Effective for future exams only.',
   })
   @ApiOkResponse({ type: UpdateClassRegistrationsResponseDto })
   async saveGrid(
@@ -113,7 +113,7 @@ export class StudentSubjectRegistrationController {
     @Body() body: UpdateClassRegistrationsDto,
   ): Promise<UpdateClassRegistrationsResponseDto> {
     const user = currentUser(req);
-    return this.registrations.updateClassGrid(user.schoolId, classId, body.changes, {
+    return this.registrations.updateClassGrid(user, classId, body.changes, {
       actorUserId: user.userId,
       actorRole: resolveActorRole(user),
     });

@@ -84,6 +84,16 @@ out). **Results** shows each exam's results as they are marked.
   original score, and is audited.
 - **Reports** exports results as CSV and prints result sheets.
 
+## 5. Who takes your elective
+
+Open **My Classes** and choose the class. Under **Subject registrations**, pick a subject and tick
+the students who take it, then press **Save**. Search finds a student by name or student ID.
+
+- You see the electives you teach in that class. If you are the class's **form teacher**, you see
+  every elective of that class. The school office makes you a form teacher.
+- Compulsory subjects are set by the school office.
+- Changes apply to future exams only; past exams and results don't change.
+
 ## Getting help
 
 Your school admin manages accounts and classes. During an exam, problems with the platform go to

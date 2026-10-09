@@ -469,3 +469,250 @@ describe('ADR-0038 offering kinds and the class subject grid', () => {
     expect(bad.statusCode).toBe(400);
   });
 });
+
+describe('ADR-0038 amendment: teachers set registrations, form teachers, history', () => {
+  let schoolId: string;
+  let admin: RequestCtx;
+  let teacher: RequestCtx;
+  let teacherProfileId: string;
+  let sessionId: string;
+  let classAId: string;
+  let classBId: string;
+  const off: Record<string, string> = {};
+  const studentIds: string[] = [];
+
+  beforeAll(async () => {
+    const school = await prisma.school.create({
+      data: { name: `Teacher Regs ${randomUUID()}`, subdomain: `trg-${randomUUID().slice(0, 8)}` },
+    });
+    schoolId = school.id;
+    createdSchoolIds.push(schoolId);
+    const host = `${school.subdomain}.${ROOT_DOMAIN}`;
+    const a = await seedUser({
+      schoolId,
+      loginIdentifier: 'admin01',
+      password: 'a-real-password-123',
+      role: 'SCHOOL_ADMIN',
+    });
+    createdUserIds.push(a.user.id);
+    admin = await freshCtx(host, `10.${RUN}.8.1`);
+    await login(admin, 'admin01', 'a-real-password-123');
+
+    const t = await seedUser({
+      schoolId,
+      loginIdentifier: 'teach01',
+      password: 'a-real-password-456',
+      role: 'TEACHER',
+    });
+    createdUserIds.push(t.user.id);
+    teacherProfileId = (
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.teacherProfile.create({
+          data: { schoolId, membershipId: t.membership.id, staffId: 'STF-T1' },
+        }),
+      )
+    ).id;
+    teacher = await freshCtx(host, `10.${RUN}.8.2`);
+    await login(teacher, 'teach01', 'a-real-password-456');
+
+    sessionId = (
+      await post(admin, '/academics/sessions', {
+        name: `Regs ${randomUUID().slice(0, 8)}`,
+        startDate: '2026-09-01',
+        endDate: '2027-07-31',
+      })
+    ).json<{ id: string }>().id;
+    const makeClass = async (arm: string) =>
+      (
+        await post(admin, '/academics/classes', {
+          academicSessionId: sessionId,
+          name: `SS1${arm}`,
+          level: 'SS1',
+          arm,
+        })
+      ).json<{ id: string }>().id;
+    classAId = await makeClass('A');
+    classBId = await makeClass('B');
+
+    for (const [name, kind] of [
+      ['Mathematics', 'COMPULSORY'],
+      ['Agric', 'ELECTIVE'],
+      ['French', 'ELECTIVE'],
+    ] as const) {
+      const subjectId = (
+        await post(admin, '/academics/subjects', {
+          name,
+          code: `${name.slice(0, 3)}-${randomUUID().slice(0, 6)}`,
+        })
+      ).json<{ id: string }>().id;
+      off[`A:${name}`] = (
+        await post(admin, `/academics/classes/${classAId}/subjects`, { subjectId, kind })
+      ).json<{ id: string }>().id;
+      if (name !== 'French') {
+        off[`B:${name}`] = (
+          await post(admin, `/academics/classes/${classBId}/subjects`, { subjectId, kind })
+        ).json<{ id: string }>().id;
+      }
+    }
+
+    for (let i = 0; i < 2; i += 1) {
+      const id = (
+        await post(admin, '/students', {
+          firstName: `Pupil${i}`,
+          lastName: 'Test',
+          studentId: `PU-${randomUUID().slice(0, 8)}`,
+        })
+      ).json<{ studentProfileId: string }>().studentProfileId;
+      studentIds.push(id);
+      await post(admin, `/students/${id}/enrollments`, {
+        academicSessionId: sessionId,
+        classId: classAId,
+      });
+    }
+
+    // The teacher teaches Agric in SS1A (an elective) and Maths (compulsory).
+    const res = await send(admin, 'PUT', `/teachers/${teacherProfileId}/assignments`, {
+      academicSessionId: sessionId,
+      classSubjectIds: [off['A:Agric'], off['A:Mathematics']],
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  afterAll(async () => {
+    await withTenant(prisma, schoolId, async (tx) => {
+      await tx.formTeacherAssignment.deleteMany({ where: { schoolId } });
+      await tx.teacherAssignment.deleteMany({ where: { schoolId } });
+      await tx.teacherProfile.deleteMany({ where: { schoolId } });
+    });
+  });
+
+  const enrollmentOf = async (ctx: RequestCtx, classId: string, i: number) =>
+    (await get(ctx, `/academics/classes/${classId}/subject-registrations`)).json<Grid>().students[
+      i
+    ]!.enrollmentId;
+
+  it('shows a subject teacher only the electives they teach, and lets them set those', async () => {
+    const g = await get(teacher, `/academics/classes/${classAId}/subject-registrations`);
+    expect(g.statusCode).toBe(200);
+    expect(g.json<Grid>().offerings.map((o) => o.subjectName)).toEqual(['Agric']);
+
+    const enrollmentId = await enrollmentOf(teacher, classAId, 0);
+    const ok = await send(teacher, 'PUT', `/academics/classes/${classAId}/subject-registrations`, {
+      changes: [{ enrollmentId, classSubjectId: off['A:Agric'], registered: true }],
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json<{ changed: number }>().changed).toBe(1);
+  });
+
+  it('refuses a subject teacher compulsory subjects and electives they do not teach', async () => {
+    const enrollmentId = await enrollmentOf(admin, classAId, 0);
+    for (const classSubjectId of [off['A:Mathematics'], off['A:French']]) {
+      const res = await send(
+        teacher,
+        'PUT',
+        `/academics/classes/${classAId}/subject-registrations`,
+        {
+          changes: [{ enrollmentId, classSubjectId, registered: false }],
+        },
+      );
+      expect(res.statusCode).toBe(403);
+    }
+    // A class they have no elective in at all.
+    expect(
+      (await get(teacher, `/academics/classes/${classBId}/subject-registrations`)).statusCode,
+    ).toBe(403);
+  });
+
+  it('lets a form teacher set every elective of their class, and only that class', async () => {
+    const assign = await send(admin, 'PUT', `/academics/classes/${classAId}/form-teachers`, {
+      teacherProfileIds: [teacherProfileId],
+    });
+    expect(assign.statusCode).toBe(200);
+    expect(assign.json<{ formTeachers: { teacherProfileId: string }[] }>().formTeachers).toEqual([
+      expect.objectContaining({ teacherProfileId }),
+    ]);
+    const mine = (await get(teacher, '/teachers/me/form-classes')).json<{
+      classes: { classId: string }[];
+    }>();
+    expect(mine.classes.map((c) => c.classId)).toEqual([classAId]);
+
+    const g = (
+      await get(teacher, `/academics/classes/${classAId}/subject-registrations`)
+    ).json<Grid>();
+    expect(g.offerings.map((o) => o.subjectName)).toEqual(['Agric', 'French']);
+    const enrollmentId = g.students[0]!.enrollmentId;
+    const res = await send(teacher, 'PUT', `/academics/classes/${classAId}/subject-registrations`, {
+      changes: [{ enrollmentId, classSubjectId: off['A:French'], registered: true }],
+    });
+    expect(res.statusCode).toBe(200);
+    // Still never compulsory subjects.
+    const maths = await send(
+      teacher,
+      'PUT',
+      `/academics/classes/${classAId}/subject-registrations`,
+      {
+        changes: [{ enrollmentId, classSubjectId: off['A:Mathematics'], registered: false }],
+      },
+    );
+    expect(maths.statusCode).toBe(403);
+    // The form teacher can now view the class roster.
+    expect((await get(teacher, `/classes/${classAId}/students`)).statusCode).toBe(200);
+  });
+
+  it('ends a removed form teacher rather than deleting them', async () => {
+    const res = await send(admin, 'PUT', `/academics/classes/${classAId}/form-teachers`, {
+      teacherProfileIds: [],
+    });
+    expect(res.json<{ formTeachers: unknown[] }>().formTeachers).toEqual([]);
+    const rows = await withTenant(prisma, schoolId, (tx) =>
+      tx.formTeacherAssignment.findMany({ where: { schoolId, classId: classAId } }),
+    );
+    expect(rows.map((r) => r.status)).toEqual(['ENDED']);
+    const g = (
+      await get(teacher, `/academics/classes/${classAId}/subject-registrations`)
+    ).json<Grid>();
+    expect(g.offerings.map((o) => o.subjectName)).toEqual(['Agric']);
+    // A teacher can't set form teachers.
+    const denied = await send(teacher, 'PUT', `/academics/classes/${classAId}/form-teachers`, {
+      teacherProfileIds: [teacherProfileId],
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+
+  it('tells the story in the student history: enrolled, subject changes by whom, moved, not carried', async () => {
+    const id = (
+      await get(admin, `/academics/classes/${classAId}/subject-registrations`)
+    ).json<Grid>().students[0]!.studentProfileId;
+    // Student 0 takes Maths, Agric (by the teacher) and French (by the form teacher).
+    await post(admin, `/students/${id}/enrollments`, {
+      academicSessionId: sessionId,
+      classId: classBId,
+    });
+    const history = (await get(admin, `/students/${id}/history`)).json<{
+      sessions: {
+        className: string;
+        subjects: string[];
+        events: {
+          kind: string;
+          summary: string;
+          detail: string | null;
+          actorRole: string | null;
+        }[];
+      }[];
+      accountEvents: { summary: string }[];
+    }>();
+    expect(history.sessions).toHaveLength(1);
+    const s = history.sessions[0]!;
+    expect(s.className).toBe('SS1B');
+    expect(s.subjects).toEqual(['Agric', 'Mathematics']);
+    const summaries = s.events.map((e) => e.summary);
+    expect(summaries[0]).toBe('Moved SS1A → SS1B');
+    expect(s.events[0]!.detail).toBe('2 subjects; not offered here: French');
+    expect(s.events[0]!.actorRole).toBe('SCHOOL_ADMIN');
+    expect(summaries).toContain('Agric added');
+    expect(summaries).toContain('French added');
+    expect(summaries.at(-1)).toBe('Enrolled in SS1A');
+    expect(s.events.find((e) => e.summary === 'Agric added')!.actorRole).toBe('TEACHER');
+    expect(history.accountEvents.map((e) => e.summary)).toContain('Account created');
+  });
+});

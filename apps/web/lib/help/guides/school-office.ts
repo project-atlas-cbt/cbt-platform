@@ -234,6 +234,7 @@ export function schoolOfficeGuides(): Guide[] {
       keywords: [
         'elective',
         'subject combination',
+        'form teacher',
         'register subject',
         'deregister',
         'crs',
@@ -241,15 +242,16 @@ export function schoolOfficeGuides(): Guide[] {
         'trade subject',
         'choice group',
       ],
-      requires: ['assignments.studentToClass'],
+      requires: ['registrations.manage'],
       steps: [
         'Open **Academics**, then **Classes**, open the class and choose **Subject registrations**.',
-        'Tick the subjects each student takes. **All** and **None** under a subject tick or untick it for the whole class.',
-        'Press **Save**.',
+        'Pick a subject on the left. The class is listed underneath it: tick the students who take it. Search finds a student by name or student ID, and **Tick all** or **Untick all** does the whole class.',
+        'Pick the next subject and carry on. Your ticks are kept until you press **Save**.',
       ],
       notes: [
+        'To set one student’s subjects, open their page under **People**, tick their subjects and press **Save subjects**.',
+        'Teachers can do this too: a subject teacher for the electives they teach, and a class’s form teacher for every elective of that class. Set a form teacher on the class’s **Teachers** tab.',
         'For subjects students choose between, add a choice group on the **Subjects** tab (for example Religion, choose 1) and put the subjects in it from their **Edit** form. A student who doesn’t match the rule is flagged, but you can still save.',
-        'One student’s subjects can also be changed on their page under People.',
         'Changes apply to future exams only. A student who moves class or goes up a class keeps the subjects they took where the new class offers them.',
       ],
       screen: { label: 'Classes', href: 'academics/classes' },

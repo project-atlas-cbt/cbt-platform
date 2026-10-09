@@ -1705,10 +1705,62 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The class subject grid (ADR-0038): every current student and offering, with choice-group warnings. */
+        /** A class's current students and the offerings the caller may change (ADR-0038), with choice-group warnings. */
         get: operations["StudentSubjectRegistrationController_grid"];
-        /** Save ticks from the class subject grid in one transaction. Effective for future exams only. */
+        /** Save registration ticks for a class in one transaction. Effective for future exams only. */
         put: operations["StudentSubjectRegistrationController_saveGrid"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teachers/me/form-classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own form classes, outside closed or archived sessions. */
+        get: operations["FormTeacherController_mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academics/classes/{id}/form-teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A class's current form teachers. */
+        get: operations["FormTeacherController_list"];
+        /** Set a class's form teachers. Anyone left out is ended, never deleted. */
+        put: operations["FormTeacherController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A student's academic history by session: classes, moves, subject changes, rollover outcomes and exam counts. */
+        get: operations["StudentHistoryController_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -5026,6 +5078,7 @@ export interface components {
             subjectCode: string;
             /** @enum {string} */
             kind: "COMPULSORY" | "ELECTIVE";
+            choiceGroupName: string | null;
             /** @enum {string} */
             status: "REGISTERED" | "DEREGISTERED";
             /** Format: date-time */
@@ -5039,6 +5092,7 @@ export interface components {
             subjectCode: string;
             /** @enum {string} */
             kind: "COMPULSORY" | "ELECTIVE";
+            choiceGroupName: string | null;
         };
         ChoiceWarningDto: {
             choiceGroupId: string;
@@ -5049,6 +5103,10 @@ export interface components {
             message: string;
         };
         StudentSubjectRegistrationListResponseDto: {
+            /** @description The current ACTIVE enrollment, if any. */
+            enrollmentId: string | null;
+            classId: string | null;
+            className: string | null;
             registrations: components["schemas"]["StudentSubjectRegistrationResponseDto"][];
             availableOfferings: components["schemas"]["AvailableOfferingDto"][];
             warnings: components["schemas"]["ChoiceWarningDto"][];
@@ -5062,6 +5120,8 @@ export interface components {
             kind: "COMPULSORY" | "ELECTIVE";
             choiceGroupId: string | null;
             choiceGroupName: string | null;
+            /** @description e.g. "Religion: choose 1". */
+            choiceRule: string | null;
         };
         GridStudentDto: {
             enrollmentId: string;
@@ -5072,6 +5132,7 @@ export interface components {
             warnings: components["schemas"]["ChoiceWarningDto"][];
         };
         ClassRegistrationGridResponseDto: {
+            className: string;
             offerings: components["schemas"]["GridOfferingDto"][];
             students: components["schemas"]["GridStudentDto"][];
         };
@@ -5085,6 +5146,74 @@ export interface components {
         };
         UpdateClassRegistrationsResponseDto: {
             changed: number;
+        };
+        MyFormClassDto: {
+            classId: string;
+            className: string;
+            level: string;
+            arm: string;
+            academicSessionId: string;
+        };
+        MyFormClassesResponseDto: {
+            classes: components["schemas"]["MyFormClassDto"][];
+        };
+        FormTeacherEntryDto: {
+            id: string;
+            teacherProfileId: string;
+            displayName: string;
+            staffId: string;
+            /** Format: date */
+            startDate: string;
+        };
+        FormTeacherListResponseDto: {
+            formTeachers: components["schemas"]["FormTeacherEntryDto"][];
+        };
+        ReplaceFormTeachersDto: {
+            /** @description Every form teacher this class should have; others are ended. */
+            teacherProfileIds: string[];
+        };
+        HistoryEventDto: {
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            kind: "ENROLLED" | "MOVED" | "STARTED_SESSION" | "SUBJECT_ADDED" | "SUBJECT_DROPPED" | "ACCOUNT";
+            /** @description What changed, e.g. "Moved SS1A → SS1B". */
+            summary: string;
+            /** @description Extra detail, e.g. subjects carried over. */
+            detail: string | null;
+            /** @description Null when the system made the change. */
+            actorName: string | null;
+            actorRole: string | null;
+        };
+        HistoryOutcomeDto: {
+            /** @description e.g. "Promoted", "Repeated", "Graduated". */
+            label: string;
+            reason: string | null;
+            actorName: string | null;
+        };
+        HistoryExamsDto: {
+            attended: number;
+            absent: number;
+            excused: number;
+        };
+        HistorySessionDto: {
+            academicSessionId: string;
+            sessionName: string;
+            /** @description The class the student ended the session in, or is in now. */
+            className: string;
+            current: boolean;
+            /** @description Subjects taken in that class, by name. */
+            subjects: string[];
+            /** @description Newest first. */
+            events: components["schemas"]["HistoryEventDto"][];
+            outcome: components["schemas"]["HistoryOutcomeDto"] | null;
+            exams: components["schemas"]["HistoryExamsDto"];
+        };
+        StudentHistoryResponseDto: {
+            /** @description Newest session first. */
+            sessions: components["schemas"]["HistorySessionDto"][];
+            /** @description Account events, newest first. */
+            accountEvents: components["schemas"]["HistoryEventDto"][];
         };
         CreateRolloverPlanDto: {
             /** Format: uuid */
@@ -9410,6 +9539,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateClassRegistrationsResponseDto"];
+                };
+            };
+        };
+    };
+    FormTeacherController_mine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyFormClassesResponseDto"];
+                };
+            };
+        };
+    };
+    FormTeacherController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormTeacherListResponseDto"];
+                };
+            };
+        };
+    };
+    FormTeacherController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceFormTeachersDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FormTeacherListResponseDto"];
+                };
+            };
+        };
+    };
+    StudentHistoryController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentHistoryResponseDto"];
                 };
             };
         };

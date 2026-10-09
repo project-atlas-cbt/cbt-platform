@@ -4159,7 +4159,7 @@
             }
           }
         },
-        "summary": "The class subject grid (ADR-0038): every current student and offering, with choice-group warnings.",
+        "summary": "A class's current students and the offerings the caller may change (ADR-0038), with choice-group warnings.",
         "tags": [
           "people"
         ]
@@ -4198,7 +4198,130 @@
             }
           }
         },
-        "summary": "Save ticks from the class subject grid in one transaction. Effective for future exams only.",
+        "summary": "Save registration ticks for a class in one transaction. Effective for future exams only.",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/teachers/me/form-classes": {
+      "get": {
+        "operationId": "FormTeacherController_mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyFormClassesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own form classes, outside closed or archived sessions.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/classes/{id}/form-teachers": {
+      "get": {
+        "operationId": "FormTeacherController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormTeacherListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A class's current form teachers.",
+        "tags": [
+          "academics"
+        ]
+      },
+      "put": {
+        "operationId": "FormTeacherController_replace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceFormTeachersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormTeacherListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set a class's form teachers. Anyone left out is ended, never deleted.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/students/{id}/history": {
+      "get": {
+        "operationId": "StudentHistoryController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentHistoryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A student's academic history by session: classes, moves, subject changes, rollover outcomes and exam counts.",
         "tags": [
           "people"
         ]
@@ -13799,6 +13922,10 @@
               "ELECTIVE"
             ]
           },
+          "choiceGroupName": {
+            "type": "string",
+            "nullable": true
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -13823,6 +13950,7 @@
           "subjectName",
           "subjectCode",
           "kind",
+          "choiceGroupName",
           "status",
           "registeredAt",
           "deregisteredAt"
@@ -13846,13 +13974,18 @@
               "COMPULSORY",
               "ELECTIVE"
             ]
+          },
+          "choiceGroupName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
           "classSubjectId",
           "subjectName",
           "subjectCode",
-          "kind"
+          "kind",
+          "choiceGroupName"
         ]
       },
       "ChoiceWarningDto": {
@@ -13889,6 +14022,19 @@
       "StudentSubjectRegistrationListResponseDto": {
         "type": "object",
         "properties": {
+          "enrollmentId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The current ACTIVE enrollment, if any."
+          },
+          "classId": {
+            "type": "string",
+            "nullable": true
+          },
+          "className": {
+            "type": "string",
+            "nullable": true
+          },
           "registrations": {
             "type": "array",
             "items": {
@@ -13909,6 +14055,9 @@
           }
         },
         "required": [
+          "enrollmentId",
+          "classId",
+          "className",
           "registrations",
           "availableOfferings",
           "warnings"
@@ -13943,6 +14092,11 @@
           "choiceGroupName": {
             "type": "string",
             "nullable": true
+          },
+          "choiceRule": {
+            "type": "string",
+            "nullable": true,
+            "description": "e.g. \"Religion: choose 1\"."
           }
         },
         "required": [
@@ -13952,7 +14106,8 @@
           "subjectCode",
           "kind",
           "choiceGroupId",
-          "choiceGroupName"
+          "choiceGroupName",
+          "choiceRule"
         ]
       },
       "GridStudentDto": {
@@ -13995,6 +14150,9 @@
       "ClassRegistrationGridResponseDto": {
         "type": "object",
         "properties": {
+          "className": {
+            "type": "string"
+          },
           "offerings": {
             "type": "array",
             "items": {
@@ -14009,6 +14167,7 @@
           }
         },
         "required": [
+          "className",
           "offerings",
           "students"
         ]
@@ -14056,6 +14215,268 @@
         },
         "required": [
           "changed"
+        ]
+      },
+      "MyFormClassDto": {
+        "type": "object",
+        "properties": {
+          "classId": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "arm": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "classId",
+          "className",
+          "level",
+          "arm",
+          "academicSessionId"
+        ]
+      },
+      "MyFormClassesResponseDto": {
+        "type": "object",
+        "properties": {
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyFormClassDto"
+            }
+          }
+        },
+        "required": [
+          "classes"
+        ]
+      },
+      "FormTeacherEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "teacherProfileId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "staffId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "id",
+          "teacherProfileId",
+          "displayName",
+          "staffId",
+          "startDate"
+        ]
+      },
+      "FormTeacherListResponseDto": {
+        "type": "object",
+        "properties": {
+          "formTeachers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormTeacherEntryDto"
+            }
+          }
+        },
+        "required": [
+          "formTeachers"
+        ]
+      },
+      "ReplaceFormTeachersDto": {
+        "type": "object",
+        "properties": {
+          "teacherProfileIds": {
+            "description": "Every form teacher this class should have; others are ended.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "teacherProfileIds"
+        ]
+      },
+      "HistoryEventDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ENROLLED",
+              "MOVED",
+              "STARTED_SESSION",
+              "SUBJECT_ADDED",
+              "SUBJECT_DROPPED",
+              "ACCOUNT"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "What changed, e.g. \"Moved SS1A → SS1B\"."
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true,
+            "description": "Extra detail, e.g. subjects carried over."
+          },
+          "actorName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null when the system made the change."
+          },
+          "actorRole": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "at",
+          "kind",
+          "summary",
+          "detail",
+          "actorName",
+          "actorRole"
+        ]
+      },
+      "HistoryOutcomeDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "e.g. \"Promoted\", \"Repeated\", \"Graduated\"."
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "actorName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "label",
+          "reason",
+          "actorName"
+        ]
+      },
+      "HistoryExamsDto": {
+        "type": "object",
+        "properties": {
+          "attended": {
+            "type": "number"
+          },
+          "absent": {
+            "type": "number"
+          },
+          "excused": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "attended",
+          "absent",
+          "excused"
+        ]
+      },
+      "HistorySessionDto": {
+        "type": "object",
+        "properties": {
+          "academicSessionId": {
+            "type": "string"
+          },
+          "sessionName": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string",
+            "description": "The class the student ended the session in, or is in now."
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "subjects": {
+            "description": "Subjects taken in that class, by name.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "events": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryEventDto"
+            }
+          },
+          "outcome": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HistoryOutcomeDto"
+              }
+            ]
+          },
+          "exams": {
+            "$ref": "#/components/schemas/HistoryExamsDto"
+          }
+        },
+        "required": [
+          "academicSessionId",
+          "sessionName",
+          "className",
+          "current",
+          "subjects",
+          "events",
+          "outcome",
+          "exams"
+        ]
+      },
+      "StudentHistoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "description": "Newest session first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistorySessionDto"
+            }
+          },
+          "accountEvents": {
+            "description": "Account events, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryEventDto"
+            }
+          }
+        },
+        "required": [
+          "sessions",
+          "accountEvents"
         ]
       },
       "CreateRolloverPlanDto": {

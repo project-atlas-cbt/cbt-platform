@@ -78,11 +78,44 @@ ADR-0011 already required.
 
 Built in three pull requests.
 
-1. Offering kinds, choice groups, the class subject grid (`GET`/`PUT
-/academics/classes/:id/subject-registrations`), registering electives from the student's page,
-   and carry-forward on move and rollover. Migration `20261009090000_subject_offering_kinds`.
+1. Offering kinds, choice groups, the class subject lists (`GET`/`PUT
+/academics/classes/:id/subject-registrations`), the student's subject checklist, form teachers,
+   teacher access and the student history (amendment below), and carry-forward on move and
+   rollover. Migrations `20261009090000_subject_offering_kinds`,
+   `20261009120000_form_teacher_assignments`.
 2. Streams: the entity, per-enrollment stream, class default, migration from class departments,
    import columns, results by stream, HOD scope moved off classes.
 3. The School Admin review fallback, then the demo school and guides.
 
 Exam readiness does not yet show choice-rule warnings; that is a candidate for the streams PR.
+
+## Amendment — who sets registrations, and the screens (2026-10-09)
+
+**Context.** Reviewing the first build, Haneef found the class subject grid (students down,
+subjects across) unworkable: an SS class with many subjects scrolls sideways, and in a class of 100
+nobody can find a student. And in a school of 1,000 students, leaving every registration to one
+School Admin or Moderator is a bottleneck. Teachers had no way to help: they cannot open Academics.
+
+**Decision (Haneef, 2026-10-09: "Both").**
+
+- **Screens.** The grid is replaced by a per-subject list: pick a subject, then tick its students
+  in a searchable list that runs down the page. One student's subjects are a checklist on their
+  page. Both save through the same all-or-nothing endpoint.
+- **Subject teachers** may set registrations for the **elective** offerings they teach (an ACTIVE
+  `TeacherAssignment`), from Teacher › My classes.
+- **Form teachers.** A new assignment, not a role: `FormTeacherAssignment` (class, teacher, ACTIVE
+  or ENDED; several per arm allowed; ended, never deleted). School Admin and Moderator set it on
+  the class's Teachers tab under the existing `assignments.teacherToClass` permission ("Assign
+  teacher → class"), which had no route until now. A form teacher may set **every elective** of
+  that class and sees its roster.
+- **Compulsory subjects stay with School Admin and Moderator.** Registration decides who may sit an
+  exam, so no teacher can remove a student from a subject every classmate takes.
+- New permission row `registrations.manage` (School Admin/Moderator SCHOOL, Teacher ASSIGNED, HOD
+  and Student denied). The guard passes a teacher optimistically; `registration-scope.util.ts`
+  narrows every read and write to the electives above and refuses anything else with 403.
+- **Academic history** on the student page is rebuilt as one block per session: class, subjects,
+  dated changes saying from what to what and by whom (from the audit log), the rollover outcome
+  and its reason, and exam counts. `GET /students/:id/history`, read-only, no new tables.
+
+**Candidate / Deferred.** The teacher assignments page (People › Teachers › Assignments) has the
+same sideways-scrolling matrix; the same "pick one, then tick" pattern should replace it.

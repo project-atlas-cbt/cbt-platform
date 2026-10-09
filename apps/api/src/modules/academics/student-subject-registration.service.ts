@@ -1,9 +1,11 @@
 import { forbiddenOtherRecord } from './actor.util.js';
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import { choiceGroupWarnings, type ChoiceGroupRule, type Role } from '@atlas/domain';
+import { choiceGroupWarnings, describeRule, type ChoiceGroupRule, type Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import type { AuthenticatedUser } from '../identity/auth.guard.js';
+import { inScope, outOfRegistrationScope, registrationScope } from './registration-scope.util.js';
 import type {
   ClassRegistrationGridResponseDto,
   RegistrationChangeDto,
@@ -23,7 +25,10 @@ function toResponseDto(registration: {
   status: string;
   registeredAt: Date;
   deregisteredAt: Date | null;
-  classSubject: { kind: string; subject: { name: string; code: string } };
+  classSubject: {
+    kind: string;
+    subject: { name: string; code: string; choiceGroup: { name: string } | null };
+  };
 }): StudentSubjectRegistrationResponseDto {
   return {
     id: registration.id,
@@ -32,15 +37,18 @@ function toResponseDto(registration: {
     subjectName: registration.classSubject.subject.name,
     subjectCode: registration.classSubject.subject.code,
     kind: registration.classSubject.kind as StudentSubjectRegistrationResponseDto['kind'],
+    choiceGroupName: registration.classSubject.subject.choiceGroup?.name ?? null,
     status: registration.status as StudentSubjectRegistrationResponseDto['status'],
     registeredAt: registration.registeredAt.toISOString(),
     deregisteredAt: registration.deregisteredAt ? registration.deregisteredAt.toISOString() : null,
   };
 }
 
-const withSubject = {
-  classSubject: { include: { subject: { select: { name: true, code: true } } } },
+const subjectFields = {
+  select: { name: true, code: true, choiceGroup: { select: { name: true } } },
 } as const;
+
+const withSubject = { classSubject: { include: { subject: subjectFields } } } as const;
 
 /** ADR-0038: every choice group, with its member subjects, in the shape
  * `choiceGroupWarnings` reads. */
@@ -101,18 +109,21 @@ export class StudentSubjectRegistrationService {
       const enrollment = await tx.studentEnrollment.findFirst({
         where: { schoolId, studentProfileId, status: 'ACTIVE' },
         orderBy: { startDate: 'desc' },
-        select: { classId: true },
+        select: { id: true, classId: true, classGroupSession: { select: { name: true } } },
       });
       const offerings = enrollment
         ? await tx.classSubject.findMany({
             where: { schoolId, classId: enrollment.classId, status: 'ACTIVE' },
-            include: { subject: { select: { name: true, code: true } } },
+            include: { subject: subjectFields },
             orderBy: { subject: { name: 'asc' } },
           })
         : [];
       const withRow = new Set(registrations.map((r) => r.classSubjectId));
       const rules = await loadChoiceRules(tx, schoolId);
       return {
+        enrollmentId: enrollment?.id ?? null,
+        classId: enrollment?.classId ?? null,
+        className: enrollment?.classGroupSession.name ?? null,
         registrations: registrations.map(toResponseDto),
         availableOfferings: offerings
           .filter((o) => !withRow.has(o.id))
@@ -121,6 +132,7 @@ export class StudentSubjectRegistrationService {
             subjectName: o.subject.name,
             subjectCode: o.subject.code,
             kind: o.kind,
+            choiceGroupName: o.subject.choiceGroup?.name ?? null,
           })),
         warnings: choiceGroupWarnings(
           rules,
@@ -247,14 +259,22 @@ export class StudentSubjectRegistrationService {
     return this.setStatus(schoolId, studentProfileId, classSubjectId, true, actor);
   }
 
-  /** ADR-0038 — the class subject grid. Choice-group rules come back as
-   * warnings per student; they never block a save. */
-  async classGrid(schoolId: string, classId: string): Promise<ClassRegistrationGridResponseDto> {
+  /** ADR-0038 — a class's students and offerings, with who takes what.
+   * Choice-group rules come back as warnings per student; they never block
+   * a save. A Teacher sees only the offerings they may change
+   * (`registrationScope`), but warnings still weigh every subject. */
+  async classGrid(
+    user: AuthenticatedUser,
+    classId: string,
+  ): Promise<ClassRegistrationGridResponseDto> {
+    const schoolId = user.schoolId;
     return withTenant(prisma, schoolId, async (tx) => {
       const classGroup = await tx.classGroup.findUnique({ where: { id: classId } });
       if (!classGroup) {
         throw new AppHttpException({ code: 'NOT_FOUND', message: 'Class not found.' });
       }
+      const scope = await registrationScope(tx, user, classId);
+      if (!scope.all && scope.classSubjectIds.size === 0) throw outOfRegistrationScope();
       const [offerings, enrollments, rules] = await Promise.all([
         tx.classSubject.findMany({
           where: { schoolId, classId, status: 'ACTIVE' },
@@ -264,7 +284,7 @@ export class StudentSubjectRegistrationService {
                 name: true,
                 code: true,
                 choiceGroupId: true,
-                choiceGroup: { select: { name: true } },
+                choiceGroup: { select: { name: true, minChoices: true, maxChoices: true } },
               },
             },
           },
@@ -285,8 +305,10 @@ export class StudentSubjectRegistrationService {
       ]);
       const subjectByOffering = new Map(offerings.map((o) => [o.id, o.subjectId]));
       const offered = new Set(offerings.map((o) => o.subjectId));
+      const visible = offerings.filter((o) => inScope(scope, o.id));
       return {
-        offerings: offerings.map((o) => ({
+        className: classGroup.name,
+        offerings: visible.map((o) => ({
           classSubjectId: o.id,
           subjectId: o.subjectId,
           subjectName: o.subject.name,
@@ -294,6 +316,9 @@ export class StudentSubjectRegistrationService {
           kind: o.kind,
           choiceGroupId: o.subject.choiceGroupId,
           choiceGroupName: o.subject.choiceGroup?.name ?? null,
+          choiceRule: o.subject.choiceGroup
+            ? `${o.subject.choiceGroup.name}: ${describeRule(o.subject.choiceGroup.minChoices, o.subject.choiceGroup.maxChoices)}`
+            : null,
         })),
         students: enrollments.map((e) => {
           const registered = e.registrations
@@ -304,7 +329,7 @@ export class StudentSubjectRegistrationService {
             studentProfileId: e.studentProfileId,
             studentId: e.studentProfile.studentId,
             displayName: e.studentProfile.membership.user.displayName,
-            registeredClassSubjectIds: registered,
+            registeredClassSubjectIds: registered.filter((id) => inScope(scope, id)),
             warnings: choiceGroupWarnings(
               rules,
               offered,
@@ -316,15 +341,18 @@ export class StudentSubjectRegistrationService {
     });
   }
 
-  /** ADR-0038 — save ticks from the class subject grid, all in one
+  /** ADR-0038 — save registration ticks for a class, all in one
    * transaction. Every enrollment and offering must belong to this class
-   * and be ACTIVE, or nothing is saved. One audit event per changed row. */
+   * and be ACTIVE, and every offering must be in the caller's
+   * `registrationScope`, or nothing is saved. One audit event per changed
+   * row. */
   async updateClassGrid(
-    schoolId: string,
+    user: AuthenticatedUser,
     classId: string,
     changes: RegistrationChangeDto[],
     actor: ActorContext,
   ): Promise<{ changed: number }> {
+    const schoolId = user.schoolId;
     const applied = await withTenant(prisma, schoolId, async (tx) => {
       const [enrollments, offerings] = await Promise.all([
         tx.studentEnrollment.findMany({
@@ -338,6 +366,10 @@ export class StudentSubjectRegistrationService {
       ]);
       const enrollmentIds = new Set(enrollments.map((e) => e.id));
       const offeringIds = new Set(offerings.map((o) => o.id));
+      const scope = await registrationScope(tx, user, classId);
+      for (const c of changes) {
+        if (!inScope(scope, c.classSubjectId)) throw outOfRegistrationScope();
+      }
       for (const c of changes) {
         if (!enrollmentIds.has(c.enrollmentId) || !offeringIds.has(c.classSubjectId)) {
           throw new AppHttpException({

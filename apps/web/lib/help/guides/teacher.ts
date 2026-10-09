@@ -175,6 +175,27 @@ export const TEACHER_GUIDES: RoleGuideSet = {
       related: ['publish-results'],
     },
     {
+      id: 'set-student-electives',
+      title: 'Choose who takes your elective',
+      summary:
+        'Tick the students who take an elective you teach, or every elective of your form class.',
+      area: 'academics',
+      keywords: ['elective', 'register', 'subject registration', 'form teacher', 'form class'],
+      requires: ['registrations.manage'],
+      steps: [
+        'Open **My Classes** and choose the class.',
+        'Under **Subject registrations**, pick the subject and tick the students who take it. Search finds a student by name or student ID.',
+        'Press **Save**.',
+      ],
+      notes: [
+        'You see the electives you teach in that class. A form teacher sees every elective of their form class.',
+        'Compulsory subjects are set by the school office, not here.',
+        'Changes apply to future exams only.',
+      ],
+      screen: { label: 'My Classes', href: 'my-classes' },
+      related: [],
+    },
+    {
       id: 'export-results',
       title: 'Download or print an exam’s results',
       summary: 'Get a CSV file or a printable broadsheet of one exam’s results.',

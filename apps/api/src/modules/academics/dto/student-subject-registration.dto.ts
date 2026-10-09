@@ -38,6 +38,9 @@ export class StudentSubjectRegistrationResponseDto {
   @ApiProperty({ type: String, enum: CLASS_SUBJECT_KINDS })
   kind!: ClassSubjectKind;
 
+  @ApiProperty({ type: String, nullable: true })
+  choiceGroupName!: string | null;
+
   @ApiProperty({ type: String, enum: STUDENT_SUBJECT_REGISTRATION_STATUSES })
   status!: StudentSubjectRegistrationStatus;
 
@@ -62,6 +65,9 @@ export class AvailableOfferingDto {
 
   @ApiProperty({ type: String, enum: CLASS_SUBJECT_KINDS })
   kind!: ClassSubjectKind;
+
+  @ApiProperty({ type: String, nullable: true })
+  choiceGroupName!: string | null;
 }
 
 export class ChoiceWarningDto {
@@ -105,6 +111,9 @@ export class GridOfferingDto {
 
   @ApiProperty({ type: String, nullable: true })
   choiceGroupName!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, description: 'e.g. "Religion: choose 1".' })
+  choiceRule!: string | null;
 }
 
 export class GridStudentDto {
@@ -130,6 +139,9 @@ export class GridStudentDto {
 /** `GET /v1/academics/classes/:id/subject-registrations` — the class
  * subject grid: students down, offerings across. */
 export class ClassRegistrationGridResponseDto {
+  @ApiProperty({ type: String })
+  className!: string;
+
   @ApiProperty({ type: GridOfferingDto, isArray: true })
   offerings!: GridOfferingDto[];
 
@@ -167,6 +179,19 @@ export class UpdateClassRegistrationsResponseDto {
 }
 
 export class StudentSubjectRegistrationListResponseDto {
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'The current ACTIVE enrollment, if any.',
+  })
+  enrollmentId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  classId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  className!: string | null;
+
   @ApiProperty({ type: StudentSubjectRegistrationResponseDto, isArray: true })
   registrations!: StudentSubjectRegistrationResponseDto[];
 

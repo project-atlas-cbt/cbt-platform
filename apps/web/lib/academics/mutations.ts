@@ -221,6 +221,21 @@ export function useSaveClassRegistrations(classId: string) {
   });
 }
 
+/** ADR-0038 amendment — replace a class's form teachers. */
+export function useSetFormTeachers(classId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (teacherProfileIds: string[]) =>
+      unwrap(
+        apiClient.PUT('/academics/classes/{id}/form-teachers', {
+          params: { path: { id: classId } },
+          body: { teacherProfileIds },
+        }),
+      ),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
 // ---- Subject choice groups (ADR-0038) ----
 
 export interface ChoiceGroupInput {

@@ -2,6 +2,36 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-09 — Subject registration screens, teachers and form teachers, student history (ADR-0038 amendment)
+
+Owner review of the first build (still PR 1 of 3): the class subject grid scrolled sideways and had
+no search, one office can't register 1,000 students alone, and the student page's academic history
+didn't say what changed. Owner decision: subject teachers **and** form teachers may set electives.
+
+- The grid is replaced by a per-subject list on the class's Subject registrations tab (pick a
+  subject, then tick its students; search by name or student ID; ticks kept across subjects and
+  saved in one request). The student's page has a subject checklist with one Save.
+- `FormTeacherAssignment` (migration `20261009120000_form_teacher_assignments`), set on the
+  class's Teachers tab (`assignments.teacherToClass`). Teacher › My classes lists form classes.
+- New permission `registrations.manage`: School Admin and Moderator for every offering; a Teacher
+  for the electives they teach, or every elective of their form class (`registration-scope.util.ts`).
+  Compulsory subjects stay with the office. A form teacher can view their class roster.
+- `GET /students/:id/history` and a new history on the student page: per session, the class,
+  subjects, dated changes (moved from where to where, subject added or dropped, by whom), the
+  rollover outcome and reason, and exam counts. It replaces the bare enrollment rows and the stale
+  "assessment history not yet available" placeholder.
+- ADR-0038 amendment, `02-roles-permissions.md` row, generated permission table, school-office and
+  teacher help guides, `docs/user-guides/teacher.md`, `school-onboarding.md`.
+
+Tests: five new integration cases (subject-teacher scope, compulsory and other electives refused,
+form teacher scope and roster, ending a form teacher, the history after enroll, subject changes and
+a move); `subject-roster.test.tsx` (5), `subject-registrations-panel.test.tsx` (2),
+`academic-history.test.tsx` (2). API integration 498 of 499 (the same s3rver media case as before),
+security suite (53), API unit (296), domain (165), web (1,201), typecheck and lint pass.
+
+Candidate / Deferred: the teacher assignments matrix (People › Teachers › Assignments) has the same
+sideways scroll and should get the same "pick one, then tick" layout.
+
 ### 2026-10-08 — Compulsory and elective subjects, choice rules, the class subject grid (ADR-0038, PR 1 of 3)
 
 Owner concern: every student was registered for every subject their class offers, which does not

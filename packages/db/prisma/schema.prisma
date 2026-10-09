@@ -405,8 +405,9 @@ model TeacherProfile {
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  membership        SchoolMembership    @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  membership        SchoolMembership        @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
   assignments       TeacherAssignment[]
+  formClasses       FormTeacherAssignment[]
   // B8: a Question's author is always a TeacherProfile — see
   // Question.authorTeacherProfileId's own doc comment.
   authoredQuestions Question[]
@@ -1131,19 +1132,20 @@ model ClassGroup {
   createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  session                 AcademicSession     @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  session                 AcademicSession         @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
   /// Restrict, not SetNull: a composite FK can't null just one of its two
   /// columns (schoolId is required), and our own archival rule already
   /// blocks hard-deleting a Department while any ClassGroup references it —
   /// Restrict is a correct database-level backstop under that rule, not a
   /// contradiction of "departmentId is nullable" (nullable only means a
   /// class *may be created* with no department).
-  department              Department?         @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  department              Department?             @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
   classSubjects           ClassSubject[]
   // B6: StudentEnrollment FKs against the (schoolId, id, academicSessionId)
   // unique below (the same D-10-style guarantee ClassSubject already uses).
   studentEnrollments      StudentEnrollment[]
-  rolloverSourceDecisions RolloverDecision[]  @relation("RolloverDecisionSourceClass")
+  rolloverSourceDecisions RolloverDecision[]      @relation("RolloverDecisionSourceClass")
+  formTeachers            FormTeacherAssignment[]
 
   // Composite-FK target for ClassSubject's session-agreement check (D-10) —
   // a three-column unique, not just (schoolId, id), so ClassSubject can FK
@@ -1396,6 +1398,32 @@ model TeacherAssignment {
 enum TeacherAssignmentStatus {
   ACTIVE
   ENDED
+}
+
+/// ADR-0038 amendment (2026-10-09) — a class's form teacher (Nigerian
+/// "form master/mistress"). An assignment, not a role: it lets a Teacher
+/// set the elective subjects of every student in that one arm. A class
+/// belongs to one session, so the assignment ends with it. Several form
+/// teachers per arm are allowed; "at most one ACTIVE row per (class,
+/// teacher)" is a partial unique index in the migration's raw SQL.
+model FormTeacherAssignment {
+  id               String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId         String                  @map("school_id") @db.Uuid
+  classId          String                  @map("class_id") @db.Uuid
+  teacherProfileId String                  @map("teacher_profile_id") @db.Uuid
+  status           TeacherAssignmentStatus @default(ACTIVE)
+  startDate        DateTime                @default(now()) @map("start_date") @db.Date
+  endDate          DateTime?               @map("end_date") @db.Date
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  classGroup     ClassGroup     @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
+  teacherProfile TeacherProfile @relation(fields: [schoolId, teacherProfileId], references: [schoolId, id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([schoolId, classId])
+  @@index([schoolId, teacherProfileId])
+  @@map("form_teacher_assignments")
 }
 
 /// ADR-0011 (Accepted, mandatory — resolves audit finding M-02). Keyed on

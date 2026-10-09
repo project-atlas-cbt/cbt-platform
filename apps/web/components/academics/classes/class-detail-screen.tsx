@@ -26,7 +26,8 @@ import { useHasPermission } from '@/lib/nav';
 import { useClassCredentialSheet } from '@/lib/people/mutations';
 import { describeAcademicsError } from '../error-utils';
 import { ClassStatusBadge } from '../academic-status-badges';
-import { ClassRegistrationGrid } from '../class-subjects/class-registration-grid';
+import { SubjectRoster } from '../class-subjects/subject-roster';
+import { FormTeachersPanel } from './form-teachers-panel';
 import { ClassSubjectList } from '../class-subjects/class-subject-list';
 import { cn } from '@/lib/utils';
 
@@ -50,8 +51,8 @@ export function ClassDetailScreen({ classId }: { classId: string }) {
   const session = useSession(classGroup.data?.academicSessionId);
   const departments = useDepartments();
   const [tab, setTab] = useState<TabId>('students');
-  // ADR-0038: the class subject grid is for the staff who set registrations.
-  const canManageRegistrations = useHasPermission('assignments.studentToClass');
+  // ADR-0038: who takes each subject, for the staff who set registrations.
+  const canManageRegistrations = useHasPermission('registrations.manage');
   const tabs = TABS.filter((t) => t.id !== 'registrations' || canManageRegistrations);
 
   if (classGroup.isPending) return <Skeleton className="h-48 w-full" />;
@@ -95,10 +96,15 @@ export function ClassDetailScreen({ classId }: { classId: string }) {
       </nav>
 
       {tab === 'students' ? <ClassRosterTable classId={classId} /> : null}
-      {tab === 'teachers' ? <ClassTeachersTable classId={classId} /> : null}
+      {tab === 'teachers' ? (
+        <div className="space-y-4">
+          <FormTeachersPanel classId={classId} />
+          <ClassTeachersTable classId={classId} />
+        </div>
+      ) : null}
       {tab === 'subjects' ? <ClassSubjectList classId={classId} /> : null}
       {tab === 'registrations' && canManageRegistrations ? (
-        <ClassRegistrationGrid classId={classId} />
+        <SubjectRoster classId={classId} />
       ) : null}
       {tab === 'exams' ? (
         <EmptyState

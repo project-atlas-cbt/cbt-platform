@@ -59,6 +59,7 @@ One important principle: permissions should not be based on role alone. They sho
 | Assign HOD → department         | Full           | Full              | Full       | —                | —                         | —                     |
 | Assign student → class          | Full           | Full              | Full       | —                | —                         | —                     |
 | Move student between classes    | Full           | Full              | Full       | Request/approve  | —                         | —                     |
+| Set subject registrations       | Full           | Full              | Full       | —                | Assigned electives¹       | —                     |
 | View assignments                | Full           | Full              | Full       | Department       | Own                       | Own                   |
 | **Question Bank**               |                |                   |            |                  |                           |                       |
 | View question bank              | Full           | View              | View       | Department       | Assigned subjects/classes | —                     |
@@ -158,6 +159,8 @@ One important principle: permissions should not be based on role alone. They sho
 | Change own profile              | ✓              | ✓                 | ✓          | ✓                | ✓                         | ✓                     |
 | Force password reset            | Full           | Full              | Full       | Limited          | —                         | —                     |
 | Deactivate account              | Full           | Full              | Full       | —                | —                         | —                     |
+
+¹ ADR-0038 amendment (2026-10-09): a Teacher may set registrations for the electives they teach in a class, and for every elective of a class they are form teacher of. "Assign teacher → class" is how School Admin or Moderator makes a teacher a class's form teacher. Compulsory subjects stay with School Admin and Moderator.
 
 ---
 
