@@ -22,6 +22,17 @@
  *    foreground — see lib/theme/tokens.ts's doc comment.
  */
 @theme {
+  /* The loading splash's indeterminate bar (components/shell/loading-splash.tsx). */
+  --animate-splash-slide: splash-slide 1.3s ease-in-out infinite;
+  @keyframes splash-slide {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(250%);
+    }
+  }
+
   --color-brand-primary: var(--brand-primary);
   --color-brand-primary-hover: var(--brand-primary-hover);
   --color-brand-primary-active: var(--brand-primary-active);

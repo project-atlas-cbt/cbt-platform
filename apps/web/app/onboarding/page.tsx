@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingSplash } from '@/components/shell/loading-splash';
 import { useOnboardingStatus } from '@/lib/onboarding/queries';
 
 /**
@@ -21,9 +21,5 @@ export default function OnboardingEntryPage() {
     router.replace(`/onboarding/${data.currentStep}`);
   }, [isPending, data, router]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Skeleton className="h-8 w-48" />
-    </div>
-  );
+  return <LoadingSplash />;
 }

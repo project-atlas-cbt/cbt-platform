@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingSplash } from '@/components/shell/loading-splash';
 import { usePlatformAuth } from '@/lib/auth';
 
 /**
@@ -25,11 +25,7 @@ export function PlatformRouteGuard({ children }: { children: ReactNode }) {
   }, [status, router]);
 
   if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Skeleton className="h-8 w-48" />
-      </div>
-    );
+    return <LoadingSplash />;
   }
 
   // A redirect from the effect above is in flight — render nothing rather
