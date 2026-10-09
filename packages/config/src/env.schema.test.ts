@@ -24,6 +24,14 @@ describe('loadEnv', () => {
     expect(env.DEFAULT_SCHOOL_TIMEZONE).toBe('Africa/Lagos');
   });
 
+  it('treats an empty SENTRY_DSN as unset and still rejects a malformed one', () => {
+    expect(loadEnv({ ...validEnv, SENTRY_DSN: '' }).SENTRY_DSN).toBeUndefined();
+    expect(loadEnv({ ...validEnv, SENTRY_DSN: 'https://k@o1.ingest.sentry.io/2' }).SENTRY_DSN).toBe(
+      'https://k@o1.ingest.sentry.io/2',
+    );
+    expect(() => loadEnv({ ...validEnv, SENTRY_DSN: 'not a url' })).toThrow(EnvValidationError);
+  });
+
   it('fails fast when PRODUCT_NAME is missing', () => {
     const { PRODUCT_NAME: _omit, ...rest } = validEnv;
     expect(() => loadEnv(rest)).toThrow(EnvValidationError);

@@ -41,6 +41,8 @@ x-app: &app
     PLATFORM_ROOT_DOMAIN: ${ROOT_DOMAIN}
     COOKIE_DOMAIN: ${ROOT_DOMAIN}
     WEB_ORIGIN: https://admin.${ROOT_DOMAIN}
+    # Server-side error reporting; empty (the default) turns Sentry off.
+    SENTRY_DSN: ${SENTRY_DSN:-}
   volumes:
     - ./certs/ca.crt:/certs/ca.crt:ro
   depends_on: &app-deps
