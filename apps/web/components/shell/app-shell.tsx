@@ -1,12 +1,15 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import type { Role } from '@atlas/domain';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { PlatformRouteGuard } from '@/components/auth/platform-route-guard';
 import { MfaEnrolmentGate } from '@/components/platform/security/mfa-enrolment-gate';
 import { PasswordChangeGate } from '@/components/platform/security/password-change-gate';
+import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { useAuth, usePlatformAuth } from '@/lib/auth';
 import { useNavigation, usePlatformNavigation, type NavigationResult } from '@/lib/nav';
@@ -18,8 +21,10 @@ import { ProfileMenu, type ProfileMenuIdentity } from './profile-menu';
 import { OfflineIndicator } from './offline-indicator';
 import { GlobalSearch } from '@/components/reports/search';
 import { ProductMark } from './product-mark';
+import { useSidebarCollapsed, useWideScreen } from './sidebar-state';
 
 const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
+const SIDEBAR_ID = 'workspace-sidebar';
 
 export interface AppShellProps {
   role: Role;
@@ -61,6 +66,14 @@ export interface AppShellProps {
  * Omitted entirely for the platform variant instead — the same "don't ship
  * a control that can't work for this session" doctrine `ProfileMenu`
  * already applies to self-service password change.
+ *
+ * The header stays fixed at the top while the page scrolls, and the sidebar
+ * stays beside it with its own scroll. On a wide screen the sidebar can be
+ * hidden (remembered per browser, `sidebar-state.ts`); on a narrow one it
+ * is a drawer the menu button opens over the page. The page itself still
+ * scrolls the window, so navigation's scroll-to-top and `position: sticky`
+ * page parts (the pagination bar in `DataTable`) keep working; those read
+ * `--shell-top` to sit below the header.
  */
 function ShellChrome({
   role,
@@ -81,35 +94,119 @@ function ShellChrome({
   showNotifications: boolean;
   children: ReactNode;
 }) {
+  const pathname = usePathname();
+  const wide = useWideScreen();
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
+  // The narrow-screen drawer belongs to the page it was opened on, so it is
+  // closed once a link in it has been followed.
+  const [drawerPath, setDrawerPath] = useState<string | null>(null);
+  const drawerOpen = drawerPath === pathname;
+  const setDrawerOpen = (open: boolean) => setDrawerPath(open ? pathname : null);
+  const chromeTop = useRef<HTMLDivElement>(null);
+  const [topHeight, setTopHeight] = useState(0);
+
+  // The header (and the offline banner under it) stays put while the page
+  // scrolls; the sidebar and sticky page parts sit just below it, so they
+  // read its real height rather than a guessed constant.
+  useEffect(() => {
+    const element = chromeTop.current;
+    if (!element) return;
+    const measure = () => setTopHeight(element.offsetHeight);
+    measure();
+    if (typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const sidebarOpen = wide ? !collapsed : drawerOpen;
+  function toggleSidebar() {
+    if (wide) setCollapsed(!collapsed);
+    else setDrawerOpen(!drawerOpen);
+  }
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <ProductMark className="size-8 shrink-0" />
-          <span className="hidden shrink-0 text-sm font-semibold text-text-primary md:inline">
-            {productName}
-          </span>
-          <ContextSwitcher
-            currentRole={role}
-            {...(schoolName ? { schoolName } : {})}
-            roles={roles}
-          />
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <GlobalSearch role={role} />
-          {showNotifications ? <NotificationPanel /> : null}
-          <ProfileMenu identity={identity} onLogout={onLogout} />
-        </div>
-      </header>
-      <OfflineIndicator />
+    <div
+      className="flex min-h-screen flex-col"
+      style={{ '--shell-top': `${topHeight}px` } as CSSProperties}
+    >
+      <div ref={chromeTop} className="sticky top-0 z-30">
+        <header className="flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="-ml-1 shrink-0"
+              onClick={toggleSidebar}
+              aria-expanded={sidebarOpen}
+              aria-controls={wide ? SIDEBAR_ID : undefined}
+              aria-label={sidebarOpen ? 'Hide navigation' : 'Show navigation'}
+              title={sidebarOpen ? 'Hide navigation' : 'Show navigation'}
+            >
+              {wide ? (
+                sidebarOpen ? (
+                  <PanelLeftClose aria-hidden />
+                ) : (
+                  <PanelLeftOpen aria-hidden />
+                )
+              ) : (
+                <Menu aria-hidden />
+              )}
+            </Button>
+            <ProductMark className="size-8 shrink-0" />
+            <span className="hidden shrink-0 text-sm font-semibold text-text-primary md:inline">
+              {productName}
+            </span>
+            <ContextSwitcher
+              currentRole={role}
+              {...(schoolName ? { schoolName } : {})}
+              roles={roles}
+            />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <GlobalSearch role={role} />
+            {showNotifications ? <NotificationPanel /> : null}
+            <ProfileMenu identity={identity} onLogout={onLogout} />
+          </div>
+        </header>
+        <OfflineIndicator />
+      </div>
       <div className="flex flex-1">
-        <aside className="w-56 shrink-0 border-r border-border bg-surface">
-          <RoleNavigation role={role} navigation={navigation} />
-        </aside>
-        <main className="min-w-0 flex-1 p-6">
+        {wide && !collapsed ? (
+          <aside
+            id={SIDEBAR_ID}
+            className="sticky top-(--shell-top) h-[calc(100dvh-var(--shell-top))] w-56 shrink-0 overflow-y-auto border-r border-border bg-surface"
+          >
+            <RoleNavigation role={role} navigation={navigation} />
+          </aside>
+        ) : null}
+        <main className="min-w-0 flex-1 p-4 md:p-6">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>
+      {wide ? null : (
+        <DialogPrimitive.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40" />
+            <DialogPrimitive.Content
+              aria-describedby={undefined}
+              className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-y-auto border-r border-border bg-surface shadow-lg focus-visible:outline-none"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+                <DialogPrimitive.Title className="text-sm font-semibold text-text-primary">
+                  Menu
+                </DialogPrimitive.Title>
+                <DialogPrimitive.Close asChild>
+                  <Button variant="ghost" size="icon" aria-label="Close navigation">
+                    <X aria-hidden />
+                  </Button>
+                </DialogPrimitive.Close>
+              </div>
+              <RoleNavigation role={role} navigation={navigation} />
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+      )}
     </div>
   );
 }

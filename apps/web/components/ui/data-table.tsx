@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react';
+'use client';
+
+import { useRef, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import {
   Table,
@@ -74,9 +76,22 @@ export function DataTable<TRow>({
   caption,
 }: DataTableProps<TRow>) {
   const showEmpty = !isLoading && rows.length === 0;
+  const container = useRef<HTMLDivElement>(null);
+
+  // Previous/Next can be pressed from anywhere in a long page now, so a new
+  // page is brought to its first row rather than opening mid-list.
+  function goToPage(next: number) {
+    onPageChange?.(next);
+    const element = container.current;
+    if (!element) return;
+    const headerHeight = parseFloat(getComputedStyle(element).getPropertyValue('--shell-top')) || 0;
+    if (element.getBoundingClientRect().top < headerHeight) {
+      element.scrollIntoView({ block: 'start' });
+    }
+  }
 
   return (
-    <div className="space-y-3">
+    <div ref={container} className="scroll-mt-[calc(var(--shell-top,0px)+1rem)] space-y-3">
       <Table>
         {caption ? <caption className="sr-only">{caption}</caption> : null}
         <TableHeader>
@@ -146,7 +161,9 @@ export function DataTable<TRow>({
         : null}
 
       {!isLoading && !showEmpty && pageCount && pageCount > 1 && onPageChange ? (
-        <div className="flex items-center justify-between text-sm text-text-secondary">
+        // Sticky to the bottom of the window while the table is in view, so
+        // Previous/Next never need a scroll past every row to reach.
+        <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between border-t border-border bg-surface px-1 py-2 text-sm text-text-secondary">
           <span>
             Page {page ?? 1} of {pageCount}
           </span>
@@ -155,7 +172,7 @@ export function DataTable<TRow>({
               variant="secondary"
               size="sm"
               disabled={(page ?? 1) <= 1}
-              onClick={() => onPageChange((page ?? 1) - 1)}
+              onClick={() => goToPage((page ?? 1) - 1)}
             >
               Previous
             </Button>
@@ -163,7 +180,7 @@ export function DataTable<TRow>({
               variant="secondary"
               size="sm"
               disabled={(page ?? 1) >= pageCount}
-              onClick={() => onPageChange((page ?? 1) + 1)}
+              onClick={() => goToPage((page ?? 1) + 1)}
             >
               Next
             </Button>

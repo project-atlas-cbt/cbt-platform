@@ -98,6 +98,29 @@ describe('AppShell', () => {
 
     consoleSpy.mockRestore();
   });
+
+  it('hides and shows the sidebar, remembering the choice in this browser', async () => {
+    window.localStorage.removeItem('atlas.sidebar');
+    mockUseAuth.mockReturnValue({ status: 'authenticated', me: ME } as never);
+    const { unmount } = renderShell(<div>teacher content</div>);
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    expect(screen.queryByRole('navigation', { name: 'Workspace navigation' })).toBeNull();
+    expect(screen.getByText('teacher content')).toBeInTheDocument();
+    expect(window.localStorage.getItem('atlas.sidebar')).toBe('collapsed');
+
+    // A later visit starts with it hidden.
+    unmount();
+    renderShell(<div>teacher content</div>);
+    const show = screen.getByRole('button', { name: 'Show navigation' });
+    expect(show).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(show);
+    expect(screen.getByRole('navigation', { name: 'Workspace navigation' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('atlas.sidebar')).toBe('open');
+  });
 });
 
 /**

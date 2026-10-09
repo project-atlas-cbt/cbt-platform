@@ -2,6 +2,20 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-09 — Fixed header, collapsible sidebar, sticky pagination
+
+UI refinements Haneef asked for (2026-10-09), in every staff and student workspace shell:
+
+- The top bar stays fixed while the page scrolls; the offline banner sits inside it.
+- The sidebar stays beside the page with its own scroll. A button at the left of the top bar hides
+  or shows it, remembered per browser (`components/shell/sidebar-state.ts`). Below 768px wide it is
+  a drawer over the page that closes after a link is followed.
+- `DataTable`'s Previous/Next bar sticks to the bottom of the window while the table is in view,
+  so every paginated list (students, teachers, questions, exams, results, imports, platform
+  schools) gets it. Moving page from mid-list brings the new page's first row into view.
+- The page still scrolls the window, so navigation's scroll-to-top is unchanged. The exam runtime
+  has no shell and is unaffected.
+
 ### 2026-10-09 — Standard setup and School Admin review fallback (ADR-0038, PR 3 of 3)
 
 Schools can now start from the standard structure a vice-principal described (Haneef, 2026-10-09):
