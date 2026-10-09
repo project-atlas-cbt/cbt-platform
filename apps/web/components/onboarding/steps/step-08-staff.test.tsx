@@ -63,12 +63,13 @@ describe('Step08Staff', () => {
       screen.getByRole('heading', { name: 'Teachers' }).closest('section') as HTMLElement,
     );
     await userEvent.type(teacherSection.getByLabelText(/first name/i), 'Chidi');
-    await userEvent.type(teacherSection.getByLabelText(/last name/i), 'Eze');
+    await userEvent.type(teacherSection.getByLabelText(/surname/i), 'Eze');
     await userEvent.type(teacherSection.getByLabelText(/email/i), 'chidi@example.com');
     await userEvent.type(teacherSection.getByLabelText(/staff id/i), 'STF001');
     await userEvent.click(teacherSection.getByRole('button', { name: /add teacher/i }));
     expect(createTeacherMutateAsync).toHaveBeenCalledWith({
       firstName: 'Chidi',
+      middleName: '',
       lastName: 'Eze',
       email: 'chidi@example.com',
       staffId: 'STF001',

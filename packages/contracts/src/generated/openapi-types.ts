@@ -6335,8 +6335,10 @@ export interface components {
             userId: string;
             studentProfileId: string;
             firstName: string;
+            middleName: string | null;
             lastName: string;
             displayName: string;
+            formalName: string;
             studentId: string;
             admissionNumber: string | null;
             loginIdentifier: string;
@@ -6368,6 +6370,7 @@ export interface components {
         CreateStudentDto: {
             firstName: string;
             lastName: string;
+            middleName?: string;
             /** @example ST001 */
             studentId: string;
             admissionNumber?: string;
@@ -6377,6 +6380,7 @@ export interface components {
         UpdateStudentDto: {
             firstName?: string;
             lastName?: string;
+            middleName?: string;
             admissionNumber?: string;
         };
         CredentialResetResponseDto: {
@@ -6389,8 +6393,10 @@ export interface components {
             userId: string;
             teacherProfileId: string;
             firstName: string;
+            middleName: string | null;
             lastName: string;
             displayName: string;
+            formalName: string;
             email: string | null;
             staffId: string;
             loginIdentifier: string;
@@ -6409,6 +6415,7 @@ export interface components {
         CreateTeacherDto: {
             firstName: string;
             lastName: string;
+            middleName?: string;
             email: string;
             /** @example STF001 */
             staffId: string;
@@ -6416,6 +6423,7 @@ export interface components {
         UpdateTeacherDto: {
             firstName?: string;
             lastName?: string;
+            middleName?: string;
             email?: string;
         };
         HodResponseDto: {
@@ -6423,8 +6431,10 @@ export interface components {
             userId: string;
             teacherProfileId: string;
             firstName: string;
+            middleName: string | null;
             lastName: string;
             displayName: string;
+            formalName: string;
             staffId: string;
             departmentId: string | null;
             departmentName: string | null;
@@ -6441,6 +6451,7 @@ export interface components {
         UpdateHodDto: {
             firstName?: string;
             lastName?: string;
+            middleName?: string;
             email?: string;
         };
         ReassignHodDepartmentDto: {
@@ -6451,8 +6462,10 @@ export interface components {
             membershipId: string;
             userId: string;
             firstName: string;
+            middleName: string | null;
             lastName: string;
             displayName: string;
+            formalName: string;
             email: string | null;
             loginIdentifier: string;
             /** @enum {string} */
@@ -6467,12 +6480,14 @@ export interface components {
         CreateModeratorDto: {
             firstName: string;
             lastName: string;
+            middleName?: string;
             email: string;
             loginIdentifier: string;
         };
         UpdateModeratorDto: {
             firstName?: string;
             lastName?: string;
+            middleName?: string;
             email?: string;
         };
         RequestImportUploadDto: {

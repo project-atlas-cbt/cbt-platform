@@ -197,7 +197,7 @@ describe('Rollover Workflow Integration', () => {
     const { unmount: unmountDecisions } = render(
       <StudentDecisionsScreen planId="plan-101" basePath="/school/academics" />,
     );
-    expect(screen.getByText('Ahmed Ibrahim')).toBeInTheDocument();
+    expect(screen.getByText('Ibrahim Ahmed')).toBeInTheDocument();
     const overrideBtn = screen.getByRole('button', { name: /Override/i });
     await user.click(overrideBtn);
 

@@ -25,11 +25,19 @@ export class HodResponseDto {
   @ApiProperty({ type: String })
   firstName!: string;
 
+  @ApiProperty({ type: String, nullable: true })
+  middleName!: string | null;
+
   @ApiProperty({ type: String })
   lastName!: string;
 
+  /** The natural "First Middle Surname" order. */
   @ApiProperty({ type: String })
   displayName!: string;
+
+  /** "Surname First Middle", the order every list shows (2026-10-09). */
+  @ApiProperty({ type: String })
+  formalName!: string;
 
   @ApiProperty({ type: String })
   staffId!: string;
@@ -82,6 +90,13 @@ export class UpdateHodDto {
   @IsString()
   @MaxLength(64)
   lastName?: string;
+
+  /** Optional third name; an empty string clears it. */
+  @ApiPropertyOptional({ type: String, maxLength: 64 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  middleName?: string;
 
   @ApiPropertyOptional({ type: String, maxLength: 320 })
   @IsOptional()

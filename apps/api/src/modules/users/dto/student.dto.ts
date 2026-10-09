@@ -19,6 +19,13 @@ export class CreateStudentDto {
   @MaxLength(64)
   lastName!: string;
 
+  /** Optional third name (owner decision 2026-10-09). */
+  @ApiPropertyOptional({ type: String, maxLength: 64 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  middleName?: string;
+
   /** Doubles as `SchoolMembership.loginIdentifier` (ADR-0005) — matches
    * that field's own doc comment example ("school-issued student ID like
    * 'ST001'"), so a Moderator enters one value, not two. */
@@ -52,6 +59,13 @@ export class UpdateStudentDto {
   @MaxLength(64)
   lastName?: string;
 
+  /** Optional third name; an empty string clears it. */
+  @ApiPropertyOptional({ type: String, maxLength: 64 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  middleName?: string;
+
   @ApiPropertyOptional({ type: String, maxLength: 32 })
   @IsOptional()
   @IsString()
@@ -72,11 +86,19 @@ export class StudentResponseDto {
   @ApiProperty({ type: String })
   firstName!: string;
 
+  @ApiProperty({ type: String, nullable: true })
+  middleName!: string | null;
+
   @ApiProperty({ type: String })
   lastName!: string;
 
+  /** The natural "First Middle Surname" order. */
   @ApiProperty({ type: String })
   displayName!: string;
+
+  /** "Surname First Middle", the order every list shows (2026-10-09). */
+  @ApiProperty({ type: String })
+  formalName!: string;
 
   @ApiProperty({ type: String })
   studentId!: string;

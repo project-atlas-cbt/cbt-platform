@@ -1,11 +1,12 @@
 import type { Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { naturalName, normaliseMiddleName, type Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { runUniqueGuarded } from '../academics/prisma-error.util.js';
 
 export interface CreatePersonInput {
   schoolId: string;
   firstName: string;
+  middleName?: string | null | undefined;
   lastName: string;
   /** ADR-0019: staff need an address to send invitations/resets to;
    * students never have one by design. */
@@ -45,9 +46,7 @@ export async function createPersonMembership(
 ): Promise<CreatedPerson> {
   const user = await tx.user.create({
     data: {
-      firstName: input.firstName,
-      lastName: input.lastName,
-      displayName: `${input.firstName} ${input.lastName}`,
+      ...personNameData(input),
       status: 'INVITED',
       ...(input.email !== undefined && { email: input.email }),
     },
@@ -84,10 +83,87 @@ export function notFound(entityLabel: string): never {
 
 /**
  * Splits a people-directory search into words. Each word must match one of
- * the person's identifier, first name or last name, so a full name such as
+ * the person's identifier, first, middle or last name, so a full name such as
  * "Adaeze Okafor" (or "Okafor Adaeze") finds the person even though neither
  * name column contains the whole phrase.
  */
 export function searchWords(q: string | undefined): string[] {
   return q?.trim().split(/\s+/).filter(Boolean) ?? [];
 }
+
+/**
+ * The four name columns written together, so `displayName` always matches
+ * the parts it is built from ("First Middle Surname"; owner decision
+ * 2026-10-09). A blank middle name is stored as null.
+ */
+export function personNameData(name: {
+  firstName: string;
+  middleName?: string | null | undefined;
+  lastName: string;
+}): { firstName: string; middleName: string | null; lastName: string; displayName: string } {
+  const middleName = normaliseMiddleName(name.middleName);
+  return {
+    firstName: name.firstName,
+    middleName,
+    lastName: name.lastName,
+    displayName: naturalName({ ...name, middleName }),
+  };
+}
+
+/** Applies a partial edit (`undefined` = unchanged) to the stored name. */
+export function mergeNameEdit(
+  existing: { firstName: string; middleName: string | null; lastName: string },
+  edit: {
+    firstName?: string | undefined;
+    middleName?: string | undefined;
+    lastName?: string | undefined;
+  },
+): ReturnType<typeof personNameData> | null {
+  if (
+    edit.firstName === undefined &&
+    edit.middleName === undefined &&
+    edit.lastName === undefined
+  ) {
+    return null;
+  }
+  return personNameData({
+    firstName: edit.firstName ?? existing.firstName,
+    middleName: edit.middleName !== undefined ? edit.middleName : existing.middleName,
+    lastName: edit.lastName ?? existing.lastName,
+  });
+}
+
+/**
+ * One page of a people list in an order the database cannot produce
+ * (owner decision 2026-10-09): names A to Z ignoring capitals and accents,
+ * identifiers by number value (`@atlas/domain` names.ts). The caller loads
+ * the sort keys of every matching row (a school's people, a few thousand at
+ * most), this sorts them and returns the ids of the requested page, and the
+ * caller then loads those rows in full.
+ */
+export function pageIdsInOrder<T extends { id: string }>(
+  keys: T[],
+  compare: (a: T, b: T) => number,
+  sortDir: 'asc' | 'desc',
+  page: number,
+  pageSize: number,
+): string[] {
+  const sign = sortDir === 'desc' ? -1 : 1;
+  return [...keys]
+    .sort((a, b) => sign * compare(a, b) || a.id.localeCompare(b.id))
+    .slice((page - 1) * pageSize, page * pageSize)
+    .map((key) => key.id);
+}
+
+/** Puts rows loaded by `id IN (...)` back into the page's order. */
+export function inIdOrder<T extends { id: string }>(ids: string[], rows: T[]): T[] {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids.flatMap((id) => byId.get(id) ?? []);
+}
+
+/** The name parts a people list sorts on. */
+export const NAME_SORT_SELECT = {
+  firstName: true,
+  middleName: true,
+  lastName: true,
+} as const;

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { formalName, sortByPersonName, type Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { runUniqueGuarded } from './prisma-error.util.js';
@@ -223,14 +223,17 @@ export class StudentEnrollmentService {
           studentProfile: { include: { membership: { include: { user: true } } } },
           stream: { select: { name: true } },
         },
-        orderBy: { studentProfile: { studentId: 'asc' } },
       }),
     );
+    sortByPersonName(enrollments, (e) => ({
+      ...e.studentProfile.membership.user,
+      identifier: e.studentProfile.studentId,
+    }));
     return enrollments.map((enrollment) => ({
       enrollmentId: enrollment.id,
       studentProfileId: enrollment.studentProfileId,
       studentId: enrollment.studentProfile.studentId,
-      displayName: enrollment.studentProfile.membership.user.displayName,
+      displayName: formalName(enrollment.studentProfile.membership.user),
       startDate: enrollment.startDate.toISOString().slice(0, 10),
       streamId: enrollment.streamId,
       streamName: enrollment.stream?.name ?? null,

@@ -47,6 +47,7 @@ export const DATA_SUBJECT_REDACTED_ACTION = 'DATA_SUBJECT_REDACTED';
 
 export const REDACTED_NAME = {
   firstName: 'Redacted',
+  middleName: null,
   lastName: 'Person',
   displayName: 'Redacted person',
 };
@@ -144,7 +145,15 @@ export async function planRedaction(params: RedactSubjectParams): Promise<Redact
       userFields:
         otherSchools > 0 || alreadyRedacted
           ? []
-          : ['firstName', 'lastName', 'displayName', 'email', 'passwordHash', 'status'],
+          : [
+              'firstName',
+              'middleName',
+              'lastName',
+              'displayName',
+              'email',
+              'passwordHash',
+              'status',
+            ],
       ...(otherSchools > 0 && {
         userSkippedReason: `The person also belongs to ${otherSchools} other school(s); only this school's identifiers are redacted.`,
       }),

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { compareText, comparePersonNames, formalName, type Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { runUniqueGuarded } from '../academics/prisma-error.util.js';
 import { AuditService } from '../operations/audit-event.service.js';
@@ -15,7 +15,15 @@ import type {
   StudentResponseDto,
   UpdateStudentDto,
 } from './dto/student.dto.js';
-import { createPersonMembership, notFound, searchWords } from './person.util.js';
+import {
+  NAME_SORT_SELECT,
+  createPersonMembership,
+  inIdOrder,
+  mergeNameEdit,
+  notFound,
+  pageIdsInOrder,
+  searchWords,
+} from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -31,7 +39,13 @@ type StudentRow = {
     id: string;
     userId: string;
     loginIdentifier: string;
-    user: { firstName: string; lastName: string; displayName: string; status: string };
+    user: {
+      firstName: string;
+      middleName: string | null;
+      lastName: string;
+      displayName: string;
+      status: string;
+    };
   };
 };
 
@@ -50,8 +64,10 @@ function toResponseDto(row: StudentRow, enrollment?: CurrentEnrollment): Student
     userId: row.membership.userId,
     studentProfileId: row.id,
     firstName: row.membership.user.firstName,
+    middleName: row.membership.user.middleName,
     lastName: row.membership.user.lastName,
     displayName: row.membership.user.displayName,
+    formalName: formalName(row.membership.user),
     studentId: row.studentId,
     admissionNumber: row.admissionNumber,
     loginIdentifier: row.membership.loginIdentifier,
@@ -124,7 +140,8 @@ export class StudentService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
-    const sortBy = query.sortBy ?? 'studentId';
+    // Owner decision 2026-10-09: A to Z by surname unless Student ID is chosen.
+    const sortBy = query.sortBy ?? 'lastName';
     const words = searchWords(query.q);
 
     const where: Prisma.StudentProfileWhereInput = {
@@ -134,6 +151,7 @@ export class StudentService {
           OR: [
             { studentId: { contains: word, mode: 'insensitive' } },
             { membership: { user: { firstName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { middleName: { contains: word, mode: 'insensitive' } } } },
             { membership: { user: { lastName: { contains: word, mode: 'insensitive' } } } },
           ],
         })),
@@ -142,28 +160,40 @@ export class StudentService {
         enrollments: { some: { classId: query.classId, status: 'ACTIVE' } },
       }),
     };
-    const orderBy: Prisma.StudentProfileOrderByWithRelationInput =
-      sortBy === 'lastName'
-        ? { membership: { user: { lastName: sortDir } } }
-        : { studentId: sortDir };
 
     const { rows, total } = await withTenant(prisma, schoolId, async (tx) => {
-      const [rows, total] = await Promise.all([
-        tx.studentProfile.findMany({
+      const keys = (
+        await tx.studentProfile.findMany({
           where,
-          include: INCLUDE,
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-        tx.studentProfile.count({ where }),
-      ]);
+          select: {
+            id: true,
+            studentId: true,
+            membership: { select: { user: { select: NAME_SORT_SELECT } } },
+          },
+        })
+      ).map((key) => ({ id: key.id, identifier: key.studentId, ...key.membership.user }));
+      const ids = pageIdsInOrder(
+        keys,
+        sortBy === 'lastName'
+          ? comparePersonNames
+          : (a, b) => compareText(a.identifier, b.identifier),
+        sortDir,
+        page,
+        pageSize,
+      );
+      const rows = inIdOrder(
+        ids,
+        await tx.studentProfile.findMany({ where: { id: { in: ids } }, include: INCLUDE }),
+      );
       const enrollmentMap = await resolveCurrentEnrollments(
         tx,
         schoolId,
         rows.map((row) => row.id),
       );
-      return { rows: rows.map((row) => toResponseDto(row, enrollmentMap.get(row.id))), total };
+      return {
+        rows: rows.map((row) => toResponseDto(row, enrollmentMap.get(row.id))),
+        total: keys.length,
+      };
     });
 
     return { students: rows, total, page, pageSize };
@@ -225,6 +255,7 @@ export class StudentService {
       const person = await createPersonMembership(tx, {
         schoolId,
         firstName: dto.firstName,
+        middleName: dto.middleName,
         lastName: dto.lastName,
         loginIdentifier: dto.studentId,
         role: 'STUDENT',
@@ -271,13 +302,9 @@ export class StudentService {
       });
       if (!existing) return notFound('Student');
 
-      if (dto.firstName !== undefined || dto.lastName !== undefined) {
-        const firstName = dto.firstName ?? existing.membership.user.firstName;
-        const lastName = dto.lastName ?? existing.membership.user.lastName;
-        await tx.user.update({
-          where: { id: existing.membership.userId },
-          data: { firstName, lastName, displayName: `${firstName} ${lastName}` },
-        });
+      const name = mergeNameEdit(existing.membership.user, dto);
+      if (name) {
+        await tx.user.update({ where: { id: existing.membership.userId }, data: name });
       }
       if (dto.admissionNumber !== undefined) {
         await tx.studentProfile.update({
@@ -410,8 +437,13 @@ export class StudentService {
           },
         },
         include: INCLUDE,
-        orderBy: { membership: { user: { lastName: 'asc' } } },
       });
+      rows.sort((a, b) =>
+        comparePersonNames(
+          { ...a.membership.user, identifier: a.studentId },
+          { ...b.membership.user, identifier: b.studentId },
+        ),
+      );
       const enrollmentMap = await resolveCurrentEnrollments(
         tx,
         schoolId,

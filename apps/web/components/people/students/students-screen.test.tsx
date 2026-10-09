@@ -62,6 +62,7 @@ const STUDENTS = [
   {
     studentProfileId: 'sp1',
     displayName: 'Ada Okoye',
+    formalName: 'Okoye Ada',
     studentId: 'ST001',
     currentClassName: 'SS2A',
     streamName: 'Sciences',
@@ -100,7 +101,7 @@ describe('StudentsScreen', () => {
   it('renders real rows with class, stream, and status', () => {
     mockUseStudentsPaginated.mockReturnValue(result(STUDENTS) as never);
     renderWithClient(<StudentsScreen basePath="/school/people" />);
-    expect(screen.getByRole('link', { name: 'Ada Okoye' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Okoye Ada' })).toHaveAttribute(
       'href',
       '/school/people/students/sp1',
     );

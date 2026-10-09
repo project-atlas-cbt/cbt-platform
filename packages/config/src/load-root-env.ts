@@ -20,7 +20,9 @@ export function loadRootEnv(startDir: string = process.cwd()): void {
     if (existsSync(join(dir, 'pnpm-workspace.yaml'))) {
       const envPath = join(dir, '.env');
       if (existsSync(envPath)) {
-        dotenvConfig({ path: envPath });
+        // quiet: dotenv's banner goes to stdout, which an operator CLI's
+        // output (ops:fix-name-order's review CSV) must not carry.
+        dotenvConfig({ path: envPath, quiet: true });
       }
       composeConnectionUrls();
       return;

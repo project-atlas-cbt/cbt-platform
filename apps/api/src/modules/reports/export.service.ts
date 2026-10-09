@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import { EXPORT_ARTEFACT_TTL_MS, type Role } from '@atlas/domain';
+import {
+  EXPORT_ARTEFACT_TTL_MS,
+  compareText,
+  comparePersonNames,
+  formalName,
+  sortByPersonName,
+  type Role,
+} from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import type { AuthenticatedUser } from '../identity/auth.guard.js';
@@ -405,15 +412,18 @@ export class ExportService {
           },
           include: { membership: { include: { user: true } } },
         });
+        // Owner decision 2026-10-09: A to Z by surname, register-order columns.
+        sortByPersonName(rows, (r) => ({ ...r.membership.user, identifier: r.studentId }));
         return {
           rows: rows.length,
           csv: csv([
-            ['Login ID', 'Admission Number', 'First Name', 'Last Name', 'Email'],
+            ['Login ID', 'Admission Number', 'Surname', 'First Name', 'Middle Name', 'Email'],
             ...rows.map((r) => [
               r.membership.loginIdentifier,
               r.admissionNumber,
-              r.membership.user.firstName,
               r.membership.user.lastName,
+              r.membership.user.firstName,
+              r.membership.user.middleName,
               r.membership.user.email,
             ]),
           ]),
@@ -427,14 +437,16 @@ export class ExportService {
             : {},
           include: { membership: { include: { user: true } } },
         });
+        sortByPersonName(rows, (r) => ({ ...r.membership.user, identifier: r.staffId }));
         return {
           rows: rows.length,
           csv: csv([
-            ['Staff ID', 'First Name', 'Last Name', 'Email'],
+            ['Staff ID', 'Surname', 'First Name', 'Middle Name', 'Email'],
             ...rows.map((r) => [
               r.staffId,
-              r.membership.user.firstName,
               r.membership.user.lastName,
+              r.membership.user.firstName,
+              r.membership.user.middleName,
               r.membership.user.email,
             ]),
           ]),
@@ -537,6 +549,10 @@ export class ExportService {
               studentProfile: r.studentProfile,
             })),
         ];
+        sortByPersonName(source, (entry) => ({
+          ...entry.studentProfile.membership.user,
+          identifier: entry.studentProfile.studentId,
+        }));
         const output = source.map((entry) => {
           const result = resultByParticipant.get(key(entry.studentProfileId, entry.examSessionId));
           if (result) {
@@ -546,7 +562,7 @@ export class ExportService {
             return [
               result.exam.title,
               result.studentProfile.studentId,
-              result.studentProfile.membership.user.displayName,
+              formalName(result.studentProfile.membership.user),
               scored ? `${result.earnedMarks}/${result.totalMarks}` : '',
               scored ? result.percentage : '',
               scored ? (result.grade ?? '') : '',
@@ -568,7 +584,7 @@ export class ExportService {
           return [
             exam.title,
             entry.studentProfile.studentId,
-            entry.studentProfile.membership.user.displayName,
+            formalName(entry.studentProfile.membership.user),
             '',
             '',
             '',
@@ -603,13 +619,21 @@ export class ExportService {
             studentProfile: { include: { membership: { include: { user: true } } } },
           },
         });
+        rows.sort(
+          (a, b) =>
+            compareText(a.exam.title, b.exam.title) ||
+            comparePersonNames(
+              { ...a.studentProfile.membership.user, identifier: a.studentProfile.studentId },
+              { ...b.studentProfile.membership.user, identifier: b.studentProfile.studentId },
+            ),
+        );
         return {
           rows: rows.length,
           csv: csv([
             ['Exam', 'Student', 'Session Type', 'Status', 'Marked At'],
             ...rows.map((r) => [
               r.exam.title,
-              r.studentProfile.membership.user.displayName,
+              formalName(r.studentProfile.membership.user),
               r.examSession.sessionType,
               r.status,
               r.markedAt.toISOString(),

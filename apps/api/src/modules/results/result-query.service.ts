@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, prisma, withTenant } from '@atlas/db';
-import { rollUpParticipation, type AttemptSnapshotDocumentV1 } from '@atlas/domain';
+import {
+  comparePersonNames,
+  rollUpParticipation,
+  type AttemptSnapshotDocumentV1,
+} from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
+import { NAME_SORT_SELECT, inIdOrder, pageIdsInOrder, searchWords } from '../users/person.util.js';
 import { resolveMembershipDisplayNames } from '../execution/exam-control-mappers.js';
 import { loadExamOrThrow } from '../exams/exam-mappers.js';
 import {
@@ -56,7 +61,7 @@ export class ResultQueryService {
     // they are ANDed; spread into one object, the search replaced the class.
     // P2-14: a class id belongs to one session, so the enrolment's current
     // status is irrelevant — a rolled-over student still sat in that class.
-    const q = query.q?.trim();
+    const words = searchWords(query.q);
     const where: Prisma.ResultWhereInput = {
       schoolId,
       examId,
@@ -71,48 +76,75 @@ export class ResultQueryService {
               },
             ]
           : []),
-        ...(q
-          ? [
-              {
-                studentProfile: {
-                  OR: [
-                    { studentId: { contains: q, mode: 'insensitive' as const } },
-                    {
-                      membership: {
-                        user: { displayName: { contains: q, mode: 'insensitive' as const } },
-                      },
-                    },
-                  ],
+        // Each word matches the Student ID or one of the names, so
+        // "Ojo Abiola" finds the student in either order.
+        ...words.map((word) => ({
+          studentProfile: {
+            OR: [
+              { studentId: { contains: word, mode: 'insensitive' as const } },
+              ...(['firstName', 'middleName', 'lastName'] as const).map((field) => ({
+                membership: {
+                  user: { [field]: { contains: word, mode: 'insensitive' as const } },
                 },
-              },
-            ]
-          : []),
+              })),
+            ],
+          },
+        })),
       ],
     };
 
     // P2-15: tied percentages are common; `id` makes the order total so
     // pages never repeat or skip a student.
     const primaryOrder: Prisma.ResultOrderByWithRelationInput =
-      sortBy === 'studentName'
-        ? { studentProfile: { membership: { user: { displayName: sortDir } } } }
-        : sortBy === 'percentage'
-          ? { percentage: sortDir }
-          : sortBy === 'earnedMarks'
-            ? { earnedMarks: sortDir }
-            : { finalizedAt: sortDir };
+      sortBy === 'percentage'
+        ? { percentage: sortDir }
+        : sortBy === 'earnedMarks'
+          ? { earnedMarks: sortDir }
+          : { finalizedAt: sortDir };
 
-    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
-      Promise.all([
-        tx.result.findMany({
+    const [rows, total] = await withTenant(prisma, schoolId, async (tx) => {
+      if (sortBy !== 'studentName') {
+        return Promise.all([
+          tx.result.findMany({
+            where,
+            include: resultListInclude(exam.academicSessionId),
+            orderBy: [primaryOrder, { id: sortDir }],
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+          tx.result.count({ where }),
+        ]);
+      }
+      // Owner decision 2026-10-09: A to Z by surname, first name, middle
+      // name, which the database's byte-order collation cannot produce.
+      const keys = (
+        await tx.result.findMany({
           where,
+          select: {
+            id: true,
+            studentProfile: {
+              select: {
+                studentId: true,
+                membership: { select: { user: { select: NAME_SORT_SELECT } } },
+              },
+            },
+          },
+        })
+      ).map((key) => ({
+        id: key.id,
+        identifier: key.studentProfile.studentId,
+        ...key.studentProfile.membership.user,
+      }));
+      const ids = pageIdsInOrder(keys, comparePersonNames, sortDir, page, pageSize);
+      const rows = inIdOrder(
+        ids,
+        await tx.result.findMany({
+          where: { id: { in: ids } },
           include: resultListInclude(exam.academicSessionId),
-          orderBy: [primaryOrder, { id: sortDir }],
-          skip: (page - 1) * pageSize,
-          take: pageSize,
         }),
-        tx.result.count({ where }),
-      ]),
-    );
+      );
+      return [rows, keys.length] as const;
+    });
 
     const publication = await withTenant(prisma, schoolId, (tx) =>
       tx.resultPublication.findUnique({ where: { schoolId_examId: { schoolId, examId } } }),

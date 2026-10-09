@@ -31,6 +31,7 @@ interface ModeratorRow {
   firstName: string;
   lastName: string;
   displayName: string;
+  formalName: string;
   loginIdentifier: string;
   email: string | null;
   userStatus: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
@@ -52,11 +53,12 @@ export function ModeratorsScreen({ basePath }: { basePath: string }) {
   const sortDir = searchParams.get('sortDir');
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
   const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
-  const sort = useMemo<DataTableSort | null>(
+  const sort = useMemo<DataTableSort>(
     () =>
       sortColumn && (sortDir === 'asc' || sortDir === 'desc')
         ? { columnId: sortColumn, direction: sortDir }
-        : null,
+        : // Owner decision 2026-10-09: lists open A to Z by surname.
+          { columnId: 'lastName', direction: 'asc' },
     [sortColumn, sortDir],
   );
 
@@ -92,7 +94,7 @@ export function ModeratorsScreen({ basePath }: { basePath: string }) {
   const pageCount = Math.max(1, Math.ceil((moderators.data?.total ?? 0) / pageSize));
 
   const columns: DataTableColumn<ModeratorRow>[] = [
-    { id: 'lastName', header: 'Name', sortable: true, cell: (row) => row.displayName },
+    { id: 'lastName', header: 'Name', sortable: true, cell: (row) => row.formalName },
     {
       id: 'loginIdentifier',
       header: 'Login ID',
@@ -109,7 +111,7 @@ export function ModeratorsScreen({ basePath }: { basePath: string }) {
             cell: (row: ModeratorRow) => (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label={`Actions for ${row.displayName}`}>
+                  <Button variant="ghost" size="icon" aria-label={`Actions for ${row.formalName}`}>
                     <MoreHorizontal aria-hidden />
                   </Button>
                 </DropdownMenuTrigger>

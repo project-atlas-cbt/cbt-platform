@@ -1,3 +1,5 @@
+import { templateCell } from './import-templates.js';
+
 export interface FieldError {
   field: string;
   message: string;
@@ -74,14 +76,14 @@ export function validateStudentRow(
   const errors: FieldError[] = [];
   const studentId = row['Student ID'] ?? '';
   const firstName = row['First Name'] ?? '';
-  const lastName = row['Last Name'] ?? '';
+  const surname = templateCell('STUDENTS', row, 'Surname');
   const className = row['Class'] ?? '';
   const stream = streamCell(row);
   const electives = splitElectives(row['Electives'] ?? '');
 
   if (!studentId) errors.push({ field: 'Student ID', message: 'Student ID is required.' });
+  if (!surname) errors.push({ field: 'Surname', message: 'Surname is required.' });
   if (!firstName) errors.push({ field: 'First Name', message: 'First Name is required.' });
-  if (!lastName) errors.push({ field: 'Last Name', message: 'Last Name is required.' });
   if (!className) errors.push({ field: 'Class', message: 'Class is required.' });
 
   if (studentId) {
@@ -148,12 +150,12 @@ export function validateTeacherRow(
   const errors: FieldError[] = [];
   const staffId = row['Staff ID'] ?? '';
   const firstName = row['First Name'] ?? '';
-  const lastName = row['Last Name'] ?? '';
+  const surname = templateCell('TEACHERS', row, 'Surname');
   const email = row['Email'] ?? '';
 
   if (!staffId) errors.push({ field: 'Staff ID', message: 'Staff ID is required.' });
+  if (!surname) errors.push({ field: 'Surname', message: 'Surname is required.' });
   if (!firstName) errors.push({ field: 'First Name', message: 'First Name is required.' });
-  if (!lastName) errors.push({ field: 'Last Name', message: 'Last Name is required.' });
   if (!email) {
     errors.push({ field: 'Email', message: 'Email is required.' });
   } else if (!EMAIL_PATTERN.test(email)) {

@@ -31,7 +31,11 @@ const PAGE_SIZE = 25;
 
 interface HodRow {
   membershipId: string;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
   displayName: string;
+  formalName: string;
   staffId: string;
   departmentId: string | null;
   departmentName: string | null;
@@ -55,11 +59,12 @@ export function HodsScreen({ basePath: _basePath }: { basePath: string }) {
   const sortDir = searchParams.get('sortDir');
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
   const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
-  const sort = useMemo<DataTableSort | null>(
+  const sort = useMemo<DataTableSort>(
     () =>
       sortColumn && (sortDir === 'asc' || sortDir === 'desc')
         ? { columnId: sortColumn, direction: sortDir }
-        : null,
+        : // Owner decision 2026-10-09: lists open A to Z by surname.
+          { columnId: 'lastName', direction: 'asc' },
     [sortColumn, sortDir],
   );
 
@@ -102,7 +107,7 @@ export function HodsScreen({ basePath: _basePath }: { basePath: string }) {
   const canManageAny = canEdit || canAssign || canReset || canRemove;
 
   const columns: DataTableColumn<HodRow>[] = [
-    { id: 'lastName', header: 'Name', sortable: true, cell: (row) => row.displayName },
+    { id: 'lastName', header: 'Name', sortable: true, cell: (row) => row.formalName },
     { id: 'staffId', header: 'Staff ID', sortable: true, cell: (row) => row.staffId },
     { id: 'department', header: 'Department', cell: (row) => row.departmentName ?? '—' },
     ...(canManageAny
@@ -114,7 +119,7 @@ export function HodsScreen({ basePath: _basePath }: { basePath: string }) {
             cell: (row: HodRow) => (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label={`Actions for ${row.displayName}`}>
+                  <Button variant="ghost" size="icon" aria-label={`Actions for ${row.formalName}`}>
                     <MoreHorizontal aria-hidden />
                   </Button>
                 </DropdownMenuTrigger>

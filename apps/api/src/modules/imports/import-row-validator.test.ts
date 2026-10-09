@@ -57,7 +57,16 @@ describe('validateStudentRow', () => {
       studentCtx(),
     );
     expect(errors.map((e) => e.field).sort()).toEqual(
-      ['Class', 'First Name', 'Last Name', 'Student ID'].sort(),
+      ['Class', 'First Name', 'Surname', 'Student ID'].sort(),
+    );
+  });
+
+  it('reads the surname from the Surname column, or Last Name in an older file', () => {
+    const row = { 'Student ID': 'ST001', 'First Name': 'Abiola', Class: 'SS1A', Department: '' };
+    expect(validateStudentRow({ ...row, Surname: 'Ojo' }, studentCtx())).toEqual([]);
+    expect(validateStudentRow({ ...row, 'Last Name': 'Ojo' }, studentCtx())).toEqual([]);
+    expect(validateStudentRow({ ...row, Surname: '  ' }, studentCtx()).map((e) => e.field)).toEqual(
+      ['Surname'],
     );
   });
 

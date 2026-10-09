@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import { ImportParseError, parseImportFile } from './import-file-parser.js';
-import { IMPORT_TEMPLATES, IMPORT_TEMPLATE_VERSION } from './import-templates.js';
+import {
+  IMPORT_TEMPLATES,
+  IMPORT_TEMPLATE_VERSION,
+  hasTemplateColumn,
+} from './import-templates.js';
 import {
   validateStudentRow,
   validateTeacherRow,
@@ -136,7 +140,7 @@ export class ImportValidationService {
       const def = IMPORT_TEMPLATES[job.type];
       const optional = new Set(def.optionalColumns ?? []);
       const missingColumns = def.columns.filter(
-        (column) => !optional.has(column) && !parsed.headers.includes(column),
+        (column) => !optional.has(column) && !hasTemplateColumn(job.type, parsed.headers, column),
       );
       if (missingColumns.length > 0) {
         await this.fail(

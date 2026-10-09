@@ -14,6 +14,24 @@ product mark instead. Used by `RouteGuard`, `PlatformRouteGuard`, `MfaEnrolmentG
 `OnboardingGuard`, the onboarding entry and `/` (which now brings its own `TenantProvider`).
 Frontend only; covered by `loading-splash.test.tsx`.
 
+### 2026-10-09 — Middle names, register order and A to Z people lists (ADR-0039)
+
+Haneef asked (2026-10-09) for students A to Z by surname, a third name, and a fix for the pilot
+school's names, which its upload stored swapped (surname in First Name, "First Middle" in Last Name).
+
+- `users.middle_name` (optional, expand-only migration `20261009180000_user_middle_name`, with a new
+  search index that includes it). On every add/edit form, both import templates and both exports.
+- Lists, rosters, results, exam control, exports and sign-in slips show "Surname First Middle" and
+  open A to Z (surname, first, middle, then ID), for students and staff. IDs sort by number value.
+  Sorting runs in the application (`@atlas/domain` `names.ts`) because the database collation is
+  byte order.
+- Forms and templates ask for **Surname** first; old files with `Last Name` still import.
+- `ops:fix-name-order` prints a review CSV of the proposed reorder, flags names that don't fit the
+  rule, and applies the confirmed rows in one transaction with an audit entry per student
+  (`--skip`, `--revert`). Not yet run on the pilot school.
+- Tests: domain name tests, users integration (middle name, A to Z, natural IDs, the ops fix),
+  imports and exam-control integration, web list/form tests.
+
 ### 2026-10-09 — Fixed header, icon-rail sidebar, school-first branding, list improvements
 
 UI refinements Haneef asked for (2026-10-09), in every staff and student workspace shell:

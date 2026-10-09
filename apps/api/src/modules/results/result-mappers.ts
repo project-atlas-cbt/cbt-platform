@@ -1,5 +1,5 @@
 import type { Prisma } from '@atlas/db';
-import type { AdjustableResultValues } from '@atlas/domain';
+import { formalName, type AdjustableResultValues } from '@atlas/domain';
 import type {
   ResultAdjustmentHistoryItemDto,
   ResultAdjustmentOperationResponseDto,
@@ -20,7 +20,9 @@ export function resultListInclude(examAcademicSessionId: string) {
       select: {
         id: true,
         studentId: true,
-        membership: { select: { user: { select: { displayName: true } } } },
+        membership: {
+          select: { user: { select: { firstName: true, middleName: true, lastName: true } } },
+        },
         enrollments: {
           where: { academicSessionId: examAcademicSessionId },
           orderBy: { startDate: 'desc' as const },
@@ -72,7 +74,7 @@ export function toResultListItemDto(row: ResultWithRelations): ResultListItemDto
     id: row.id,
     attemptId: row.attemptId,
     studentProfileId: row.studentProfileId,
-    studentName: row.studentProfile.membership.user.displayName,
+    studentName: formalName(row.studentProfile.membership.user),
     studentIdentifier: row.studentProfile.studentId,
     classId: enrollment?.classGroupSession.id ?? null,
     className: enrollment?.classGroupSession.name ?? null,
