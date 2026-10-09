@@ -2,6 +2,13 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-09 — Server errors reach Sentry on the VPS
+
+- The VPS Compose file passed `SENTRY_DSN` only into the web build, so the API and worker never
+  reported to Sentry even with a DSN in `.env`. It now goes to both. An empty value (the
+  `init-env.sh` default) counts as unset, so this can't stop the API from starting.
+- Sentry stays errors-only, as B20 designed; performance tracing remains OpenTelemetry's job.
+
 ### 2026-10-09 — Backup-failure email and off-site keys off the command line (audit P0-3, P2-26)
 
 - `bin/backup.sh` now emails the operations alert recipients when any step fails, naming the step.
