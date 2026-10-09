@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingSplash } from '@/components/shell/loading-splash';
 import { useOnboardingStatus } from '@/lib/onboarding/queries';
 
 /**
@@ -26,11 +26,7 @@ export function OnboardingGuard({ children }: { children: ReactNode }) {
   }, [isPending, completed, router]);
 
   if (isPending || completed) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Skeleton className="h-8 w-48" />
-      </div>
-    );
+    return <LoadingSplash />;
   }
 
   return <>{children}</>;
