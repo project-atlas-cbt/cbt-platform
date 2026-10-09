@@ -3698,6 +3698,58 @@
         ]
       }
     },
+    "/academics/standard-setup": {
+      "get": {
+        "operationId": "StandardSetupController_preview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSetupPreviewResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What applying the standard setup would add or place (ADR-0038).",
+        "tags": [
+          "academics"
+        ]
+      },
+      "post": {
+        "operationId": "StandardSetupController_apply",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyStandardSetupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSetupResultResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Apply the ticked parts of the standard setup.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
     "/academics/classes/{id}/subjects": {
       "get": {
         "operationId": "ClassSubjectController_list",
@@ -11566,6 +11618,15 @@
             "type": "number",
             "description": "Initial subscription period, in days.",
             "minimum": 1
+          },
+          "startingStructure": {
+            "type": "string",
+            "enum": [
+              "STANDARD",
+              "EMPTY"
+            ],
+            "default": "EMPTY",
+            "description": "STANDARD creates the standard departments, streams and subjects (ADR-0038); the school edits them after. EMPTY leaves setup to the school."
           }
         },
         "required": [
@@ -13690,6 +13751,200 @@
             ]
           }
         }
+      },
+      "StandardSetupDepartmentDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "PLACE",
+              "EXISTS"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "status"
+        ]
+      },
+      "StandardSetupStreamDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "PLACE",
+              "EXISTS"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "status"
+        ]
+      },
+      "StandardSetupSubjectDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The school's own name when it already has it."
+          },
+          "departmentCode": {
+            "type": "string"
+          },
+          "departmentName": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "JSS",
+              "SS",
+              "JSS_AND_SS"
+            ]
+          },
+          "choiceGroupName": {
+            "type": "string",
+            "nullable": true,
+            "description": "e.g. \"Trade subject: choose 1\"."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "PLACE",
+              "EXISTS"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "departmentCode",
+          "departmentName",
+          "stage",
+          "choiceGroupName",
+          "status"
+        ]
+      },
+      "StandardSetupPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "departments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StandardSetupDepartmentDto"
+            }
+          },
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StandardSetupStreamDto"
+            }
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StandardSetupSubjectDto"
+            }
+          }
+        },
+        "required": [
+          "departments",
+          "streams",
+          "subjects"
+        ]
+      },
+      "ApplyStandardSetupDto": {
+        "type": "object",
+        "properties": {
+          "departmentCodes": {
+            "example": [
+              "SCI",
+              "BUS",
+              "HUM"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "streamCodes": {
+            "example": [
+              "SCI",
+              "BUS",
+              "HUM"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subjectCodes": {
+            "example": [
+              "MTH",
+              "ENG"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "departmentCodes",
+          "streamCodes",
+          "subjectCodes"
+        ]
+      },
+      "StandardSetupResultResponseDto": {
+        "type": "object",
+        "properties": {
+          "departmentsCreated": {
+            "type": "number"
+          },
+          "streamsCreated": {
+            "type": "number"
+          },
+          "subjectsCreated": {
+            "type": "number"
+          },
+          "subjectsPlaced": {
+            "type": "number",
+            "description": "Existing subjects given their standard department."
+          },
+          "choiceGroupsCreated": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "departmentsCreated",
+          "streamsCreated",
+          "subjectsCreated",
+          "subjectsPlaced",
+          "choiceGroupsCreated"
+        ]
       },
       "ClassSubjectResponseDto": {
         "type": "object",
@@ -20246,6 +20501,16 @@
           },
           "revision": {
             "$ref": "#/components/schemas/QuestionRevisionResponseDto"
+          },
+          "fallbackReason": {
+            "type": "string",
+            "enum": [
+              "NO_DEPARTMENT",
+              "NO_HOD",
+              "AUTHOR_IS_ONLY_HOD"
+            ],
+            "nullable": true,
+            "description": "ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can."
           }
         },
         "required": [
@@ -20256,7 +20521,8 @@
           "authorTeacherProfileId",
           "authorName",
           "submittedAt",
-          "revision"
+          "revision",
+          "fallbackReason"
         ]
       },
       "QuestionReviewQueueSubjectGroupDto": {
@@ -20374,6 +20640,16 @@
             "items": {
               "$ref": "#/components/schemas/QuestionReviewHistoryItemDto"
             }
+          },
+          "fallbackReason": {
+            "type": "string",
+            "enum": [
+              "NO_DEPARTMENT",
+              "NO_HOD",
+              "AUTHOR_IS_ONLY_HOD"
+            ],
+            "nullable": true,
+            "description": "ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can."
           }
         },
         "required": [
@@ -20384,7 +20660,8 @@
           "authorTeacherProfileId",
           "authorName",
           "currentRevision",
-          "history"
+          "history",
+          "fallbackReason"
         ]
       },
       "ApproveQuestionReviewDto": {

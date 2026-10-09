@@ -40,7 +40,7 @@ export function registerQuestionReviewTemplates(registry: TemplateRegistry): voi
     subject: 'Changes requested on your question',
     text:
       'Hello {{displayName}},\n\n' +
-      'The reviewing HOD has requested changes to your question.{{detailLine}}\n\n' +
+      'Your reviewer has requested changes to your question.{{detailLine}}\n\n' +
       'You can revise and resubmit it from your question bank.',
   });
 }

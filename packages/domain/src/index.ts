@@ -109,6 +109,17 @@ export {
   type ChoiceGroupWarning,
 } from './academics/choice-rules.js';
 export {
+  STANDARD_CHOICE_GROUPS,
+  STANDARD_DEPARTMENTS,
+  STANDARD_STREAMS,
+  STANDARD_SUBJECTS,
+  type StandardChoiceGroup,
+  type StandardDepartment,
+  type StandardSetupStage,
+  type StandardStream,
+  type StandardSubject,
+} from './academics/standard-setup.js';
+export {
   USER_STATUSES,
   STUDENT_PROFILE_STATUSES,
   EMPLOYMENT_STATUSES,
@@ -137,6 +148,8 @@ export {
   QUESTION_DIFFICULTIES,
   QUESTION_REVISION_STATUSES,
   QUESTION_REVIEW_DECISIONS,
+  QUESTION_REVIEW_FALLBACK_REASONS,
+  type QuestionReviewFallbackReason,
   type QuestionType,
   type QuestionDifficulty,
   type QuestionRevisionStatus,

@@ -28,6 +28,7 @@ export class AcademicsAuditActionRegistrationProvider implements OnModuleInit {
       'STREAM_CREATED',
       'STREAM_UPDATED',
       'STREAM_DELETED',
+      'STANDARD_SETUP_APPLIED',
       'STUDENT_STREAM_CHANGED',
       'CLASS_SUBJECT_STREAMS_CHANGED',
       'DEPARTMENT_CREATED',
