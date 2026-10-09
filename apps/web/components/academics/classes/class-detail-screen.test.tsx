@@ -56,6 +56,9 @@ vi.mock('@/lib/people/queries', () => ({
   useTeachersPaginated: () => ({ isPending: false, data: { teachers: [] } }),
 }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
+vi.mock('./class-exams-table', () => ({
+  ClassExamsTable: ({ classId }: { classId: string }) => <p>Exams for class {classId}</p>,
+}));
 
 const mockUseClass = vi.mocked(useClass);
 const mockUseClassRoster = vi.mocked(useClassRoster);
@@ -227,7 +230,7 @@ describe('ClassDetailScreen', () => {
     expect(screen.getByText('Mrs Bello')).toBeInTheDocument();
   });
 
-  it('the Exams tab shows an honest "not yet available" placeholder, never fabricated data', async () => {
+  it('the Exams tab lists the exams for this class', async () => {
     mockUseClass.mockReturnValue({ isPending: false, isError: false, data: CLASS } as never);
     mockUseClassRoster.mockReturnValue({
       isPending: false,
@@ -236,7 +239,7 @@ describe('ClassDetailScreen', () => {
     } as never);
     renderScreen();
     await userEvent.click(screen.getByRole('button', { name: 'Exams' }));
-    expect(screen.getByText(/aren't available yet/i)).toBeInTheDocument();
+    expect(screen.getByText('Exams for class c1')).toBeInTheDocument();
   });
 
   it('the Subjects offered tab lists real offerings via ClassSubjectList', async () => {

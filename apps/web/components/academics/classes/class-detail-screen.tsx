@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ClipboardList, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +23,7 @@ import { ClassStatusBadge } from '../academic-status-badges';
 import { SubjectRoster } from '../class-subjects/subject-roster';
 import { FormTeachersPanel } from './form-teachers-panel';
 import { ClassSubjectList } from '../class-subjects/class-subject-list';
+import { ClassExamsTable } from './class-exams-table';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -38,8 +39,7 @@ type TabId = (typeof TABS)[number]['id'];
  * tab state, not nested routes — no independent deep-link need for a
  * within-page concern, avoiding four more thin route files per role root.
  * Teachers comes from this phase's own `GET /v1/classes/:id/teachers`
- * gap-closure; Exams is an honest "not yet available" placeholder — no exam
- * backend exists at all yet (B9+), so nothing is fabricated here. */
+ * gap-closure; Exams lists the exams targeting this class (`ClassExamsTable`). */
 export function ClassDetailScreen({ classId }: { classId: string }) {
   const classGroup = useClass(classId);
   const session = useSession(classGroup.data?.academicSessionId);
@@ -97,13 +97,7 @@ export function ClassDetailScreen({ classId }: { classId: string }) {
       {tab === 'registrations' && canManageRegistrations ? (
         <SubjectRoster classId={classId} />
       ) : null}
-      {tab === 'exams' ? (
-        <EmptyState
-          icon={ClipboardList}
-          title="Exams aren't available yet"
-          description="This arrives with a later phase — the exam engine hasn't been built yet."
-        />
-      ) : null}
+      {tab === 'exams' ? <ClassExamsTable classId={classId} /> : null}
     </div>
   );
 }
