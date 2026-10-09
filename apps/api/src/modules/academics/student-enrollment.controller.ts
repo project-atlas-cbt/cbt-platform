@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
@@ -8,6 +8,7 @@ import { assertCanViewClassPeople, assertCanViewStudent } from './people-scope.u
 import {
   ClassRosterResponseDto,
   EnrollStudentDto,
+  SetStudentStreamDto,
   StudentEnrollmentListResponseDto,
   StudentEnrollmentResponseDto,
 } from './dto/student-enrollment.dto.js';
@@ -44,6 +45,26 @@ export class StudentEnrollmentController {
   ): Promise<StudentEnrollmentResponseDto> {
     const user = currentUser(req);
     return this.enrollments.enroll(user.schoolId, studentProfileId, body, {
+      actorUserId: user.userId,
+      actorRole: resolveActorRole(user),
+    });
+  }
+
+  @Put('students/:id/stream')
+  @Authorized('assignments.studentToClass')
+  @ApiOperation({
+    summary:
+      "Put a student's current enrollment in another stream (ADR-0038); registers the new " +
+      "stream's subjects and deregisters the old stream's, for future exams only.",
+  })
+  @ApiOkResponse({ type: StudentEnrollmentResponseDto })
+  async setStream(
+    @Req() req: FastifyRequest,
+    @Param('id') studentProfileId: string,
+    @Body() body: SetStudentStreamDto,
+  ): Promise<StudentEnrollmentResponseDto> {
+    const user = currentUser(req);
+    return this.enrollments.setStream(user.schoolId, studentProfileId, body, {
       actorUserId: user.userId,
       actorRole: resolveActorRole(user),
     });

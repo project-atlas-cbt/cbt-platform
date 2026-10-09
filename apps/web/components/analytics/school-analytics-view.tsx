@@ -159,6 +159,19 @@ export function SchoolAnalyticsView() {
           />
         </ErrorBoundary>
       </div>
+
+      {/* ADR-0038: results by student stream, shown once the school has streams. */}
+      {(analytics?.streams ?? []).length > 0 ? (
+        <ErrorBoundary>
+          <ComparisonChart
+            items={analytics?.streams ?? []}
+            title="Stream Comparison"
+            subtitle="Average results of the students in each stream"
+            metricLabel="Stream Avg"
+            emptyMessage="No stream results yet."
+          />
+        </ErrorBoundary>
+      ) : null}
     </div>
   );
 }

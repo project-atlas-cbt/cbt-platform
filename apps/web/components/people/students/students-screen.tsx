@@ -34,7 +34,7 @@ interface StudentRow {
   displayName: string;
   studentId: string;
   currentClassName: string | null;
-  departmentName: string | null;
+  streamName: string | null;
   userStatus: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
 }
 
@@ -116,7 +116,7 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
     },
     { id: 'studentId', header: 'Student ID', sortable: true, cell: (row) => row.studentId },
     { id: 'class', header: 'Class', cell: (row) => row.currentClassName ?? '—' },
-    { id: 'department', header: 'Department', cell: (row) => row.departmentName ?? '—' },
+    { id: 'stream', header: 'Stream', cell: (row) => row.streamName ?? '—' },
     { id: 'status', header: 'Status', cell: (row) => <UserStatusBadge value={row.userStatus} /> },
     {
       id: 'view',

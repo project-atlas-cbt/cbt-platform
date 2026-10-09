@@ -17,6 +17,8 @@ vi.mock('@/lib/academics/queries', () => ({
   useClasses: vi.fn(),
   useDepartments: vi.fn(),
   useSessions: vi.fn(),
+  useStreams: () => ({ data: { streams: [] }, isSuccess: true, isPending: false }),
+  useClassRoster: () => ({ data: { students: [] }, isSuccess: true, isPending: false }),
 }));
 vi.mock('@/lib/onboarding/mutations', () => ({ useCreateClass: vi.fn() }));
 vi.mock('@/lib/academics/mutations', () => ({

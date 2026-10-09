@@ -11,9 +11,10 @@ import type { AuthenticatedUser } from '../identity/auth.guard.js';
  * table already states are applied here:
  *
  * - School Admin / Moderator (SCHOOL): every record in the school.
- * - HOD (DEPARTMENT): classes of a department they head, either the class's
- *   own department or a subject of that department taught in the class;
- *   students enrolled in such a class; teachers teaching a subject of it.
+ * - HOD (DEPARTMENT): classes taught a subject of a department they head
+ *   (ADR-0038: classes no longer carry a department; HOD scope comes from
+ *   subjects only); students enrolled in such a class; teachers teaching a
+ *   subject of it.
  * - Teacher: the classes they are assigned to teach or are form teacher of
  *   (ADR-0038), and those classes' current students; their own assignment
  *   record.
@@ -56,10 +57,7 @@ async function viewableClassIds(user: AuthenticatedUser, classIds: string[]): Pr
         where: {
           schoolId: user.schoolId,
           id: { in: classIds },
-          OR: [
-            { departmentId: { in: departments } },
-            { classSubjects: { some: { subject: { departmentId: { in: departments } } } } },
-          ],
+          classSubjects: { some: { subject: { departmentId: { in: departments } } } },
         },
         select: { id: true },
       });

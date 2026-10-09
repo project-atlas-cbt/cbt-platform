@@ -109,7 +109,13 @@ export class StudentSubjectRegistrationService {
       const enrollment = await tx.studentEnrollment.findFirst({
         where: { schoolId, studentProfileId, status: 'ACTIVE' },
         orderBy: { startDate: 'desc' },
-        select: { id: true, classId: true, classGroupSession: { select: { name: true } } },
+        select: {
+          id: true,
+          classId: true,
+          streamId: true,
+          classGroupSession: { select: { name: true } },
+          stream: { select: { name: true } },
+        },
       });
       const offerings = enrollment
         ? await tx.classSubject.findMany({
@@ -124,6 +130,8 @@ export class StudentSubjectRegistrationService {
         enrollmentId: enrollment?.id ?? null,
         classId: enrollment?.classId ?? null,
         className: enrollment?.classGroupSession.name ?? null,
+        streamId: enrollment?.streamId ?? null,
+        streamName: enrollment?.stream?.name ?? null,
         registrations: registrations.map(toResponseDto),
         availableOfferings: offerings
           .filter((o) => !withRow.has(o.id))
@@ -287,6 +295,7 @@ export class StudentSubjectRegistrationService {
                 choiceGroup: { select: { name: true, minChoices: true, maxChoices: true } },
               },
             },
+            streams: { select: { stream: { select: { name: true } } } },
           },
           orderBy: { subject: { name: 'asc' } },
         }),
@@ -294,6 +303,7 @@ export class StudentSubjectRegistrationService {
           where: { schoolId, classId, status: 'ACTIVE' },
           include: {
             studentProfile: { include: { membership: { include: { user: true } } } },
+            stream: { select: { name: true } },
             registrations: {
               where: { status: 'REGISTERED' },
               select: { classSubjectId: true },
@@ -319,6 +329,7 @@ export class StudentSubjectRegistrationService {
           choiceRule: o.subject.choiceGroup
             ? `${o.subject.choiceGroup.name}: ${describeRule(o.subject.choiceGroup.minChoices, o.subject.choiceGroup.maxChoices)}`
             : null,
+          streamNames: o.streams.map((s) => s.stream.name).sort(),
         })),
         students: enrollments.map((e) => {
           const registered = e.registrations
@@ -329,6 +340,7 @@ export class StudentSubjectRegistrationService {
             studentProfileId: e.studentProfileId,
             studentId: e.studentProfile.studentId,
             displayName: e.studentProfile.membership.user.displayName,
+            streamName: e.stream?.name ?? null,
             registeredClassSubjectIds: registered.filter((id) => inScope(scope, id)),
             warnings: choiceGroupWarnings(
               rules,

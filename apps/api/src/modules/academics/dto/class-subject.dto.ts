@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsUUID } from 'class-validator';
 import {
   CLASS_SUBJECT_KINDS,
   CLASS_SUBJECT_STATUSES,
@@ -22,12 +22,30 @@ export class CreateClassSubjectDto {
   @IsOptional()
   @IsIn(CLASS_SUBJECT_KINDS)
   kind?: ClassSubjectKind;
+
+  /** ADR-0038: on an ELECTIVE offering, the streams whose students are
+   * registered automatically ("Physics for Science"). */
+  @ApiPropertyOptional({ type: String, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID('all', { each: true })
+  streamIds?: string[];
 }
 
+/** ADR-0038: who takes an offering. COMPULSORY clears any streams. */
 export class UpdateClassSubjectDto {
-  @ApiProperty({ type: String, enum: CLASS_SUBJECT_KINDS })
+  @ApiPropertyOptional({ type: String, enum: CLASS_SUBJECT_KINDS })
+  @IsOptional()
   @IsIn(CLASS_SUBJECT_KINDS)
-  kind!: ClassSubjectKind;
+  kind?: ClassSubjectKind;
+
+  @ApiPropertyOptional({ type: String, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID('all', { each: true })
+  streamIds?: string[];
 }
 
 /** `07 §6.6`'s offering shape, enriched with the subject's own name/code so
@@ -56,6 +74,13 @@ export class ClassSubjectResponseDto {
 
   @ApiProperty({ type: String, enum: CLASS_SUBJECT_KINDS })
   kind!: ClassSubjectKind;
+
+  /** ADR-0038: streams registered automatically (ELECTIVE only). */
+  @ApiProperty({ type: String, isArray: true })
+  streamIds!: string[];
+
+  @ApiProperty({ type: String, isArray: true })
+  streamNames!: string[];
 }
 
 export class ClassSubjectListResponseDto {

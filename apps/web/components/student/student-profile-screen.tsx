@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth';
  * ("Keep it simple... No unnecessary social/profile functionality," per
  * `04 §62`'s own text). `account.changeOwnProfile`'s own deferred
  * profile-*edit* endpoint gap (`awaitingResource`) is untouched by this
- * screen, which never edits name/class/department.
+ * screen, which never edits name/class/stream.
  */
 export function StudentProfileScreen() {
   const query = useOwnStudentProfile();
@@ -55,8 +55,8 @@ export function StudentProfileScreen() {
             </dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-text-muted">Department</dt>
-            <dd className="font-medium text-text-primary">{profile.departmentName ?? '—'}</dd>
+            <dt className="text-text-muted">Stream</dt>
+            <dd className="font-medium text-text-primary">{profile.streamName ?? '—'}</dd>
           </div>
         </dl>
       </div>

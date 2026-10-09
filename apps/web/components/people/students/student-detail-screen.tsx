@@ -21,6 +21,7 @@ import { MoveClassDialog } from './move-class-dialog';
 import { RevealCredentialsDialog } from './reveal-credentials-dialog';
 import { SubjectRegistrationsPanel } from './subject-registrations-panel';
 import { AcademicHistory } from './academic-history';
+import { StudentStreamField } from './student-stream-field';
 
 /** USR-S-02 (`05 §9.2`). DoD item 2: identity, subjects, academic history
  * and administrative metadata. The history (2026-10-09 redesign) covers
@@ -128,8 +129,15 @@ export function StudentDetailScreen({ studentProfileId }: { studentProfileId: st
           <dd>
             <StudentProfileStatusBadge value={data.profileStatus} />
           </dd>
-          <dt className="text-text-muted">Department</dt>
-          <dd className="text-text-primary">{data.departmentName ?? '—'}</dd>
+          <dt className="self-center text-text-muted">Stream</dt>
+          <dd>
+            <StudentStreamField
+              studentProfileId={studentProfileId}
+              streamId={data.streamId}
+              streamName={data.streamName}
+              editable={canMove && Boolean(data.currentClassId)}
+            />
+          </dd>
         </dl>
       </section>
 

@@ -99,6 +99,7 @@ export function AcademicHistory({ studentProfileId }: { studentProfileId: string
               <h4 className="text-sm font-semibold text-text-primary">{s.sessionName}</h4>
               <span className="flex items-center gap-2 text-sm text-text-secondary">
                 {s.className}
+                {s.streamName ? <span className="text-text-muted">· {s.streamName}</span> : null}
                 {s.current ? <Badge status="info">Current</Badge> : null}
               </span>
             </header>

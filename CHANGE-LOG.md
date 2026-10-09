@@ -2,6 +2,49 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-09 — Student streams (ADR-0038, PR 2 of 3)
+
+Streams (Science, Business, Humanities) are now their own list, separate from staff departments,
+so a department only decides who reviews a subject's questions.
+
+- `Stream`, `ClassSubjectStream`, `ClassGroup.defaultStreamId`, `StudentEnrollment.streamId`,
+  `RolloverClassDraft.defaultStreamId` (migration `20261009150000_streams`, expand-only). The
+  migration turns every department a class used into a stream with the same name and code and
+  fills each class's and enrollment's stream from it; checked by hand on a copy of the demo school
+  inside a rolled-back transaction. The old class department columns stay but are no longer read
+  or written; the class API takes `defaultStreamId`.
+- A stream subject is an elective offered to one or more streams (no new enum value; ADR-0038
+  streams amendment). Everyone in those streams is registered for it.
+- Academics › Streams tab; a class's stream on the class form (and, for an existing class, an
+  option to place its students who have no stream); "who takes it" on Subjects offered
+  (compulsory, elective, or ticked streams); a stream filter and stream names on Subject
+  registrations; the student's stream on their page (changeable, `PUT /students/:id/stream`,
+  swaps the stream subjects, audited, shown in the history); Stream columns on the students list
+  and class roster; the student's own profile.
+- HOD scope over classes, rosters, rollover drafts, exports and class analytics now comes only from
+  the subjects a class offers (`GET /academics/classes?departmentId=`).
+- Rollover keeps class streams, offering streams and each student's stream; the student-decisions
+  filter is by stream.
+- The students import template has optional **Stream** and **Electives** columns; files with the
+  old Department column still import (read as Stream).
+- School analytics has a stream comparison.
+- ADR-0038 streams amendment, school-office help guides (new "Set up streams" guide),
+  `docs/user-guides/teacher.md`, `school-onboarding.md`, generated permission table note.
+
+Tests: new `streams.integration.test.ts` (9 cases: CRUD, class default, stream subjects, refusing
+streams on compulsory, department class filter, stream change and history, placing a class's
+students, deactivate and delete), rollover keeps streams, HOD scope ignores the old class
+department, import Stream and Electives columns; web `streams-screen.test.tsx` (5),
+`class-form.test.tsx` (3), `student-stream-field.test.tsx` (2), a stream case in
+`class-subject-list.test.tsx`, and the structure-creation flow now creates a stream. API
+integration 507 of 508 (the same s3rver media case as before), security suite (53), API unit (299),
+domain (165), web (1,212), lint, typecheck and migration lint pass. Screens checked in a production
+build against the demo school.
+
+Candidate / Deferred: choice-rule warnings in exam readiness. Changing an offering from compulsory
+to a stream subject leaves existing registrations in place (by design); staff untick students who
+don't take it.
+
 ### 2026-10-09 — Subject registration screens, teachers and form teachers, student history (ADR-0038 amendment)
 
 Owner review of the first build (still PR 1 of 3): the class subject grid scrolled sideways and had

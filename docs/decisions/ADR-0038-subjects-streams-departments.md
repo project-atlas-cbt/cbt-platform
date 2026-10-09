@@ -39,7 +39,8 @@ The owner approved the design as a whole (2026-10-08).
    - `COMPULSORY` registers every student in the class (the old behaviour, and the default).
    - `ELECTIVE` registers nobody; staff choose students on the class subject grid or the student's
      page.
-   - `STREAM` (with streams, below) registers the students in that stream.
+   - `STREAM` (with streams, below) registers the students in that stream. (Built as an elective
+     with streams, not a third kind: see the streams amendment.)
 2. **Choice groups.** A school-wide `SubjectChoiceGroup` ("Religion: choose 1", "Trade subject:
    choose 1") groups subjects by `Subject.choiceGroupId`. A rule applies to a student only where
    their class offers one of its subjects, with the minimum capped at how many the class offers.
@@ -84,7 +85,8 @@ Built in three pull requests.
    rollover. Migrations `20261009090000_subject_offering_kinds`,
    `20261009120000_form_teacher_assignments`.
 2. Streams: the entity, per-enrollment stream, class default, migration from class departments,
-   import columns, results by stream, HOD scope moved off classes.
+   import columns, results by stream, HOD scope moved off classes (amendment below). Migration
+   `20261009150000_streams`.
 3. The School Admin review fallback, then the demo school and guides.
 
 Exam readiness does not yet show choice-rule warnings; that is a candidate for the streams PR.
@@ -119,3 +121,47 @@ School Admin or Moderator is a bottleneck. Teachers had no way to help: they can
 
 **Candidate / Deferred.** The teacher assignments page (People › Teachers › Assignments) has the
 same sideways-scrolling matrix; the same "pick one, then tick" pattern should replace it.
+
+## Amendment — how streams are built (2026-10-09)
+
+**Context.** Building PR 2 (streams). Decision 1 named a third offering kind, `STREAM`. Adding an
+enum value and writing it in the same release breaks the expand-only migration rule
+(`docs/operations/migrations.md`): a server still on the old code would fail to read the new value
+during a rolling deploy.
+
+**Decision.**
+
+- **No `STREAM` kind.** A stream subject is an `ELECTIVE` offering with one or more streams in the
+  new `ClassSubjectStream` join (`class_subject_streams`). A student is registered automatically
+  for a compulsory offering, or for an elective whose streams include theirs. A plain elective
+  (no streams) still registers nobody. One subject can serve several streams (Economics for
+  Business and Humanities). Streams on a compulsory offering are refused.
+- **`Stream`** (`streams`: name, code, ACTIVE or INACTIVE) per school, separate from `Department`.
+  `ClassGroup.defaultStreamId` (optional) is copied onto each new enrollment;
+  `StudentEnrollment.streamId` is the student's stream for that session. An inactive stream stays
+  on the rows that have it but cannot be newly picked; a stream in use cannot be deleted.
+- **Giving an existing class a stream** can also place its current students who are in no stream
+  (`placeStudentsWithoutStream` on `PATCH /academics/classes/:id`, ticked by default on the class
+  form). Each placement is audited as a stream change; students already in a stream keep theirs.
+- **Changing a student's stream** (`PUT /students/:id/stream`, `assignments.studentToClass`)
+  registers the new stream's subjects and deregisters those that were theirs only through the old
+  stream. Compulsory subjects and hand-picked electives are untouched. Audited
+  (`STUDENT_STREAM_CHANGED`) and shown in the student history.
+- **Migration** `20261009150000_streams` makes one stream per department that any class (or
+  rollover class draft) used, with the same name and code, sets each such class's default stream
+  and each enrollment's stream from its class. `ClassGroup.departmentId` and
+  `RolloverClassDraft.departmentId` are kept (expand-only) but no longer written or read; the
+  class API takes `defaultStreamId` instead of `departmentId`.
+- **HOD scope** over classes, rosters, rollover drafts and class analytics comes only from the
+  subjects a class offers in the HOD's departments. `GET /academics/classes?departmentId=` lists
+  those classes.
+- **Rollover** keeps a class's default stream, each offering's streams, and each student's stream
+  (the target class's default first, else the student's own). The student-decisions filter is by
+  stream.
+- **Imports.** The students template is `Student ID, First Name, Last Name, Class, Stream,
+Electives`. Stream and Electives are optional; Electives are separated by `;` or `,` and must be
+  offered by the class. A file with the old `Department` column still imports, read as Stream.
+- **Results by stream.** School analytics adds a stream comparison: results whose student was in
+  that stream in the exam's session.
+
+Choice-rule warnings in exam readiness stay a candidate.

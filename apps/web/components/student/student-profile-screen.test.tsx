@@ -38,13 +38,13 @@ describe('StudentProfileScreen', () => {
     expect(await screen.findByText(/couldn't load your profile/i)).toBeInTheDocument();
   });
 
-  it('DoD 7 — shows name, student ID, class, and department', async () => {
+  it('DoD 7 — shows name, student ID, class, and stream', async () => {
     mockGet.mockResolvedValue(
       ok({
         displayName: 'Ahmed Bello',
         studentId: 'ST001',
         currentClassName: 'SS2A',
-        departmentName: 'Science',
+        streamName: 'Science',
       }),
     );
     renderWithClient(<StudentProfileScreen />);
@@ -62,7 +62,7 @@ describe('StudentProfileScreen', () => {
         displayName: 'New Student',
         studentId: 'ST099',
         currentClassName: null,
-        departmentName: null,
+        streamName: null,
       }),
     );
     renderWithClient(<StudentProfileScreen />);
@@ -77,7 +77,7 @@ describe('StudentProfileScreen', () => {
         displayName: 'Ahmed Bello',
         studentId: 'ST001',
         currentClassName: 'SS2A',
-        departmentName: null,
+        streamName: null,
       }),
     );
     renderWithClient(<StudentProfileScreen />);

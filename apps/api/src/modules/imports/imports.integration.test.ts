@@ -254,8 +254,8 @@ describe('B7 — Bulk Import Pipeline', () => {
   let host: string;
   let admin: RequestCtx;
   let sessionId: string;
-  let departmentId: string;
-  let classId: string; // SS1A, in `departmentId`
+  let classId: string; // SS1A
+  let electiveSubjectId: string; // Further Mathematics, an elective in SS1A
 
   beforeAll(async () => {
     const school = await createSchool();
@@ -280,20 +280,30 @@ describe('B7 — Bulk Import Pipeline', () => {
     sessionId = sessionRes.json<{ id: string }>().id;
     await post(admin, `/academics/sessions/${sessionId}/activate`);
 
-    const deptRes = await post(admin, '/academics/departments', {
+    const streamRes = await post(admin, '/academics/streams', {
       name: 'Science',
       code: `SCI-${randomUUID().slice(0, 6)}`,
     });
-    departmentId = deptRes.json<{ id: string }>().id;
+    expect(streamRes.statusCode).toBe(201);
 
     const classRes = await post(admin, '/academics/classes', {
       academicSessionId: sessionId,
-      departmentId,
       name: 'SS1A',
       level: 'SS1',
       arm: 'A',
     });
     classId = classRes.json<{ id: string }>().id;
+
+    const subjectRes = await post(admin, '/academics/subjects', {
+      name: 'Further Mathematics',
+      code: `FMT-${randomUUID().slice(0, 6)}`,
+    });
+    electiveSubjectId = subjectRes.json<{ id: string }>().id;
+    const offeringRes = await post(admin, `/academics/classes/${classId}/subjects`, {
+      subjectId: electiveSubjectId,
+      kind: 'ELECTIVE',
+    });
+    expect(offeringRes.statusCode).toBe(201);
   });
 
   describe('templates', () => {
@@ -302,7 +312,7 @@ describe('B7 — Bulk Import Pipeline', () => {
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/csv');
       expect(res.body).toContain(`# template-version: ${IMPORT_TEMPLATE_VERSION}`);
-      expect(res.body).toContain('Student ID,First Name,Last Name,Class,Department');
+      expect(res.body).toContain('Student ID,First Name,Last Name,Class,Stream,Electives');
     });
 
     it('downloads a versioned CSV template for teachers', async () => {
@@ -315,13 +325,13 @@ describe('B7 — Bulk Import Pipeline', () => {
     it('validates, previews, confirms, and imports valid rows only (DoD 1-4, 10)', async () => {
       const buffer = csv([
         `# template-version: ${IMPORT_TEMPLATE_VERSION}`,
-        'Student ID,First Name,Last Name,Class,Department',
-        `IMP-S1-${RUN},Ahmed,Bello,SS1A,Science`,
-        `IMP-S2-${RUN},David,John,SS1A,`,
+        'Student ID,First Name,Last Name,Class,Stream,Electives',
+        `IMP-S1-${RUN},Ahmed,Bello,SS1A,Science,Further Mathematics`,
+        `IMP-S2-${RUN},David,John,SS1A,,`,
         // Invalid: unresolvable class.
-        `IMP-S3-${RUN},Mary,James,NoSuchClass,`,
+        `IMP-S3-${RUN},Mary,James,NoSuchClass,,`,
         // Invalid: missing required First Name.
-        `,Blank,Firstname,SS1A,`,
+        `,Blank,Firstname,SS1A,,`,
       ]);
       const mediaAssetId = await uploadImportFile(admin, buffer);
 
@@ -377,14 +387,31 @@ describe('B7 — Bulk Import Pipeline', () => {
         students: {
           studentId: string;
           currentClassId: string | null;
-          departmentName: string | null;
+          streamName: string | null;
         }[];
       }>().students;
       const s1 = students.find((s) => s.studentId === `IMP-S1-${RUN}`);
       const s2 = students.find((s) => s.studentId === `IMP-S2-${RUN}`);
       expect(s1?.currentClassId).toBe(classId);
-      expect(s1?.departmentName).toBe('Science');
+      expect(s1?.streamName).toBe('Science');
       expect(s2?.currentClassId).toBe(classId);
+      expect(s2?.streamName).toBeNull();
+
+      // ADR-0038: the Electives column registers the student for that
+      // elective; a student who chose none is not registered for it.
+      const electiveRegs = await withTenant(prisma, schoolId, (tx) =>
+        tx.studentSubjectRegistration.findMany({
+          where: {
+            schoolId,
+            status: 'REGISTERED',
+            classSubject: { subjectId: electiveSubjectId },
+          },
+          select: { enrollment: { select: { studentProfile: { select: { studentId: true } } } } },
+        }),
+      );
+      expect(electiveRegs.map((r) => r.enrollment.studentProfile.studentId)).toEqual([
+        `IMP-S1-${RUN}`,
+      ]);
       expect(students.some((s) => s.studentId === `IMP-S3-${RUN}`)).toBe(false);
 
       // DoD 10: import completion is audited with counts.

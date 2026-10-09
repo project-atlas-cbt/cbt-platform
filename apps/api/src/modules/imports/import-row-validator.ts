@@ -24,22 +24,48 @@ export interface StudentValidationContext {
   /** Keyed by lower-cased class name — `ClassGroup.name` is the school's
    * own freeform label, matched case-insensitively, scoped to the job's
    * target academic session. */
-  classesByName: Map<string, { id: string; departmentId: string | null }>;
-  /** Keyed by lower-cased department name. */
-  departmentsByName: Map<string, { id: string }>;
+  classesByName: Map<string, ImportClass>;
+  /** ADR-0038: ACTIVE streams, keyed by lower-cased name and by code. */
+  streamsByName: Map<string, { id: string }>;
+}
+
+/** A class as the student import sees it: its ACTIVE offerings keyed by
+ * lower-cased subject name and by subject code. */
+export interface ImportClass {
+  id: string;
+  offeringsByName: Map<string, { classSubjectId: string; kind: string }>;
+}
+
+/** ADR-0038: the Electives cell, e.g. "Further Mathematics; Data Processing".
+ * Semicolons or commas separate subjects; blanks and repeats are dropped. */
+export function splitElectives(cell: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of cell.split(/[;,]/)) {
+    const name = part.trim();
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      out.push(name);
+    }
+  }
+  return out;
+}
+
+/** ADR-0038: the row's stream. The Stream column, or for files made from the
+ * old template, the Department column (which named the class's stream). */
+export function streamCell(row: Record<string, string>): { field: string; value: string } {
+  if (row['Stream']) return { field: 'Stream', value: row['Stream'] };
+  return { field: 'Department', value: row['Department'] ?? '' };
 }
 
 /**
  * `03 §16`'s validation catalogue, resolved: required fields, duplicate ID
- * (in-file and against existing records), invalid class, invalid
- * department. An engineering judgment call, not specified in the docs: a
- * *blank* Department cell is always accepted, even for a class that does
- * carry one — `ClassGroup.departmentId` is already the authoritative
- * source (Department is supplementary, cross-checked only when given), so
- * requiring every row to redundantly restate it would frustrate a
- * legitimate import for no correctness gain. A *non-blank* Department that
- * doesn't resolve, or resolves but disagrees with the row's own Class, is
- * still a real error.
+ * (in-file and against existing records), invalid class, and (ADR-0038)
+ * invalid stream and electives. A blank Stream means the class's default
+ * stream; a stream that differs from the class's default is allowed (a
+ * mixed arm, or a student in another stream). Each elective must be a
+ * subject the row's class offers; a compulsory one listed there is
+ * harmless and accepted.
  */
 export function validateStudentRow(
   row: Record<string, string>,
@@ -50,7 +76,8 @@ export function validateStudentRow(
   const firstName = row['First Name'] ?? '';
   const lastName = row['Last Name'] ?? '';
   const className = row['Class'] ?? '';
-  const departmentName = row['Department'] ?? '';
+  const stream = streamCell(row);
+  const electives = splitElectives(row['Electives'] ?? '');
 
   if (!studentId) errors.push({ field: 'Student ID', message: 'Student ID is required.' });
   if (!firstName) errors.push({ field: 'First Name', message: 'First Name is required.' });
@@ -72,7 +99,7 @@ export function validateStudentRow(
     }
   }
 
-  let resolvedClass: { id: string; departmentId: string | null } | undefined;
+  let resolvedClass: ImportClass | undefined;
   if (className) {
     resolvedClass = ctx.classesByName.get(className.toLowerCase());
     if (!resolvedClass) {
@@ -83,17 +110,21 @@ export function validateStudentRow(
     }
   }
 
-  if (departmentName) {
-    const resolvedDepartment = ctx.departmentsByName.get(departmentName.toLowerCase());
-    if (!resolvedDepartment) {
+  if (stream.value && !ctx.streamsByName.has(stream.value.toLowerCase())) {
+    errors.push({
+      field: stream.field,
+      message: `Stream "${stream.value}" was not found. Add it under Academics › Streams first.`,
+    });
+  }
+
+  if (resolvedClass) {
+    const missing = electives.filter(
+      (name) => !resolvedClass.offeringsByName.has(name.toLowerCase()),
+    );
+    if (missing.length > 0) {
       errors.push({
-        field: 'Department',
-        message: `Department "${departmentName}" was not found.`,
-      });
-    } else if (resolvedClass && resolvedClass.departmentId !== resolvedDepartment.id) {
-      errors.push({
-        field: 'Department',
-        message: `Department "${departmentName}" does not match class "${className}".`,
+        field: 'Electives',
+        message: `Class "${className}" does not offer ${missing.map((m) => `"${m}"`).join(', ')}.`,
       });
     }
   }

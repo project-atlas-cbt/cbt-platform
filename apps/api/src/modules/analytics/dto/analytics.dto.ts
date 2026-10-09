@@ -116,6 +116,8 @@ export class SchoolAnalyticsResponseDto extends PercentageMetricDto {
   @ApiProperty({ type: Number }) examCount!: number;
   @ApiProperty({ type: Number }) attemptCount!: number;
   @ApiProperty({ type: [ComparisonMetricDto] }) departments!: ComparisonMetricDto[];
+  /** ADR-0038: results by the stream each student was in that session. */
+  @ApiProperty({ type: [ComparisonMetricDto] }) streams!: ComparisonMetricDto[];
   @ApiProperty({ type: [AnalyticsTrendDto] }) sessionTrends!: AnalyticsTrendDto[];
 }
 

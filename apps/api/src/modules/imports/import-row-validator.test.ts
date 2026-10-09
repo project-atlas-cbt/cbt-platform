@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  splitElectives,
   validateStudentRow,
   validateTeacherRow,
   type StudentValidationContext,
@@ -10,8 +11,23 @@ function studentCtx(overrides: Partial<StudentValidationContext> = {}): StudentV
   return {
     existingStudentIds: new Set(),
     idCountsInFile: new Map(),
-    classesByName: new Map([['ss1a', { id: 'class-1', departmentId: null }]]),
-    departmentsByName: new Map([['science', { id: 'dept-1' }]]),
+    classesByName: new Map([
+      [
+        'ss1a',
+        {
+          id: 'class-1',
+          offeringsByName: new Map([
+            ['further mathematics', { classSubjectId: 'cs-fm', kind: 'ELECTIVE' }],
+            ['fmt', { classSubjectId: 'cs-fm', kind: 'ELECTIVE' }],
+            ['mathematics', { classSubjectId: 'cs-m', kind: 'COMPULSORY' }],
+          ]),
+        },
+      ],
+    ]),
+    streamsByName: new Map([
+      ['science', { id: 'stream-1' }],
+      ['sci', { id: 'stream-1' }],
+    ]),
     ...overrides,
   };
 }
@@ -89,61 +105,49 @@ describe('validateStudentRow', () => {
     expect(errors).toEqual([]);
   });
 
-  it('accepts a blank Department even when the class has one — supplementary, not required', () => {
-    const errors = validateStudentRow(
-      { 'Student ID': 'ST001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A', Department: '' },
-      studentCtx({ classesByName: new Map([['ss1a', { id: 'class-1', departmentId: 'dept-1' }]]) }),
-    );
-    expect(errors).toEqual([]);
+  const base = { 'Student ID': 'ST001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A' };
+
+  it('accepts a blank Stream: the class default applies', () => {
+    expect(validateStudentRow({ ...base, Stream: '' }, studentCtx())).toEqual([]);
   });
 
-  it('flags an unresolvable Department', () => {
-    const errors = validateStudentRow(
-      {
-        'Student ID': 'ST001',
-        'First Name': 'A',
-        'Last Name': 'B',
-        Class: 'SS1A',
-        Department: 'Nonexistent',
-      },
-      studentCtx(),
-    );
-    expect(errors.some((e) => e.field === 'Department' && e.message.includes('not found'))).toBe(
-      true,
-    );
+  it('accepts a stream by name or code, in any case', () => {
+    expect(validateStudentRow({ ...base, Stream: 'science' }, studentCtx())).toEqual([]);
+    expect(validateStudentRow({ ...base, Stream: 'SCI' }, studentCtx())).toEqual([]);
   });
 
-  it('flags a Department that disagrees with the resolved Class', () => {
-    const errors = validateStudentRow(
-      {
-        'Student ID': 'ST001',
-        'First Name': 'A',
-        'Last Name': 'B',
-        Class: 'SS1A',
-        Department: 'Science',
-      },
-      studentCtx({
-        classesByName: new Map([['ss1a', { id: 'class-1', departmentId: 'dept-other' }]]),
-        departmentsByName: new Map([['science', { id: 'dept-1' }]]),
-      }),
-    );
+  it('flags an unknown stream', () => {
+    const errors = validateStudentRow({ ...base, Stream: 'Arts' }, studentCtx());
+    expect(errors.some((e) => e.field === 'Stream' && e.message.includes('not found'))).toBe(true);
+  });
+
+  it("reads an old file's Department column as the stream", () => {
+    expect(validateStudentRow({ ...base, Department: 'Science' }, studentCtx())).toEqual([]);
+    const errors = validateStudentRow({ ...base, Department: 'Arts' }, studentCtx());
+    expect(errors.some((e) => e.field === 'Department')).toBe(true);
+  });
+
+  it('accepts electives the class offers, by name or code', () => {
     expect(
-      errors.some((e) => e.field === 'Department' && e.message.includes('does not match')),
-    ).toBe(true);
+      validateStudentRow({ ...base, Electives: 'Further Mathematics; mathematics' }, studentCtx()),
+    ).toEqual([]);
+    expect(validateStudentRow({ ...base, Electives: 'FMT' }, studentCtx())).toEqual([]);
   });
 
-  it('accepts a Department that agrees with the resolved Class', () => {
-    const errors = validateStudentRow(
-      {
-        'Student ID': 'ST001',
-        'First Name': 'A',
-        'Last Name': 'B',
-        Class: 'SS1A',
-        Department: 'Science',
-      },
-      studentCtx({ classesByName: new Map([['ss1a', { id: 'class-1', departmentId: 'dept-1' }]]) }),
-    );
-    expect(errors).toEqual([]);
+  it('flags an elective the class does not offer', () => {
+    const errors = validateStudentRow({ ...base, Electives: 'FMT; Latin' }, studentCtx());
+    expect(errors).toEqual([
+      { field: 'Electives', message: 'Class "SS1A" does not offer "Latin".' },
+    ]);
+  });
+});
+
+describe('splitElectives', () => {
+  it('splits on semicolons or commas and drops blanks and repeats', () => {
+    expect(splitElectives(' Further Mathematics ;Data Processing,, further mathematics ')).toEqual([
+      'Further Mathematics',
+      'Data Processing',
+    ]);
   });
 });
 

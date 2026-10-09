@@ -96,13 +96,72 @@ export function useDeleteDepartment() {
   });
 }
 
+// ---- Stream (ADR-0038) ----
+
+export function useCreateStream() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; code: string }) =>
+      unwrap(apiClient.POST('/academics/streams', { body })),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useUpdateStream() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      name?: string;
+      code?: string;
+      status?: 'ACTIVE' | 'INACTIVE';
+    }) => unwrap(apiClient.PATCH('/academics/streams/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+export function useDeleteStream() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(apiClient.DELETE('/academics/streams/{id}', { params: { path: { id } } })),
+    onSuccess: () => invalidateAcademics(client),
+  });
+}
+
+/** Moves a student into a stream (or out of any, with null) for their
+ * current enrollment. Stream offerings follow: the new stream's subjects are
+ * registered, the old stream's dropped. */
+export function useSetStudentStream(studentProfileId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (streamId: string | null) =>
+      unwrap(
+        apiClient.PUT('/students/{id}/stream', {
+          params: { path: { id: studentProfileId } },
+          body: { streamId },
+        }),
+      ),
+    onSuccess: () =>
+      Promise.all([
+        invalidateAcademics(client),
+        client.invalidateQueries({ queryKey: ['people'], exact: false }),
+        client.invalidateQueries({ queryKey: ['students'], exact: false }),
+      ]),
+  });
+}
+
 // ---- ClassGroup ----
 
 export function useUpdateClass(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: {
-      departmentId?: string | null;
+      defaultStreamId?: string | null;
+      placeStudentsWithoutStream?: boolean;
       name?: string;
       level?: 'JSS1' | 'JSS2' | 'JSS3' | 'SS1' | 'SS2' | 'SS3';
       arm?: string;
@@ -169,27 +228,44 @@ export type ClassSubjectKind = 'COMPULSORY' | 'ELECTIVE';
 export function useAddClassSubject(classId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ subjectId, kind }: { subjectId: string; kind: ClassSubjectKind }) =>
+    mutationFn: ({
+      subjectId,
+      kind,
+      streamIds,
+    }: {
+      subjectId: string;
+      kind: ClassSubjectKind;
+      streamIds?: string[];
+    }) =>
       unwrap(
         apiClient.POST('/academics/classes/{id}/subjects', {
           params: { path: { id: classId } },
-          body: { subjectId, kind },
+          body: { subjectId, kind, ...(streamIds ? { streamIds } : {}) },
         }),
       ),
     onSuccess: () => invalidateAcademics(client),
   });
 }
 
-/** ADR-0038: compulsory or elective. Compulsory registers every student
- * without a registration; elective changes no registration. */
+/** ADR-0038: who takes the subject. Compulsory registers every student
+ * without a registration; an elective with streams registers the students in
+ * those streams; a plain elective changes no registration. */
 export function useSetClassSubjectKind() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, kind }: { id: string; kind: ClassSubjectKind }) =>
+    mutationFn: ({
+      id,
+      kind,
+      streamIds,
+    }: {
+      id: string;
+      kind: ClassSubjectKind;
+      streamIds?: string[];
+    }) =>
       unwrap(
         apiClient.PATCH('/academics/class-subjects/{id}', {
           params: { path: { id } },
-          body: { kind },
+          body: { kind, ...(streamIds ? { streamIds } : {}) },
         }),
       ),
     onSuccess: () => invalidateAcademics(client),

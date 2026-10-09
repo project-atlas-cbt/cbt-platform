@@ -15,13 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  useClass,
-  useClassRoster,
-  useClassTeachers,
-  useDepartments,
-  useSession,
-} from '@/lib/academics/queries';
+import { useClass, useClassRoster, useClassTeachers, useSession } from '@/lib/academics/queries';
 import { useHasPermission } from '@/lib/nav';
 import { useClassCredentialSheet } from '@/lib/people/mutations';
 import { describeAcademicsError } from '../error-utils';
@@ -49,7 +43,6 @@ type TabId = (typeof TABS)[number]['id'];
 export function ClassDetailScreen({ classId }: { classId: string }) {
   const classGroup = useClass(classId);
   const session = useSession(classGroup.data?.academicSessionId);
-  const departments = useDepartments();
   const [tab, setTab] = useState<TabId>('students');
   // ADR-0038: who takes each subject, for the staff who set registrations.
   const canManageRegistrations = useHasPermission('registrations.manage');
@@ -60,17 +53,15 @@ export function ClassDetailScreen({ classId }: { classId: string }) {
     return <ErrorState error={classGroup.error} onRetry={() => void classGroup.refetch()} />;
   }
 
-  const department = classGroup.data.departmentId
-    ? departments.data?.departments.find((d) => d.id === classGroup.data.departmentId)
-    : undefined;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-base font-semibold text-text-primary">{classGroup.data.name}</h2>
         <Badge status="neutral">{classGroup.data.level}</Badge>
         {session.data ? <Badge status="neutral">{session.data.name}</Badge> : null}
-        {department ? <Badge status="info">{department.name}</Badge> : null}
+        {classGroup.data.defaultStreamName ? (
+          <Badge status="info">{classGroup.data.defaultStreamName} stream</Badge>
+        ) : null}
         <ClassStatusBadge value={classGroup.data.status} />
       </div>
 
@@ -147,6 +138,8 @@ function ClassRosterTable({ classId }: { classId: string }) {
       <EmptyState title="No students enrolled yet" description="Enroll students from People." />
     );
   }
+  // ADR-0038: the column shows only when some student here has a stream.
+  const showStream = roster.data.students.some((s) => s.streamName);
   return (
     <div className="space-y-3">
       {canResetCredentials ? (
@@ -174,6 +167,7 @@ function ClassRosterTable({ classId }: { classId: string }) {
           <TableRow>
             <TableHead>Student ID</TableHead>
             <TableHead>Name</TableHead>
+            {showStream ? <TableHead>Stream</TableHead> : null}
             <TableHead>Enrolled since</TableHead>
           </TableRow>
         </TableHeader>
@@ -182,6 +176,7 @@ function ClassRosterTable({ classId }: { classId: string }) {
             <TableRow key={s.enrollmentId}>
               <TableCell>{s.studentId}</TableCell>
               <TableCell>{s.displayName}</TableCell>
+              {showStream ? <TableCell>{s.streamName ?? '—'}</TableCell> : null}
               <TableCell>{s.startDate}</TableCell>
             </TableRow>
           ))}

@@ -6,6 +6,7 @@ export const HISTORY_EVENT_KINDS = [
   'STARTED_SESSION',
   'SUBJECT_ADDED',
   'SUBJECT_DROPPED',
+  'STREAM_CHANGED',
   'ACCOUNT',
 ] as const;
 export type HistoryEventKind = (typeof HISTORY_EVENT_KINDS)[number];
@@ -72,6 +73,10 @@ export class HistorySessionDto {
     description: 'The class the student ended the session in, or is in now.',
   })
   className!: string;
+
+  /** ADR-0038: the stream the student ended the session in, if any. */
+  @ApiProperty({ type: String, nullable: true })
+  streamName!: string | null;
 
   @ApiProperty({ type: Boolean })
   current!: boolean;

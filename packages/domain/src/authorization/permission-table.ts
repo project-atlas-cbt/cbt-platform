@@ -1009,7 +1009,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted(
         'SELF',
-        'F14 gap-closure — GET /students/me (name, student ID, current class/department for the ' +
+        'F14 gap-closure — GET /students/me (name, student ID, current class/stream for the ' +
           "Profile screen, 04 §62). Distinct from users.student.view (the staff directory's " +
           "broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.",
       ),

@@ -7,6 +7,7 @@ import { useUpdateRolloverDecisions } from '@/lib/academics/mutations';
 import { useHasPermission } from '@/lib/nav';
 
 vi.mock('@/lib/academics/queries', () => ({
+  useStreams: () => ({ data: { streams: [] }, isSuccess: true, isPending: false }),
   useRolloverPlan: vi.fn(),
   useDepartments: vi.fn(),
 }));

@@ -58,8 +58,9 @@ describe('HodDashboard', () => {
     vi.mocked(useClasses).mockReturnValue({
       data: {
         classes: [
-          ...Array.from({ length: 6 }, (_, i) => ({ id: `c-${i}`, departmentId: 'dept-sci' })),
-          { id: 'c-arts', departmentId: 'dept-arts' },
+          // ADR-0038: the server returns only classes offering the
+          // department's subjects (`departmentId` query).
+          ...Array.from({ length: 6 }, (_, i) => ({ id: `c-${i}`, status: 'ACTIVE' })),
         ],
       },
       isPending: false,
@@ -93,6 +94,10 @@ describe('HodDashboard', () => {
     expect(screen.getByText('76.5%')).toBeInTheDocument(); // Average score
     expect(screen.getByText('2')).toBeInTheDocument(); // 2 department subjects
     expect(screen.getByText('6')).toBeInTheDocument(); // 6 department classes
+    expect(vi.mocked(useClasses)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ departmentId: 'dept-sci' }),
+    );
   });
 
   function mockLoadedData() {

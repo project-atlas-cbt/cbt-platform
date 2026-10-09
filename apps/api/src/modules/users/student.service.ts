@@ -40,8 +40,8 @@ type CurrentEnrollment = {
   currentClassId: string | null;
   currentClassName: string | null;
   currentAcademicSessionId: string | null;
-  departmentId: string | null;
-  departmentName: string | null;
+  streamId: string | null;
+  streamName: string | null;
 };
 
 function toResponseDto(row: StudentRow, enrollment?: CurrentEnrollment): StudentResponseDto {
@@ -60,8 +60,8 @@ function toResponseDto(row: StudentRow, enrollment?: CurrentEnrollment): Student
     currentClassId: enrollment?.currentClassId ?? null,
     currentClassName: enrollment?.currentClassName ?? null,
     currentAcademicSessionId: enrollment?.currentAcademicSessionId ?? null,
-    departmentId: enrollment?.departmentId ?? null,
-    departmentName: enrollment?.departmentName ?? null,
+    streamId: enrollment?.streamId ?? null,
+    streamName: enrollment?.streamName ?? null,
   };
 }
 
@@ -83,9 +83,8 @@ export async function resolveCurrentEnrollments(
   const enrollments = await tx.studentEnrollment.findMany({
     where: { schoolId, studentProfileId: { in: studentProfileIds }, status: 'ACTIVE' },
     include: {
-      classGroupSession: {
-        include: { department: { select: { id: true, name: true } } },
-      },
+      classGroupSession: true,
+      stream: { select: { id: true, name: true } },
     },
   });
   const map = new Map<string, CurrentEnrollment>();
@@ -95,8 +94,8 @@ export async function resolveCurrentEnrollments(
       currentClassId: enrollment.classGroupSession.id,
       currentClassName: enrollment.classGroupSession.name,
       currentAcademicSessionId: enrollment.academicSessionId,
-      departmentId: enrollment.classGroupSession.department?.id ?? null,
-      departmentName: enrollment.classGroupSession.department?.name ?? null,
+      streamId: enrollment.stream?.id ?? null,
+      streamName: enrollment.stream?.name ?? null,
     });
   }
   return map;
@@ -207,7 +206,7 @@ export class StudentService {
         displayName: row.membership.user.displayName,
         studentId: row.studentId,
         currentClassName: enrollment?.currentClassName ?? null,
-        departmentName: enrollment?.departmentName ?? null,
+        streamName: enrollment?.streamName ?? null,
       };
     });
     // Unreachable via the STUDENT-only route this backs (a membership with

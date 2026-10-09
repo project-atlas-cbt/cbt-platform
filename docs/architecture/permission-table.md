@@ -156,7 +156,7 @@ This is B2's DoD item 1 deliverable: "the normalised permission table derived fr
 - **Reset Teacher credentials / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **View students / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
 - **View own student profile / SOFTWARE_ADMIN:** R3: ADR-0012 "permitted, audited" — read-audit emission deferred, see B10's Deferred items.
-- **View own student profile / STUDENT:** F14 gap-closure — GET /students/me (name, student ID, current class/department for the Profile screen, 04 §62). Distinct from users.student.view (the staff directory's broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.
+- **View own student profile / STUDENT:** F14 gap-closure — GET /students/me (name, student ID, current class/stream for the Profile screen, 04 §62). Distinct from users.student.view (the staff directory's broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.
 - **Create Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Edit Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.
 - **Deactivate Student / SOFTWARE_ADMIN:** R4: ADR-0012 school-academic-write category, extended from its named examples — see this file's header.

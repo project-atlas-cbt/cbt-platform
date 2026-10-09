@@ -76,3 +76,9 @@ export function SubjectStatusBadge({ value }: { value: SubjectStatus }) {
   const meta = SUBJECT_STATUS_META[value];
   return <Badge status={meta.status}>{meta.label}</Badge>;
 }
+
+/** ADR-0038: a stream is Active or Inactive, the same pair as a department. */
+export function StreamStatusBadge({ value }: { value: 'ACTIVE' | 'INACTIVE' }) {
+  const meta = DEPARTMENT_STATUS_META[value];
+  return <Badge status={meta.status}>{meta.label}</Badge>;
+}

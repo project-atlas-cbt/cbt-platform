@@ -283,7 +283,6 @@ describe('B5 Academic Structure — full structure creation, activation, archiva
 
     const classRes = await post(admin, '/academics/classes', {
       academicSessionId: sessionAId,
-      departmentId,
       name: 'SS2A',
       level: 'SS2',
       arm: 'A',
@@ -372,7 +371,7 @@ describe('B5 Academic Structure — full structure creation, activation, archiva
 
     const classStillThere = await get(admin, `/academics/classes/${classId}`);
     expect(classStillThere.statusCode).toBe(200);
-    expect(classStillThere.json<{ departmentId: string }>().departmentId).toBe(departmentId);
+    expect(classStillThere.json<{ status: string }>().status).toBe('ACTIVE');
   });
 
   it('destructive deletion is refused where dependents exist, with a clear error (DoD item 5)', async () => {

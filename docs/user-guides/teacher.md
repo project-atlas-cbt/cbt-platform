@@ -91,7 +91,8 @@ the students who take it, then press **Save**. Search finds a student by name or
 
 - You see the electives you teach in that class. If you are the class's **form teacher**, you see
   every elective of that class. The school office makes you a form teacher.
-- Compulsory subjects are set by the school office.
+- Compulsory subjects are set by the school office. A subject offered to a stream (for example
+  Physics for Science) is ticked already for everyone in that stream.
 - Changes apply to future exams only; past exams and results don't change.
 
 ## Getting help

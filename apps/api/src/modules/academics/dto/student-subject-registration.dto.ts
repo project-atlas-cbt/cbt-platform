@@ -114,6 +114,10 @@ export class GridOfferingDto {
 
   @ApiProperty({ type: String, nullable: true, description: 'e.g. "Religion: choose 1".' })
   choiceRule!: string | null;
+
+  /** ADR-0038: streams whose students are registered automatically. */
+  @ApiProperty({ type: String, isArray: true })
+  streamNames!: string[];
 }
 
 export class GridStudentDto {
@@ -128,6 +132,9 @@ export class GridStudentDto {
 
   @ApiProperty({ type: String })
   displayName!: string;
+
+  @ApiProperty({ type: String, nullable: true })
+  streamName!: string | null;
 
   @ApiProperty({ type: String, isArray: true })
   registeredClassSubjectIds!: string[];
@@ -191,6 +198,13 @@ export class StudentSubjectRegistrationListResponseDto {
 
   @ApiProperty({ type: String, nullable: true })
   className!: string | null;
+
+  /** ADR-0038: the current enrollment's stream. */
+  @ApiProperty({ type: String, nullable: true })
+  streamId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  streamName!: string | null;
 
   @ApiProperty({ type: StudentSubjectRegistrationResponseDto, isArray: true })
   registrations!: StudentSubjectRegistrationResponseDto[];

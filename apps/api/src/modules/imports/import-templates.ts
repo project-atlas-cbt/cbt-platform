@@ -31,6 +31,9 @@ export interface ImportTemplateDef {
   columns: readonly string[];
   /** Subset of `columns` that must be non-empty (after trim) on every row. */
   requiredColumns: readonly string[];
+  /** Subset of `columns` an upload may leave out entirely, so a file made
+   * from an earlier template with the same version still imports. */
+  optionalColumns?: readonly string[];
 }
 
 // B8 — 05 §18.1's own literal column list: Question, Option A-D, Correct
@@ -38,9 +41,13 @@ export interface ImportTemplateDef {
 // Question.level exactly like STUDENTS' own "Class" column resolves to a
 // ClassGroup — see import-row-validator.ts's validateQuestionRow.
 export const IMPORT_TEMPLATES: Record<ImportJobType, ImportTemplateDef> = {
+  // ADR-0038: Stream replaces Department (a file with the old Department
+  // column still imports; it is read as the stream), and Electives lists
+  // the elective subjects a student takes, separated by semicolons.
   STUDENTS: {
-    columns: ['Student ID', 'First Name', 'Last Name', 'Class', 'Department'],
+    columns: ['Student ID', 'First Name', 'Last Name', 'Class', 'Stream', 'Electives'],
     requiredColumns: ['Student ID', 'First Name', 'Last Name', 'Class'],
+    optionalColumns: ['Stream', 'Electives'],
   },
   TEACHERS: {
     columns: ['Staff ID', 'First Name', 'Last Name', 'Email'],
@@ -116,7 +123,12 @@ export function buildErrorRowsCsv(
     templateVersionMarker(IMPORT_TEMPLATE_VERSION),
     toCsvLine([...def.columns, 'Errors']),
     ...rows.map((row) => {
-      const cells = def.columns.map((column) => row.rawData[column] ?? '');
+      // A row from a file made on the old students template keeps its
+      // Department value, now under Stream (ADR-0038).
+      const cells = def.columns.map(
+        (column) =>
+          row.rawData[column] || (column === 'Stream' ? (row.rawData['Department'] ?? '') : ''),
+      );
       const errorText = (row.errors ?? []).map((e) => `${e.field}: ${e.message}`).join('; ');
       return toCsvLine([...cells, errorText]);
     }),

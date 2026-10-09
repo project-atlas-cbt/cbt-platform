@@ -3083,6 +3083,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "departmentId",
+            "required": false,
+            "in": "query",
+            "description": "ADR-0038: only classes offering a subject in this department.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3567,6 +3576,128 @@
         ]
       }
     },
+    "/academics/streams": {
+      "get": {
+        "operationId": "StreamController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's student streams (ADR-0038).",
+        "tags": [
+          "academics"
+        ]
+      },
+      "post": {
+        "operationId": "StreamController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStreamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a stream.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/streams/{id}": {
+      "patch": {
+        "operationId": "StreamController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStreamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rename a stream, or retire it (status INACTIVE).",
+        "tags": [
+          "academics"
+        ]
+      },
+      "delete": {
+        "operationId": "StreamController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a stream that no class, student or offering uses.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
     "/academics/classes/{id}/subjects": {
       "get": {
         "operationId": "ClassSubjectController_list",
@@ -3866,6 +3997,47 @@
           }
         },
         "summary": "A student's full enrollment history (never overwritten, 07 §35).",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/students/{id}/stream": {
+      "put": {
+        "operationId": "StudentEnrollmentController_setStream",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetStudentStreamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentEnrollmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Put a student's current enrollment in another stream (ADR-0038); registers the new stream's subjects and deregisters the old stream's, for future exams only.",
         "tags": [
           "people"
         ]
@@ -4529,7 +4701,7 @@
             }
           },
           {
-            "name": "departmentId",
+            "name": "streamId",
             "required": false,
             "in": "query",
             "schema": {
@@ -13108,7 +13280,11 @@
           "academicSessionId": {
             "type": "string"
           },
-          "departmentId": {
+          "defaultStreamId": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultStreamName": {
             "type": "string",
             "nullable": true
           },
@@ -13141,7 +13317,8 @@
         "required": [
           "id",
           "academicSessionId",
-          "departmentId",
+          "defaultStreamId",
+          "defaultStreamName",
           "name",
           "level",
           "arm",
@@ -13168,10 +13345,10 @@
           "academicSessionId": {
             "type": "string"
           },
-          "departmentId": {
+          "defaultStreamId": {
             "type": "string",
             "nullable": true,
-            "description": "Null for classes with no department (e.g. JSS levels before streaming)."
+            "description": "ADR-0038: the stream students joining this class take unless set otherwise. Null for a mixed arm and for JSS."
           },
           "name": {
             "type": "string",
@@ -13205,7 +13382,7 @@
       "UpdateClassGroupDto": {
         "type": "object",
         "properties": {
-          "departmentId": {
+          "defaultStreamId": {
             "type": "string",
             "nullable": true
           },
@@ -13227,6 +13404,10 @@
           "arm": {
             "type": "string",
             "maxLength": 16
+          },
+          "placeStudentsWithoutStream": {
+            "type": "boolean",
+            "description": "ADR-0038: with a new defaultStreamId, also put the class’s current students who are in no stream into it (registering its stream subjects). Students already in a stream keep it."
           }
         }
       },
@@ -13422,6 +13603,94 @@
           }
         }
       },
+      "StreamResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "classCount": {
+            "type": "number"
+          },
+          "studentCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "status",
+          "classCount",
+          "studentCount"
+        ]
+      },
+      "StreamListResponseDto": {
+        "type": "object",
+        "properties": {
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StreamResponseDto"
+            }
+          }
+        },
+        "required": [
+          "streams"
+        ]
+      },
+      "CreateStreamDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "example": "Science"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 16,
+            "example": "SCI"
+          }
+        },
+        "required": [
+          "name",
+          "code"
+        ]
+      },
+      "UpdateStreamDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          }
+        }
+      },
       "ClassSubjectResponseDto": {
         "type": "object",
         "properties": {
@@ -13456,6 +13725,18 @@
               "COMPULSORY",
               "ELECTIVE"
             ]
+          },
+          "streamIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "streamNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -13466,7 +13747,9 @@
           "subjectCode",
           "academicSessionId",
           "status",
-          "kind"
+          "kind",
+          "streamIds",
+          "streamNames"
         ]
       },
       "ClassSubjectListResponseDto": {
@@ -13496,6 +13779,12 @@
               "ELECTIVE"
             ],
             "description": "ADR-0038: COMPULSORY (default) registers every student in the class; ELECTIVE registers nobody."
+          },
+          "streamIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -13511,11 +13800,14 @@
               "COMPULSORY",
               "ELECTIVE"
             ]
+          },
+          "streamIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
-        },
-        "required": [
-          "kind"
-        ]
+        }
       },
       "HodAssignmentResponseDto": {
         "type": "object",
@@ -13609,6 +13901,10 @@
           },
           "classId": {
             "type": "string"
+          },
+          "streamId": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -13630,6 +13926,10 @@
           },
           "classId": {
             "type": "string"
+          },
+          "streamId": {
+            "type": "string",
+            "nullable": true
           },
           "startDate": {
             "type": "string",
@@ -13655,9 +13955,22 @@
           "studentProfileId",
           "academicSessionId",
           "classId",
+          "streamId",
           "startDate",
           "endDate",
           "status"
+        ]
+      },
+      "SetStudentStreamDto": {
+        "type": "object",
+        "properties": {
+          "streamId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "streamId"
         ]
       },
       "StudentEnrollmentListResponseDto": {
@@ -13692,6 +14005,14 @@
           "startDate": {
             "type": "string",
             "format": "date"
+          },
+          "streamId": {
+            "type": "string",
+            "nullable": true
+          },
+          "streamName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -13699,7 +14020,9 @@
           "studentProfileId",
           "studentId",
           "displayName",
-          "startDate"
+          "startDate",
+          "streamId",
+          "streamName"
         ]
       },
       "ClassRosterResponseDto": {
@@ -14035,6 +14358,14 @@
             "type": "string",
             "nullable": true
           },
+          "streamId": {
+            "type": "string",
+            "nullable": true
+          },
+          "streamName": {
+            "type": "string",
+            "nullable": true
+          },
           "registrations": {
             "type": "array",
             "items": {
@@ -14058,6 +14389,8 @@
           "enrollmentId",
           "classId",
           "className",
+          "streamId",
+          "streamName",
           "registrations",
           "availableOfferings",
           "warnings"
@@ -14097,6 +14430,12 @@
             "type": "string",
             "nullable": true,
             "description": "e.g. \"Religion: choose 1\"."
+          },
+          "streamNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -14107,7 +14446,8 @@
           "kind",
           "choiceGroupId",
           "choiceGroupName",
-          "choiceRule"
+          "choiceRule",
+          "streamNames"
         ]
       },
       "GridStudentDto": {
@@ -14124,6 +14464,10 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "streamName": {
+            "type": "string",
+            "nullable": true
           },
           "registeredClassSubjectIds": {
             "type": "array",
@@ -14143,6 +14487,7 @@
           "studentProfileId",
           "studentId",
           "displayName",
+          "streamName",
           "registeredClassSubjectIds",
           "warnings"
         ]
@@ -14330,6 +14675,7 @@
               "STARTED_SESSION",
               "SUBJECT_ADDED",
               "SUBJECT_DROPPED",
+              "STREAM_CHANGED",
               "ACCOUNT"
             ]
           },
@@ -14415,6 +14761,10 @@
             "type": "string",
             "description": "The class the student ended the session in, or is in now."
           },
+          "streamName": {
+            "type": "string",
+            "nullable": true
+          },
           "current": {
             "type": "boolean"
           },
@@ -14449,6 +14799,7 @@
           "academicSessionId",
           "sessionName",
           "className",
+          "streamName",
           "current",
           "subjects",
           "events",
@@ -16836,6 +17187,12 @@
               "$ref": "#/components/schemas/ComparisonMetricDto"
             }
           },
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonMetricDto"
+            }
+          },
           "sessionTrends": {
             "type": "array",
             "items": {
@@ -16853,6 +17210,7 @@
           "examCount",
           "attemptCount",
           "departments",
+          "streams",
           "sessionTrends"
         ]
       },
@@ -18131,11 +18489,11 @@
             "type": "string",
             "nullable": true
           },
-          "departmentId": {
+          "streamId": {
             "type": "string",
             "nullable": true
           },
-          "departmentName": {
+          "streamName": {
             "type": "string",
             "nullable": true
           }
@@ -18155,8 +18513,8 @@
           "currentClassId",
           "currentClassName",
           "currentAcademicSessionId",
-          "departmentId",
-          "departmentName"
+          "streamId",
+          "streamName"
         ]
       },
       "StudentListResponseDto": {
@@ -18212,7 +18570,7 @@
             "type": "string",
             "nullable": true
           },
-          "departmentName": {
+          "streamName": {
             "type": "string",
             "nullable": true
           }
@@ -18221,7 +18579,7 @@
           "displayName",
           "studentId",
           "currentClassName",
-          "departmentName"
+          "streamName"
         ]
       },
       "CreateStudentDto": {
