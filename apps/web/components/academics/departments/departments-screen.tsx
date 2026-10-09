@@ -20,6 +20,7 @@ import { useDeactivateDepartment } from '@/lib/onboarding/mutations';
 import { useDeleteDepartment } from '@/lib/academics/mutations';
 import { DepartmentStatusBadge } from '../academic-status-badges';
 import { ConfirmActionDialog } from '../confirm-action-dialog';
+import { StandardSetupDialog } from '../standard-setup/standard-setup-dialog';
 import { DepartmentForm } from './department-form';
 
 interface DepartmentRow {
@@ -45,6 +46,7 @@ export function DepartmentsScreen({ basePath }: { basePath: string }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DepartmentRow | undefined>(undefined);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [standardOpen, setStandardOpen] = useState(false);
 
   if (departments.isError) {
     return <ErrorState error={departments.error} onRetry={() => void departments.refetch()} />;
@@ -125,17 +127,28 @@ export function DepartmentsScreen({ basePath }: { basePath: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-text-primary">Departments</h2>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Departments</h2>
+          <p className="text-sm text-text-secondary">
+            A department groups subjects so its HOD reviews their questions. Students are not in
+            departments; they are in classes and, in senior classes, streams.
+          </p>
+        </div>
         {canManage ? (
-          <Button
-            onClick={() => {
-              setEditing(undefined);
-              setFormOpen(true);
-            }}
-          >
-            <Plus aria-hidden /> Add department
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="secondary" onClick={() => setStandardOpen(true)}>
+              Use standard setup
+            </Button>
+            <Button
+              onClick={() => {
+                setEditing(undefined);
+                setFormOpen(true);
+              }}
+            >
+              <Plus aria-hidden /> Add department
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -150,19 +163,12 @@ export function DepartmentsScreen({ basePath }: { basePath: string }) {
             title="No departments yet"
             description={
               canManage
-                ? 'Add your school’s first department.'
+                ? 'Start from the standard setup (Science, Business and Humanities, with the usual subjects in them), or add your own.'
                 : 'No departments have been created for this school yet.'
             }
             action={
               canManage ? (
-                <Button
-                  onClick={() => {
-                    setEditing(undefined);
-                    setFormOpen(true);
-                  }}
-                >
-                  Add department
-                </Button>
+                <Button onClick={() => setStandardOpen(true)}>Use standard setup</Button>
               ) : undefined
             }
           />
@@ -180,6 +186,8 @@ export function DepartmentsScreen({ basePath }: { basePath: string }) {
           />
         </DialogContent>
       </Dialog>
+
+      <StandardSetupDialog open={standardOpen} onOpenChange={setStandardOpen} />
 
       <ConfirmActionDialog
         open={confirmAction?.type === 'deactivate'}

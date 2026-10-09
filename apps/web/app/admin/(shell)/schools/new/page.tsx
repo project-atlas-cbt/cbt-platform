@@ -17,6 +17,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { EmptyState } from '@/components/ui/empty-state';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useCreateSchool } from '@/lib/platform/mutations';
 
 // `initialPeriodDays` stays a string in the form's own values (matching
@@ -37,6 +38,7 @@ const createSchoolSchema = z.object({
       (v) => Number.isInteger(Number(v)) && Number(v) >= 1,
       'Enter a whole number of at least 1 day.',
     ),
+  startingStructure: z.enum(['STANDARD', 'EMPTY']),
 });
 type CreateSchoolValues = z.infer<typeof createSchoolSchema>;
 
@@ -63,6 +65,7 @@ export default function CreateSchoolPage() {
       adminLoginIdentifier: '',
       plan: '',
       initialPeriodDays: '365',
+      startingStructure: 'STANDARD',
     },
   });
 
@@ -203,6 +206,44 @@ export default function CreateSchoolPage() {
               )}
             />
           </div>
+          <FormField
+            control={form.control}
+            name="startingStructure"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Starting structure</FormLabel>
+                <FormControl>
+                  <RadioGroup value={field.value} onValueChange={field.onChange}>
+                    <label className="flex items-start gap-2 text-sm">
+                      <RadioGroupItem
+                        value="STANDARD"
+                        aria-label="Standard setup"
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium text-text-primary">Standard setup</span>
+                        <span className="block text-text-secondary">
+                          Science, Business and Humanities departments, matching streams, and the
+                          usual JSS and SS subjects. The school edits them after activation.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <RadioGroupItem value="EMPTY" aria-label="Start empty" className="mt-0.5" />
+                      <span>
+                        <span className="font-medium text-text-primary">Start empty</span>
+                        <span className="block text-text-secondary">
+                          For a school organised differently: it sets up its own departments,
+                          streams and subjects.
+                        </span>
+                      </span>
+                    </label>
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           {submitError ? (
             <p role="alert" className="text-sm font-medium text-danger">
               {submitError}

@@ -38,6 +38,7 @@ export function useCreateSchool() {
       adminLoginIdentifier: string;
       plan: string;
       initialPeriodDays: number;
+      startingStructure: 'STANDARD' | 'EMPTY';
     }) => unwrap(apiClient.POST('/platform/schools', { body })),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ['platform', 'schools'], exact: false });

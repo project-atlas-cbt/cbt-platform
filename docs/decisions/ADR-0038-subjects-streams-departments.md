@@ -165,3 +165,46 @@ Electives`. Stream and Electives are optional; Electives are separated by `;` or
   that stream in the exam's session.
 
 Choice-rule warnings in exam readiness stay a candidate.
+
+## Amendment — the standard setup and the review fallback (2026-10-09)
+
+**Context.** Haneef relayed how an experienced vice-principal says schools run. Most have three
+departments, Science, Business and Humanities. A subject every stream takes still sits in one
+department so its HOD reviews it: Mathematics in Science, English in Humanities. Students in a
+stream take its subjects, but what a student takes is separate from where a subject sits. Schools
+differ, so the platform should start from the standard and let each school change it. The model
+above already allows all of this, since a department is free-form and only decides review. What
+was missing was a ready-made start, clearer labels, and a path for a subject no HOD covers.
+
+**Decision.**
+
+- **Standard setup** (`packages/domain/src/academics/standard-setup.ts`): the three departments,
+  three streams with the same names, the usual JSS and SS subjects each in a department, and two
+  choice groups ("Religion: choose 1", "Trade subject: choose 1"). `GET /academics/standard-setup`
+  previews it item by item (new, already there, or an existing subject with no department that
+  will be placed). `POST /academics/standard-setup` applies the ticked codes. It only adds what is
+  missing and places existing, name-matched subjects that have no department; it never moves,
+  renames or removes anything. School Admin and Moderator (`schoolConfig.subject.manage`), offered
+  on the setup Departments step and on **Academics › Departments** and **Subjects**. Audited as
+  `STANDARD_SETUP_APPLIED`.
+- **Software Admin.** Create school takes `startingStructure`: `STANDARD` applies the whole
+  standard setup in the school-creation transaction, and `EMPTY` (the API default) leaves it to the
+  school. The form defaults to Standard. This is structural setup, which the permission table
+  already grants the Software Admin (R1), not academic content (ADR-0012). The Software Admin
+  does not edit the structure afterwards. A questionnaire of structure toggles was considered and
+  set aside: every answer is something the school already sets on its own screens.
+- **Review fallback** (decision 6). `questionBank.approve`, `reject` and `requestChanges` grant
+  the School Admin `SCHOOL`; `QuestionReviewService` refuses it with
+  `QUESTION_REVIEW_HOD_AVAILABLE` (403) unless no HOD can decide. That is when the subject has no
+  department, the department has no active HOD (assignment and membership both ACTIVE), or every
+  such HOD wrote the question. A School Admin who is also an active HOD of the department acts as
+  that HOD. Self-review stays blocked for everyone. Queue items and the workspace carry
+  `fallbackReason`. The audit row's `actorRole` is `SCHOOL_ADMIN`, with the reason in its
+  metadata. The School Admin's **Question Review** lists only these questions, each with its
+  reason.
+- **Labels.** Screens say "department" for subjects and HOD review, and "stream" for students
+  ("Science department", "Science stream" in the standard setup). The Subjects screen warns about
+  any active subject with no department.
+
+**Not changed.** One department per subject (decision 5's reasoning stands). HODs per level, and
+letting a school rename the words "department" and "stream", stay candidates.

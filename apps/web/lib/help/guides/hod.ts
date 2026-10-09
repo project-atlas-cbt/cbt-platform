@@ -31,7 +31,7 @@ export const HOD_GUIDES: RoleGuideSet = {
       notes: [
         'Keyboard shortcuts: **A** approve, **R** reject, **C** request changes.',
         'Only approved questions can be put into exams. An approved revision never changes; a correction comes back to you as a new revision.',
-        'A subject with no department is outside every HOD’s review. Ask your school admin to set the subject’s department.',
+        'You never review a question you wrote. It goes to another HOD of the department, or to the School Admin if you are its only HOD. Questions in a subject with no department also go to the School Admin.',
       ],
       screen: { label: 'Question Review', href: 'question-review' },
       related: ['rejected-questions'],

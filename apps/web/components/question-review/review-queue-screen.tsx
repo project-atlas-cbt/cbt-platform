@@ -15,7 +15,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useReviewQueue } from '@/lib/question-review/queries';
-import { formatQueueAge } from '@/lib/question-review/queue-order';
+import {
+  FALLBACK_REASON_TEXT,
+  fallbackOnlyQueue,
+  formatQueueAge,
+} from '@/lib/question-review/queue-order';
 import { stripHtmlToText } from '@/lib/questions/sanitize-html';
 import { HelpLink } from '@/components/help/help-link';
 import { formatDate } from '@/lib/format/date';
@@ -27,8 +31,17 @@ import { formatDate } from '@/lib/format/date';
  * is department-scoped and expected to be dozens, not thousands, of items).
  * Plain `Table` primitives per subject group rather than the full
  * `DataTable`, since there's no server-side sort/pagination to wire up here.
+ *
+ * ADR-0038: with `fallbackOnly` (the School Admin's queue) it lists only the
+ * questions no HOD can review, each with the reason.
  */
-export function ReviewQueue() {
+export function ReviewQueue({
+  basePath = '/hod/question-review',
+  fallbackOnly = false,
+}: {
+  basePath?: string;
+  fallbackOnly?: boolean;
+} = {}) {
   const queue = useReviewQueue();
 
   if (queue.isPending) return <Skeleton className="h-96 w-full" />;
@@ -36,17 +49,29 @@ export function ReviewQueue() {
     return <ErrorState error={queue.error} onRetry={() => void queue.refetch()} />;
   }
 
-  const subjects = queue.data.subjects;
+  const subjects = (fallbackOnly ? fallbackOnlyQueue(queue.data) : queue.data)?.subjects ?? [];
+  const intro = fallbackOnly ? (
+    <p className="max-w-2xl text-sm text-text-secondary">
+      HODs review their departments&apos; questions. These are the ones no HOD can review, so they
+      come to you. Give the subject a department, or the department an HOD, to send future ones to
+      an HOD instead.
+    </p>
+  ) : null;
   const totalPending = subjects.reduce((sum, group) => sum + group.pendingCount, 0);
 
   if (totalPending === 0) {
     return (
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-text-primary">Question review</h1>
+        {intro}
         <EmptyState
           icon={ClipboardCheck}
           title="Queue is empty"
-          description="No questions are waiting for your review right now."
+          description={
+            fallbackOnly
+              ? 'Every question waiting for review has an HOD who can review it.'
+              : 'No questions are waiting for your review right now.'
+          }
         />
       </div>
     );
@@ -59,6 +84,7 @@ export function ReviewQueue() {
         <p className="text-sm text-text-secondary">
           {totalPending} question{totalPending === 1 ? '' : 's'} awaiting review
         </p>
+        {intro}
         <HelpLink context="questionReview" className="mt-1" />
       </div>
 
@@ -76,6 +102,7 @@ export function ReviewQueue() {
                 <TableHead>Level</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Age</TableHead>
+                {fallbackOnly ? <TableHead>Why it&apos;s yours</TableHead> : null}
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -89,9 +116,14 @@ export function ReviewQueue() {
                   <TableCell>{item.level}</TableCell>
                   <TableCell>{formatDate(item.submittedAt)}</TableCell>
                   <TableCell>{formatQueueAge(item.submittedAt)}</TableCell>
+                  {fallbackOnly ? (
+                    <TableCell className="max-w-xs text-text-secondary">
+                      {item.fallbackReason ? FALLBACK_REASON_TEXT[item.fallbackReason] : null}
+                    </TableCell>
+                  ) : null}
                   <TableCell>
                     <Button asChild size="sm">
-                      <Link href={`/hod/question-review/${item.questionId}`}>Open review</Link>
+                      <Link href={`${basePath}/${item.questionId}`}>Open review</Link>
                     </Button>
                   </TableCell>
                 </TableRow>

@@ -54,7 +54,20 @@ describe('CreateSchoolPage', () => {
         name: 'Greenfield College',
         adminEmail: 'ada@example.com',
         initialPeriodDays: 365,
+        startingStructure: 'STANDARD',
       }),
+    );
+  });
+
+  it('can start the school empty instead of with the standard setup (ADR-0038)', async () => {
+    mutateAsync.mockResolvedValueOnce({ id: 's1', subdomain: 'greenfield' });
+    render(<CreateSchoolPage />);
+    await fillValidForm();
+    await userEvent.click(screen.getByRole('radio', { name: /start empty/i }));
+    await userEvent.click(screen.getByRole('button', { name: /create school/i }));
+    await screen.findByText(/school created/i, {}, { timeout: 10000 });
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ startingStructure: 'EMPTY' }),
     );
   });
 

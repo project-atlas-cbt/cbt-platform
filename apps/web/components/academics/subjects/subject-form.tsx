@@ -149,8 +149,9 @@ export function SubjectForm({
                 </SelectContent>
               </Select>
               <FormDescription>
-                Without a department, no HOD sees this subject&rsquo;s questions, exams or results.
-                Only School Admins, Moderators and the exam&rsquo;s author do.
+                This department&rsquo;s HOD reviews the subject&rsquo;s questions. A subject every
+                student takes still needs one, such as Mathematics in Science. Without a department,
+                the School Admin reviews its questions and no HOD sees its exams or results.
               </FormDescription>
               <FormMessage />
             </FormItem>
