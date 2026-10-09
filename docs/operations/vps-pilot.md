@@ -209,10 +209,8 @@ set -a; . ./.env; set +a
 docker compose exec -T -e BACKUP_S3_ENDPOINT -e BACKUP_S3_ACCESS_KEY_ID \
   -e BACKUP_S3_SECRET_ACCESS_KEY -e BACKUP_S3_BUCKET minio sh -ec '
   export MC_HOST_local="http://atlas-root:${MINIO_ROOT_PASSWORD}@localhost:9000"
-  mc alias set offsite "https://${BACKUP_S3_ENDPOINT#https://}" \
-    "$BACKUP_S3_ACCESS_KEY_ID" "$BACKUP_S3_SECRET_ACCESS_KEY" >/dev/null
-  mc mirror offsite/$BACKUP_S3_BUCKET/media local/atlas-media
-  mc alias remove offsite >/dev/null'
+  export MC_HOST_offsite="https://${BACKUP_S3_ACCESS_KEY_ID}:${BACKUP_S3_SECRET_ACCESS_KEY}@${BACKUP_S3_ENDPOINT#https://}"
+  mc mirror offsite/$BACKUP_S3_BUCKET/media local/atlas-media'
 bin/deploy.sh                                 # 5. reasserts grants, starts the apps
 ```
 
@@ -231,5 +229,8 @@ restore once before the pilot (launch checklist section 0).
   `@atlas/observability`).
 - Exam Health Monitor alerts reach `OPS_ALERT_EMAILS` through SMTP (or the recipients set in System
   Configuration, ADR-0036, which override it).
-- `backups/backup.log` after each night; an empty off-site setting prints a warning there.
+- `backups/backup.log` after each night; an empty off-site setting prints a warning there. A
+  failed backup also emails the operations alert recipients ("Nightly backup failed", sent by
+  `ops:send-alert` from the last release in `releases.log`). A backup that never starts (cron
+  removed, server off) sends nothing, so still glance at the log or the off-site bucket weekly.
 - An external uptime check (any free service) on `https://api.<root>/v1/health`.

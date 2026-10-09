@@ -2,6 +2,20 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-09 — Backup-failure email and off-site keys off the command line (audit P0-3, P2-26)
+
+- `bin/backup.sh` now emails the operations alert recipients when any step fails, naming the step.
+  It runs the new `ops:send-alert` CLI from the last deployed release's ops image (cron has no
+  `RELEASE`). The CLI sends straight over the transport, not through the dispatch queue, so it
+  works with the API, worker or Redis down, and falls back to `OPS_ALERT_EMAILS` if the settings
+  table can't be read in 5 seconds.
+- The off-site keys reach `mc` as an `MC_HOST_offsite` variable instead of `mc alias set`
+  arguments, so `ps` in the MinIO container no longer shows them. mc splits that value by pattern,
+  not as a URL (checked in mc's `parseEnvURLStr`), so secrets containing `/ + @` still work.
+- Tested: the trap with a stubbed `docker` (failure sends one alert naming the step; success sends
+  none); the CLI with the console transport, with and without a reachable database. Not covered:
+  a backup that never starts (cron missing, server off); `vps-pilot.md` says to check weekly.
+
 ### 2026-10-09 — Middle names, register order and A to Z people lists (ADR-0039)
 
 Haneef asked (2026-10-09) for students A to Z by surname, a third name, and a fix for the pilot
