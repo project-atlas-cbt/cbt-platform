@@ -1,5 +1,6 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { AuditActionRegistry } from '../operations/audit-action.registry.js';
+import { NAME_ORDER_FIXED_ACTION, NAME_ORDER_REVERTED_ACTION } from './name-order-fix.js';
 
 /** Registers every `AuditEvent.action` string this module's services emit
  * (B10). `STUDENT_DEACTIVATED`/`TEACHER_DEACTIVATED`/`MODERATOR_REMOVED`
@@ -28,6 +29,9 @@ export class UsersAuditActionRegistrationProvider implements OnModuleInit {
       'STUDENT_DEACTIVATED',
       'STUDENT_REACTIVATED',
       'STUDENT_SIGN_IN_UNLOCKED',
+      // Operator repair, ops:fix-name-order (2026-10-09).
+      NAME_ORDER_FIXED_ACTION,
+      NAME_ORDER_REVERTED_ACTION,
       'TEACHER_CREATED',
       'TEACHER_UPDATED',
       'TEACHER_CREDENTIALS_RESET',

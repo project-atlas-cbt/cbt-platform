@@ -1,7 +1,14 @@
 import { forbiddenOtherRecord } from './actor.util.js';
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import { choiceGroupWarnings, describeRule, type ChoiceGroupRule, type Role } from '@atlas/domain';
+import {
+  choiceGroupWarnings,
+  formalName,
+  sortByPersonName,
+  describeRule,
+  type ChoiceGroupRule,
+  type Role,
+} from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import type { AuthenticatedUser } from '../identity/auth.guard.js';
@@ -309,10 +316,13 @@ export class StudentSubjectRegistrationService {
               select: { classSubjectId: true },
             },
           },
-          orderBy: { studentProfile: { studentId: 'asc' } },
         }),
         loadChoiceRules(tx, schoolId),
       ]);
+      sortByPersonName(enrollments, (e) => ({
+        ...e.studentProfile.membership.user,
+        identifier: e.studentProfile.studentId,
+      }));
       const subjectByOffering = new Map(offerings.map((o) => [o.id, o.subjectId]));
       const offered = new Set(offerings.map((o) => o.subjectId));
       const visible = offerings.filter((o) => inScope(scope, o.id));
@@ -339,7 +349,7 @@ export class StudentSubjectRegistrationService {
             enrollmentId: e.id,
             studentProfileId: e.studentProfileId,
             studentId: e.studentProfile.studentId,
-            displayName: e.studentProfile.membership.user.displayName,
+            displayName: formalName(e.studentProfile.membership.user),
             streamName: e.stream?.name ?? null,
             registeredClassSubjectIds: registered.filter((id) => inScope(scope, id)),
             warnings: choiceGroupWarnings(

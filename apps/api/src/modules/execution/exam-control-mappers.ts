@@ -1,4 +1,5 @@
 import { prisma, withTenant, type Prisma } from '@atlas/db';
+import { formalName } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import type {
   ExamAdministratorResponseDto,
@@ -34,12 +35,15 @@ export type ExamSessionWithExam = Prisma.ExamSessionGetPayload<{
   include: typeof EXAM_SESSION_WITH_EXAM_INCLUDE;
 }>;
 
+/** A student's name parts, for the "Surname First Middle" form lists show. */
+export const PERSON_NAME_SELECT = { firstName: true, middleName: true, lastName: true } as const;
+
 export const EXAM_SESSION_PARTICIPANT_INCLUDE = {
   studentProfile: {
     select: {
       id: true,
       studentId: true,
-      membership: { select: { user: { select: { displayName: true } } } },
+      membership: { select: { user: { select: PERSON_NAME_SELECT } } },
     },
   },
 } satisfies Prisma.ExamSessionParticipantInclude;
@@ -160,7 +164,7 @@ export function toExamSessionParticipantResponseDto(
     examSessionId: participant.examSessionId,
     studentProfileId: participant.studentProfileId,
     studentIdNumber: participant.studentProfile.studentId,
-    studentName: participant.studentProfile.membership.user.displayName,
+    studentName: formalName(participant.studentProfile.membership.user),
     status: participant.status,
     authorizedAt: participant.authorizedAt.toISOString(),
     authorizedByMembershipId: participant.authorizedByMembershipId,

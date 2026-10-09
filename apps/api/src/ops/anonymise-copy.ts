@@ -51,6 +51,7 @@ export async function anonymiseCopy(db: PrismaClient): Promise<AnonymiseSummary>
   summary.users = await db.$executeRaw`
     UPDATE users SET
       first_name = 'Person',
+      middle_name = NULL,
       last_name = substr(replace(id::text, '-', ''), 1, 8),
       display_name = 'Person ' || substr(replace(id::text, '-', ''), 1, 8),
       email = CASE WHEN email IS NULL THEN NULL

@@ -285,3 +285,12 @@ export {
   type RetentionRule,
   type RetentionAction,
 } from './compliance/retention.js';
+export {
+  formalName,
+  naturalName,
+  normaliseMiddleName,
+  compareText,
+  comparePersonNames,
+  sortByPersonName,
+  type PersonNameParts,
+} from './people/names.js';

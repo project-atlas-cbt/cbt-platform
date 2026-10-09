@@ -55,7 +55,7 @@ export function StudentDetailScreen({ studentProfileId }: { studentProfileId: st
     <div className="max-w-2xl space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-base font-semibold text-text-primary">{data.displayName}</h2>
+          <h2 className="text-base font-semibold text-text-primary">{data.formalName}</h2>
           <p className="text-sm text-text-muted">
             {data.studentId}
             {data.currentClassName ? ` · ${data.currentClassName}` : ''}
@@ -160,6 +160,7 @@ export function StudentDetailScreen({ studentProfileId }: { studentProfileId: st
             student={{
               studentProfileId: data.studentProfileId,
               firstName: data.firstName,
+              middleName: data.middleName,
               lastName: data.lastName,
               admissionNumber: data.admissionNumber,
             }}
@@ -182,7 +183,7 @@ export function StudentDetailScreen({ studentProfileId }: { studentProfileId: st
       <ConfirmActionDialog
         open={confirmDeactivate}
         onOpenChange={setConfirmDeactivate}
-        title={`Deactivate ${data.displayName}?`}
+        title={`Deactivate ${data.formalName}?`}
         body="This blocks the student's account access. Their enrollment history, subject registrations, and any recorded results are preserved and stay attributed to them — deactivating never deletes academic records."
         confirmLabel="Deactivate"
         destructive

@@ -263,6 +263,7 @@ async function setSettings(f: Fixture, actor: string, password: string, body: un
 describe('nameMatches', () => {
   const record = {
     firstName: 'Funmilayo',
+    middleName: null,
     lastName: 'Adebayo',
     displayName: 'Funmilayo Grace Adebayo',
   };
@@ -277,6 +278,17 @@ describe('nameMatches', () => {
     expect(nameMatches('Adebayo', record)).toBe(false);
     expect(nameMatches('Funmilayo Adebayo Okafor', record)).toBe(false);
     expect(nameMatches('', record)).toBe(false);
+  });
+  it('treats the middle name field as optional to type', () => {
+    const withMiddle = {
+      firstName: 'Abiola',
+      middleName: 'Bola',
+      lastName: 'Ojo',
+      displayName: 'Abiola Bola Ojo',
+    };
+    expect(nameMatches('Ojo Abiola', withMiddle)).toBe(true);
+    expect(nameMatches('Ojo Abiola Bola', withMiddle)).toBe(true);
+    expect(nameMatches('Ojo Bola', withMiddle)).toBe(false);
   });
 });
 

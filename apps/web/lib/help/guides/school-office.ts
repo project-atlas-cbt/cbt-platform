@@ -90,6 +90,7 @@ export function schoolOfficeGuides(): Guide[] {
         'Downloading a credential sheet gives every active student in that class a new password. Do it before they first sign in, or when you mean to reset the whole class.',
         'Students choose their own password the first time they sign in, unless they sign in without a password (see **Let students sign in without a password**).',
         'Students are registered for their class’s compulsory subjects, and their stream’s subjects, automatically.',
+        'Type names in register order: **Surname**, **First name**, then **Middle name** if the student has one. Lists show students the same way, A to Z by surname; press **Student ID** above the list to sort by ID instead.',
         'In the import file, **Stream** and **Electives** are optional. Put the stream’s name (for example Science), and the electives separated by semicolons (for example Further Mathematics; CRS). A blank stream uses the class’s stream.',
         'In Excel, format the **Student ID** column as **Text** before you type, so IDs like 00123 keep their leading zeros.',
       ],

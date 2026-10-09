@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
-import { rollUpParticipation, type ExamParticipationStatus } from '@atlas/domain';
+import {
+  rollUpParticipation,
+  type ExamParticipationStatus,
+  formalName,
+  sortByPersonName,
+} from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
@@ -10,7 +15,7 @@ import { AnalyticsCacheService } from '../analytics/analytics-cache.service.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { NotificationService } from '../notification-center/notification.service.js';
 import { requireSchoolActor } from '../questions/question-scope.util.js';
-import { loadParentExamOrThrow } from './exam-control-mappers.js';
+import { PERSON_NAME_SELECT, loadParentExamOrThrow } from './exam-control-mappers.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
 import type {
   GrantMakeupAuthorizationDto,
@@ -463,7 +468,7 @@ export class AttemptAdministrationService {
           studentProfile: {
             select: {
               id: true,
-              membership: { select: { user: { select: { displayName: true } } } },
+              membership: { select: { user: { select: PERSON_NAME_SELECT } } },
             },
           },
           session: { select: { id: true } },
@@ -481,6 +486,7 @@ export class AttemptAdministrationService {
       tx.examParticipation.findMany({ where: { schoolId, examId } }),
     );
     const students = new Map<string, ExamParticipationResponseDto['students'][number]>();
+    sortByPersonName(rows, (row) => row.studentProfile.membership.user);
     for (const row of rows) {
       const attempt = attempts.find(
         (entry) =>
@@ -494,7 +500,7 @@ export class AttemptAdministrationService {
       );
       const current = students.get(row.studentProfileId) ?? {
         studentProfileId: row.studentProfileId,
-        studentName: row.studentProfile.membership.user.displayName,
+        studentName: formalName(row.studentProfile.membership.user),
         rollupStatus: 'PENDING',
         sessions: [],
       };

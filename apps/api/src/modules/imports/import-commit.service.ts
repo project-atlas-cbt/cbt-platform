@@ -9,6 +9,7 @@ import { createPersonMembership } from '../users/person.util.js';
 import { QuestionService } from '../questions/question.service.js';
 import { TopicService } from '../questions/topic.service.js';
 import { splitElectives, streamCell } from './import-row-validator.js';
+import { templateCell } from './import-templates.js';
 
 const CHUNK_SIZE = 100;
 
@@ -264,7 +265,8 @@ export class ImportCommitService {
         const person = await createPersonMembership(tx, {
           schoolId,
           firstName: rawData['First Name'] ?? '',
-          lastName: rawData['Last Name'] ?? '',
+          middleName: rawData['Middle Name'] ?? null,
+          lastName: templateCell('STUDENTS', rawData, 'Surname'),
           loginIdentifier: rawData['Student ID'] ?? '',
           role: 'STUDENT',
         });
@@ -293,7 +295,8 @@ export class ImportCommitService {
       const person = await createPersonMembership(tx, {
         schoolId,
         firstName: rawData['First Name'] ?? '',
-        lastName: rawData['Last Name'] ?? '',
+        middleName: rawData['Middle Name'] ?? null,
+        lastName: templateCell('TEACHERS', rawData, 'Surname'),
         email: rawData['Email'] ?? '',
         loginIdentifier: rawData['Staff ID'] ?? '',
         role: 'TEACHER',

@@ -20,6 +20,7 @@ const TEACHERS = [
   {
     teacherProfileId: 'tp1',
     displayName: 'Chinedu Obi',
+    formalName: 'Obi Chinedu',
     staffId: 'STF001',
     userStatus: 'ACTIVE',
     isHod: false,
@@ -55,7 +56,7 @@ describe('TeachersScreen', () => {
     } as never);
     render(<TeachersScreen basePath="/school/people" />);
 
-    expect(screen.getByRole('link', { name: 'Chinedu Obi' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Obi Chinedu' })).toHaveAttribute(
       'href',
       '/school/people/teachers/tp1',
     );
