@@ -22,21 +22,20 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ApiError } from '@/lib/api';
+import { PersonNameFields, personNameSchema } from '@/components/people/person-name-fields';
 import { useAcademicsContext, useClasses } from '@/lib/academics/queries';
 import { useCreateStudent } from '@/lib/onboarding/mutations';
 import { useUpdateStudent } from '@/lib/people/mutations';
 import { CredentialsRevealPanel } from './reveal-credentials-dialog';
 
 const createSchema = z.object({
-  firstName: z.string().min(1, 'Enter a first name.'),
-  lastName: z.string().min(1, 'Enter a last name.'),
+  ...personNameSchema,
   studentId: z.string().min(1, 'Enter a student ID, e.g. "ST001".'),
   admissionNumber: z.string().optional(),
   classId: z.string().min(1, 'Select a class.'),
 });
 const editSchema = z.object({
-  firstName: z.string().min(1, 'Enter a first name.'),
-  lastName: z.string().min(1, 'Enter a last name.'),
+  ...personNameSchema,
   admissionNumber: z.string().optional(),
 });
 type CreateValues = z.infer<typeof createSchema>;
@@ -46,6 +45,7 @@ export interface StudentFormStudent {
   studentProfileId: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   admissionNumber: string | null;
 }
 
@@ -88,6 +88,7 @@ export function StudentForm({
     defaultValues: {
       firstName: student?.firstName ?? '',
       lastName: student?.lastName ?? '',
+      middleName: student?.middleName ?? '',
       admissionNumber: student?.admissionNumber ?? '',
     },
   });
@@ -96,6 +97,7 @@ export function StudentForm({
     defaultValues: {
       firstName: '',
       lastName: '',
+      middleName: '',
       studentId: '',
       admissionNumber: '',
       classId: '',
@@ -109,6 +111,7 @@ export function StudentForm({
       const created = await createStudent.mutateAsync({
         firstName: values.firstName,
         lastName: values.lastName,
+        middleName: values.middleName,
         studentId: values.studentId,
         ...(values.admissionNumber ? { admissionNumber: values.admissionNumber } : {}),
         academicSessionId: sessionId,
@@ -139,6 +142,7 @@ export function StudentForm({
       await updateStudent.mutateAsync({
         firstName: values.firstName,
         lastName: values.lastName,
+        middleName: values.middleName,
         ...(values.admissionNumber ? { admissionNumber: values.admissionNumber } : {}),
       });
       onSaved();
@@ -155,34 +159,7 @@ export function StudentForm({
           className="space-y-4"
           noValidate
         >
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={editForm.control}
-              name="firstName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>First name</FormLabel>
-                  <FormControl>
-                    <Input autoFocus {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={editForm.control}
-              name="lastName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Last name</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+          <PersonNameFields control={editForm.control} autoFocus />
           <FormField
             control={editForm.control}
             name="admissionNumber"
@@ -216,34 +193,7 @@ export function StudentForm({
         className="space-y-4"
         noValidate
       >
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={createForm.control}
-            name="firstName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>First name</FormLabel>
-                <FormControl>
-                  <Input autoFocus {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={createForm.control}
-            name="lastName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Last name</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+        <PersonNameFields control={createForm.control} autoFocus />
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={createForm.control}

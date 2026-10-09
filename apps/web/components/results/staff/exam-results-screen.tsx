@@ -132,7 +132,11 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
   );
 
   const results = useExamResults(examId, filters);
-  const sort: DataTableSort | null = sortBy ? { columnId: sortBy, direction: sortDir } : null;
+  // With no column chosen the server lists students A to Z by surname
+  // (owner decision 2026-10-09); the header says so.
+  const sort: DataTableSort = sortBy
+    ? { columnId: sortBy, direction: sortDir }
+    : { columnId: 'studentName', direction: 'asc' };
   const hasFilters = Boolean(q || classId || state);
 
   if (results.isError) {

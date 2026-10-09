@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { compareText, comparePersonNames, formalName, type Role } from '@atlas/domain';
 import { runUniqueGuarded } from '../academics/prisma-error.util.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { IdentityService } from '../identity/identity.service.js';
@@ -12,7 +12,15 @@ import type {
   TeacherResponseDto,
   UpdateTeacherDto,
 } from './dto/teacher.dto.js';
-import { createPersonMembership, notFound, searchWords } from './person.util.js';
+import {
+  NAME_SORT_SELECT,
+  createPersonMembership,
+  inIdOrder,
+  mergeNameEdit,
+  notFound,
+  pageIdsInOrder,
+  searchWords,
+} from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -29,6 +37,7 @@ type TeacherRow = {
     loginIdentifier: string;
     user: {
       firstName: string;
+      middleName: string | null;
       lastName: string;
       displayName: string;
       email: string | null;
@@ -44,8 +53,10 @@ function toResponseDto(row: TeacherRow): TeacherResponseDto {
     userId: row.membership.userId,
     teacherProfileId: row.id,
     firstName: row.membership.user.firstName,
+    middleName: row.membership.user.middleName,
     lastName: row.membership.user.lastName,
     displayName: row.membership.user.displayName,
+    formalName: formalName(row.membership.user),
     email: row.membership.user.email,
     staffId: row.staffId,
     loginIdentifier: row.membership.loginIdentifier,
@@ -80,7 +91,8 @@ export class TeacherService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
-    const sortBy = query.sortBy ?? 'staffId';
+    // Owner decision 2026-10-09: staff lists also run A to Z by surname.
+    const sortBy = query.sortBy ?? 'lastName';
     const words = searchWords(query.q);
 
     const where: Prisma.TeacherProfileWhereInput = {
@@ -90,28 +102,38 @@ export class TeacherService {
           OR: [
             { staffId: { contains: word, mode: 'insensitive' } },
             { membership: { user: { firstName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { middleName: { contains: word, mode: 'insensitive' } } } },
             { membership: { user: { lastName: { contains: word, mode: 'insensitive' } } } },
           ],
         })),
       }),
     };
-    const orderBy: Prisma.TeacherProfileOrderByWithRelationInput =
-      sortBy === 'lastName'
-        ? { membership: { user: { lastName: sortDir } } }
-        : { staffId: sortDir };
-
-    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
-      Promise.all([
-        tx.teacherProfile.findMany({
+    const { rows, total } = await withTenant(prisma, schoolId, async (tx) => {
+      const keys = (
+        await tx.teacherProfile.findMany({
           where,
-          include: INCLUDE,
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-        tx.teacherProfile.count({ where }),
-      ]),
-    );
+          select: {
+            id: true,
+            staffId: true,
+            membership: { select: { user: { select: NAME_SORT_SELECT } } },
+          },
+        })
+      ).map((key) => ({ id: key.id, identifier: key.staffId, ...key.membership.user }));
+      const ids = pageIdsInOrder(
+        keys,
+        sortBy === 'lastName'
+          ? comparePersonNames
+          : (a, b) => compareText(a.identifier, b.identifier),
+        sortDir,
+        page,
+        pageSize,
+      );
+      const rows = inIdOrder(
+        ids,
+        await tx.teacherProfile.findMany({ where: { id: { in: ids } }, include: INCLUDE }),
+      );
+      return { rows, total: keys.length };
+    });
     return { teachers: rows.map(toResponseDto), total, page, pageSize };
   }
 
@@ -132,6 +154,7 @@ export class TeacherService {
       const person = await createPersonMembership(tx, {
         schoolId,
         firstName: dto.firstName,
+        middleName: dto.middleName,
         lastName: dto.lastName,
         email: dto.email,
         loginIdentifier: dto.staffId,
@@ -178,17 +201,11 @@ export class TeacherService {
       });
       if (!existing) return notFound('Teacher');
 
-      if (dto.firstName !== undefined || dto.lastName !== undefined || dto.email !== undefined) {
-        const firstName = dto.firstName ?? existing.membership.user.firstName;
-        const lastName = dto.lastName ?? existing.membership.user.lastName;
+      const name = mergeNameEdit(existing.membership.user, dto);
+      if (name || dto.email !== undefined) {
         await tx.user.update({
           where: { id: existing.membership.userId },
-          data: {
-            firstName,
-            lastName,
-            displayName: `${firstName} ${lastName}`,
-            ...(dto.email !== undefined && { email: dto.email }),
-          },
+          data: { ...name, ...(dto.email !== undefined && { email: dto.email }) },
         });
       }
     });

@@ -1,7 +1,17 @@
 import { prisma, withTenant } from '@atlas/db';
-import { attemptSignalCounts, isDisconnected, rollUpExamParticipation } from '@atlas/domain';
+import {
+  attemptSignalCounts,
+  isDisconnected,
+  rollUpExamParticipation,
+  formalName,
+  sortByPersonName,
+} from '@atlas/domain';
 import type { AttemptEventType, ExamControlCenterSnapshot } from '@atlas/domain';
-import { resolveMembershipDisplayNames, toExamSessionResponseDto } from './exam-control-mappers.js';
+import {
+  PERSON_NAME_SELECT,
+  resolveMembershipDisplayNames,
+  toExamSessionResponseDto,
+} from './exam-control-mappers.js';
 
 /**
  * The one place `GET /v1/exams/:id/control` (`ExamControlCenterService`'s
@@ -67,7 +77,7 @@ export async function computeExamControlSnapshot(
         startedAt: true,
         lastSeenAt: true,
         studentProfile: {
-          select: { membership: { select: { user: { select: { displayName: true } } } } },
+          select: { membership: { select: { user: { select: PERSON_NAME_SELECT } } } },
         },
       },
     });
@@ -130,16 +140,18 @@ export async function computeExamControlSnapshot(
         absentCount,
         attemptDataAvailable: true,
       },
-      liveAttempts: liveAttempts.map((a) => ({
-        studentProfileId: a.studentProfileId,
-        status: a.state,
-        timeRemainingSeconds: Math.max(0, Math.floor((a.expiresAt.getTime() - nowMs) / 1000)),
-        studentName: a.studentProfile.membership.user.displayName,
-        startedAt: a.startedAt.toISOString(),
-        lastSeenAt: a.lastSeenAt.toISOString(),
-        disconnected: isDisconnected(a.lastSeenAt, nowMs),
-        signals: attemptSignalCounts(signalsByAttempt.get(a.id) ?? []),
-      })),
+      liveAttempts: sortByPersonName(liveAttempts, (a) => a.studentProfile.membership.user).map(
+        (a) => ({
+          studentProfileId: a.studentProfileId,
+          status: a.state,
+          timeRemainingSeconds: Math.max(0, Math.floor((a.expiresAt.getTime() - nowMs) / 1000)),
+          studentName: formalName(a.studentProfile.membership.user),
+          startedAt: a.startedAt.toISOString(),
+          lastSeenAt: a.lastSeenAt.toISOString(),
+          disconnected: isDisconnected(a.lastSeenAt, nowMs),
+          signals: attemptSignalCounts(signalsByAttempt.get(a.id) ?? []),
+        }),
+      ),
       staleness: {
         isStale,
         openSince: openSince?.toISOString() ?? null,

@@ -273,6 +273,12 @@ model User {
   id              String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
   firstName       String          @map("first_name")
   lastName        String          @map("last_name")
+  /// Optional (owner decision 2026-10-09): most students have three names.
+  /// `lastName` is the surname; lists show "Surname First Middle" and sort
+  /// by surname, first name, middle name (`@atlas/domain` names.ts). Null,
+  /// never empty, when there is none.
+  middleName      String?         @map("middle_name")
+  /// The natural "First Middle Surname" order, used to greet the person.
   displayName     String          @map("display_name")
   /// ADR-0019: staff-facing flows (password reset, invitations) need an
   /// email address to deliver to; students have none by design (no

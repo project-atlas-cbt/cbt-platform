@@ -793,7 +793,8 @@ describe('B12 Exam Activation & Control', () => {
     if (!row) return;
     expect(row.status).toBe('IN_PROGRESS');
     // Seeded as firstName 'Tunde' lastName 'Bello' (beforeAll).
-    expect(row.studentName).toBe('Tunde Bello');
+    // Lists show "Surname First Middle" (owner decision 2026-10-09).
+    expect(row.studentName).toBe('Bello Tunde');
     expect(Number.isNaN(Date.parse(row.startedAt))).toBe(false);
     expect(row.timeRemainingSeconds).not.toBeNull();
     expect(row.timeRemainingSeconds as number).toBeGreaterThanOrEqual(0);

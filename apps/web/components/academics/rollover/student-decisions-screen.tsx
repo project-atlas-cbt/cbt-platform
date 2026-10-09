@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formalName, sortByPersonName } from '@atlas/domain';
 import Link from 'next/link';
 import {
   Filter,
@@ -62,6 +63,7 @@ interface DecisionRecord {
         user?: {
           id: string;
           firstName: string;
+          middleName?: string | null;
           lastName: string;
           displayName?: string;
         };
@@ -161,8 +163,7 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
 
   const openSingleOverride = (rec: DecisionRecord) => {
     const studentUser = rec.sourceEnrollment?.studentProfile?.membership?.user;
-    const fullName = `${studentUser?.firstName ?? ''} ${studentUser?.lastName ?? ''}`.trim();
-    const name = studentUser?.displayName || fullName || 'Student';
+    const name = (studentUser && formalName(studentUser)) || 'Student';
     setDialogDecisions([rec.id]);
     setDialogStudentLabels([name]);
     setDialogSourceLevel(rec.sourceClass?.level);
@@ -401,15 +402,17 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
                 </td>
               </tr>
             ) : (
-              decisions.map((rec) => {
+              sortByPersonName([...decisions], (rec) => ({
+                firstName: rec.sourceEnrollment?.studentProfile?.membership?.user?.firstName ?? '',
+                middleName: rec.sourceEnrollment?.studentProfile?.membership?.user?.middleName,
+                lastName: rec.sourceEnrollment?.studentProfile?.membership?.user?.lastName ?? '',
+                identifier: rec.sourceEnrollment?.studentProfile?.studentId,
+              })).map((rec) => {
                 const isSelected = selectedDecisionIds.includes(rec.id);
                 const isOverridden = Boolean(rec.overriddenAt);
                 const studentUser = rec.sourceEnrollment?.studentProfile?.membership?.user;
                 const studentProfile = rec.sourceEnrollment?.studentProfile;
-                const studentName =
-                  studentUser?.displayName ??
-                  (`${studentUser?.firstName ?? ''} ${studentUser?.lastName ?? ''}`.trim() ||
-                    'Student Candidate');
+                const studentName = (studentUser && formalName(studentUser)) || 'Student Candidate';
                 const regNo =
                   studentProfile?.studentId ??
                   rec.sourceEnrollment?.studentProfile?.membership?.loginIdentifier ??

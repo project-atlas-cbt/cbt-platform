@@ -384,6 +384,7 @@ export class RolloverService {
                           select: {
                             id: true,
                             firstName: true,
+                            middleName: true,
                             lastName: true,
                             displayName: true,
                           },

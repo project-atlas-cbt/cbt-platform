@@ -162,8 +162,13 @@ function invalidatePeople(client: QueryClient) {
 export function useCreateTeacher() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName: string; lastName: string; email: string; staffId: string }) =>
-      unwrap(apiClient.POST('/teachers', { body })),
+    mutationFn: (body: {
+      firstName: string;
+      middleName?: string;
+      lastName: string;
+      email: string;
+      staffId: string;
+    }) => unwrap(apiClient.POST('/teachers', { body })),
     onSuccess: () => invalidatePeople(client),
   });
 }
@@ -230,6 +235,7 @@ export function useCreateStudent() {
   return useMutation({
     mutationFn: async (input: {
       firstName: string;
+      middleName?: string;
       lastName: string;
       studentId: string;
       admissionNumber?: string;
@@ -240,6 +246,7 @@ export function useCreateStudent() {
         apiClient.POST('/students', {
           body: {
             firstName: input.firstName,
+            ...(input.middleName ? { middleName: input.middleName } : {}),
             lastName: input.lastName,
             studentId: input.studentId,
             ...(input.admissionNumber ? { admissionNumber: input.admissionNumber } : {}),

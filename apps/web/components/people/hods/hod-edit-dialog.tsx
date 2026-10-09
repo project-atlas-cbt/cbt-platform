@@ -5,23 +5,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Form } from '@/components/ui/form';
 import { ApiError } from '@/lib/api';
+import { PersonNameFields, personNameSchema } from '@/components/people/person-name-fields';
 import { useUpdateHod } from '@/lib/people/mutations';
 
-const schema = z.object({
-  firstName: z.string().min(1, 'Enter a first name.'),
-  lastName: z.string().min(1, 'Enter a last name.'),
-});
+const schema = z.object(personNameSchema);
 type Values = z.infer<typeof schema>;
 
 /** Decision C — a dedicated HOD edit dialog calling `PATCH /hods/:id`
@@ -33,17 +23,18 @@ export function HodEditDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  hod: { membershipId: string; displayName: string };
+  hod: { membershipId: string; firstName: string; middleName: string | null; lastName: string };
 }) {
   const updateHod = useUpdateHod(hod.membershipId);
   const [error, setError] = useState<string | null>(null);
 
-  const [firstName = '', ...rest] = hod.displayName.split(' ');
-  const lastName = rest.join(' ');
-
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { firstName, lastName },
+    defaultValues: {
+      lastName: hod.lastName,
+      firstName: hod.firstName,
+      middleName: hod.middleName ?? '',
+    },
   });
 
   async function onSubmit(values: Values) {
@@ -68,34 +59,7 @@ export function HodEditDialog({
             className="space-y-4"
             noValidate
           >
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="firstName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>First name</FormLabel>
-                    <FormControl>
-                      <Input autoFocus {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="lastName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Last name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <PersonNameFields control={form.control} autoFocus />
             {error ? (
               <p role="alert" className="text-sm font-medium text-danger">
                 {error}

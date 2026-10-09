@@ -47,7 +47,7 @@ describe('Step09Students', () => {
 
     render(<Step09Students />);
     await userEvent.type(screen.getByLabelText(/first name/i), 'Ada');
-    await userEvent.type(screen.getByLabelText(/last name/i), 'Obi');
+    await userEvent.type(screen.getByLabelText(/surname/i), 'Obi');
     await userEvent.type(screen.getByLabelText(/student id/i), 'ST001');
     await userEvent.click(screen.getByRole('combobox'));
     await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }, { timeout: 10000 }));
@@ -55,6 +55,7 @@ describe('Step09Students', () => {
 
     expect(mutateAsync).toHaveBeenCalledWith({
       firstName: 'Ada',
+      middleName: '',
       lastName: 'Obi',
       studentId: 'ST001',
       academicSessionId: 'sess1',
@@ -82,7 +83,7 @@ describe('Step09Students', () => {
 
     render(<Step09Students />);
     await userEvent.type(screen.getByLabelText(/first name/i), 'Ada');
-    await userEvent.type(screen.getByLabelText(/last name/i), 'Obi');
+    await userEvent.type(screen.getByLabelText(/surname/i), 'Obi');
     await userEvent.type(screen.getByLabelText(/student id/i), 'ST001');
     await userEvent.click(screen.getByRole('combobox'));
     await userEvent.click(await screen.findByRole('option', { name: 'SS2A' }, { timeout: 10000 }));

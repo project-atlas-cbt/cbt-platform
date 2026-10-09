@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { compareText, comparePersonNames, formalName, type Role } from '@atlas/domain';
 import { AuditService } from '../operations/audit-event.service.js';
 import { IdentityService } from '../identity/identity.service.js';
 import type {
@@ -10,7 +10,15 @@ import type {
   ModeratorResponseDto,
   UpdateModeratorDto,
 } from './dto/moderator.dto.js';
-import { createPersonMembership, notFound, searchWords } from './person.util.js';
+import {
+  NAME_SORT_SELECT,
+  createPersonMembership,
+  inIdOrder,
+  mergeNameEdit,
+  notFound,
+  pageIdsInOrder,
+  searchWords,
+} from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -23,6 +31,7 @@ type ModeratorRow = {
   loginIdentifier: string;
   user: {
     firstName: string;
+    middleName: string | null;
     lastName: string;
     displayName: string;
     email: string | null;
@@ -35,8 +44,10 @@ function toResponseDto(row: ModeratorRow): ModeratorResponseDto {
     membershipId: row.id,
     userId: row.userId,
     firstName: row.user.firstName,
+    middleName: row.user.middleName,
     lastName: row.user.lastName,
     displayName: row.user.displayName,
+    formalName: formalName(row.user),
     email: row.user.email,
     loginIdentifier: row.loginIdentifier,
     userStatus: row.user.status as ModeratorResponseDto['userStatus'],
@@ -65,7 +76,7 @@ export class ModeratorService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
-    const sortBy = query.sortBy ?? 'loginIdentifier';
+    const sortBy = query.sortBy ?? 'lastName';
     const words = searchWords(query.q);
 
     const where: Prisma.SchoolMembershipWhereInput = {
@@ -76,26 +87,37 @@ export class ModeratorService {
           OR: [
             { loginIdentifier: { contains: word, mode: 'insensitive' } },
             { user: { firstName: { contains: word, mode: 'insensitive' } } },
+            { user: { middleName: { contains: word, mode: 'insensitive' } } },
             { user: { lastName: { contains: word, mode: 'insensitive' } } },
           ],
         })),
       }),
     };
-    const orderBy: Prisma.SchoolMembershipOrderByWithRelationInput =
-      sortBy === 'lastName' ? { user: { lastName: sortDir } } : { loginIdentifier: sortDir };
-
-    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
-      Promise.all([
-        tx.schoolMembership.findMany({
+    const { rows, total } = await withTenant(prisma, schoolId, async (tx) => {
+      const keys = (
+        await tx.schoolMembership.findMany({
           where,
+          select: { id: true, loginIdentifier: true, user: { select: NAME_SORT_SELECT } },
+        })
+      ).map((key) => ({ id: key.id, identifier: key.loginIdentifier, ...key.user }));
+      const ids = pageIdsInOrder(
+        keys,
+        sortBy === 'lastName'
+          ? comparePersonNames
+          : (a, b) => compareText(a.identifier, b.identifier),
+        sortDir,
+        page,
+        pageSize,
+      );
+      const rows = inIdOrder(
+        ids,
+        await tx.schoolMembership.findMany({
+          where: { id: { in: ids } },
           include: { user: true },
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
         }),
-        tx.schoolMembership.count({ where }),
-      ]),
-    );
+      );
+      return { rows, total: keys.length };
+    });
     return { moderators: rows.map(toResponseDto), total, page, pageSize };
   }
 
@@ -116,6 +138,7 @@ export class ModeratorService {
       createPersonMembership(tx, {
         schoolId,
         firstName: dto.firstName,
+        middleName: dto.middleName,
         lastName: dto.lastName,
         email: dto.email,
         loginIdentifier: dto.loginIdentifier,
@@ -149,17 +172,11 @@ export class ModeratorService {
       });
       if (!existing) return notFound('Moderator');
 
-      if (dto.firstName !== undefined || dto.lastName !== undefined || dto.email !== undefined) {
-        const firstName = dto.firstName ?? existing.user.firstName;
-        const lastName = dto.lastName ?? existing.user.lastName;
+      const name = mergeNameEdit(existing.user, dto);
+      if (name || dto.email !== undefined) {
         await tx.user.update({
           where: { id: existing.userId },
-          data: {
-            firstName,
-            lastName,
-            displayName: `${firstName} ${lastName}`,
-            ...(dto.email !== undefined && { email: dto.email }),
-          },
+          data: { ...name, ...(dto.email !== undefined && { email: dto.email }) },
         });
       }
     });

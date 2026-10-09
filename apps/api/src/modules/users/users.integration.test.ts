@@ -21,6 +21,16 @@ import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
+import { AuditActionRegistry } from '../operations/audit-action.registry.js';
+import { AuditService } from '../operations/audit-event.service.js';
+import {
+  NAME_ORDER_FIXED_ACTION,
+  NAME_ORDER_REVERTED_ACTION,
+  applyNameOrderFix,
+  planNameOrderFix,
+  revertNameOrderFix,
+  type NameOrderProposal,
+} from './name-order-fix.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -1108,5 +1118,179 @@ describe('F14 gap closure — GET /students/me', () => {
   it('denies a non-student actor (security boundary — this is a self-view route, not a directory read)', async () => {
     const res = await get(admin, '/students/me');
     expect(res.statusCode).toBe(403);
+  });
+});
+
+/**
+ * Owner decision 2026-10-09: an optional middle name, names shown
+ * "Surname First Middle", every people list A to Z by surname by default
+ * (capitals ignored), and Student IDs in number order.
+ */
+describe('Student names — middle name, A to Z, number-order IDs', () => {
+  let schoolId: string;
+  let adminUserId: string;
+  let admin: RequestCtx;
+
+  beforeAll(async () => {
+    const school = await createSchool();
+    schoolId = school.id;
+    createdSchoolIds.push(schoolId);
+    const { user } = await seedUser({
+      schoolId,
+      loginIdentifier: 'names-admin',
+      password: 'a-real-password-123',
+      role: 'SCHOOL_ADMIN',
+    });
+    adminUserId = user.id;
+    createdUserIds.push(user.id);
+    admin = await freshCtx(`${school.subdomain}.${ROOT_DOMAIN}`, `10.${RUN}.9.1`);
+    await login(admin, 'names-admin', 'a-real-password-123');
+    const students = [
+      { lastName: 'Ojo', firstName: 'Abiola', middleName: 'Bola', studentId: 'S10' },
+      { lastName: 'OJO', firstName: 'Abiola', middleName: 'Ade', studentId: 'S9' },
+      { lastName: 'adeyemi', firstName: 'Zainab', studentId: 'S2' },
+      { lastName: 'Zubair', firstName: 'Musa', middleName: '  ', studentId: 'S1' },
+    ];
+    for (const body of students) {
+      const res = await post(admin, '/students', body);
+      expect(res.statusCode).toBe(201);
+    }
+  });
+
+  type Listed = { formalName: string; displayName: string; middleName: string | null };
+  const formalNames = async (query: string) => {
+    const res = await get(admin, `/students${query}`);
+    expect(res.statusCode).toBe(200);
+    return res.json<{ students: Listed[] }>().students.map((s) => s.formalName);
+  };
+
+  it('stores the middle name and builds both name orders from it', async () => {
+    const res = await get(admin, '/students?q=Bola');
+    const [student] = res.json<{ students: Listed[] }>().students;
+    expect(student).toMatchObject({
+      middleName: 'Bola',
+      formalName: 'Ojo Abiola Bola',
+      displayName: 'Abiola Bola Ojo',
+    });
+    // A blank middle name is stored as none.
+    const zubair = (await get(admin, '/students?q=Zubair')).json<{ students: Listed[] }>();
+    expect(zubair.students[0]?.middleName).toBeNull();
+  });
+
+  it('lists students A to Z by surname, then first and middle name, by default', async () => {
+    expect(await formalNames('')).toEqual([
+      'adeyemi Zainab',
+      'OJO Abiola Ade',
+      'Ojo Abiola Bola',
+      'Zubair Musa',
+    ]);
+    expect(await formalNames('?sortBy=lastName&sortDir=desc')).toEqual([
+      'Zubair Musa',
+      'Ojo Abiola Bola',
+      'OJO Abiola Ade',
+      'adeyemi Zainab',
+    ]);
+    // Pages follow the same order.
+    expect(await formalNames('?pageSize=2&page=2')).toEqual(['Ojo Abiola Bola', 'Zubair Musa']);
+  });
+
+  it('sorts Student IDs by number value', async () => {
+    const res = await get(admin, '/students?sortBy=studentId&sortDir=asc');
+    expect(
+      res.json<{ students: { studentId: string }[] }>().students.map((s) => s.studentId),
+    ).toEqual(['S1', 'S2', 'S9', 'S10']);
+  });
+
+  it('edits and clears the middle name', async () => {
+    const res = await get(admin, '/students?q=Zainab');
+    const id = res.json<{ students: { studentProfileId: string }[] }>().students[0]!
+      .studentProfileId;
+    const set = await patch(admin, `/students/${id}`, { middleName: 'Kemi' });
+    expect(set.json<Listed>()).toMatchObject({
+      middleName: 'Kemi',
+      formalName: 'adeyemi Zainab Kemi',
+      displayName: 'Zainab Kemi adeyemi',
+    });
+    const cleared = await patch(admin, `/students/${id}`, { middleName: '' });
+    expect(cleared.json<Listed>().middleName).toBeNull();
+  });
+
+  it('ops:fix-name-order reorders swapped names once, flags the rest, and can be undone', async () => {
+    const swapped = [
+      { firstName: 'Bello', lastName: 'Ibrahim Tunde', studentId: 'FIX-1' },
+      { firstName: 'Okafor', lastName: 'Ada', studentId: 'FIX-2' },
+      { firstName: 'Eze', lastName: 'Chinedu Obi Kalu', studentId: 'FIX-3' },
+      { firstName: 'Musa', lastName: 'Sani', studentId: 'FIX-4' },
+    ];
+    for (const body of swapped) expect((await post(admin, '/students', body)).statusCode).toBe(201);
+
+    const registry = new AuditActionRegistry();
+    registry.registerAll([NAME_ORDER_FIXED_ACTION, NAME_ORDER_REVERTED_ACTION]);
+    const audit = new AuditService(registry);
+    const noteOf = (rows: NameOrderProposal[], id: string) =>
+      rows.find((r) => r.studentId === id)?.note;
+
+    const plan = await planNameOrderFix(schoolId, new Set(['fix-4']));
+    expect(noteOf(plan, 'FIX-1')).toBe('OK');
+    expect(plan.find((r) => r.studentId === 'FIX-1')?.proposed).toEqual({
+      lastName: 'Bello',
+      firstName: 'Ibrahim',
+      middleName: 'Tunde',
+    });
+    expect(noteOf(plan, 'FIX-2')).toBe('OK');
+    expect(noteOf(plan, 'FIX-3')).toBe('MORE_THAN_TWO_NAMES');
+    expect(noteOf(plan, 'FIX-4')).toBe('SKIPPED_BY_OPERATOR');
+    expect(noteOf(plan, 'S10')).toBe('HAS_MIDDLE_NAME');
+
+    const nameOf = async (id: string) =>
+      withTenant(prisma, schoolId, (tx) =>
+        tx.studentProfile.findFirstOrThrow({
+          where: { studentId: id },
+          select: {
+            membership: {
+              select: {
+                user: {
+                  select: { firstName: true, middleName: true, lastName: true, displayName: true },
+                },
+              },
+            },
+          },
+        }),
+      ).then((row) => row.membership.user);
+
+    const applied = await applyNameOrderFix(audit, {
+      schoolId,
+      actorUserId: adminUserId,
+      skipStudentIds: new Set(['FIX-4']),
+    });
+    // S2 (Zainab adeyemi, one word each, no middle name) fits the rule too:
+    // the review list is how the school catches students entered correctly.
+    expect(applied.map((r) => r.studentId).sort()).toEqual(['FIX-1', 'FIX-2', 'S1', 'S2']);
+    expect(await nameOf('FIX-1')).toEqual({
+      firstName: 'Ibrahim',
+      middleName: 'Tunde',
+      lastName: 'Bello',
+      displayName: 'Ibrahim Tunde Bello',
+    });
+    expect(await nameOf('FIX-3')).toMatchObject({ firstName: 'Eze', lastName: 'Chinedu Obi Kalu' });
+    expect(await nameOf('FIX-4')).toMatchObject({ firstName: 'Musa', lastName: 'Sani' });
+
+    // Never twice: a second run changes nobody.
+    expect(await applyNameOrderFix(audit, { schoolId, actorUserId: adminUserId })).toEqual([
+      expect.objectContaining({ studentId: 'FIX-4' }),
+    ]);
+    const audited = await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.count({ where: { schoolId, action: NAME_ORDER_FIXED_ACTION } }),
+    );
+    expect(audited).toBe(5);
+
+    const reverted = await revertNameOrderFix(audit, { schoolId, actorUserId: adminUserId });
+    expect(reverted.sort()).toEqual(['FIX-1', 'FIX-2', 'FIX-4', 'S1', 'S2']);
+    expect(await nameOf('FIX-1')).toEqual({
+      firstName: 'Bello',
+      middleName: null,
+      lastName: 'Ibrahim Tunde',
+      displayName: 'Bello Ibrahim Tunde',
+    });
   });
 });

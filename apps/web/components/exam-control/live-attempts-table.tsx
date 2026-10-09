@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ApiComponents } from '@atlas/contracts';
+import { compareText } from '@atlas/domain';
 import { Users } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -141,7 +142,7 @@ function buildRows(
     (a, b) =>
       STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
       Number(b.disconnected) - Number(a.disconnected) ||
-      a.studentName.localeCompare(b.studentName),
+      compareText(a.studentName, b.studentName),
   );
 }
 

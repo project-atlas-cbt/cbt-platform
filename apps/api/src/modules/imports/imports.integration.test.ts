@@ -312,12 +312,14 @@ describe('B7 — Bulk Import Pipeline', () => {
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/csv');
       expect(res.body).toContain(`# template-version: ${IMPORT_TEMPLATE_VERSION}`);
-      expect(res.body).toContain('Student ID,First Name,Last Name,Class,Stream,Electives');
+      expect(res.body).toContain(
+        'Student ID,Surname,First Name,Middle Name,Class,Stream,Electives',
+      );
     });
 
     it('downloads a versioned CSV template for teachers', async () => {
       const res = await get(admin, '/imports/templates/teachers');
-      expect(res.body).toContain('Staff ID,First Name,Last Name,Email');
+      expect(res.body).toContain('Staff ID,Surname,First Name,Middle Name,Email');
     });
   });
 
@@ -325,13 +327,13 @@ describe('B7 — Bulk Import Pipeline', () => {
     it('validates, previews, confirms, and imports valid rows only (DoD 1-4, 10)', async () => {
       const buffer = csv([
         `# template-version: ${IMPORT_TEMPLATE_VERSION}`,
-        'Student ID,First Name,Last Name,Class,Stream,Electives',
-        `IMP-S1-${RUN},Ahmed,Bello,SS1A,Science,Further Mathematics`,
-        `IMP-S2-${RUN},David,John,SS1A,,`,
+        'Student ID,Surname,First Name,Middle Name,Class,Stream,Electives',
+        `IMP-S1-${RUN},Bello,Ahmed,Musa,SS1A,Science,Further Mathematics`,
+        `IMP-S2-${RUN},John,David,,SS1A,,`,
         // Invalid: unresolvable class.
-        `IMP-S3-${RUN},Mary,James,NoSuchClass,,`,
-        // Invalid: missing required First Name.
-        `,Blank,Firstname,SS1A,,`,
+        `IMP-S3-${RUN},James,Mary,,NoSuchClass,,`,
+        // Invalid: missing required Student ID.
+        `,Firstname,Blank,,SS1A,,`,
       ]);
       const mediaAssetId = await uploadImportFile(admin, buffer);
 
@@ -388,10 +390,17 @@ describe('B7 — Bulk Import Pipeline', () => {
           studentId: string;
           currentClassId: string | null;
           streamName: string | null;
+          formalName: string;
+          middleName: string | null;
         }[];
       }>().students;
       const s1 = students.find((s) => s.studentId === `IMP-S1-${RUN}`);
       const s2 = students.find((s) => s.studentId === `IMP-S2-${RUN}`);
+      // Register order, Surname first, with the optional Middle Name.
+      expect(s1?.formalName).toBe('Bello Ahmed Musa');
+      expect(s1?.middleName).toBe('Musa');
+      expect(s2?.formalName).toBe('John David');
+      expect(s2?.middleName).toBeNull();
       expect(s1?.currentClassId).toBe(classId);
       expect(s1?.streamName).toBe('Science');
       expect(s2?.currentClassId).toBe(classId);

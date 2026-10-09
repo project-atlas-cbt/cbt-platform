@@ -27,14 +27,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BulkImportFlow } from '@/components/imports/bulk-import-flow';
 import { ApiError } from '@/lib/api';
+import { PersonNameFields, personNameSchema } from '@/components/people/person-name-fields';
 import { useAcademicsContext, useClasses, useStudents } from '@/lib/onboarding/queries';
 import { useCreateStudent } from '@/lib/onboarding/mutations';
 import { CredentialsRevealPanel } from '@/components/people/students/reveal-credentials-dialog';
 import { StepList } from '../step-list';
 
 const schema = z.object({
-  firstName: z.string().min(1, 'Enter a first name.'),
-  lastName: z.string().min(1, 'Enter a last name.'),
+  ...personNameSchema,
   studentId: z.string().min(1, 'Enter a student ID, e.g. "ST001".'),
   admissionNumber: z.string().optional(),
   classId: z.string().min(1, 'Select a class.'),
@@ -73,7 +73,14 @@ export function Step09Students() {
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: { firstName: '', lastName: '', studentId: '', admissionNumber: '', classId: '' },
+    defaultValues: {
+      firstName: '',
+      middleName: '',
+      lastName: '',
+      studentId: '',
+      admissionNumber: '',
+      classId: '',
+    },
   });
 
   async function onSubmit(values: Values) {
@@ -84,6 +91,7 @@ export function Step09Students() {
       const created = await createStudent.mutateAsync({
         firstName: values.firstName,
         lastName: values.lastName,
+        middleName: values.middleName,
         studentId: values.studentId,
         ...(values.admissionNumber ? { admissionNumber: values.admissionNumber } : {}),
         academicSessionId: sessionId,
@@ -93,6 +101,7 @@ export function Step09Students() {
       form.reset({
         firstName: '',
         lastName: '',
+        middleName: '',
         studentId: '',
         admissionNumber: '',
         classId: values.classId,
@@ -129,34 +138,7 @@ export function Step09Students() {
               className="space-y-4"
               noValidate
             >
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First name</FormLabel>
-                      <FormControl>
-                        <Input autoFocus {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last name</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <PersonNameFields control={form.control} autoFocus />
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -247,7 +229,7 @@ export function Step09Students() {
         emptyLabel="No students added yet."
         renderItem={(s) => (
           <span className="text-text-primary">
-            {s.displayName} <span className="text-text-muted">({s.studentId})</span>
+            {s.formalName} <span className="text-text-muted">({s.studentId})</span>
           </span>
         )}
       />

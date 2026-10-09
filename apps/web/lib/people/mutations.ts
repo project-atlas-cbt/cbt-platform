@@ -22,7 +22,12 @@ function invalidatePeople(client: QueryClient) {
 export function useUpdateStudent(studentProfileId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName?: string; lastName?: string; admissionNumber?: string }) =>
+    mutationFn: (body: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      admissionNumber?: string;
+    }) =>
       unwrap(
         apiClient.PATCH('/students/{id}', { params: { path: { id: studentProfileId } }, body }),
       ),
@@ -116,7 +121,12 @@ export function useReRegisterElective(studentProfileId: string) {
 export function useUpdateTeacher(teacherProfileId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName?: string; lastName?: string; email?: string }) =>
+    mutationFn: (body: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      email?: string;
+    }) =>
       unwrap(
         apiClient.PATCH('/teachers/{id}', { params: { path: { id: teacherProfileId } }, body }),
       ),
@@ -195,8 +205,12 @@ export function useSetHodDepartment(membershipId: string) {
 export function useUpdateHod(membershipId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName?: string; lastName?: string; email?: string }) =>
-      unwrap(apiClient.PATCH('/hods/{id}', { params: { path: { id: membershipId } }, body })),
+    mutationFn: (body: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      email?: string;
+    }) => unwrap(apiClient.PATCH('/hods/{id}', { params: { path: { id: membershipId } }, body })),
     onSuccess: () => invalidatePeople(client),
   });
 }
@@ -224,7 +238,12 @@ export function useRemoveHod() {
 export function useUpdateModerator(membershipId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName?: string; lastName?: string; email?: string }) =>
+    mutationFn: (body: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      email?: string;
+    }) =>
       unwrap(apiClient.PATCH('/moderators/{id}', { params: { path: { id: membershipId } }, body })),
     onSuccess: () => invalidatePeople(client),
   });

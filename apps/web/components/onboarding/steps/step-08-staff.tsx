@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BulkImportFlow } from '@/components/imports/bulk-import-flow';
 import { ApiError } from '@/lib/api';
+import { PersonNameFields, personNameSchema } from '@/components/people/person-name-fields';
 import {
   useAcademicsContext,
   useDepartments,
@@ -37,16 +38,14 @@ import { useCreateHod, useCreateModerator, useCreateTeacher } from '@/lib/onboar
 import { StepList } from '../step-list';
 
 const teacherSchema = z.object({
-  firstName: z.string().min(1, 'Enter a first name.'),
-  lastName: z.string().min(1, 'Enter a last name.'),
+  ...personNameSchema,
   email: z.string().min(1, 'Enter an email.').email('Enter a valid email address.'),
   staffId: z.string().min(1, 'Enter a staff ID.'),
 });
 type TeacherValues = z.infer<typeof teacherSchema>;
 
 const moderatorSchema = z.object({
-  firstName: z.string().min(1, 'Enter a first name.'),
-  lastName: z.string().min(1, 'Enter a last name.'),
+  ...personNameSchema,
   email: z.string().min(1, 'Enter an email.').email('Enter a valid email address.'),
   loginIdentifier: z.string().min(1, 'Enter a login identifier.'),
 });
@@ -85,14 +84,14 @@ function TeacherSection() {
   const defaultTab = useSearchParams()?.get('teachersImportJob') ? 'import' : 'manual';
   const form = useForm<TeacherValues>({
     resolver: zodResolver(teacherSchema),
-    defaultValues: { firstName: '', lastName: '', email: '', staffId: '' },
+    defaultValues: { firstName: '', middleName: '', lastName: '', email: '', staffId: '' },
   });
 
   async function onSubmit(values: TeacherValues) {
     setError(null);
     try {
       await createTeacher.mutateAsync(values);
-      form.reset({ firstName: '', lastName: '', email: '', staffId: '' });
+      form.reset({ firstName: '', middleName: '', lastName: '', email: '', staffId: '' });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create the teacher.');
     }
@@ -117,34 +116,7 @@ function TeacherSection() {
                   className="space-y-3"
                   noValidate
                 >
-                  <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                      control={form.control}
-                      name="firstName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First name</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="lastName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Last name</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <PersonNameFields control={form.control} className="grid grid-cols-2 gap-3" />
                   <div className="grid grid-cols-2 gap-3">
                     <FormField
                       control={form.control}
@@ -206,14 +178,14 @@ function ModeratorSection() {
   const [error, setError] = useState<string | null>(null);
   const form = useForm<ModeratorValues>({
     resolver: zodResolver(moderatorSchema),
-    defaultValues: { firstName: '', lastName: '', email: '', loginIdentifier: '' },
+    defaultValues: { firstName: '', middleName: '', lastName: '', email: '', loginIdentifier: '' },
   });
 
   async function onSubmit(values: ModeratorValues) {
     setError(null);
     try {
       await createModerator.mutateAsync(values);
-      form.reset({ firstName: '', lastName: '', email: '', loginIdentifier: '' });
+      form.reset({ firstName: '', middleName: '', lastName: '', email: '', loginIdentifier: '' });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create the moderator.');
     }
@@ -232,34 +204,7 @@ function ModeratorSection() {
               className="space-y-3"
               noValidate
             >
-              <div className="grid grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First name</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last name</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <PersonNameFields control={form.control} className="grid grid-cols-2 gap-3" />
               <div className="grid grid-cols-2 gap-3">
                 <FormField
                   control={form.control}

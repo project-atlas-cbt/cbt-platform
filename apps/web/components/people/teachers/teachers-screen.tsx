@@ -23,6 +23,7 @@ const PAGE_SIZE = 25;
 interface TeacherRow {
   teacherProfileId: string;
   displayName: string;
+  formalName: string;
   staffId: string;
   userStatus: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
   isHod: boolean;
@@ -38,11 +39,12 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
   const sortDir = searchParams.get('sortDir');
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
   const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
-  const sort = useMemo<DataTableSort | null>(
+  const sort = useMemo<DataTableSort>(
     () =>
       sortColumn && (sortDir === 'asc' || sortDir === 'desc')
         ? { columnId: sortColumn, direction: sortDir }
-        : null,
+        : // Owner decision 2026-10-09: lists open A to Z by surname.
+          { columnId: 'lastName', direction: 'asc' },
     [sortColumn, sortDir],
   );
 
@@ -89,7 +91,7 @@ export function TeachersScreen({ basePath }: { basePath: string }) {
             href={`${basePath}/teachers/${row.teacherProfileId}`}
             className="font-medium text-text-primary hover:underline"
           >
-            {row.displayName}
+            {row.formalName}
           </Link>
           {row.isHod ? <Badge status="info">HOD</Badge> : null}
         </div>

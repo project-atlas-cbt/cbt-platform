@@ -49,17 +49,23 @@ export function nameWords(value: string): string[] {
  * Owner decision 2026-10-08: the typed name matches when it contains the
  * student's first name and surname, in any order and any capitals; middle
  * names are optional, and any word that is not part of the recorded name
- * fails the match.
+ * fails the match. Since 2026-10-09 the middle name has its own field; a
+ * name typed before then into the surname box still has to be typed whole.
  */
 export function nameMatches(
   typed: string,
-  record: { firstName: string; lastName: string; displayName: string },
+  record: { firstName: string; middleName: string | null; lastName: string; displayName: string },
 ): boolean {
   const words = nameWords(typed);
   if (words.length === 0) return false;
   const first = nameWords(record.firstName);
   const last = nameWords(record.lastName);
-  const known = new Set([...first, ...last, ...nameWords(record.displayName)]);
+  const known = new Set([
+    ...first,
+    ...last,
+    ...nameWords(record.middleName ?? ''),
+    ...nameWords(record.displayName),
+  ]);
   const typedSet = new Set(words);
   return (
     first.length > 0 &&

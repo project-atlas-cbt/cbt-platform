@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
+import { formalName, sortByPersonName } from '@atlas/domain';
 import { AuthLockoutService } from './auth-lockout.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService } from './session.service.js';
 
 export interface CredentialSheetRow {
   studentId: string;
+  /** "Surname First Middle", as the slips list it. */
   displayName: string;
   loginIdentifier: string;
   initialPassword: string;
@@ -48,9 +50,14 @@ export class CredentialSheetService {
     const memberships = await withTenant(prisma, schoolId, (tx) =>
       tx.schoolMembership.findMany({
         where: { schoolId, id: { in: studentMembershipIds } },
-        include: { studentProfile: true },
+        include: { studentProfile: true, user: true },
       }),
     );
+    // Slips print A to Z by surname (owner decision 2026-10-09).
+    sortByPersonName(memberships, (m) => ({
+      ...m.user,
+      identifier: m.studentProfile?.studentId,
+    }));
 
     const rows: CredentialSheetRow[] = [];
     for (const membership of memberships) {
@@ -91,7 +98,7 @@ export class CredentialSheetService {
       await this.lockout.clear(schoolId, membership.loginIdentifier);
       rows.push({
         studentId: membership.studentProfile.studentId,
-        displayName: user.displayName,
+        displayName: formalName(user),
         loginIdentifier: membership.loginIdentifier,
         initialPassword,
       });
