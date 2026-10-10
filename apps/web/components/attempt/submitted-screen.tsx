@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAttemptStatus } from '@/lib/attempt/queries';
@@ -15,10 +17,23 @@ const STATUS_POLL_INTERVAL_MS = 5_000;
  * a `SUBMITTED`/`AUTO_SUBMITTED` attempt — the one and only place that
  * state is ever shown, so a repeat visit to the runtime URL always
  * redirects here rather than allowing a restart (`exam-runtime.tsx`).
- * Polls `GET /attempts/:id/status` (B14, live-aggregated) only while
- * marking is still `PENDING`.
+ * Polls `GET /attempts/:id/status` (B14) only while marking is still
+ * `PENDING`. Never shows a score or counts (04 §59, 2026-10-06): those
+ * reach the student only once results are released, through My Results,
+ * as the exam's "what students see" setting allows.
+ *
+ * Pilot feedback (2026-10-08): also shown, `embedded` inside the student
+ * shell, when a student reopens the preview of an exam they have already
+ * submitted (`AssessmentPreview`). Go home returns to the Assessment screen
+ * either way.
  */
-export function SubmittedScreen({ attemptId }: { attemptId: string }) {
+export function SubmittedScreen({
+  attemptId,
+  embedded = false,
+}: {
+  attemptId: string;
+  embedded?: boolean;
+}) {
   const status = useAttemptStatus(attemptId, { refetchIntervalMs: STATUS_POLL_INTERVAL_MS });
   const autoSubmitted = status.data?.state === 'AUTO_SUBMITTED';
 
@@ -33,7 +48,13 @@ export function SubmittedScreen({ attemptId }: { attemptId: string }) {
   }, [attemptId]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface px-6 text-center">
+    <div
+      className={
+        embedded
+          ? 'flex max-w-lg flex-col items-center gap-4 rounded-lg border border-border bg-surface px-6 py-10 text-center'
+          : 'flex min-h-screen flex-col items-center justify-center gap-4 bg-surface px-6 text-center'
+      }
+    >
       <CheckCircle2 className="size-10 text-success" aria-hidden />
       <h1 className="text-lg font-semibold text-text-primary">
         Your assessment has been submitted
@@ -57,27 +78,17 @@ export function SubmittedScreen({ attemptId }: { attemptId: string }) {
               Your answers are being marked — this page will update automatically.
             </p>
           ) : (
-            <dl className="grid grid-cols-2 gap-2">
-              <dt className="text-text-muted">Score</dt>
-              <dd className="text-right font-medium tabular-nums text-text-primary">
-                {status.data.marking.awardedMarks} / {status.data.marking.maximumMarks}
-              </dd>
-              <dt className="text-text-muted">Correct</dt>
-              <dd className="text-right font-medium tabular-nums text-text-primary">
-                {status.data.marking.correctCount}
-              </dd>
-              <dt className="text-text-muted">Incorrect</dt>
-              <dd className="text-right font-medium tabular-nums text-text-primary">
-                {status.data.marking.incorrectCount}
-              </dd>
-              <dt className="text-text-muted">Unanswered</dt>
-              <dd className="text-right font-medium tabular-nums text-text-primary">
-                {status.data.marking.unansweredCount}
-              </dd>
-            </dl>
+            <p className="text-text-secondary">
+              Your answers have been marked. Your result will be available according to your
+              school&apos;s result policy.
+            </p>
           )}
         </div>
       )}
+
+      <Button asChild>
+        <Link href="/student">Go home</Link>
+      </Button>
     </div>
   );
 }

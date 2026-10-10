@@ -328,6 +328,90 @@
         ]
       }
     },
+    "/auth/student-sign-in": {
+      "post": {
+        "operationId": "StudentPasswordlessController_signIn",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudentSignInDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Student sign-in with Login ID + name, only while the school or the student's class has it switched on.",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/school/student-passwordless-sign-in": {
+      "get": {
+        "operationId": "StudentPasswordlessController_getSettings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentPasswordlessSettingsDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Where students may currently sign in without a password.",
+        "tags": [
+          "identity"
+        ]
+      },
+      "put": {
+        "operationId": "StudentPasswordlessController_updateSettings",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudentPasswordlessSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentPasswordlessSettingsDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Switch passwordless student sign-in on or off for the school or chosen classes (School Admin, Moderator). Switching off signs those students out.",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_liveness",
@@ -353,6 +437,31 @@
           }
         },
         "summary": "Readiness probe — 503 only when the database is unreachable or the process is draining; Redis and object storage are reported as degraded.",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/tls-ask": {
+      "get": {
+        "operationId": "HealthController_tlsAsk",
+        "parameters": [
+          {
+            "name": "domain",
+            "required": true,
+            "in": "query",
+            "description": "The host Caddy is about to certify.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "On-demand TLS: 200 when the host names an existing school (`<school>.<root>` or `<school>.api.<root>`), else 404.",
         "tags": [
           "health"
         ]
@@ -1915,6 +2024,58 @@
         ]
       }
     },
+    "/school/assessment-rules": {
+      "get": {
+        "operationId": "SchoolAssessmentRulesController_getAssessmentRules",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAssessmentRulesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own school's default rules for new exams.",
+        "tags": [
+          "school"
+        ]
+      },
+      "put": {
+        "operationId": "SchoolAssessmentRulesController_updateAssessmentRules",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSchoolAssessmentRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAssessmentRulesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update the default rules for new exams (School Admin only).",
+        "tags": [
+          "school"
+        ]
+      }
+    },
     "/school/onboarding": {
       "get": {
         "operationId": "SchoolOnboardingController_getStatus",
@@ -2922,6 +3083,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "departmentId",
+            "required": false,
+            "in": "query",
+            "description": "ADR-0038: only classes offering a subject in this department.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3284,6 +3454,302 @@
         ]
       }
     },
+    "/academics/subject-choice-groups": {
+      "get": {
+        "operationId": "SubjectChoiceGroupController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectChoiceGroupListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's subject choice groups (ADR-0038).",
+        "tags": [
+          "academics"
+        ]
+      },
+      "post": {
+        "operationId": "SubjectChoiceGroupController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubjectChoiceGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectChoiceGroupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a subject choice group.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/subject-choice-groups/{id}": {
+      "patch": {
+        "operationId": "SubjectChoiceGroupController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubjectChoiceGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectChoiceGroupResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rename a choice group or change its rule.",
+        "tags": [
+          "academics"
+        ]
+      },
+      "delete": {
+        "operationId": "SubjectChoiceGroupController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a choice group that no subject is in.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/streams": {
+      "get": {
+        "operationId": "StreamController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the school's student streams (ADR-0038).",
+        "tags": [
+          "academics"
+        ]
+      },
+      "post": {
+        "operationId": "StreamController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStreamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create a stream.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/streams/{id}": {
+      "patch": {
+        "operationId": "StreamController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStreamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rename a stream, or retire it (status INACTIVE).",
+        "tags": [
+          "academics"
+        ]
+      },
+      "delete": {
+        "operationId": "StreamController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a stream that no class, student or offering uses.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/standard-setup": {
+      "get": {
+        "operationId": "StandardSetupController_preview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSetupPreviewResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "What applying the standard setup would add or place (ADR-0038).",
+        "tags": [
+          "academics"
+        ]
+      },
+      "post": {
+        "operationId": "StandardSetupController_apply",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyStandardSetupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardSetupResultResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Apply the ticked parts of the standard setup.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
     "/academics/classes/{id}/subjects": {
       "get": {
         "operationId": "ClassSubjectController_list",
@@ -3355,6 +3821,45 @@
       }
     },
     "/academics/class-subjects/{id}": {
+      "patch": {
+        "operationId": "ClassSubjectController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClassSubjectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassSubjectResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Make an offering compulsory or elective (ADR-0038).",
+        "tags": [
+          "academics"
+        ]
+      },
       "delete": {
         "operationId": "ClassSubjectController_remove",
         "parameters": [
@@ -3544,6 +4049,47 @@
           }
         },
         "summary": "A student's full enrollment history (never overwritten, 07 §35).",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/students/{id}/stream": {
+      "put": {
+        "operationId": "StudentEnrollmentController_setStream",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetStudentStreamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentEnrollmentResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Put a student's current enrollment in another stream (ADR-0038); registers the new stream's subjects and deregisters the old stream's, for future exams only.",
         "tags": [
           "people"
         ]
@@ -3806,7 +4352,200 @@
             }
           }
         },
-        "summary": "Re-register a student for a previously deregistered elective.",
+        "summary": "Register a student for a subject their class offers, including an elective they never had (ADR-0038).",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/academics/classes/{id}/subject-registrations": {
+      "get": {
+        "operationId": "StudentSubjectRegistrationController_grid",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassRegistrationGridResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A class's current students and the offerings the caller may change (ADR-0038), with choice-group warnings.",
+        "tags": [
+          "people"
+        ]
+      },
+      "put": {
+        "operationId": "StudentSubjectRegistrationController_saveGrid",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClassRegistrationsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateClassRegistrationsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Save registration ticks for a class in one transaction. Effective for future exams only.",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/teachers/me/form-classes": {
+      "get": {
+        "operationId": "FormTeacherController_mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyFormClassesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "The caller's own form classes, outside closed or archived sessions.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/academics/classes/{id}/form-teachers": {
+      "get": {
+        "operationId": "FormTeacherController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormTeacherListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A class's current form teachers.",
+        "tags": [
+          "academics"
+        ]
+      },
+      "put": {
+        "operationId": "FormTeacherController_replace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceFormTeachersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormTeacherListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Set a class's form teachers. Anyone left out is ended, never deleted.",
+        "tags": [
+          "academics"
+        ]
+      }
+    },
+    "/students/{id}/history": {
+      "get": {
+        "operationId": "StudentHistoryController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentHistoryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "A student's academic history by session: classes, moves, subject changes, rollover outcomes and exam counts.",
         "tags": [
           "people"
         ]
@@ -4014,7 +4753,7 @@
             }
           },
           {
-            "name": "departmentId",
+            "name": "streamId",
             "required": false,
             "in": "query",
             "schema": {
@@ -5085,7 +5824,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StatusResponseDto"
+                  "$ref": "#/components/schemas/HeartbeatResponseDto"
                 }
               }
             }
@@ -6686,7 +7425,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -6788,6 +7527,28 @@
           }
         },
         "summary": "Create a student.",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/students/locked-out": {
+      "get": {
+        "operationId": "StudentController_listLockedOut",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LockedOutStudentsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Students whose sign-in is locked right now (too many wrong tries), for one-click unlocking. Same permission as Unlock sign-in.",
         "tags": [
           "people"
         ]
@@ -6978,6 +7739,30 @@
         ]
       }
     },
+    "/students/{id}/unlock-sign-in": {
+      "post": {
+        "operationId": "StudentController_unlockSignIn",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "End a student's sign-in lockout after too many wrong passwords, without changing their password (audited).",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/teachers": {
       "get": {
         "operationId": "TeacherController_list",
@@ -6986,7 +7771,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -7256,7 +8041,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -7536,7 +8321,7 @@
             "name": "q",
             "required": false,
             "in": "query",
-            "description": "Matches the entity's own identifier and first/last name.",
+            "description": "Each word must match the entity's own identifier, first name or last name, so a full name matches.",
             "schema": {
               "type": "string"
             }
@@ -8375,6 +9160,38 @@
           }
         },
         "summary": "Archive a question — always allowed, never touches any revision row.",
+        "tags": [
+          "questions"
+        ]
+      }
+    },
+    "/questions/bulk-archive": {
+      "post": {
+        "operationId": "QuestionController_bulkArchive",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkArchiveQuestionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkArchiveResultDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archive several questions in one call. Best-effort: each question is checked and archived independently under the single-archive rules, with per-question outcomes.",
         "tags": [
           "questions"
         ]
@@ -9586,7 +10403,7 @@
     }
   },
   "info": {
-    "title": "Project Atlas API",
+    "title": "ExamKeep API",
     "description": "Multi-tenant CBT platform API. Error envelope and idempotency contract: ADR-0033.",
     "version": "1.0.0",
     "contact": {}
@@ -9776,6 +10593,10 @@
           "primaryColor": {
             "type": "string",
             "nullable": true
+          },
+          "studentPasswordlessSignIn": {
+            "type": "boolean",
+            "description": "Some students of this school may sign in with Login ID + name right now — the sign-in page offers the student form."
           }
         },
         "required": [
@@ -9783,7 +10604,8 @@
           "subdomain",
           "timezone",
           "logoUrl",
-          "primaryColor"
+          "primaryColor",
+          "studentPasswordlessSignIn"
         ]
       },
       "TenantResolveResponseDto": {
@@ -9914,13 +10736,18 @@
           },
           "effectiveSchoolId": {
             "type": "string"
+          },
+          "passwordless": {
+            "type": "boolean",
+            "description": "Signed in with Login ID + name (passwordless student sign-in): no password change is asked for or allowed."
           }
         },
         "required": [
           "user",
           "membership",
           "roles",
-          "effectiveSchoolId"
+          "effectiveSchoolId",
+          "passwordless"
         ]
       },
       "PasswordChangeDto": {
@@ -9964,6 +10791,44 @@
         "required": [
           "token",
           "newPassword"
+        ]
+      },
+      "StudentSignInDto": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "description": "The student's Login ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "First name and surname in any order and any capitals; middle names optional."
+          }
+        },
+        "required": [
+          "identifier",
+          "name"
+        ]
+      },
+      "StudentPasswordlessSettingsDto": {
+        "type": "object",
+        "properties": {
+          "allStudents": {
+            "type": "boolean",
+            "description": "On for every student of the school."
+          },
+          "classIds": {
+            "description": "Classes switched on individually. A PUT replaces the whole list.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "allStudents",
+          "classIds"
         ]
       },
       "RequestMediaUploadDto": {
@@ -10753,6 +11618,15 @@
             "type": "number",
             "description": "Initial subscription period, in days.",
             "minimum": 1
+          },
+          "startingStructure": {
+            "type": "string",
+            "enum": [
+              "STANDARD",
+              "EMPTY"
+            ],
+            "default": "EMPTY",
+            "description": "STANDARD creates the standard departments, streams and subjects (ADR-0038); the school edits them after. EMPTY leaves setup to the school."
           }
         },
         "required": [
@@ -11773,6 +12647,70 @@
           }
         }
       },
+      "SchoolAssessmentRulesResponseDto": {
+        "type": "object",
+        "properties": {
+          "defaultExamDurationSeconds": {
+            "type": "number",
+            "nullable": true
+          },
+          "defaultAttemptLimit": {
+            "type": "number"
+          },
+          "defaultNavigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "defaultRandomizeQuestions": {
+            "type": "boolean"
+          },
+          "defaultRandomizeOptions": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "defaultExamDurationSeconds",
+          "defaultAttemptLimit",
+          "defaultNavigationPolicy",
+          "defaultRandomizeQuestions",
+          "defaultRandomizeOptions"
+        ]
+      },
+      "UpdateSchoolAssessmentRulesDto": {
+        "type": "object",
+        "properties": {
+          "defaultExamDurationSeconds": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 60,
+            "maximum": 86400,
+            "description": "Default exam duration in whole seconds; null means no default."
+          },
+          "defaultAttemptLimit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "defaultNavigationPolicy": {
+            "type": "string",
+            "enum": [
+              "FREE",
+              "SEQUENTIAL_NO_REVISIT",
+              "SEQUENTIAL_WITH_REVISIT"
+            ]
+          },
+          "defaultRandomizeQuestions": {
+            "type": "boolean"
+          },
+          "defaultRandomizeOptions": {
+            "type": "boolean"
+          }
+        }
+      },
       "OnboardingStatusResponseDto": {
         "type": "object",
         "properties": {
@@ -12336,6 +13274,9 @@
               "ACTIVE",
               "INACTIVE"
             ]
+          },
+          "headedByMe": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -12400,7 +13341,11 @@
           "academicSessionId": {
             "type": "string"
           },
-          "departmentId": {
+          "defaultStreamId": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultStreamName": {
             "type": "string",
             "nullable": true
           },
@@ -12433,7 +13378,8 @@
         "required": [
           "id",
           "academicSessionId",
-          "departmentId",
+          "defaultStreamId",
+          "defaultStreamName",
           "name",
           "level",
           "arm",
@@ -12460,10 +13406,10 @@
           "academicSessionId": {
             "type": "string"
           },
-          "departmentId": {
+          "defaultStreamId": {
             "type": "string",
             "nullable": true,
-            "description": "Null for classes with no department (e.g. JSS levels before streaming)."
+            "description": "ADR-0038: the stream students joining this class take unless set otherwise. Null for a mixed arm and for JSS."
           },
           "name": {
             "type": "string",
@@ -12497,7 +13443,7 @@
       "UpdateClassGroupDto": {
         "type": "object",
         "properties": {
-          "departmentId": {
+          "defaultStreamId": {
             "type": "string",
             "nullable": true
           },
@@ -12519,6 +13465,10 @@
           "arm": {
             "type": "string",
             "maxLength": 16
+          },
+          "placeStudentsWithoutStream": {
+            "type": "boolean",
+            "description": "ADR-0038: with a new defaultStreamId, also put the class’s current students who are in no stream into it (registering its stream subjects). Students already in a stream keep it."
           }
         }
       },
@@ -12538,6 +13488,10 @@
             "type": "string",
             "nullable": true
           },
+          "choiceGroupId": {
+            "type": "string",
+            "nullable": true
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -12551,6 +13505,7 @@
           "name",
           "code",
           "departmentId",
+          "choiceGroupId",
           "status"
         ]
       },
@@ -12585,6 +13540,11 @@
             "type": "string",
             "nullable": true,
             "description": "ADR-0001: a subject with no department falls outside every HOD's automatic review scope."
+          },
+          "choiceGroupId": {
+            "type": "string",
+            "nullable": true,
+            "description": "ADR-0038: the \"pick N of these\" choice group this subject belongs to."
           }
         },
         "required": [
@@ -12606,8 +13566,385 @@
           "departmentId": {
             "type": "string",
             "nullable": true
+          },
+          "choiceGroupId": {
+            "type": "string",
+            "nullable": true,
+            "description": "ADR-0038: the \"pick N of these\" choice group this subject belongs to."
           }
         }
+      },
+      "SubjectChoiceGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "minChoices": {
+            "type": "number"
+          },
+          "maxChoices": {
+            "type": "number"
+          },
+          "subjectIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "minChoices",
+          "maxChoices",
+          "subjectIds"
+        ]
+      },
+      "SubjectChoiceGroupListResponseDto": {
+        "type": "object",
+        "properties": {
+          "choiceGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubjectChoiceGroupResponseDto"
+            }
+          }
+        },
+        "required": [
+          "choiceGroups"
+        ]
+      },
+      "CreateSubjectChoiceGroupDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "example": "Religion"
+          },
+          "minChoices": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 20,
+            "example": 1
+          },
+          "maxChoices": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20,
+            "example": 1
+          }
+        },
+        "required": [
+          "name",
+          "minChoices",
+          "maxChoices"
+        ]
+      },
+      "UpdateSubjectChoiceGroupDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "minChoices": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "maxChoices": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20
+          }
+        }
+      },
+      "StreamResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "classCount": {
+            "type": "number"
+          },
+          "studentCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code",
+          "status",
+          "classCount",
+          "studentCount"
+        ]
+      },
+      "StreamListResponseDto": {
+        "type": "object",
+        "properties": {
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StreamResponseDto"
+            }
+          }
+        },
+        "required": [
+          "streams"
+        ]
+      },
+      "CreateStreamDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "example": "Science"
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 16,
+            "example": "SCI"
+          }
+        },
+        "required": [
+          "name",
+          "code"
+        ]
+      },
+      "UpdateStreamDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "code": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          }
+        }
+      },
+      "StandardSetupDepartmentDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "PLACE",
+              "EXISTS"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "status"
+        ]
+      },
+      "StandardSetupStreamDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "PLACE",
+              "EXISTS"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "status"
+        ]
+      },
+      "StandardSetupSubjectDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The school's own name when it already has it."
+          },
+          "departmentCode": {
+            "type": "string"
+          },
+          "departmentName": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "JSS",
+              "SS",
+              "JSS_AND_SS"
+            ]
+          },
+          "choiceGroupName": {
+            "type": "string",
+            "nullable": true,
+            "description": "e.g. \"Trade subject: choose 1\"."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "PLACE",
+              "EXISTS"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "departmentCode",
+          "departmentName",
+          "stage",
+          "choiceGroupName",
+          "status"
+        ]
+      },
+      "StandardSetupPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "departments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StandardSetupDepartmentDto"
+            }
+          },
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StandardSetupStreamDto"
+            }
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StandardSetupSubjectDto"
+            }
+          }
+        },
+        "required": [
+          "departments",
+          "streams",
+          "subjects"
+        ]
+      },
+      "ApplyStandardSetupDto": {
+        "type": "object",
+        "properties": {
+          "departmentCodes": {
+            "example": [
+              "SCI",
+              "BUS",
+              "HUM"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "streamCodes": {
+            "example": [
+              "SCI",
+              "BUS",
+              "HUM"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subjectCodes": {
+            "example": [
+              "MTH",
+              "ENG"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "departmentCodes",
+          "streamCodes",
+          "subjectCodes"
+        ]
+      },
+      "StandardSetupResultResponseDto": {
+        "type": "object",
+        "properties": {
+          "departmentsCreated": {
+            "type": "number"
+          },
+          "streamsCreated": {
+            "type": "number"
+          },
+          "subjectsCreated": {
+            "type": "number"
+          },
+          "subjectsPlaced": {
+            "type": "number",
+            "description": "Existing subjects given their standard department."
+          },
+          "choiceGroupsCreated": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "departmentsCreated",
+          "streamsCreated",
+          "subjectsCreated",
+          "subjectsPlaced",
+          "choiceGroupsCreated"
+        ]
       },
       "ClassSubjectResponseDto": {
         "type": "object",
@@ -12636,6 +13973,25 @@
               "ACTIVE",
               "INACTIVE"
             ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "COMPULSORY",
+              "ELECTIVE"
+            ]
+          },
+          "streamIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "streamNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -12645,7 +14001,10 @@
           "subjectName",
           "subjectCode",
           "academicSessionId",
-          "status"
+          "status",
+          "kind",
+          "streamIds",
+          "streamNames"
         ]
       },
       "ClassSubjectListResponseDto": {
@@ -12667,11 +14026,43 @@
         "properties": {
           "subjectId": {
             "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "COMPULSORY",
+              "ELECTIVE"
+            ],
+            "description": "ADR-0038: COMPULSORY (default) registers every student in the class; ELECTIVE registers nobody."
+          },
+          "streamIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
           "subjectId"
         ]
+      },
+      "UpdateClassSubjectDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "COMPULSORY",
+              "ELECTIVE"
+            ]
+          },
+          "streamIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "HodAssignmentResponseDto": {
         "type": "object",
@@ -12765,6 +14156,10 @@
           },
           "classId": {
             "type": "string"
+          },
+          "streamId": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -12786,6 +14181,10 @@
           },
           "classId": {
             "type": "string"
+          },
+          "streamId": {
+            "type": "string",
+            "nullable": true
           },
           "startDate": {
             "type": "string",
@@ -12811,9 +14210,22 @@
           "studentProfileId",
           "academicSessionId",
           "classId",
+          "streamId",
           "startDate",
           "endDate",
           "status"
+        ]
+      },
+      "SetStudentStreamDto": {
+        "type": "object",
+        "properties": {
+          "streamId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "streamId"
         ]
       },
       "StudentEnrollmentListResponseDto": {
@@ -12848,6 +14260,14 @@
           "startDate": {
             "type": "string",
             "format": "date"
+          },
+          "streamId": {
+            "type": "string",
+            "nullable": true
+          },
+          "streamName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -12855,7 +14275,9 @@
           "studentProfileId",
           "studentId",
           "displayName",
-          "startDate"
+          "startDate",
+          "streamId",
+          "streamName"
         ]
       },
       "ClassRosterResponseDto": {
@@ -13071,6 +14493,17 @@
           "subjectCode": {
             "type": "string"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "COMPULSORY",
+              "ELECTIVE"
+            ]
+          },
+          "choiceGroupName": {
+            "type": "string",
+            "nullable": true
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -13094,23 +14527,562 @@
           "classSubjectId",
           "subjectName",
           "subjectCode",
+          "kind",
+          "choiceGroupName",
           "status",
           "registeredAt",
           "deregisteredAt"
         ]
       },
+      "AvailableOfferingDto": {
+        "type": "object",
+        "properties": {
+          "classSubjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "subjectCode": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "COMPULSORY",
+              "ELECTIVE"
+            ]
+          },
+          "choiceGroupName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "classSubjectId",
+          "subjectName",
+          "subjectCode",
+          "kind",
+          "choiceGroupName"
+        ]
+      },
+      "ChoiceWarningDto": {
+        "type": "object",
+        "properties": {
+          "choiceGroupId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "chosen": {
+            "type": "number"
+          },
+          "minChoices": {
+            "type": "number"
+          },
+          "maxChoices": {
+            "type": "number"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "choiceGroupId",
+          "name",
+          "chosen",
+          "minChoices",
+          "maxChoices",
+          "message"
+        ]
+      },
       "StudentSubjectRegistrationListResponseDto": {
         "type": "object",
         "properties": {
+          "enrollmentId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The current ACTIVE enrollment, if any."
+          },
+          "classId": {
+            "type": "string",
+            "nullable": true
+          },
+          "className": {
+            "type": "string",
+            "nullable": true
+          },
+          "streamId": {
+            "type": "string",
+            "nullable": true
+          },
+          "streamName": {
+            "type": "string",
+            "nullable": true
+          },
           "registrations": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/StudentSubjectRegistrationResponseDto"
             }
+          },
+          "availableOfferings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailableOfferingDto"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChoiceWarningDto"
+            }
           }
         },
         "required": [
-          "registrations"
+          "enrollmentId",
+          "classId",
+          "className",
+          "streamId",
+          "streamName",
+          "registrations",
+          "availableOfferings",
+          "warnings"
+        ]
+      },
+      "GridOfferingDto": {
+        "type": "object",
+        "properties": {
+          "classSubjectId": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "subjectCode": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "COMPULSORY",
+              "ELECTIVE"
+            ]
+          },
+          "choiceGroupId": {
+            "type": "string",
+            "nullable": true
+          },
+          "choiceGroupName": {
+            "type": "string",
+            "nullable": true
+          },
+          "choiceRule": {
+            "type": "string",
+            "nullable": true,
+            "description": "e.g. \"Religion: choose 1\"."
+          },
+          "streamNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "classSubjectId",
+          "subjectId",
+          "subjectName",
+          "subjectCode",
+          "kind",
+          "choiceGroupId",
+          "choiceGroupName",
+          "choiceRule",
+          "streamNames"
+        ]
+      },
+      "GridStudentDto": {
+        "type": "object",
+        "properties": {
+          "enrollmentId": {
+            "type": "string"
+          },
+          "studentProfileId": {
+            "type": "string"
+          },
+          "studentId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "streamName": {
+            "type": "string",
+            "nullable": true
+          },
+          "registeredClassSubjectIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChoiceWarningDto"
+            }
+          }
+        },
+        "required": [
+          "enrollmentId",
+          "studentProfileId",
+          "studentId",
+          "displayName",
+          "streamName",
+          "registeredClassSubjectIds",
+          "warnings"
+        ]
+      },
+      "ClassRegistrationGridResponseDto": {
+        "type": "object",
+        "properties": {
+          "className": {
+            "type": "string"
+          },
+          "offerings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GridOfferingDto"
+            }
+          },
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GridStudentDto"
+            }
+          }
+        },
+        "required": [
+          "className",
+          "offerings",
+          "students"
+        ]
+      },
+      "RegistrationChangeDto": {
+        "type": "object",
+        "properties": {
+          "enrollmentId": {
+            "type": "string"
+          },
+          "classSubjectId": {
+            "type": "string"
+          },
+          "registered": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enrollmentId",
+          "classSubjectId",
+          "registered"
+        ]
+      },
+      "UpdateClassRegistrationsDto": {
+        "type": "object",
+        "properties": {
+          "changes": {
+            "maxItems": 5000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegistrationChangeDto"
+            }
+          }
+        },
+        "required": [
+          "changes"
+        ]
+      },
+      "UpdateClassRegistrationsResponseDto": {
+        "type": "object",
+        "properties": {
+          "changed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "changed"
+        ]
+      },
+      "MyFormClassDto": {
+        "type": "object",
+        "properties": {
+          "classId": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "arm": {
+            "type": "string"
+          },
+          "academicSessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "classId",
+          "className",
+          "level",
+          "arm",
+          "academicSessionId"
+        ]
+      },
+      "MyFormClassesResponseDto": {
+        "type": "object",
+        "properties": {
+          "classes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyFormClassDto"
+            }
+          }
+        },
+        "required": [
+          "classes"
+        ]
+      },
+      "FormTeacherEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "teacherProfileId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "staffId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "id",
+          "teacherProfileId",
+          "displayName",
+          "staffId",
+          "startDate"
+        ]
+      },
+      "FormTeacherListResponseDto": {
+        "type": "object",
+        "properties": {
+          "formTeachers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormTeacherEntryDto"
+            }
+          }
+        },
+        "required": [
+          "formTeachers"
+        ]
+      },
+      "ReplaceFormTeachersDto": {
+        "type": "object",
+        "properties": {
+          "teacherProfileIds": {
+            "description": "Every form teacher this class should have; others are ended.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "teacherProfileIds"
+        ]
+      },
+      "HistoryEventDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ENROLLED",
+              "MOVED",
+              "STARTED_SESSION",
+              "SUBJECT_ADDED",
+              "SUBJECT_DROPPED",
+              "STREAM_CHANGED",
+              "ACCOUNT"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "What changed, e.g. \"Moved SS1A → SS1B\"."
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true,
+            "description": "Extra detail, e.g. subjects carried over."
+          },
+          "actorName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null when the system made the change."
+          },
+          "actorRole": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "at",
+          "kind",
+          "summary",
+          "detail",
+          "actorName",
+          "actorRole"
+        ]
+      },
+      "HistoryOutcomeDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "e.g. \"Promoted\", \"Repeated\", \"Graduated\"."
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "actorName": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "label",
+          "reason",
+          "actorName"
+        ]
+      },
+      "HistoryExamsDto": {
+        "type": "object",
+        "properties": {
+          "attended": {
+            "type": "number"
+          },
+          "absent": {
+            "type": "number"
+          },
+          "excused": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "attended",
+          "absent",
+          "excused"
+        ]
+      },
+      "HistorySessionDto": {
+        "type": "object",
+        "properties": {
+          "academicSessionId": {
+            "type": "string"
+          },
+          "sessionName": {
+            "type": "string"
+          },
+          "className": {
+            "type": "string",
+            "description": "The class the student ended the session in, or is in now."
+          },
+          "streamName": {
+            "type": "string",
+            "nullable": true
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "subjects": {
+            "description": "Subjects taken in that class, by name.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "events": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryEventDto"
+            }
+          },
+          "outcome": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HistoryOutcomeDto"
+              }
+            ]
+          },
+          "exams": {
+            "$ref": "#/components/schemas/HistoryExamsDto"
+          }
+        },
+        "required": [
+          "academicSessionId",
+          "sessionName",
+          "className",
+          "streamName",
+          "current",
+          "subjects",
+          "events",
+          "outcome",
+          "exams"
+        ]
+      },
+      "StudentHistoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "description": "Newest session first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistorySessionDto"
+            }
+          },
+          "accountEvents": {
+            "description": "Account events, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryEventDto"
+            }
+          }
+        },
+        "required": [
+          "sessions",
+          "accountEvents"
         ]
       },
       "CreateRolloverPlanDto": {
@@ -13679,6 +15651,9 @@
               "FULL_REVIEW"
             ]
           },
+          "resultSettingsLocked": {
+            "type": "boolean"
+          },
           "accessMode": {
             "type": "string",
             "enum": [
@@ -13748,6 +15723,7 @@
           "randomizeOptions",
           "resultPolicy",
           "resultDetailVisibility",
+          "resultSettingsLocked",
           "accessMode",
           "generalInstructions",
           "navigationInstructions",
@@ -14224,6 +16200,10 @@
             "type": "string",
             "nullable": true
           },
+          "pendingAbsence": {
+            "type": "boolean",
+            "description": "End Examination will record this student absent: authorized, never started, and has not sat another batch."
+          },
           "extraTimeSeconds": {
             "type": "number",
             "description": "F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none)."
@@ -14240,6 +16220,7 @@
           "eligible",
           "failedChecks",
           "participantStatus",
+          "pendingAbsence",
           "extraTimeSeconds",
           "largerText"
         ]
@@ -14546,6 +16527,27 @@
           "results"
         ]
       },
+      "HeartbeatResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "example": "ok"
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The server's current clock. The client counts the exam countdown from it on its own monotonic clock, never from the PC's wall clock."
+          }
+        },
+        "required": [
+          "status",
+          "serverTime"
+        ]
+      },
       "RecordAttemptEventDto": {
         "type": "object",
         "properties": {
@@ -14643,43 +16645,12 @@
           },
           "markedCount": {
             "type": "number"
-          },
-          "correctCount": {
-            "type": "number"
-          },
-          "incorrectCount": {
-            "type": "number"
-          },
-          "unansweredCount": {
-            "type": "number"
-          },
-          "partialCount": {
-            "type": "number",
-            "description": "Always 0 this phase — PARTIAL is reserved for a future non-objective type."
-          },
-          "awardedMarks": {
-            "type": "number"
-          },
-          "maximumMarks": {
-            "type": "number"
-          },
-          "percentage": {
-            "type": "number",
-            "nullable": true,
-            "description": "null iff maximumMarks is 0 (guards divide-by-zero) or marking is not COMPLETE."
           }
         },
         "required": [
           "status",
           "questionCount",
-          "markedCount",
-          "correctCount",
-          "incorrectCount",
-          "unansweredCount",
-          "partialCount",
-          "awardedMarks",
-          "maximumMarks",
-          "percentage"
+          "markedCount"
         ]
       },
       "AttemptStatusResponseDto": {
@@ -14811,6 +16782,11 @@
           "largerText": {
             "type": "boolean",
             "description": "F20 (DoD 3): the caller's staff-granted larger-text accommodation (07 §9.7)."
+          },
+          "submittedAttemptId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Set when the caller has already submitted this exam and cannot start another attempt: their latest submitted attempt. The client shows the submission confirmation instead of Start."
           }
         },
         "required": [
@@ -14823,7 +16799,8 @@
           "questionCount",
           "totalMarks",
           "extraTimeSeconds",
-          "largerText"
+          "largerText",
+          "submittedAttemptId"
         ]
       },
       "MediaManifestAssetDto": {
@@ -15465,6 +17442,12 @@
               "$ref": "#/components/schemas/ComparisonMetricDto"
             }
           },
+          "streams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparisonMetricDto"
+            }
+          },
           "sessionTrends": {
             "type": "array",
             "items": {
@@ -15482,6 +17465,7 @@
           "examCount",
           "attemptCount",
           "departments",
+          "streams",
           "sessionTrends"
         ]
       },
@@ -15676,6 +17660,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "withheld": {
             "type": "boolean"
           },
@@ -15716,6 +17704,7 @@
           "unansweredCount",
           "partialCount",
           "grade",
+          "gradePassing",
           "withheld",
           "withheldReason",
           "voidedReason",
@@ -15757,6 +17746,9 @@
           "passRate": {
             "type": "number",
             "nullable": true
+          },
+          "ungradedCount": {
+            "type": "number"
           }
         },
         "required": [
@@ -15768,7 +17760,8 @@
           "averagePercentage",
           "highestPercentage",
           "lowestPercentage",
-          "passRate"
+          "passRate",
+          "ungradedCount"
         ]
       },
       "ExamResultClassSummaryDto": {
@@ -15805,6 +17798,9 @@
             "type": "number",
             "nullable": true
           },
+          "ungradedCount": {
+            "type": "number"
+          },
           "classId": {
             "type": "string"
           },
@@ -15822,6 +17818,7 @@
           "highestPercentage",
           "lowestPercentage",
           "passRate",
+          "ungradedCount",
           "classId",
           "className"
         ]
@@ -15871,6 +17868,29 @@
           "adjustmentInProgress"
         ]
       },
+      "QuestionOptionReviewDto": {
+        "type": "object",
+        "properties": {
+          "optionId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "correct": {
+            "type": "boolean"
+          },
+          "selected": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "optionId",
+          "content",
+          "correct",
+          "selected"
+        ]
+      },
       "ResultQuestionBreakdownDto": {
         "type": "object",
         "properties": {
@@ -15894,6 +17914,12 @@
           },
           "voided": {
             "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOptionReviewDto"
+            }
           }
         },
         "required": [
@@ -15903,7 +17929,8 @@
           "correctness",
           "awardedMarks",
           "maximumMarks",
-          "voided"
+          "voided",
+          "options"
         ]
       },
       "ResultAdjustmentHistoryItemDto": {
@@ -16012,6 +18039,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "withheld": {
             "type": "boolean"
           },
@@ -16077,6 +18108,7 @@
           "unansweredCount",
           "partialCount",
           "grade",
+          "gradePassing",
           "withheld",
           "withheldReason",
           "voidedReason",
@@ -16205,6 +18237,10 @@
           "overrideEarnedMarks": {
             "type": "number",
             "description": "MANUAL_OVERRIDE only — the earned-marks value set outright."
+          },
+          "ungradedOnly": {
+            "type": "boolean",
+            "description": "RECALCULATE only — \"Grade now\": touch only results finalised without a grade, and grade them against the school's current scale."
           }
         },
         "required": [
@@ -16315,6 +18351,10 @@
             "type": "string",
             "nullable": true
           },
+          "gradePassing": {
+            "type": "boolean",
+            "nullable": true
+          },
           "publishedAt": {
             "type": "string",
             "nullable": true
@@ -16330,6 +18370,7 @@
           "earnedMarks",
           "percentage",
           "grade",
+          "gradePassing",
           "publishedAt"
         ]
       },
@@ -16364,6 +18405,15 @@
           },
           "maximumMarks": {
             "type": "number"
+          },
+          "voided": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOptionReviewDto"
+            }
           }
         },
         "required": [
@@ -16371,7 +18421,9 @@
           "content",
           "correctness",
           "awardedMarks",
-          "maximumMarks"
+          "maximumMarks",
+          "voided",
+          "options"
         ]
       },
       "StudentResultDetailDto": {
@@ -16404,6 +18456,10 @@
           },
           "grade": {
             "type": "string",
+            "nullable": true
+          },
+          "gradePassing": {
+            "type": "boolean",
             "nullable": true
           },
           "publishedAt": {
@@ -16447,6 +18503,7 @@
           "earnedMarks",
           "percentage",
           "grade",
+          "gradePassing",
           "publishedAt",
           "detailVisibility",
           "correctCount",
@@ -16641,10 +18698,17 @@
           "firstName": {
             "type": "string"
           },
+          "middleName": {
+            "type": "string",
+            "nullable": true
+          },
           "lastName": {
             "type": "string"
           },
           "displayName": {
+            "type": "string"
+          },
+          "formalName": {
             "type": "string"
           },
           "studentId": {
@@ -16687,11 +18751,11 @@
             "type": "string",
             "nullable": true
           },
-          "departmentId": {
+          "streamId": {
             "type": "string",
             "nullable": true
           },
-          "departmentName": {
+          "streamName": {
             "type": "string",
             "nullable": true
           }
@@ -16701,8 +18765,10 @@
           "userId",
           "studentProfileId",
           "firstName",
+          "middleName",
           "lastName",
           "displayName",
+          "formalName",
           "studentId",
           "admissionNumber",
           "loginIdentifier",
@@ -16711,8 +18777,8 @@
           "currentClassId",
           "currentClassName",
           "currentAcademicSessionId",
-          "departmentId",
-          "departmentName"
+          "streamId",
+          "streamName"
         ]
       },
       "StudentListResponseDto": {
@@ -16741,6 +18807,20 @@
           "pageSize"
         ]
       },
+      "LockedOutStudentsResponseDto": {
+        "type": "object",
+        "properties": {
+          "students": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentResponseDto"
+            }
+          }
+        },
+        "required": [
+          "students"
+        ]
+      },
       "StudentOwnProfileResponseDto": {
         "type": "object",
         "properties": {
@@ -16754,7 +18834,7 @@
             "type": "string",
             "nullable": true
           },
-          "departmentName": {
+          "streamName": {
             "type": "string",
             "nullable": true
           }
@@ -16763,7 +18843,7 @@
           "displayName",
           "studentId",
           "currentClassName",
-          "departmentName"
+          "streamName"
         ]
       },
       "CreateStudentDto": {
@@ -16774,6 +18854,10 @@
             "maxLength": 64
           },
           "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "middleName": {
             "type": "string",
             "maxLength": 64
           },
@@ -16805,6 +18889,10 @@
             "maxLength": 64
           },
           "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "middleName": {
             "type": "string",
             "maxLength": 64
           },
@@ -16848,10 +18936,17 @@
           "firstName": {
             "type": "string"
           },
+          "middleName": {
+            "type": "string",
+            "nullable": true
+          },
           "lastName": {
             "type": "string"
           },
           "displayName": {
+            "type": "string"
+          },
+          "formalName": {
             "type": "string"
           },
           "email": {
@@ -16889,8 +18984,10 @@
           "userId",
           "teacherProfileId",
           "firstName",
+          "middleName",
           "lastName",
           "displayName",
+          "formalName",
           "email",
           "staffId",
           "loginIdentifier",
@@ -16936,6 +19033,10 @@
             "type": "string",
             "maxLength": 64
           },
+          "middleName": {
+            "type": "string",
+            "maxLength": 64
+          },
           "email": {
             "type": "string",
             "maxLength": 320
@@ -16964,6 +19065,10 @@
             "type": "string",
             "maxLength": 64
           },
+          "middleName": {
+            "type": "string",
+            "maxLength": 64
+          },
           "email": {
             "type": "string",
             "maxLength": 320
@@ -16985,10 +19090,17 @@
           "firstName": {
             "type": "string"
           },
+          "middleName": {
+            "type": "string",
+            "nullable": true
+          },
           "lastName": {
             "type": "string"
           },
           "displayName": {
+            "type": "string"
+          },
+          "formalName": {
             "type": "string"
           },
           "staffId": {
@@ -17008,8 +19120,10 @@
           "userId",
           "teacherProfileId",
           "firstName",
+          "middleName",
           "lastName",
           "displayName",
+          "formalName",
           "staffId",
           "departmentId",
           "departmentName"
@@ -17063,6 +19177,10 @@
             "type": "string",
             "maxLength": 64
           },
+          "middleName": {
+            "type": "string",
+            "maxLength": 64
+          },
           "email": {
             "type": "string",
             "maxLength": 320
@@ -17096,10 +19214,17 @@
           "firstName": {
             "type": "string"
           },
+          "middleName": {
+            "type": "string",
+            "nullable": true
+          },
           "lastName": {
             "type": "string"
           },
           "displayName": {
+            "type": "string"
+          },
+          "formalName": {
             "type": "string"
           },
           "email": {
@@ -17123,8 +19248,10 @@
           "membershipId",
           "userId",
           "firstName",
+          "middleName",
           "lastName",
           "displayName",
+          "formalName",
           "email",
           "loginIdentifier",
           "userStatus"
@@ -17167,6 +19294,10 @@
             "type": "string",
             "maxLength": 64
           },
+          "middleName": {
+            "type": "string",
+            "maxLength": 64
+          },
           "email": {
             "type": "string",
             "maxLength": 320
@@ -17191,6 +19322,10 @@
             "maxLength": 64
           },
           "lastName": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "middleName": {
             "type": "string",
             "maxLength": 64
           },
@@ -18054,6 +20189,73 @@
           "pageSize"
         ]
       },
+      "BulkArchiveQuestionsDto": {
+        "type": "object",
+        "properties": {
+          "questionIds": {
+            "maxItems": 200,
+            "description": "Question ids to archive, each checked against the single-archive rules.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "questionIds"
+        ]
+      },
+      "QuestionBulkArchiveItemDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId"
+        ]
+      },
+      "QuestionBulkSubmitFailureDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId",
+          "code",
+          "message"
+        ]
+      },
+      "BulkArchiveResultDto": {
+        "type": "object",
+        "properties": {
+          "archived": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionBulkArchiveItemDto"
+            }
+          },
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionBulkSubmitFailureDto"
+            }
+          }
+        },
+        "required": [
+          "archived",
+          "failed"
+        ]
+      },
       "BulkSubmitQuestionsDto": {
         "type": "object",
         "properties": {
@@ -18083,25 +20285,6 @@
         "required": [
           "questionId",
           "revisionId"
-        ]
-      },
-      "QuestionBulkSubmitFailureDto": {
-        "type": "object",
-        "properties": {
-          "questionId": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "questionId",
-          "code",
-          "message"
         ]
       },
       "BulkSubmitResultDto": {
@@ -18382,6 +20565,16 @@
           },
           "revision": {
             "$ref": "#/components/schemas/QuestionRevisionResponseDto"
+          },
+          "fallbackReason": {
+            "type": "string",
+            "enum": [
+              "NO_DEPARTMENT",
+              "NO_HOD",
+              "AUTHOR_IS_ONLY_HOD"
+            ],
+            "nullable": true,
+            "description": "ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can."
           }
         },
         "required": [
@@ -18392,7 +20585,8 @@
           "authorTeacherProfileId",
           "authorName",
           "submittedAt",
-          "revision"
+          "revision",
+          "fallbackReason"
         ]
       },
       "QuestionReviewQueueSubjectGroupDto": {
@@ -18510,6 +20704,16 @@
             "items": {
               "$ref": "#/components/schemas/QuestionReviewHistoryItemDto"
             }
+          },
+          "fallbackReason": {
+            "type": "string",
+            "enum": [
+              "NO_DEPARTMENT",
+              "NO_HOD",
+              "AUTHOR_IS_ONLY_HOD"
+            ],
+            "nullable": true,
+            "description": "ADR-0038: why no HOD can decide this question, so the School Admin may. null when an HOD can."
           }
         },
         "required": [
@@ -18520,7 +20724,8 @@
           "authorTeacherProfileId",
           "authorName",
           "currentRevision",
-          "history"
+          "history",
+          "fallbackReason"
         ]
       },
       "ApproveQuestionReviewDto": {
@@ -18672,11 +20877,13 @@
           "durationSeconds": {
             "type": "number",
             "minimum": 1,
+            "maximum": 86400,
             "description": "Duration in whole seconds."
           },
           "attemptLimit": {
             "type": "number",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 100
           },
           "navigationPolicy": {
             "type": "string",

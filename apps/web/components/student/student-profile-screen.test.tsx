@@ -10,6 +10,9 @@ vi.mock('@/lib/api', async () => {
 });
 const mockGet = vi.mocked(apiClient.GET);
 
+const authState = vi.hoisted(() => ({ me: null as { passwordless?: boolean } | null }));
+vi.mock('@/lib/auth', () => ({ useAuth: () => ({ me: authState.me }) }));
+
 function ok<T>(data: T) {
   return Promise.resolve({ data, response: new Response(null, { status: 200 }) } as never);
 }
@@ -35,13 +38,13 @@ describe('StudentProfileScreen', () => {
     expect(await screen.findByText(/couldn't load your profile/i)).toBeInTheDocument();
   });
 
-  it('DoD 7 — shows name, student ID, class, and department', async () => {
+  it('DoD 7 — shows name, student ID, class, and stream', async () => {
     mockGet.mockResolvedValue(
       ok({
         displayName: 'Ahmed Bello',
         studentId: 'ST001',
         currentClassName: 'SS2A',
-        departmentName: 'Science',
+        streamName: 'Science',
       }),
     );
     renderWithClient(<StudentProfileScreen />);
@@ -59,11 +62,27 @@ describe('StudentProfileScreen', () => {
         displayName: 'New Student',
         studentId: 'ST099',
         currentClassName: null,
-        departmentName: null,
+        streamName: null,
       }),
     );
     renderWithClient(<StudentProfileScreen />);
     expect(await screen.findByText(/not yet enrolled/i)).toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('offers no password change to a student signed in without a password', async () => {
+    authState.me = { passwordless: true };
+    mockGet.mockResolvedValue(
+      ok({
+        displayName: 'Ahmed Bello',
+        studentId: 'ST001',
+        currentClassName: 'SS2A',
+        streamName: null,
+      }),
+    );
+    renderWithClient(<StudentProfileScreen />);
+    expect(await screen.findByText(/signed in with your name and login id/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /change password/i })).not.toBeInTheDocument();
+    authState.me = null;
   });
 });

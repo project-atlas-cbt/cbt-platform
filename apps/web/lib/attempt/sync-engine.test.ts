@@ -165,6 +165,30 @@ describe('AttemptSyncEngine', () => {
     expect(mockPost).toHaveBeenCalledTimes(2);
   });
 
+  it('audit P0-2 — flushUntilSynced reports answers that never reached the server, and keeps them', async () => {
+    mockPost.mockRejectedValue(new Error('network down'));
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1');
+
+    let tries = 0;
+    const left = await engine.flushUntilSynced(() => ++tries < 2, 0);
+    expect(left).toBe(1);
+    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('pending');
+  });
+
+  it('audit P0-2 — flushUntilSynced keeps trying until the answer arrives', async () => {
+    mockPost.mockRejectedValueOnce(new Error('network down'));
+    mockPost.mockRejectedValueOnce(new Error('network down'));
+    mockPost.mockResolvedValue(
+      ok({ results: [{ examQuestionId: 'q1', accepted: true, gradeWindowFlag: false }] }),
+    );
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1');
+
+    expect(await engine.flushUntilSynced(() => true, 0)).toBe(0);
+    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('synced');
+  });
+
   it('ADR-0003 — a window-closed rejection is permanently excluded from retry', async () => {
     mockPost.mockResolvedValue(
       ok({
@@ -191,6 +215,29 @@ describe('AttemptSyncEngine', () => {
     await engine.flushNow();
     // A window-closed row is never `pending` again, so the next flush finds
     // nothing to send.
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('bug audit P1-6 — a locked-question rejection is final and does not hold Submit back', async () => {
+    mockPost.mockResolvedValue(
+      ok({
+        results: [
+          {
+            examQuestionId: 'q1',
+            accepted: false,
+            rejectionCode: 'ATTEMPT_QUESTION_LOCKED',
+            gradeWindowFlag: false,
+          },
+        ],
+      }),
+    );
+    const engine = track(new AttemptSyncEngine(ATTEMPT_ID));
+    await engine.recordAnswer('q1', 'o1');
+
+    expect(await engine.flushUntilSynced(() => true, 0)).toBe(0);
+    expect((await getAttemptDb().answers.get([ATTEMPT_ID, 'q1']))?.syncStatus).toBe('locked');
+    mockPost.mockClear();
+    await engine.flushNow();
     expect(mockPost).not.toHaveBeenCalled();
   });
 

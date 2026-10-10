@@ -286,7 +286,9 @@ const envObject = z.object({
   // (logs still go to stdout as JSON).
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
-  SENTRY_DSN: z.url().optional(),
+  // Empty counts as unset: the VPS Compose file passes `${SENTRY_DSN:-}` to
+  // the api and worker, which is "" until a DSN is put in .env.
+  SENTRY_DSN: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),
   RELEASE_VERSION: z.string().optional(),
 
   // Exam Health Monitor (09 §37) and operational/security alert dispatch.

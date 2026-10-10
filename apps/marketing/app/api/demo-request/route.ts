@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { RateLimiter, parseLead, readMailSettings, sendLead } from '@/lib/lead';
+import { RateLimiter, isOwnOrigin, parseLead, readMailSettings, sendLead } from '@/lib/lead';
 import { site } from '@/lib/site';
 
 const limiter = new RateLimiter(5, 10 * 60 * 1000);
@@ -14,8 +14,7 @@ function back(request: NextRequest, path: string) {
  */
 export async function POST(request: NextRequest) {
   // A browser always sends Origin on a form POST; a different one is another site's form.
-  const origin = request.headers.get('origin');
-  if (origin && new URL(origin).host !== new URL(site.url).host) {
+  if (!isOwnOrigin(request.headers.get('origin'), site.url)) {
     return new NextResponse(null, { status: 403 });
   }
 

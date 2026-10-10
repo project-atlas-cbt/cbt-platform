@@ -16,6 +16,7 @@ vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 vi.mock('@/lib/exams/queries', () => ({
   useExamsPaginated: vi.fn(),
   useMyTeacherAssignments: vi.fn(),
+  useOwnExamsFilter: (enabled: boolean) => (enabled ? { teacherMembershipId: 'm-me' } : {}),
 }));
 vi.mock('@/lib/academics/queries', () => ({
   useSubjects: vi.fn(),
@@ -71,6 +72,16 @@ describe('ExamListScreen', () => {
     } as never);
   });
 
+  it("ADR-0037: a teacher's Exams screen asks only for their own exams; oversight does not", () => {
+    mockUseHasPermission.mockReturnValue(true);
+    const { rerender } = render(<ExamListScreen basePath="/teacher/exams" scope="own" />);
+    expect(mockUseExamsPaginated).toHaveBeenLastCalledWith(
+      expect.objectContaining({ teacherMembershipId: 'm-me' }),
+    );
+    rerender(<ExamListScreen basePath="/school/exams" scope="oversight" />);
+    expect(mockUseExamsPaginated.mock.lastCall?.[0]).not.toHaveProperty('teacherMembershipId');
+  });
+
   it('shows "New exam" only for the Teacher root, and only when exam.create is granted', () => {
     mockUseHasPermission.mockReturnValue(true);
     const { rerender } = render(<ExamListScreen basePath="/teacher/exams" scope="own" />);
@@ -93,6 +104,21 @@ describe('ExamListScreen', () => {
 
     rerender(<ExamListScreen basePath="/teacher/exams" scope="own" />);
     expect(screen.queryByRole('columnheader', { name: /teacher/i })).not.toBeInTheDocument();
+  });
+
+  it('P3-17: offers the Teacher filter only to roles that may list teachers', () => {
+    mockUseHasPermission.mockImplementation((resource) => resource !== 'users.teacher.view');
+    render(<ExamListScreen basePath="/hod/exams" scope="oversight" />);
+    expect(mockUseTeachers).toHaveBeenLastCalledWith({ enabled: false });
+    expect(screen.queryByLabelText('Teacher')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Department')).toBeInTheDocument();
+  });
+
+  it('shows the Teacher filter to School Admins and Moderators', () => {
+    mockUseHasPermission.mockReturnValue(true);
+    render(<ExamListScreen basePath="/school/exams" scope="oversight" />);
+    expect(mockUseTeachers).toHaveBeenLastCalledWith({ enabled: true });
+    expect(screen.getByLabelText('Teacher')).toBeInTheDocument();
   });
 
   it('shows a loading state', () => {

@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn, type DataTableSort } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -30,6 +31,7 @@ interface ModeratorRow {
   firstName: string;
   lastName: string;
   displayName: string;
+  formalName: string;
   loginIdentifier: string;
   email: string | null;
   userStatus: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
@@ -50,11 +52,13 @@ export function ModeratorsScreen({ basePath }: { basePath: string }) {
   const sortColumn = searchParams.get('sortBy');
   const sortDir = searchParams.get('sortDir');
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
-  const sort = useMemo<DataTableSort | null>(
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
+  const sort = useMemo<DataTableSort>(
     () =>
       sortColumn && (sortDir === 'asc' || sortDir === 'desc')
         ? { columnId: sortColumn, direction: sortDir }
-        : null,
+        : // Owner decision 2026-10-09: lists open A to Z by surname.
+          { columnId: 'lastName', direction: 'asc' },
     [sortColumn, sortDir],
   );
 
@@ -81,16 +85,16 @@ export function ModeratorsScreen({ basePath }: { basePath: string }) {
   const moderators = useModeratorsPaginated({
     q: search,
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     sortBy: sortColumn === 'loginIdentifier' || sortColumn === 'lastName' ? sortColumn : null,
     sortDir: sortDir === 'asc' || sortDir === 'desc' ? sortDir : null,
   });
 
   const rows: ModeratorRow[] = moderators.data?.moderators ?? [];
-  const pageCount = Math.max(1, Math.ceil((moderators.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((moderators.data?.total ?? 0) / pageSize));
 
   const columns: DataTableColumn<ModeratorRow>[] = [
-    { id: 'lastName', header: 'Name', sortable: true, cell: (row) => row.displayName },
+    { id: 'lastName', header: 'Name', sortable: true, cell: (row) => row.formalName },
     {
       id: 'loginIdentifier',
       header: 'Login ID',
@@ -107,7 +111,7 @@ export function ModeratorsScreen({ basePath }: { basePath: string }) {
             cell: (row: ModeratorRow) => (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label={`Actions for ${row.displayName}`}>
+                  <Button variant="ghost" size="icon" aria-label={`Actions for ${row.formalName}`}>
                     <MoreHorizontal aria-hidden />
                   </Button>
                 </DropdownMenuTrigger>
@@ -176,6 +180,11 @@ export function ModeratorsScreen({ basePath }: { basePath: string }) {
           }
           page={page}
           pageCount={pageCount}
+          total={moderators.data?.total}
+          pageSize={pageSize}
+          onPageSizeChange={(next) =>
+            updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+          }
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             !search ? (

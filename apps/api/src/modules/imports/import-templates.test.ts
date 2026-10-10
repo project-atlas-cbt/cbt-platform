@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   buildErrorRowsCsv,
   buildTemplateCsv,
+  hasTemplateColumn,
   IMPORT_TEMPLATE_VERSION,
   IMPORT_TEMPLATES,
+  templateCell,
   templateVersionMarker,
 } from './import-templates.js';
 
@@ -15,15 +17,35 @@ describe('buildTemplateCsv', () => {
     expect(lines[1]).toBe(IMPORT_TEMPLATES.STUDENTS.columns.join(','));
   });
 
-  it("includes 01 §7's own worked example rows for students", () => {
-    const csv = buildTemplateCsv('STUDENTS');
-    expect(csv).toContain('ST001,Ahmed,Bello,SS1A,Science');
+  it('bug audit P2-8: carries no sample rows a school could import by mistake', () => {
+    for (const type of ['STUDENTS', 'TEACHERS', 'QUESTIONS'] as const) {
+      expect(buildTemplateCsv(type).trim().split('\r\n')).toHaveLength(2);
+    }
   });
 
   it('produces a teacher template with the minimal required columns', () => {
     const csv = buildTemplateCsv('TEACHERS');
     const lines = csv.trim().split('\r\n');
-    expect(lines[1]).toBe('Staff ID,First Name,Last Name,Email');
+    expect(lines[1]).toBe('Staff ID,Surname,First Name,Middle Name,Email');
+  });
+
+  it('lists names in register order, Surname first (2026-10-09)', () => {
+    const lines = buildTemplateCsv('STUDENTS').trim().split('\r\n');
+    expect(lines[1]).toBe('Student ID,Surname,First Name,Middle Name,Class,Stream,Electives');
+  });
+});
+
+describe('templateCell', () => {
+  it('falls back to the earlier column name and trims', () => {
+    expect(templateCell('STUDENTS', { Surname: ' Ojo ' }, 'Surname')).toBe('Ojo');
+    expect(templateCell('STUDENTS', { 'Last Name': 'Ojo' }, 'Surname')).toBe('Ojo');
+    expect(templateCell('TEACHERS', { 'Last Name': 'Eze' }, 'Surname')).toBe('Eze');
+    expect(templateCell('STUDENTS', {}, 'Middle Name')).toBe('');
+  });
+
+  it('accepts a header row that uses the earlier name', () => {
+    expect(hasTemplateColumn('STUDENTS', ['Last Name'], 'Surname')).toBe(true);
+    expect(hasTemplateColumn('STUDENTS', ['First Name'], 'Surname')).toBe(false);
   });
 });
 
@@ -36,7 +58,7 @@ describe('buildErrorRowsCsv', () => {
           'First Name': 'A',
           'Last Name': 'B',
           Class: '',
-          Department: '',
+          Department: 'Science',
         },
         errors: [
           { field: 'Student ID', message: 'Student ID is required.' },
@@ -46,8 +68,13 @@ describe('buildErrorRowsCsv', () => {
     ]);
     const lines = csv.trim().split('\r\n');
     expect(lines[0]).toBe(templateVersionMarker(IMPORT_TEMPLATE_VERSION));
-    expect(lines[1]).toBe('Student ID,First Name,Last Name,Class,Department,Errors');
+    expect(lines[1]).toBe(
+      'Student ID,Surname,First Name,Middle Name,Class,Stream,Electives,Errors',
+    );
     expect(lines[2]).toContain('Student ID: Student ID is required.; Class: Class is required.');
+    // An old file's Last Name comes back under Surname, and its
+    // Department value under Stream.
+    expect(lines[2]).toContain(',B,A,,,Science,,');
   });
 
   it('carries the version marker, so a hand-corrected copy is directly re-uploadable', () => {

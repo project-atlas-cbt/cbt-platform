@@ -22,7 +22,9 @@ afterAll(async () => {
       await tx.studentEnrollment.deleteMany({ where: { schoolId } });
       await tx.classSubject.deleteMany({ where: { schoolId } });
       await tx.classGroup.deleteMany({ where: { schoolId } });
+      await tx.stream.deleteMany({ where: { schoolId } });
       await tx.subject.deleteMany({ where: { schoolId } });
+      await tx.subjectChoiceGroup.deleteMany({ where: { schoolId } });
       await tx.studentProfile.deleteMany({ where: { schoolId } });
       await tx.roleAssignment.deleteMany({ where: { schoolId } });
       await tx.schoolMembership.deleteMany({ where: { schoolId } });
@@ -178,6 +180,194 @@ describe('B19 rollover — atomic historical transition', () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+
+  it("keeps offering kinds and each student's subjects into the next session (ADR-0038)", async () => {
+    const school = await prisma.school.create({
+      data: { name: `Rollover ${randomUUID()}`, subdomain: `roll-${randomUUID().slice(0, 10)}` },
+    });
+    schoolIds.push(school.id);
+    const user = await prisma.user.create({
+      data: {
+        firstName: 'Bola',
+        lastName: 'Student',
+        displayName: 'Bola Student',
+        status: 'ACTIVE',
+        credentialState: 'OK',
+      },
+    });
+    userIds.push(user.id);
+    const s = school.id;
+    const { source, target, subjects, science } = await withTenant(prisma, s, async (tx) => {
+      const membership = await tx.schoolMembership.create({
+        data: {
+          schoolId: s,
+          userId: user.id,
+          loginIdentifier: `S-${randomUUID().slice(0, 12)}`,
+          status: 'ACTIVE',
+        },
+      });
+      await tx.roleAssignment.create({
+        data: { schoolId: s, membershipId: membership.id, role: 'STUDENT' },
+      });
+      const profile = await tx.studentProfile.create({
+        data: {
+          schoolId: s,
+          membershipId: membership.id,
+          studentId: `ST-${randomUUID().slice(0, 12)}`,
+        },
+      });
+      const source = await tx.academicSession.create({
+        data: {
+          schoolId: s,
+          name: `Source-${randomUUID().slice(0, 8)}`,
+          startDate: new Date('2026-09-01'),
+          endDate: new Date('2027-07-31'),
+          status: 'CURRENT',
+        },
+      });
+      const target = await tx.academicSession.create({
+        data: {
+          schoolId: s,
+          name: `Target-${randomUUID().slice(0, 8)}`,
+          startDate: new Date('2027-09-01'),
+          endDate: new Date('2028-07-31'),
+        },
+      });
+      await tx.academicTerm.create({
+        data: {
+          schoolId: s,
+          academicSessionId: target.id,
+          name: 'First Term',
+          sequence: 1,
+          startDate: new Date('2027-09-01'),
+          endDate: new Date('2027-12-15'),
+        },
+      });
+      const science = await tx.stream.create({
+        data: { schoolId: s, name: 'Science', code: 'SCI' },
+      });
+      const [jss1, jss2] = await Promise.all(
+        (['JSS1', 'JSS2'] as const).map((level) =>
+          tx.classGroup.create({
+            data: {
+              schoolId: s,
+              academicSessionId: source.id,
+              name: `${level}A`,
+              level,
+              arm: 'A',
+              defaultStreamId: science.id,
+            },
+          }),
+        ),
+      );
+      const subjects: Record<string, string> = {};
+      for (const name of ['Mathematics', 'French', 'CRS', 'IRS', 'Physics']) {
+        subjects[name] = (
+          await tx.subject.create({
+            data: { schoolId: s, name, code: `${name.slice(0, 3)}-${randomUUID().slice(0, 6)}` },
+          })
+        ).id;
+      }
+      const offerings: Record<string, string> = {};
+      for (const classGroup of [jss1!, jss2!]) {
+        for (const name of Object.keys(subjects)) {
+          const o = await tx.classSubject.create({
+            data: {
+              schoolId: s,
+              academicSessionId: source.id,
+              classId: classGroup.id,
+              subjectId: subjects[name]!,
+              kind: name === 'Mathematics' ? 'COMPULSORY' : 'ELECTIVE',
+            },
+          });
+          // Physics is the Science stream's subject.
+          if (name === 'Physics')
+            await tx.classSubjectStream.create({
+              data: { schoolId: s, classSubjectId: o.id, streamId: science.id },
+            });
+          if (classGroup.id === jss1!.id) offerings[name] = o.id;
+        }
+      }
+      const enrollment = await tx.studentEnrollment.create({
+        data: {
+          schoolId: s,
+          studentProfileId: profile.id,
+          academicSessionId: source.id,
+          classId: jss1!.id,
+          streamId: science.id,
+          startDate: new Date('2026-09-01'),
+        },
+      });
+      // Took Maths and CRS; French was dropped during the year. Joined the
+      // Science stream late, so has no Physics registration yet.
+      await tx.studentSubjectRegistration.createMany({
+        data: [
+          {
+            schoolId: s,
+            studentEnrollmentId: enrollment.id,
+            classSubjectId: offerings['Mathematics']!,
+          },
+          { schoolId: s, studentEnrollmentId: enrollment.id, classSubjectId: offerings['CRS']! },
+          {
+            schoolId: s,
+            studentEnrollmentId: enrollment.id,
+            classSubjectId: offerings['French']!,
+            status: 'DEREGISTERED',
+            deregisteredAt: new Date(),
+          },
+        ],
+      });
+      return { source, target, subjects, science };
+    });
+
+    const service = new RolloverService(audit as never);
+    await service.close(s, source.id, actor);
+    const plan = await service.createPlan(
+      s,
+      source.id,
+      { targetAcademicSessionId: target.id },
+      actor,
+    );
+    await service.commit(s, plan.id, plan.version, actor);
+
+    const after = await withTenant(prisma, s, async (tx) => ({
+      offerings: await tx.classSubject.findMany({
+        where: { schoolId: s, academicSessionId: target.id },
+        include: {
+          classGroupSession: { select: { level: true, defaultStreamId: true } },
+          streams: { select: { streamId: true } },
+        },
+      }),
+      registrations: await tx.studentSubjectRegistration.findMany({
+        where: { schoolId: s, enrollment: { academicSessionId: target.id } },
+        include: { classSubject: { select: { subjectId: true } } },
+      }),
+      enrollment: await tx.studentEnrollment.findFirst({
+        where: { schoolId: s, academicSessionId: target.id },
+      }),
+    }));
+    const kindOf = (name: string) =>
+      after.offerings.find(
+        (o) => o.subjectId === subjects[name] && o.classGroupSession.level === 'JSS2',
+      )?.kind;
+    expect(kindOf('Mathematics')).toBe('COMPULSORY');
+    expect(kindOf('French')).toBe('ELECTIVE');
+    // ADR-0038 streams: the class keeps its default stream, the offering
+    // keeps its stream, and the student stays in theirs, so the stream
+    // subject is registered in the new session.
+    const physics = after.offerings.find(
+      (o) => o.subjectId === subjects['Physics'] && o.classGroupSession.level === 'JSS2',
+    );
+    expect(physics?.classGroupSession.defaultStreamId).toBe(science.id);
+    expect(physics?.streams.map((x) => x.streamId)).toEqual([science.id]);
+    expect(after.enrollment?.streamId).toBe(science.id);
+    expect(
+      after.registrations
+        .filter((r) => r.status === 'REGISTERED')
+        .map((r) => r.classSubject.subjectId)
+        .sort(),
+    ).toEqual([subjects['Mathematics'], subjects['CRS'], subjects['Physics']].sort());
   });
 
   it('allows exactly one of two simultaneous commit requests', async () => {

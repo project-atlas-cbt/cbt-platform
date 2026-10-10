@@ -8,6 +8,7 @@ import { AuditService } from '../operations/audit-event.service.js';
 import {
   QUESTION_DETAIL_INCLUDE,
   QUESTION_INCLUDE,
+  QUESTION_REVISION_INCLUDE,
   currentRevisionOwnedBy,
   deriveCurrentStatus,
   toQuestionListItemDto,
@@ -22,6 +23,7 @@ import { validateQuestionRevisionForSubmit } from './question-validation.util.js
 import { TopicService } from './topic.service.js';
 import type { SubjectListResponseDto } from '../academics/dto/subject.dto.js';
 import type {
+  BulkArchiveResultDto,
   CreateQuestionDto,
   QuestionCountsResponseDto,
   QuestionListResponseDto,
@@ -61,6 +63,7 @@ export class QuestionService {
   ): Promise<QuestionResponseDto> {
     validateQuestionRevisionForSubmit({
       content: dto.content,
+      questionType: dto.questionType,
       options: dto.options,
       marks: dto.marks,
     });
@@ -203,6 +206,7 @@ export class QuestionService {
           name: s.name,
           code: s.code,
           departmentId: s.departmentId,
+          choiceGroupId: s.choiceGroupId,
           status: s.status,
         })),
     };
@@ -277,6 +281,67 @@ export class QuestionService {
     };
   }
 
+  /**
+   * `GET /v1/exams/:id/available-questions`: every unarchived question in
+   * the scope with an approved revision, shown as its latest approved
+   * revision. `list(status: APPROVED)` filters on the *current* revision,
+   * so a question hid from exam building as soon as someone started a new
+   * draft of it, and its row carried the draft's id (bug audit P2-5).
+   */
+  async listBindable(
+    schoolId: string,
+    actor: AuthorizedActor,
+    query: ListQuestionsQueryDto,
+  ): Promise<QuestionListResponseDto> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const scopeFilter = await this.buildScopeFilter(schoolId, actor);
+    const approved: Prisma.QuestionRevisionWhereInput = {
+      status: 'APPROVED',
+      ...(query.topicId !== undefined && { topicId: query.topicId }),
+      ...(query.difficulty !== undefined && { difficulty: query.difficulty }),
+    };
+    const where: Prisma.QuestionWhereInput = {
+      schoolId,
+      ...scopeFilter,
+      ...(query.subjectId !== undefined && { subjectId: query.subjectId }),
+      ...(query.level !== undefined && { level: query.level }),
+      archivedAt: null,
+      revisions: { some: approved },
+    };
+
+    const [questions, total] = await withTenant(prisma, schoolId, (tx) =>
+      Promise.all([
+        tx.question.findMany({
+          where,
+          include: {
+            ...QUESTION_INCLUDE,
+            revisions: {
+              where: { status: 'APPROVED' },
+              include: QUESTION_REVISION_INCLUDE,
+              orderBy: { revisionNumber: 'desc' },
+              take: 1,
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.question.count({ where }),
+      ]),
+    );
+
+    return {
+      questions: questions.map((q) => {
+        const asApproved = { ...q, currentRevision: q.revisions[0] ?? null };
+        return toQuestionListItemDto(asApproved, currentRevisionOwnedBy(actor, asApproved));
+      }),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
   async counts(schoolId: string, actor: AuthorizedActor): Promise<QuestionCountsResponseDto> {
     const scopeFilter = await this.buildScopeFilter(schoolId, actor);
     // In-memory rollup, not a raw-SQL groupBy: this school's question bank
@@ -337,6 +402,50 @@ export class QuestionService {
     id: string,
     auditCtx: ActorContext,
   ): Promise<QuestionResponseDto> {
+    await this.archiveOne(schoolId, actor, id, auditCtx);
+    return this.get(schoolId, actor, id);
+  }
+
+  /** Bulk archive — the single-question rules (`questionBank.archive`
+   * evaluated per question against its own resource context, one
+   * `QUESTION_ARCHIVED` audit row each) applied independently per id, in
+   * one request. Best-effort like `bulkSubmit`: a question the actor may not
+   * archive, that is missing, or that is already archived lands in `failed`
+   * with its reason and never blocks the rest. */
+  async bulkArchive(
+    schoolId: string,
+    actor: AuthorizedActor,
+    questionIds: string[],
+    auditCtx: ActorContext,
+  ): Promise<BulkArchiveResultDto> {
+    const archived: BulkArchiveResultDto['archived'] = [];
+    const failed: BulkArchiveResultDto['failed'] = [];
+    for (const questionId of Array.from(new Set(questionIds))) {
+      try {
+        await this.archiveOne(schoolId, actor, questionId, auditCtx, { rejectIfArchived: true });
+        archived.push({ questionId });
+      } catch (err) {
+        if (err instanceof AppHttpException) {
+          failed.push({
+            questionId,
+            code: err.code,
+            message: err.message || 'This question could not be archived.',
+          });
+        } else {
+          throw err;
+        }
+      }
+    }
+    return { archived, failed };
+  }
+
+  private async archiveOne(
+    schoolId: string,
+    actor: AuthorizedActor,
+    id: string,
+    auditCtx: ActorContext,
+    options: { rejectIfArchived?: boolean } = {},
+  ): Promise<void> {
     const question = await withTenant(prisma, schoolId, (tx) =>
       tx.question.findUnique({ where: { id }, include: QUESTION_INCLUDE }),
     );
@@ -352,6 +461,12 @@ export class QuestionService {
         message: 'You do not have permission to archive this question.',
       });
     }
+    if (options.rejectIfArchived && question.archivedAt !== null) {
+      throw new AppHttpException({
+        code: 'CONFLICT',
+        message: 'This question is already archived.',
+      });
+    }
 
     await withTenant(prisma, schoolId, (tx) =>
       tx.question.update({ where: { id }, data: { archivedAt: new Date() } }),
@@ -364,8 +479,6 @@ export class QuestionService {
       entityType: 'Question',
       entityId: id,
     });
-
-    return this.get(schoolId, actor, id);
   }
 
   /** Builds the full `ResourceContext` a single-question `evaluate()` call

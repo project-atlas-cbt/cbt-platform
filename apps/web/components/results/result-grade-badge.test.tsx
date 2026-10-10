@@ -12,6 +12,20 @@ describe('ResultGradeBadge', () => {
     render(<ResultGradeBadge grade={null} />);
     expect(screen.getByText('Ungraded')).toBeInTheDocument();
   });
+
+  // P3-6: colour follows the band's isPassing, not the letter.
+  it('shows a passing "E" as a pass and a failing "B" as a fail', () => {
+    render(
+      <>
+        <ResultGradeBadge grade="E" passing />
+        <ResultGradeBadge grade="B" passing={false} />
+        <ResultGradeBadge grade="C" passing={null} />
+      </>,
+    );
+    expect(screen.getByText('E').className).toContain('bg-success-subtle');
+    expect(screen.getByText('B').className).toContain('bg-danger-subtle');
+    expect(screen.getByText('C').className).toContain('bg-surface-muted');
+  });
 });
 
 describe('ResultCorrectnessBadge', () => {

@@ -216,6 +216,20 @@ export function useStudentEnrollments(studentProfileId: string | undefined) {
 
 /** ADR-0011's elective-registration surface — the student profile's
  * "Subjects" panel. */
+/** A student's academic history by session (2026-10-09 redesign). */
+export function useStudentHistory(studentProfileId: string | undefined) {
+  return useQuery({
+    queryKey: ['people', 'students', studentProfileId, 'history'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/students/{id}/history', {
+          params: { path: { id: studentProfileId as string } },
+        }),
+      ),
+    enabled: Boolean(studentProfileId),
+  });
+}
+
 export function useStudentSubjectRegistrations(studentProfileId: string | undefined) {
   return useQuery({
     queryKey: ['people', 'students', studentProfileId, 'subject-registrations'],
@@ -291,4 +305,25 @@ export function useAllClassSubjectsForSession(academicSessionId: string | undefi
   });
 
   return { classes: classList, cells, isPending, isError };
+}
+
+/** Passwordless student sign-in (owner decision 2026-10-08): where students
+ * may sign in with name + Login ID instead of a password. */
+export function useStudentPasswordlessSettings(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['people', 'student-passwordless-sign-in'],
+    queryFn: () => unwrap(apiClient.GET('/school/student-passwordless-sign-in', {})),
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/** Students whose sign-in is locked right now. Polled, so a lab invigilator
+ * sees new lockouts without reloading. */
+export function useLockedOutStudents(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['people', 'students', 'locked-out'],
+    queryFn: () => unwrap(apiClient.GET('/students/locked-out', {})),
+    enabled: options?.enabled ?? true,
+    refetchInterval: 15_000,
+  });
 }

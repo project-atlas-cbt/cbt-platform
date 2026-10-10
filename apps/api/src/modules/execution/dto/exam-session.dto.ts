@@ -220,6 +220,13 @@ export class EligibleStudentResponseDto {
   examSessionId?: string | null;
 
   @ApiProperty({
+    type: Boolean,
+    description:
+      'End Examination will record this student absent: authorized, never started, and has not sat another batch.',
+  })
+  pendingAbsence!: boolean;
+
+  @ApiProperty({
     type: Number,
     description:
       "F20 (DoD 3): extra time on the student's latest participant row, seconds (0 = none).",

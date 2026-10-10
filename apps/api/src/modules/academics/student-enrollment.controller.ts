@@ -1,12 +1,14 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { Authorized } from '../authorization/decorators.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { resolveActorRole } from './actor.util.js';
+import { assertCanViewClassPeople, assertCanViewStudent } from './people-scope.util.js';
 import {
   ClassRosterResponseDto,
   EnrollStudentDto,
+  SetStudentStreamDto,
   StudentEnrollmentListResponseDto,
   StudentEnrollmentResponseDto,
 } from './dto/student-enrollment.dto.js';
@@ -48,6 +50,26 @@ export class StudentEnrollmentController {
     });
   }
 
+  @Put('students/:id/stream')
+  @Authorized('assignments.studentToClass')
+  @ApiOperation({
+    summary:
+      "Put a student's current enrollment in another stream (ADR-0038); registers the new " +
+      "stream's subjects and deregisters the old stream's, for future exams only.",
+  })
+  @ApiOkResponse({ type: StudentEnrollmentResponseDto })
+  async setStream(
+    @Req() req: FastifyRequest,
+    @Param('id') studentProfileId: string,
+    @Body() body: SetStudentStreamDto,
+  ): Promise<StudentEnrollmentResponseDto> {
+    const user = currentUser(req);
+    return this.enrollments.setStream(user.schoolId, studentProfileId, body, {
+      actorUserId: user.userId,
+      actorRole: resolveActorRole(user),
+    });
+  }
+
   @Get('students/:id/enrollments')
   @Authorized('assignments.view')
   @ApiOperation({ summary: "A student's full enrollment history (never overwritten, 07 §35)." })
@@ -56,10 +78,9 @@ export class StudentEnrollmentController {
     @Req() req: FastifyRequest,
     @Param('id') studentProfileId: string,
   ): Promise<StudentEnrollmentListResponseDto> {
-    const enrollments = await this.enrollments.listForStudent(
-      currentUser(req).schoolId,
-      studentProfileId,
-    );
+    const user = currentUser(req);
+    await assertCanViewStudent(user, studentProfileId);
+    const enrollments = await this.enrollments.listForStudent(user.schoolId, studentProfileId);
     return { enrollments };
   }
 
@@ -71,7 +92,9 @@ export class StudentEnrollmentController {
     @Req() req: FastifyRequest,
     @Param('id') classId: string,
   ): Promise<ClassRosterResponseDto> {
-    const students = await this.enrollments.rosterForClass(currentUser(req).schoolId, classId);
+    const user = currentUser(req);
+    await assertCanViewClassPeople(user, classId);
+    const students = await this.enrollments.rosterForClass(user.schoolId, classId);
     return { students };
   }
 }

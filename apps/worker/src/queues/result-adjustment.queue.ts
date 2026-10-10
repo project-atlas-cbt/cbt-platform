@@ -12,6 +12,7 @@ import {
   type ResultAdjustmentJobPayload,
   type ResultQuestionMarking,
 } from '@atlas/domain';
+import { resolveGradingScaleVersion } from './result-finalization.js';
 
 /**
  * ADR-0025's bulk-adjustment consumer — the only place in the product where a
@@ -81,14 +82,24 @@ export async function runResultAdjustment(
 
   let chunkIndex = 0;
   let failureReason: string | null = null;
+  // P2-21: "Grade now" results left untouched because no scale covers them
+  // (bands removed since the request). They get no child row, so they are
+  // excluded here to keep the loop finite.
+  const skipped = new Set<string>();
 
   try {
     for (;;) {
-      const pending = await loadPendingResultIds(schoolId, operation, RESULT_ADJUSTMENT_CHUNK_SIZE);
+      const pending = await loadPendingResultIds(
+        schoolId,
+        operation,
+        RESULT_ADJUSTMENT_CHUNK_SIZE,
+        skipped,
+      );
       if (pending.length === 0) break;
 
       deps.onBeforeChunk?.(chunkIndex);
-      await applyChunk(schoolId, operation, pending, previouslyVoided);
+      const notGraded = await applyChunk(schoolId, operation, pending, previouslyVoided);
+      for (const id of notGraded) skipped.add(id);
       await refreshClaim(schoolId, operationId);
       chunkIndex += 1;
     }
@@ -156,17 +167,40 @@ async function refreshClaim(schoolId: string, operationId: string): Promise<void
  */
 async function loadPendingResultIds(
   schoolId: string,
-  operation: { id: string; examId: string; type: string; targetResultId: string | null },
+  operation: {
+    id: string;
+    examId: string;
+    type: string;
+    targetResultId: string | null;
+    ungradedOnly: boolean;
+  },
   take: number,
+  skipped: ReadonlySet<string>,
 ): Promise<string[]> {
+  // P2-19: an override's one result may have been voided (attempt
+  // invalidated) after the override was queued. VOIDED → ADJUSTED is refused
+  // by the database, so it is skipped like any other non-adjustable result
+  // and the operation completes, releasing the exam's results hold.
   const scope: Prisma.ResultWhereInput =
     operation.type === 'MANUAL_OVERRIDE' && operation.targetResultId
-      ? { schoolId, id: operation.targetResultId }
-      : { schoolId, examId: operation.examId, state: { in: ['FINAL', 'ADJUSTED'] } };
+      ? { schoolId, id: operation.targetResultId, state: { in: ['FINAL', 'ADJUSTED'] } }
+      : {
+          schoolId,
+          examId: operation.examId,
+          state: { in: ['FINAL', 'ADJUSTED'] },
+          // P2-21 "Grade now": only results finalised without a grade.
+          ...(operation.ungradedOnly && { gradingScaleVersionId: null }),
+        };
 
   const rows = await withTenant(prisma, schoolId, (tx) =>
     tx.result.findMany({
-      where: { AND: [scope, { adjustments: { none: { operationId: operation.id } } }] },
+      where: {
+        AND: [
+          scope,
+          { adjustments: { none: { operationId: operation.id } } },
+          ...(skipped.size > 0 ? [{ id: { notIn: [...skipped] } }] : []),
+        ],
+      },
       select: { id: true },
       orderBy: { id: 'asc' },
       take,
@@ -211,17 +245,32 @@ async function applyChunk(
     markDelta: number | null;
     overrideEarnedMarks: number | null;
     createdByMembershipId: string;
+    ungradedOnly: boolean;
   },
   resultIds: readonly string[],
   previouslyVoided: readonly string[],
-): Promise<void> {
+): Promise<string[]> {
+  const notGraded: string[] = [];
   await withTenant(prisma, schoolId, async (tx) => {
+    // P2-17: each per-result audit row carries the adjusting member's role
+    // (the API's `auditRoleFor` precedence), not a fixed SCHOOL_ADMIN — a
+    // Moderator or HOD may adjust results too. Read from their role
+    // assignments: the runtime role cannot read audit events back.
+    const assignments = await tx.roleAssignment.findMany({
+      where: { schoolId, membershipId: operation.createdByMembershipId, status: 'ACTIVE' },
+      select: { role: true },
+    });
+    const roles = new Set(assignments.map((a) => a.role));
+    const actorRole =
+      (['SCHOOL_ADMIN', 'MODERATOR', 'HOD', 'TEACHER'] as const).find((r) => roles.has(r)) ??
+      'SCHOOL_ADMIN';
     for (const resultId of resultIds) {
       const result = await tx.result.findUniqueOrThrow({
         where: { id: resultId },
         select: {
           id: true,
           attemptId: true,
+          grade: true,
           totalMarks: true,
           earnedMarks: true,
           percentage: true,
@@ -277,12 +326,27 @@ async function applyChunk(
       // result was originally graded with — never the school's current one.
       // A regrade after an adjustment must reflect the new mark under the
       // rules that applied at the time, not rules adopted since (ADR-0018).
-      const grade = await resolveGradeForVersion(
-        tx,
-        schoolId,
-        result.gradingScaleVersionId,
-        newValue.percentage,
-      );
+      //
+      // P2-21 ("Grade now", Haneef 2026-10-06): the one exception is a
+      // RECALCULATE over a result that was never graded because the school
+      // had no bands at finalisation. It is graded against the school's
+      // current scale for the student's level, and that version is stored,
+      // so from then on it is frozen like any other.
+      let versionId = result.gradingScaleVersionId;
+      let gradedNow = false;
+      if (operation.type === 'RECALCULATE' && versionId === null) {
+        const level = await levelForResult(tx, resultId);
+        versionId = (await resolveGradingScaleVersion(tx, schoolId, level))?.versionId ?? null;
+        gradedNow = versionId !== null;
+      }
+      // P2-21: "Grade now" never marks a result ADJUSTED that it could not
+      // grade. The API only targets gradable results, so this is the race
+      // where the bands were archived after the request.
+      if (operation.ungradedOnly && !gradedNow) {
+        notGraded.push(resultId);
+        continue;
+      }
+      const grade = await resolveGradeForVersion(tx, schoolId, versionId, newValue.percentage);
 
       await tx.result.update({
         where: { id: resultId },
@@ -295,6 +359,7 @@ async function applyChunk(
           unansweredCount: newValue.unansweredCount,
           partialCount: newValue.partialCount,
           grade,
+          ...(gradedNow && { gradingScaleVersionId: versionId }),
           // 07 §19: "An adjustment does not erase the original result state."
           // FINAL becomes ADJUSTED; an already-ADJUSTED result stays so.
           state: 'ADJUSTED',
@@ -307,8 +372,12 @@ async function applyChunk(
           operationId: operation.id,
           resultId,
           adjustmentType: operation.type as never,
-          oldValue: oldValue as unknown as Prisma.InputJsonValue,
-          newValue: newValue as unknown as Prisma.InputJsonValue,
+          oldValue: (gradedNow
+            ? { ...oldValue, grade: result.grade }
+            : oldValue) as unknown as Prisma.InputJsonValue,
+          newValue: (gradedNow
+            ? { ...newValue, grade }
+            : newValue) as unknown as Prisma.InputJsonValue,
           reason: operation.reason,
           authorizedByMembershipId: operation.createdByMembershipId,
         },
@@ -326,7 +395,7 @@ async function applyChunk(
               select: { userId: true },
             })
           ).userId,
-          actorRole: 'SCHOOL_ADMIN',
+          actorRole,
           action:
             operation.type === 'MANUAL_OVERRIDE' ? 'RESULT_MANUAL_OVERRIDE' : 'RESULT_ADJUSTED',
           entityType: 'Result',
@@ -344,9 +413,42 @@ async function applyChunk(
 
     await tx.resultAdjustmentOperation.update({
       where: { id: operation.id },
-      data: { appliedCount: { increment: resultIds.length } },
+      data: { appliedCount: { increment: resultIds.length - notGraded.length } },
     });
   });
+  return notGraded;
+}
+
+/** The class level the student sat the exam in: their enrolment in the
+ * exam's own academic session (the class they were in then, even after
+ * rollover), else their current one. */
+async function levelForResult(
+  tx: Prisma.TransactionClient,
+  resultId: string,
+): Promise<string | null> {
+  const row = await tx.result.findUniqueOrThrow({
+    where: { id: resultId },
+    select: {
+      exam: { select: { academicSessionId: true } },
+      studentProfile: {
+        select: {
+          enrollments: {
+            orderBy: { startDate: 'desc' },
+            select: {
+              status: true,
+              academicSessionId: true,
+              classGroupSession: { select: { level: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  const enrollments = row.studentProfile.enrollments;
+  const chosen =
+    enrollments.find((e) => e.academicSessionId === row.exam.academicSessionId) ??
+    enrollments.find((e) => e.status === 'ACTIVE');
+  return chosen?.classGroupSession.level ?? null;
 }
 
 async function resolveGradeForVersion(

@@ -1009,7 +1009,7 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       TEACHER: denied(),
       STUDENT: granted(
         'SELF',
-        'F14 gap-closure — GET /students/me (name, student ID, current class/department for the ' +
+        'F14 gap-closure — GET /students/me (name, student ID, current class/stream for the ' +
           "Profile screen, 04 §62). Distinct from users.student.view (the staff directory's " +
           "broader, denied-to-STUDENT read) — this is narrowly the caller's own row only.",
       ),
@@ -1198,6 +1198,28 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     },
   },
   {
+    // ADR-0038 amendment (2026-10-09): owner decision. Registration decides
+    // who may sit an exam, so a Teacher's grant is ASSIGNED, narrowed by the
+    // registration service to elective offerings the teacher teaches, or
+    // every elective of a class they are form teacher of. Compulsory
+    // subjects stay with School Admin and Moderator.
+    id: 'registrations.manage',
+    section: 'Assignments',
+    label: "Set students' subject registrations",
+    action: 'UPDATE',
+    grants: {
+      SOFTWARE_ADMIN: breakGlassWrite(),
+      SCHOOL_ADMIN: granted('SCHOOL'),
+      MODERATOR: granted('SCHOOL'),
+      HOD: denied(),
+      TEACHER: granted(
+        'ASSIGNED',
+        'Electives they teach in a class, or every elective of a class they are form teacher of (ADR-0038).',
+      ),
+      STUDENT: denied(),
+    },
+  },
+  {
     id: 'assignments.view',
     section: 'Assignments',
     label: 'View assignments',
@@ -1354,7 +1376,10 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'EXECUTE',
     grants: {
       SOFTWARE_ADMIN: denied(),
-      SCHOOL_ADMIN: denied(),
+      SCHOOL_ADMIN: granted(
+        'SCHOOL',
+        'Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).',
+      ),
       MODERATOR: denied(),
       HOD: granted('DEPARTMENT'),
       TEACHER: denied(),
@@ -1363,6 +1388,8 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     // B9: POST /v1/reviews/questions/:id/approve. SOFTWARE_ADMIN is denied
     // outright, not breakGlass — ADR-0012 names question approval as one of
     // the few school-academic actions with no break-glass override at all.
+    // ADR-0038: SCHOOL_ADMIN is the fallback reviewer; the guard passes it
+    // and QuestionReviewService refuses it whenever an HOD can decide.
   },
   {
     id: 'questionBank.reject',
@@ -1371,7 +1398,10 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'EXECUTE',
     grants: {
       SOFTWARE_ADMIN: denied(),
-      SCHOOL_ADMIN: denied(),
+      SCHOOL_ADMIN: granted(
+        'SCHOOL',
+        'Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).',
+      ),
       MODERATOR: denied(),
       HOD: granted('DEPARTMENT'),
       TEACHER: denied(),
@@ -1386,7 +1416,10 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
     action: 'EXECUTE',
     grants: {
       SOFTWARE_ADMIN: denied(),
-      SCHOOL_ADMIN: denied(),
+      SCHOOL_ADMIN: granted(
+        'SCHOOL',
+        'Only when no HOD can: the subject has no department, the department has no active HOD, or the author is its only HOD (ADR-0038).',
+      ),
       MODERATOR: denied(),
       HOD: granted('DEPARTMENT'),
       TEACHER: denied(),
@@ -1584,7 +1617,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
-      TEACHER: granted('ASSIGNED'),
+      // ADR-0037: own exams and exams delegated to them, not every exam for
+      // a class they teach (02 §5 said "Assigned").
+      TEACHER: granted('OWNED'),
       STUDENT: granted(
         'SELF',
         '"Available only" — ADR-0006\'s eligibility predicate; B12 wires the actual filter.',
@@ -2216,7 +2251,9 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       SCHOOL_ADMIN: granted('SCHOOL'),
       MODERATOR: granted('SCHOOL'),
       HOD: granted('DEPARTMENT'),
-      TEACHER: granted('ASSIGNED'),
+      // ADR-0037: a result of their own exam, not of a colleague's exam
+      // sat by a class they teach (02 §5 said "Assigned students").
+      TEACHER: granted('OWNED'),
       STUDENT: granted('SELF'),
     },
   },

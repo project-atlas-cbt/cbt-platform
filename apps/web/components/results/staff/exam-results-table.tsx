@@ -25,6 +25,7 @@ export interface StaffResultRow {
   totalMarks: number;
   percentage: number;
   grade: string | null;
+  gradePassing?: boolean | null;
   withheld: boolean;
   withheldReason: string | null;
   voidedReason: string | null;
@@ -61,6 +62,9 @@ export function ExamResultsTable({
   page,
   pageCount,
   onPageChange,
+  total,
+  pageSize,
+  onPageSizeChange,
   detailBasePath,
   hasFilters,
 }: {
@@ -71,6 +75,9 @@ export function ExamResultsTable({
   page: number;
   pageCount: number;
   onPageChange: (page: number) => void;
+  total?: number | undefined;
+  pageSize?: number | undefined;
+  onPageSizeChange?: ((pageSize: number) => void) | undefined;
   detailBasePath: string;
   hasFilters: boolean;
 }) {
@@ -112,7 +119,11 @@ export function ExamResultsTable({
       sortable: true,
       cell: (row) => formatResultPercentage(row.percentage),
     },
-    { id: 'grade', header: 'Grade', cell: (row) => <ResultGradeBadge grade={row.grade} /> },
+    {
+      id: 'grade',
+      header: 'Grade',
+      cell: (row) => <ResultGradeBadge grade={row.grade} passing={row.gradePassing} />,
+    },
     {
       id: 'state',
       header: 'State',
@@ -137,12 +148,16 @@ export function ExamResultsTable({
       columns={columns}
       rows={rows}
       getRowId={(row) => row.id}
+      getRowHref={(row) => `${detailBasePath}/${row.id}`}
       isLoading={isLoading}
       sort={sort}
       onSortChange={onSortChange}
       page={page}
       pageCount={pageCount}
       onPageChange={onPageChange}
+      total={total}
+      pageSize={pageSize}
+      onPageSizeChange={onPageSizeChange}
       emptyState={
         hasFilters ? (
           <EmptyState

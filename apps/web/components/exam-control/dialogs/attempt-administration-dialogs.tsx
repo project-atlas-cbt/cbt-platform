@@ -24,6 +24,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { describeExamControlError } from '@/lib/exam-control/error-utils';
+import { getDisplayTimeZone, wallTimeToIso } from '@/lib/format/date';
 
 const schema = z.object({
   reason: z.string().trim().min(1, 'A reason is required and will be recorded in the audit trail.'),
@@ -35,7 +36,7 @@ const schema = z.object({
       'Enter a valid expiry date and time.',
     )
     .refine(
-      (value) => value.length === 0 || Date.parse(value) > Date.now(),
+      (value) => value.length === 0 || Date.parse(wallTimeToIso(value)) > Date.now(),
       'The expiry must be in the future.',
     ),
 });
@@ -70,7 +71,7 @@ function AuthorizationDialog({
     try {
       await onConfirm({
         reason: values.reason,
-        ...(values.expiresAt ? { expiresAt: new Date(values.expiresAt).toISOString() } : {}),
+        ...(values.expiresAt ? { expiresAt: wallTimeToIso(values.expiresAt) } : {}),
       });
       form.reset();
       onOpenChange(false);
@@ -126,7 +127,10 @@ function AuthorizationDialog({
                 name="expiresAt"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Access expires (optional)</FormLabel>
+                    <FormLabel>
+                      Access expires (optional
+                      {getDisplayTimeZone() ? `, school time ${getDisplayTimeZone()}` : ''})
+                    </FormLabel>
                     <FormControl>
                       <Input type="datetime-local" autoComplete="off" {...field} />
                     </FormControl>

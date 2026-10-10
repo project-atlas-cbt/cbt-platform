@@ -18,6 +18,7 @@ import {
   SCHOOL_ACTIVATION_TEMPLATE_NAME,
   SUBSCRIPTION_RENEWAL_TEMPLATE_NAME,
 } from './templates.js';
+import { StandardSetupService } from '../academics/standard-setup.service.js';
 import type { CreateSchoolDto } from './dto/create-school.dto.js';
 import type { IssueSubscriptionDto } from './dto/school-lifecycle.dto.js';
 import type {
@@ -93,6 +94,7 @@ export class SchoolsAdminService {
     @Inject(NOTIFICATION_CHANNEL) private readonly notifications: NotificationChannel,
     private readonly config: ConfigService<Env, true>,
     private readonly settings: PlatformSettingsService,
+    private readonly standardSetup: StandardSetupService,
   ) {}
 
   /** A link to the school's own web host (`common/school-url.ts`). */
@@ -245,6 +247,14 @@ export class SchoolsAdminService {
           expiresAt: addDays(now, ACTIVATION_GRANT_VALIDITY_DAYS),
         },
       });
+
+      // ADR-0038 amendment: the school asked for the standard structure.
+      if (dto.startingStructure === 'STANDARD') {
+        await this.standardSetup.applyAllInTx(tx, school.id, {
+          actorUserId: issuedByUserId,
+          actorRole: 'SOFTWARE_ADMIN',
+        });
+      }
 
       return { school, admin };
     });

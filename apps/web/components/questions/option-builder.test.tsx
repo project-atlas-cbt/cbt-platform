@@ -99,4 +99,20 @@ describe('OptionBuilder', () => {
       /exactly one option must be marked correct/i,
     );
   });
+
+  it('keeps focus and every character while typing into an option (regression)', async () => {
+    render(
+      <Harness
+        initialOptions={[
+          { id: 'server-id-1', content: '', correctFlag: true },
+          { id: 'server-id-2', content: '', correctFlag: false },
+        ]}
+      />,
+    );
+    const input = screen.getByLabelText('Option 1 text');
+    await userEvent.click(input);
+    await userEvent.keyboard('abc');
+    expect(screen.getByLabelText('Option 1 text')).toHaveValue('abc');
+    expect(screen.getByLabelText('Option 1 text')).toHaveFocus();
+  });
 });

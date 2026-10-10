@@ -59,6 +59,16 @@ export const BASE_ERROR_CODES = {
   // subscription; only an explicit platform override blocks login itself.
   SCHOOL_ACCESS_SUSPENDED: { httpStatus: 403, retryable: false },
   SCHOOL_ACCESS_DEACTIVATED: { httpStatus: 403, retryable: false },
+  // P1-3 / ADR-0015: the subscription expired and its 14-day grace has
+  // ended. Reads, running attempts, marking and renewal keep working; new
+  // exams, questions, imports, sessions and attempts are refused.
+  SUBSCRIPTION_EXPIRED: { httpStatus: 403, retryable: false },
+
+  // Pilot follow-up (2026-10-08): the student name + Login ID page tells a
+  // locked-out student to ask their teacher, instead of the generic "check
+  // your details" text. Returned only by that page's endpoint (owner
+  // accepted the lockout disclosure there: the teacher is in the lab).
+  STUDENT_SIGN_IN_LOCKED: { httpStatus: 403, retryable: false },
 
   // B4 (Media, Storage & Branding).
   //
@@ -164,6 +174,8 @@ export const BASE_ERROR_CODES = {
   QUESTION_INSUFFICIENT_OPTIONS: { httpStatus: 400, retryable: false },
   QUESTION_OPTION_TEXT_EMPTY: { httpStatus: 400, retryable: false },
   QUESTION_CORRECT_ANSWER_MISSING: { httpStatus: 400, retryable: false },
+  // Bug audit P3-9: a True/False question has exactly two options.
+  QUESTION_TRUE_FALSE_OPTIONS: { httpStatus: 400, retryable: false },
   // QUESTION_OPTION_NOT_FOUND: a body-supplied option id doesn't belong to
   // this revision — this schema stores correctFlag per-option (06 §27),
   // not a separate correct-answer pointer field, so this is the closest
@@ -210,6 +222,10 @@ export const BASE_ERROR_CODES = {
   // domain-rule failure distinct from the authorization engine's own
   // FORBIDDEN, mirroring QUESTION_OUT_OF_SCOPE's exact reasoning.
   QUESTION_SELF_REVIEW_FORBIDDEN: { httpStatus: 400, retryable: false },
+  // QUESTION_REVIEW_HOD_AVAILABLE (ADR-0038): a School Admin tried to decide
+  // a question its department's HOD can decide. The School Admin is only the
+  // fallback reviewer.
+  QUESTION_REVIEW_HOD_AVAILABLE: { httpStatus: 403, retryable: false },
 
   // B11 (Exam Builder & Readiness).
   //
@@ -364,6 +380,11 @@ export const BASE_ERROR_CODES = {
   // examQuestionId/selectedOptionId that does not appear in this attempt's
   // own frozen AttemptQuestionSnapshot.document — never silently accepted.
   ATTEMPT_QUESTION_NOT_IN_SNAPSHOT: { httpStatus: 400, retryable: false },
+  // ATTEMPT_QUESTION_LOCKED (bug audit P1-6): under SEQUENTIAL_NO_REVISIT,
+  // an answer write to a question that comes before the furthest question
+  // the server already holds an answer for. The student has moved past it,
+  // so it is locked. Non-retryable: the lock never lifts.
+  ATTEMPT_QUESTION_LOCKED: { httpStatus: 409, retryable: false },
   // EXAM_SESSION_PARTICIPANT_NOT_FOUND: POST .../extra-time (decision 2,
   // accommodations) named a student with no ExamSessionParticipant row for
   // this session at all — distinct from EXAM_SESSION_PARTICIPANT_NOT_

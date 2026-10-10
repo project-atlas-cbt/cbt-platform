@@ -1,17 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, prisma, withTenant } from '@atlas/db';
-import { rollUpParticipation, type AttemptSnapshotDocumentV1 } from '@atlas/domain';
+import {
+  comparePersonNames,
+  rollUpParticipation,
+  type AttemptSnapshotDocumentV1,
+} from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
+import { NAME_SORT_SELECT, inIdOrder, pageIdsInOrder, searchWords } from '../users/person.util.js';
 import { resolveMembershipDisplayNames } from '../execution/exam-control-mappers.js';
 import { loadExamOrThrow } from '../exams/exam-mappers.js';
 import {
-  RESULT_LIST_INCLUDE,
+  resultListInclude,
   decimalToNumber,
   toAdjustmentHistoryItemDto,
   toResultListItemDto,
 } from './result-mappers.js';
+import { buildQuestionOptionReview } from './question-option-review.util.js';
 import { isExamCreator, resolveResultResourceContext } from './result-scope.util.js';
 import { aggregatableResultWhere } from './result-visibility.util.js';
 import type {
@@ -51,51 +57,94 @@ export class ResultQueryService {
     const sortBy = query.sortBy ?? 'studentName';
     const sortDir = query.sortDir ?? 'asc';
 
+    // P2-13: the class filter and the search both narrow the student, so
+    // they are ANDed; spread into one object, the search replaced the class.
+    // P2-14: a class id belongs to one session, so the enrolment's current
+    // status is irrelevant — a rolled-over student still sat in that class.
+    const words = searchWords(query.q);
     const where: Prisma.ResultWhereInput = {
       schoolId,
       examId,
       ...(query.state !== undefined && { state: query.state }),
-      ...(query.classId !== undefined && {
-        studentProfile: {
-          enrollments: { some: { schoolId, classId: query.classId, status: 'ACTIVE' } },
-        },
-      }),
-      ...(query.q !== undefined &&
-        query.q.trim() !== '' && {
-          studentProfile: {
-            OR: [
-              { studentId: { contains: query.q.trim(), mode: 'insensitive' } },
+      AND: [
+        ...(query.classId !== undefined
+          ? [
               {
-                membership: {
-                  user: { displayName: { contains: query.q.trim(), mode: 'insensitive' } },
+                studentProfile: {
+                  enrollments: { some: { schoolId, classId: query.classId } },
                 },
               },
+            ]
+          : []),
+        // Each word matches the Student ID or one of the names, so
+        // "Ojo Abiola" finds the student in either order.
+        ...words.map((word) => ({
+          studentProfile: {
+            OR: [
+              { studentId: { contains: word, mode: 'insensitive' as const } },
+              ...(['firstName', 'middleName', 'lastName'] as const).map((field) => ({
+                membership: {
+                  user: { [field]: { contains: word, mode: 'insensitive' as const } },
+                },
+              })),
             ],
           },
-        }),
+        })),
+      ],
     };
 
-    const orderBy: Prisma.ResultOrderByWithRelationInput =
-      sortBy === 'studentName'
-        ? { studentProfile: { membership: { user: { displayName: sortDir } } } }
-        : sortBy === 'percentage'
-          ? { percentage: sortDir }
-          : sortBy === 'earnedMarks'
-            ? { earnedMarks: sortDir }
-            : { finalizedAt: sortDir };
+    // P2-15: tied percentages are common; `id` makes the order total so
+    // pages never repeat or skip a student.
+    const primaryOrder: Prisma.ResultOrderByWithRelationInput =
+      sortBy === 'percentage'
+        ? { percentage: sortDir }
+        : sortBy === 'earnedMarks'
+          ? { earnedMarks: sortDir }
+          : { finalizedAt: sortDir };
 
-    const [rows, total] = await withTenant(prisma, schoolId, (tx) =>
-      Promise.all([
-        tx.result.findMany({
+    const [rows, total] = await withTenant(prisma, schoolId, async (tx) => {
+      if (sortBy !== 'studentName') {
+        return Promise.all([
+          tx.result.findMany({
+            where,
+            include: resultListInclude(exam.academicSessionId),
+            orderBy: [primaryOrder, { id: sortDir }],
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+          tx.result.count({ where }),
+        ]);
+      }
+      // Owner decision 2026-10-09: A to Z by surname, first name, middle
+      // name, which the database's byte-order collation cannot produce.
+      const keys = (
+        await tx.result.findMany({
           where,
-          include: RESULT_LIST_INCLUDE,
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
+          select: {
+            id: true,
+            studentProfile: {
+              select: {
+                studentId: true,
+                membership: { select: { user: { select: NAME_SORT_SELECT } } },
+              },
+            },
+          },
+        })
+      ).map((key) => ({
+        id: key.id,
+        identifier: key.studentProfile.studentId,
+        ...key.studentProfile.membership.user,
+      }));
+      const ids = pageIdsInOrder(keys, comparePersonNames, sortDir, page, pageSize);
+      const rows = inIdOrder(
+        ids,
+        await tx.result.findMany({
+          where: { id: { in: ids } },
+          include: resultListInclude(exam.academicSessionId),
         }),
-        tx.result.count({ where }),
-      ]),
-    );
+      );
+      return [rows, keys.length] as const;
+    });
 
     const publication = await withTenant(prisma, schoolId, (tx) =>
       tx.resultPublication.findUnique({ where: { schoolId_examId: { schoolId, examId } } }),
@@ -118,11 +167,16 @@ export class ResultQueryService {
     actor: AuthorizedActor,
     resultId: string,
   ): Promise<ResultDetailResponseDto> {
-    const result = await withTenant(prisma, schoolId, (tx) =>
-      tx.result.findUnique({
+    const result = await withTenant(prisma, schoolId, async (tx) => {
+      const sessionOf = await tx.result.findUnique({
+        where: { id: resultId },
+        select: { exam: { select: { academicSessionId: true } } },
+      });
+      if (!sessionOf) return null;
+      return tx.result.findUnique({
         where: { id: resultId },
         include: {
-          ...RESULT_LIST_INCLUDE,
+          ...resultListInclude(sessionOf.exam.academicSessionId),
           exam: { select: { id: true, title: true, subject: { select: { name: true } } } },
           adjustments: {
             orderBy: { createdAt: 'asc' },
@@ -131,8 +185,8 @@ export class ResultQueryService {
             },
           },
         },
-      }),
-    );
+      });
+    });
     if (!result) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Result not found.' });
     }
@@ -140,7 +194,7 @@ export class ResultQueryService {
     const exam = await loadExamOrThrow(schoolId, result.examId);
     await this.assertCanViewExamResults(schoolId, actor, exam, 'results.viewIndividualResult');
 
-    const [questionResults, snapshot, actorNames] = await Promise.all([
+    const [questionResults, snapshot, answers, actorNames] = await Promise.all([
       withTenant(prisma, schoolId, (tx) =>
         tx.attemptQuestionResult.findMany({
           where: { schoolId, attemptId: result.attemptId },
@@ -150,6 +204,12 @@ export class ResultQueryService {
         tx.attemptQuestionSnapshot.findUnique({
           where: { schoolId_attemptId: { schoolId, attemptId: result.attemptId } },
           select: { document: true },
+        }),
+      ),
+      withTenant(prisma, schoolId, (tx) =>
+        tx.attemptAnswer.findMany({
+          where: { schoolId, attemptId: result.attemptId },
+          select: { examQuestionId: true, selectedOptionId: true },
         }),
       ),
       resolveMembershipDisplayNames(
@@ -174,6 +234,7 @@ export class ResultQueryService {
       (document?.questions ?? []).map((q) => [q.examQuestionId, q] as const),
     );
 
+    const selectedByQuestion = new Map(answers.map((a) => [a.examQuestionId, a.selectedOptionId]));
     const questions: ResultQuestionBreakdownDto[] = questionResults
       .map((qr) => {
         const snapshotQuestion = questionsById.get(qr.examQuestionId);
@@ -185,6 +246,10 @@ export class ResultQueryService {
           awardedMarks: qr.awardedMarks,
           maximumMarks: qr.maximumMarks,
           voided: voidedQuestionIds.has(qr.examQuestionId),
+          options: buildQuestionOptionReview(
+            snapshotQuestion,
+            selectedByQuestion.get(qr.examQuestionId) ?? null,
+          ),
         };
       })
       .sort((a, b) => a.displaySequence - b.displaySequence);
@@ -226,7 +291,7 @@ export class ResultQueryService {
       classId === undefined
         ? undefined
         : {
-            enrollments: { some: { schoolId, classId, status: 'ACTIVE' } },
+            enrollments: { some: { schoolId, classId } },
           };
     const participantWhere: Prisma.ExamSessionParticipantWhereInput = {
       schoolId,
@@ -332,6 +397,9 @@ export class ResultQueryService {
       lowestPercentage:
         aggregate._min.percentage === null ? null : decimalToNumber(aggregate._min.percentage),
       passRate,
+      // P2-21: finalised before the school had grading bands; "Grade now"
+      // grades exactly these.
+      ungradedCount: resultCount - passingRows.length,
     };
   }
 
@@ -397,7 +465,7 @@ export class ResultQueryService {
           exam.id,
           {
             studentProfile: {
-              enrollments: { some: { schoolId, classId: classGroup.id, status: 'ACTIVE' } },
+              enrollments: { some: { schoolId, classId: classGroup.id } },
             },
           },
           classGroup.id,

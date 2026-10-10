@@ -23,6 +23,8 @@ interface AuthContextValue {
   /** Human-readable reason the session bootstrap failed, if any. */
   error: string | null;
   login: (identifier: string, password: string) => Promise<void>;
+  /** Passwordless student sign-in: Login ID + name. */
+  studentSignIn: (identifier: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Re-runs the `/auth/me` bootstrap — used after a forced password change succeeds. */
   reload: () => Promise<void>;
@@ -38,6 +40,23 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 // satisfies with no client code running at all — this interval is what
 // exercises `refresh` itself, per the roadmap's own testing table.
 const SESSION_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
+
+// How often `/auth/me` is retried while the server can't be reached. A
+// load-shed 503's own `Retry-After` wins when it is longer.
+const UNAVAILABLE_RETRY_MS = 5_000;
+
+/**
+ * Only a rejection the server actually made about this session means
+ * "signed out". A request that never arrived, a 5xx (a deploy restart's 502
+ * from Caddy) or a 408/429 says nothing about the cookie, so the session is
+ * treated as unknown and retried (bug audit P2-3).
+ */
+export function isServerUnavailable(error: unknown): boolean {
+  if (error instanceof NetworkError) return true;
+  if (!(error instanceof ApiError)) return false;
+  const status = error.httpStatus;
+  return status === undefined || status >= 500 || status === 408 || status === 429;
+}
 
 /**
  * Session bootstrap and lifecycle (F1). `GET /auth/me` is the *only*
@@ -57,20 +76,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // A rejection here (401 UNAUTHENTICATED, 403 PASSWORD_CHANGE_REQUIRED)
     // is a real, meaningful outcome, not a transient failure to paper over
     // — only a genuine NetworkError is worth a couple of quiet retries.
-    retry: (failureCount, err) => err instanceof NetworkError && failureCount < 2,
+    retry: (failureCount, err) => isServerUnavailable(err) && failureCount < 2,
     staleTime: Infinity,
+    // Keeps asking while the server is unreachable, so the page recovers on
+    // its own once the network or the API is back.
+    refetchInterval: (query) =>
+      isServerUnavailable(query.state.error)
+        ? Math.max(
+            UNAVAILABLE_RETRY_MS,
+            query.state.error instanceof ApiError ? (query.state.error.retryAfterMs ?? 0) : 0,
+          )
+        : false,
   });
 
+  // A failed re-check (after another call's 401) keeps the earlier answer
+  // when the failure is only the server being unreachable.
   const status: AuthStatus = meQuery.isPending
     ? 'loading'
-    : meQuery.isSuccess
+    : meQuery.isSuccess || (meQuery.data !== undefined && isServerUnavailable(meQuery.error))
       ? 'authenticated'
       : meQuery.error instanceof ApiError && meQuery.error.code === 'PASSWORD_CHANGE_REQUIRED'
         ? 'password-change-required'
-        : 'unauthenticated';
+        : isServerUnavailable(meQuery.error)
+          ? 'unavailable'
+          : 'unauthenticated';
 
   const error =
-    status === 'unauthenticated' &&
+    (status === 'unauthenticated' || status === 'unavailable') &&
     (meQuery.error instanceof ApiError || meQuery.error instanceof NetworkError)
       ? meQuery.error.message
       : null;
@@ -115,6 +147,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [reload],
   );
 
+  const studentSignIn = useCallback(
+    async (identifier: string, name: string) => {
+      await unwrap(apiClient.POST('/auth/student-sign-in', { body: { identifier, name } }));
+      await reload();
+    },
+    [reload],
+  );
+
   const logout = useCallback(async () => {
     await unwrap(apiClient.POST('/auth/logout', {}));
     // The session cookie is now revoked server-side — re-running /auth/me
@@ -125,8 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, me, error, login, logout, reload }),
-    [status, me, error, login, logout, reload],
+    () => ({ status, me, error, login, studentSignIn, logout, reload }),
+    [status, me, error, login, studentSignIn, logout, reload],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { compareText, comparePersonNames, formalName, type Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { runUniqueGuarded } from '../academics/prisma-error.util.js';
 import { AuditService } from '../operations/audit-event.service.js';
+import { AuthLockoutService } from '../identity/auth-lockout.service.js';
 import { CredentialSheetService } from '../identity/credential-sheet.service.js';
 import { CredentialResetResponseDto } from './dto/credential-reset.dto.js';
 import type {
@@ -14,7 +15,15 @@ import type {
   StudentResponseDto,
   UpdateStudentDto,
 } from './dto/student.dto.js';
-import { createPersonMembership, notFound } from './person.util.js';
+import {
+  NAME_SORT_SELECT,
+  createPersonMembership,
+  inIdOrder,
+  mergeNameEdit,
+  notFound,
+  pageIdsInOrder,
+  searchWords,
+} from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -30,7 +39,13 @@ type StudentRow = {
     id: string;
     userId: string;
     loginIdentifier: string;
-    user: { firstName: string; lastName: string; displayName: string; status: string };
+    user: {
+      firstName: string;
+      middleName: string | null;
+      lastName: string;
+      displayName: string;
+      status: string;
+    };
   };
 };
 
@@ -39,8 +54,8 @@ type CurrentEnrollment = {
   currentClassId: string | null;
   currentClassName: string | null;
   currentAcademicSessionId: string | null;
-  departmentId: string | null;
-  departmentName: string | null;
+  streamId: string | null;
+  streamName: string | null;
 };
 
 function toResponseDto(row: StudentRow, enrollment?: CurrentEnrollment): StudentResponseDto {
@@ -49,8 +64,10 @@ function toResponseDto(row: StudentRow, enrollment?: CurrentEnrollment): Student
     userId: row.membership.userId,
     studentProfileId: row.id,
     firstName: row.membership.user.firstName,
+    middleName: row.membership.user.middleName,
     lastName: row.membership.user.lastName,
     displayName: row.membership.user.displayName,
+    formalName: formalName(row.membership.user),
     studentId: row.studentId,
     admissionNumber: row.admissionNumber,
     loginIdentifier: row.membership.loginIdentifier,
@@ -59,8 +76,8 @@ function toResponseDto(row: StudentRow, enrollment?: CurrentEnrollment): Student
     currentClassId: enrollment?.currentClassId ?? null,
     currentClassName: enrollment?.currentClassName ?? null,
     currentAcademicSessionId: enrollment?.currentAcademicSessionId ?? null,
-    departmentId: enrollment?.departmentId ?? null,
-    departmentName: enrollment?.departmentName ?? null,
+    streamId: enrollment?.streamId ?? null,
+    streamName: enrollment?.streamName ?? null,
   };
 }
 
@@ -82,9 +99,8 @@ export async function resolveCurrentEnrollments(
   const enrollments = await tx.studentEnrollment.findMany({
     where: { schoolId, studentProfileId: { in: studentProfileIds }, status: 'ACTIVE' },
     include: {
-      classGroupSession: {
-        include: { department: { select: { id: true, name: true } } },
-      },
+      classGroupSession: true,
+      stream: { select: { id: true, name: true } },
     },
   });
   const map = new Map<string, CurrentEnrollment>();
@@ -94,8 +110,8 @@ export async function resolveCurrentEnrollments(
       currentClassId: enrollment.classGroupSession.id,
       currentClassName: enrollment.classGroupSession.name,
       currentAcademicSessionId: enrollment.academicSessionId,
-      departmentId: enrollment.classGroupSession.department?.id ?? null,
-      departmentName: enrollment.classGroupSession.department?.name ?? null,
+      streamId: enrollment.stream?.id ?? null,
+      streamName: enrollment.stream?.name ?? null,
     });
   }
   return map;
@@ -110,6 +126,7 @@ export class StudentService {
   constructor(
     private readonly audit: AuditService,
     private readonly credentialSheets: CredentialSheetService,
+    private readonly lockout: AuthLockoutService,
   ) {}
 
   /** F7 gap-closure: server-side search/sort/paginate (DoD item 1), plus
@@ -123,44 +140,60 @@ export class StudentService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
-    const sortBy = query.sortBy ?? 'studentId';
-    const q = query.q?.trim();
+    // Owner decision 2026-10-09: A to Z by surname unless Student ID is chosen.
+    const sortBy = query.sortBy ?? 'lastName';
+    const words = searchWords(query.q);
 
     const where: Prisma.StudentProfileWhereInput = {
       schoolId,
-      ...(q && {
-        OR: [
-          { studentId: { contains: q, mode: 'insensitive' } },
-          { membership: { user: { firstName: { contains: q, mode: 'insensitive' } } } },
-          { membership: { user: { lastName: { contains: q, mode: 'insensitive' } } } },
-        ],
+      ...(words.length > 0 && {
+        AND: words.map((word) => ({
+          OR: [
+            { studentId: { contains: word, mode: 'insensitive' } },
+            { membership: { user: { firstName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { middleName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { lastName: { contains: word, mode: 'insensitive' } } } },
+          ],
+        })),
       }),
       ...(query.classId && {
         enrollments: { some: { classId: query.classId, status: 'ACTIVE' } },
       }),
     };
-    const orderBy: Prisma.StudentProfileOrderByWithRelationInput =
-      sortBy === 'lastName'
-        ? { membership: { user: { lastName: sortDir } } }
-        : { studentId: sortDir };
 
     const { rows, total } = await withTenant(prisma, schoolId, async (tx) => {
-      const [rows, total] = await Promise.all([
-        tx.studentProfile.findMany({
+      const keys = (
+        await tx.studentProfile.findMany({
           where,
-          include: INCLUDE,
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-        tx.studentProfile.count({ where }),
-      ]);
+          select: {
+            id: true,
+            studentId: true,
+            membership: { select: { user: { select: NAME_SORT_SELECT } } },
+          },
+        })
+      ).map((key) => ({ id: key.id, identifier: key.studentId, ...key.membership.user }));
+      const ids = pageIdsInOrder(
+        keys,
+        sortBy === 'lastName'
+          ? comparePersonNames
+          : (a, b) => compareText(a.identifier, b.identifier),
+        sortDir,
+        page,
+        pageSize,
+      );
+      const rows = inIdOrder(
+        ids,
+        await tx.studentProfile.findMany({ where: { id: { in: ids } }, include: INCLUDE }),
+      );
       const enrollmentMap = await resolveCurrentEnrollments(
         tx,
         schoolId,
         rows.map((row) => row.id),
       );
-      return { rows: rows.map((row) => toResponseDto(row, enrollmentMap.get(row.id))), total };
+      return {
+        rows: rows.map((row) => toResponseDto(row, enrollmentMap.get(row.id))),
+        total: keys.length,
+      };
     });
 
     return { students: rows, total, page, pageSize };
@@ -203,7 +236,7 @@ export class StudentService {
         displayName: row.membership.user.displayName,
         studentId: row.studentId,
         currentClassName: enrollment?.currentClassName ?? null,
-        departmentName: enrollment?.departmentName ?? null,
+        streamName: enrollment?.streamName ?? null,
       };
     });
     // Unreachable via the STUDENT-only route this backs (a membership with
@@ -222,6 +255,7 @@ export class StudentService {
       const person = await createPersonMembership(tx, {
         schoolId,
         firstName: dto.firstName,
+        middleName: dto.middleName,
         lastName: dto.lastName,
         loginIdentifier: dto.studentId,
         role: 'STUDENT',
@@ -268,13 +302,9 @@ export class StudentService {
       });
       if (!existing) return notFound('Student');
 
-      if (dto.firstName !== undefined || dto.lastName !== undefined) {
-        const firstName = dto.firstName ?? existing.membership.user.firstName;
-        const lastName = dto.lastName ?? existing.membership.user.lastName;
-        await tx.user.update({
-          where: { id: existing.membership.userId },
-          data: { firstName, lastName, displayName: `${firstName} ${lastName}` },
-        });
+      const name = mergeNameEdit(existing.membership.user, dto);
+      if (name) {
+        await tx.user.update({ where: { id: existing.membership.userId }, data: name });
       }
       if (dto.admissionNumber !== undefined) {
         await tx.studentProfile.update({
@@ -387,5 +417,64 @@ export class StudentService {
       loginIdentifier: row.loginIdentifier,
       initialPassword: row.initialPassword,
     };
+  }
+
+  /** Students whose sign-in is locked right now, so staff can unlock them
+   * from one list instead of finding each name (pilot follow-up
+   * 2026-10-08). Lockout counters are keyed by Login ID in Redis; they are
+   * matched to students case-insensitively, as sign-in does. */
+  async listLockedOut(schoolId: string): Promise<StudentResponseDto[]> {
+    const identifiers = await this.lockout.lockedIdentifiers(schoolId);
+    if (identifiers.length === 0) return [];
+    return withTenant(prisma, schoolId, async (tx) => {
+      const rows = await tx.studentProfile.findMany({
+        where: {
+          schoolId,
+          membership: {
+            OR: identifiers.map((id) => ({
+              loginIdentifier: { equals: id, mode: 'insensitive' as const },
+            })),
+          },
+        },
+        include: INCLUDE,
+      });
+      rows.sort((a, b) =>
+        comparePersonNames(
+          { ...a.membership.user, identifier: a.studentId },
+          { ...b.membership.user, identifier: b.studentId },
+        ),
+      );
+      const enrollmentMap = await resolveCurrentEnrollments(
+        tx,
+        schoolId,
+        rows.map((row) => row.id),
+      );
+      return rows.map((row) => toResponseDto(row, enrollmentMap.get(row.id)));
+    });
+  }
+
+  /** P1-4: ends a sign-in lockout without changing the student's password.
+   * Five wrong guesses at a guessable student ID lock the account; staff
+   * clear it here so the student signs straight back in (mid-exam, their
+   * attempt timer is still running). */
+  async unlockSignIn(
+    schoolId: string,
+    studentProfileId: string,
+    actor: ActorContext,
+  ): Promise<void> {
+    const profile = await withTenant(prisma, schoolId, (tx) =>
+      tx.studentProfile.findUnique({ where: { id: studentProfileId }, include: INCLUDE }),
+    );
+    if (!profile) return notFound('Student');
+
+    await this.lockout.clear(schoolId, profile.membership.loginIdentifier);
+    await this.audit.record({
+      schoolId,
+      actorUserId: actor.actorUserId,
+      actorRole: actor.actorRole,
+      action: 'STUDENT_SIGN_IN_UNLOCKED',
+      entityType: 'StudentProfile',
+      entityId: studentProfileId,
+    });
   }
 }

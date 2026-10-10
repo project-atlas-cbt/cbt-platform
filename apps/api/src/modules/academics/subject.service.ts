@@ -17,6 +17,7 @@ function toResponseDto(subject: {
   name: string;
   code: string;
   departmentId: string | null;
+  choiceGroupId: string | null;
   status: string;
 }): SubjectResponseDto {
   return {
@@ -24,6 +25,7 @@ function toResponseDto(subject: {
     name: subject.name,
     code: subject.code,
     departmentId: subject.departmentId,
+    choiceGroupId: subject.choiceGroupId,
     status: subject.status as SubjectResponseDto['status'],
   };
 }
@@ -65,6 +67,14 @@ export class SubjectService {
         throw new AppHttpException({ code: 'NOT_FOUND', message: 'Department not found.' });
       }
     }
+    if (dto.choiceGroupId) {
+      const group = await withTenant(prisma, schoolId, (tx) =>
+        tx.subjectChoiceGroup.findUnique({ where: { id: dto.choiceGroupId as string } }),
+      );
+      if (!group) {
+        throw new AppHttpException({ code: 'NOT_FOUND', message: 'Choice group not found.' });
+      }
+    }
     const created = await runUniqueGuarded(
       () =>
         withTenant(prisma, schoolId, (tx) =>
@@ -74,6 +84,7 @@ export class SubjectService {
               name: dto.name,
               code: dto.code,
               departmentId: dto.departmentId ?? null,
+              choiceGroupId: dto.choiceGroupId ?? null,
             },
           }),
         ),
@@ -110,6 +121,14 @@ export class SubjectService {
         throw new AppHttpException({ code: 'NOT_FOUND', message: 'Department not found.' });
       }
     }
+    if (dto.choiceGroupId) {
+      const group = await withTenant(prisma, schoolId, (tx) =>
+        tx.subjectChoiceGroup.findUnique({ where: { id: dto.choiceGroupId as string } }),
+      );
+      if (!group) {
+        throw new AppHttpException({ code: 'NOT_FOUND', message: 'Choice group not found.' });
+      }
+    }
     const updated = await runUniqueGuarded(
       () =>
         withTenant(prisma, schoolId, (tx) =>
@@ -119,6 +138,7 @@ export class SubjectService {
               ...(dto.name !== undefined && { name: dto.name }),
               ...(dto.code !== undefined && { code: dto.code }),
               ...(dto.departmentId !== undefined && { departmentId: dto.departmentId }),
+              ...(dto.choiceGroupId !== undefined && { choiceGroupId: dto.choiceGroupId }),
             },
           }),
         ),

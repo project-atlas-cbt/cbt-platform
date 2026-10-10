@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { DataTableSort } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import {
   useExamResults,
   type ExamResultSortBy,
@@ -27,6 +28,7 @@ import { ExamResultsTable } from './exam-results-table';
 import { ExamResultClassTabs, ExamResultSummaryPanel } from './exam-result-summary-panel';
 import { PublicationControls } from './publication-controls';
 import { AdjustmentProgress } from './adjustment-progress';
+import { GradeNowPanel } from './grade-now-panel';
 import { HelpLink } from '@/components/help/help-link';
 
 const PAGE_SIZE = 50;
@@ -86,6 +88,7 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
   const sortBy = asSortBy(searchParams.get('sortBy'));
   const sortDir = searchParams.get('sortDir') === 'desc' ? 'desc' : 'asc';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
 
   /**
    * The operation id of an adjustment raised from this exam's result detail
@@ -119,17 +122,21 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
   const filters: ExamResultsFilters = useMemo(
     () => ({
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       ...(q ? { q } : {}),
       ...(classId ? { classId } : {}),
       ...(state ? { state } : {}),
       ...(sortBy ? { sortBy, sortDir } : {}),
     }),
-    [page, q, classId, state, sortBy, sortDir],
+    [page, pageSize, q, classId, state, sortBy, sortDir],
   );
 
   const results = useExamResults(examId, filters);
-  const sort: DataTableSort | null = sortBy ? { columnId: sortBy, direction: sortDir } : null;
+  // With no column chosen the server lists students A to Z by surname
+  // (owner decision 2026-10-09); the header says so.
+  const sort: DataTableSort = sortBy
+    ? { columnId: sortBy, direction: sortDir }
+    : { columnId: 'studentName', direction: 'asc' };
   const hasFilters = Boolean(q || classId || state);
 
   if (results.isError) {
@@ -144,7 +151,7 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
 
   const data = results.data;
   const rows = data?.items ?? [];
-  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
 
   return (
     <div className="space-y-4">
@@ -193,6 +200,12 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
             examId={examId}
             published={data.published}
             adjustmentInProgress={data.adjustmentInProgress}
+          />
+          <GradeNowPanel
+            examId={examId}
+            ungradedCount={data.summary.ungradedCount}
+            adjustmentInProgress={data.adjustmentInProgress}
+            onStarted={(id) => updateParams({ op: id })}
           />
           <ExamResultClassTabs
             classSummaries={data.classSummaries ?? []}
@@ -254,6 +267,11 @@ export function ExamResultsScreen({ examId, basePath }: { examId: string; basePa
         }
         page={page}
         pageCount={pageCount}
+        total={data?.total}
+        pageSize={pageSize}
+        onPageSizeChange={(next) =>
+          updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+        }
         onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
         detailBasePath={screenPath}
         hasFilters={hasFilters}

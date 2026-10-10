@@ -1,12 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, withTenant } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
+import { formalName, sortByPersonName, type Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { runUniqueGuarded } from './prisma-error.util.js';
+import {
+  changeEnrollmentStream,
+  registerNewEnrollment,
+  registeredSubjectIds,
+} from './subject-registration-sync.util.js';
 import type {
   ClassRosterEntryDto,
   EnrollStudentDto,
+  SetStudentStreamDto,
   StudentEnrollmentResponseDto,
 } from './dto/student-enrollment.dto.js';
 
@@ -20,6 +26,7 @@ function toResponseDto(enrollment: {
   studentProfileId: string;
   academicSessionId: string;
   classId: string;
+  streamId: string | null;
   startDate: Date;
   endDate: Date | null;
   status: string;
@@ -29,10 +36,27 @@ function toResponseDto(enrollment: {
     studentProfileId: enrollment.studentProfileId,
     academicSessionId: enrollment.academicSessionId,
     classId: enrollment.classId,
+    streamId: enrollment.streamId,
     startDate: enrollment.startDate.toISOString().slice(0, 10),
     endDate: enrollment.endDate ? enrollment.endDate.toISOString().slice(0, 10) : null,
     status: enrollment.status as StudentEnrollmentResponseDto['status'],
   };
+}
+
+/** ADR-0038: a stream a student is put in must be an ACTIVE stream of the
+ * school. Must run in `withTenant`. */
+export async function assertUsableStreamInTx(
+  tx: Prisma.TransactionClient,
+  streamId: string | null,
+): Promise<void> {
+  if (!streamId) return;
+  const stream = await tx.stream.findUnique({ where: { id: streamId } });
+  if (!stream) throw new AppHttpException({ code: 'NOT_FOUND', message: 'Stream not found.' });
+  if (stream.status !== 'ACTIVE')
+    throw new AppHttpException({
+      code: 'VALIDATION_ERROR',
+      message: `The ${stream.name} stream is retired; choose an active stream.`,
+    });
 }
 
 /** `people.v1` — StudentEnrollment (07 §6.7). Session-scoped student
@@ -119,6 +143,14 @@ export class StudentEnrollmentService {
         });
       }
 
+      // ADR-0038: the stream given, else the new class's default stream,
+      // else (on a move into a mixed arm) the stream the student had.
+      const streamId =
+        dto.streamId !== undefined
+          ? dto.streamId
+          : (classGroup.defaultStreamId ?? existing?.streamId ?? null);
+      await assertUsableStreamInTx(tx, dto.streamId ?? null);
+
       const created = await runUniqueGuarded(
         () =>
           tx.studentEnrollment.create({
@@ -127,31 +159,23 @@ export class StudentEnrollmentService {
               studentProfileId,
               academicSessionId: dto.academicSessionId,
               classId: dto.classId,
+              streamId,
               startDate: new Date(),
             },
           }),
         'This student already has an active enrollment for this session.',
       );
 
-      // ADR-0011 reconciliation: auto-register the new enrollment for every
-      // ACTIVE ClassSubject of the new class. The old enrollment's own
-      // registrations are left exactly as they are — they're already
-      // historically frozen the moment their enrollment stops being
-      // ACTIVE, satisfying "close registrations for subjects the new class
-      // doesn't offer" by construction, with no explicit close-loop needed.
-      const offerings = await tx.classSubject.findMany({
-        where: { schoolId, classId: dto.classId, status: 'ACTIVE' },
-        select: { id: true },
-      });
-      if (offerings.length > 0) {
-        await tx.studentSubjectRegistration.createMany({
-          data: offerings.map((offering) => ({
-            schoolId,
-            studentEnrollmentId: created.id,
-            classSubjectId: offering.id,
-          })),
-        });
-      }
+      // ADR-0011 reconciliation, ADR-0038 rules: the new enrollment is
+      // registered for the new class's compulsory subjects, and on a move it
+      // keeps the subjects the student was registered for where the new
+      // class offers them. The old enrollment's own registrations are left
+      // exactly as they are: they're historically frozen the moment their
+      // enrollment stops being ACTIVE.
+      const carried = existing
+        ? await registeredSubjectIds(tx, schoolId, existing.id)
+        : new Set<string>();
+      await registerNewEnrollment(tx, schoolId, created, carried);
 
       // isMove: true when this call closed a prior ACTIVE enrollment for a
       // *different* class (07 §35's class-movement case) — distinct from a
@@ -197,16 +221,82 @@ export class StudentEnrollmentService {
         where: { schoolId, classId, status: 'ACTIVE' },
         include: {
           studentProfile: { include: { membership: { include: { user: true } } } },
+          stream: { select: { name: true } },
         },
-        orderBy: { studentProfile: { studentId: 'asc' } },
       }),
     );
+    sortByPersonName(enrollments, (e) => ({
+      ...e.studentProfile.membership.user,
+      identifier: e.studentProfile.studentId,
+    }));
     return enrollments.map((enrollment) => ({
       enrollmentId: enrollment.id,
       studentProfileId: enrollment.studentProfileId,
       studentId: enrollment.studentProfile.studentId,
-      displayName: enrollment.studentProfile.membership.user.displayName,
+      displayName: formalName(enrollment.studentProfile.membership.user),
       startDate: enrollment.startDate.toISOString().slice(0, 10),
+      streamId: enrollment.streamId,
+      streamName: enrollment.stream?.name ?? null,
     }));
+  }
+
+  /**
+   * ADR-0038: put a student's current enrollment in another stream, or
+   * none. Registers them for the class's subjects in the new stream and
+   * deregisters those they had only through the old one, all in one
+   * transaction; compulsory and hand-picked subjects are untouched. Takes
+   * effect for future exams only.
+   */
+  async setStream(
+    schoolId: string,
+    studentProfileId: string,
+    dto: SetStudentStreamDto,
+    actor: ActorContext,
+  ): Promise<StudentEnrollmentResponseDto> {
+    const result = await withTenant(prisma, schoolId, async (tx) => {
+      const enrollment = await tx.studentEnrollment.findFirst({
+        where: {
+          schoolId,
+          studentProfileId,
+          status: 'ACTIVE',
+          session: { status: { notIn: ['CLOSED', 'ARCHIVED'] } },
+        },
+        orderBy: { startDate: 'desc' },
+      });
+      if (!enrollment)
+        throw new AppHttpException({
+          code: 'NOT_FOUND',
+          message: 'This student is not in a class this session.',
+        });
+      await assertUsableStreamInTx(tx, dto.streamId);
+      const changes = await changeEnrollmentStream(tx, schoolId, enrollment, dto.streamId);
+      const updated = await tx.studentEnrollment.findUniqueOrThrow({
+        where: { id: enrollment.id },
+      });
+      return { from: enrollment.streamId, updated, changes };
+    });
+    if (result.from !== dto.streamId) {
+      await this.audit.record({
+        schoolId,
+        actorUserId: actor.actorUserId,
+        actorRole: actor.actorRole,
+        action: 'STUDENT_STREAM_CHANGED',
+        entityType: 'StudentEnrollment',
+        entityId: result.updated.id,
+        metadata: { fromStreamId: result.from, toStreamId: dto.streamId },
+      });
+      for (const change of result.changes) {
+        await this.audit.record({
+          schoolId,
+          actorUserId: actor.actorUserId,
+          actorRole: actor.actorRole,
+          action: change.action,
+          entityType: 'StudentSubjectRegistration',
+          entityId: change.id,
+          metadata: { reason: 'STREAM_CHANGED' },
+        });
+      }
+    }
+    return toResponseDto(result.updated);
   }
 }

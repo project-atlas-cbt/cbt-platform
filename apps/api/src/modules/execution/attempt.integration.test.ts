@@ -394,6 +394,7 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     attemptLimit?: number;
     randomizeQuestions?: boolean;
     randomizeOptions?: boolean;
+    navigationPolicy?: 'FREE' | 'SEQUENTIAL_NO_REVISIT' | 'SEQUENTIAL_WITH_REVISIT';
   }): Promise<string> {
     const termId = (await get(admin, '/academics/context')).json<{ term: { id: string } }>().term
       .id;
@@ -415,6 +416,7 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
       attemptLimit: opts?.attemptLimit ?? 1,
       randomizeQuestions: opts?.randomizeQuestions ?? false,
       randomizeOptions: opts?.randomizeOptions ?? false,
+      ...(opts?.navigationPolicy && { navigationPolicy: opts.navigationPolicy }),
       resultPolicy: 'TEACHER',
       resultDetailVisibility: 'SCORE_AND_COUNTS',
       generalInstructions: 'Answer all.',
@@ -664,6 +666,56 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
       }),
     );
     expect(count).toBe(1);
+  });
+
+  it('P1-3 / ADR-0015: past the grace period a running attempt resumes, but nothing new starts', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const first = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+
+    // Expired 20 days ago: past the 14-day grace.
+    const expiredAt = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000);
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.subscription.create({
+        data: {
+          schoolId,
+          plan: 'TEST',
+          status: 'EXPIRED',
+          startAt: new Date(expiredAt.getTime() - 365 * 24 * 60 * 60 * 1000),
+          expiresAt: expiredAt,
+        },
+      }),
+    );
+    try {
+      const resumed = await post(studentA, `/exams/${examId}/attempts`, {});
+      expect(resumed.statusCode).toBe(200);
+      expect(resumed.json<AttemptPackage>().attemptId).toBe(first.attemptId);
+
+      const fresh = await post(studentB, `/exams/${examId}/attempts`, {});
+      expect(fresh.statusCode).toBe(403);
+      expect(fresh.json<{ error: { code: string } }>().error.code).toBe('SUBSCRIPTION_EXPIRED');
+
+      const newSession = await post(teacher, `/exams/${examId}/sessions`, {});
+      expect(newSession.statusCode).toBe(403);
+      const newExam = await post(teacher, '/exams', { title: 'Blocked' });
+      expect(newExam.json<{ error: { code: string } }>().error.code).toBe('SUBSCRIPTION_EXPIRED');
+
+      // Reads keep working (ADR-0015: read access to all historical data).
+      expect((await get(teacher, `/exams/${examId}`)).statusCode).toBe(200);
+
+      // Inside the grace period nothing is blocked.
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.subscription.updateMany({
+          where: { schoolId },
+          data: { expiresAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+        }),
+      );
+      expect((await post(studentB, `/exams/${examId}/attempts`, {})).statusCode).toBe(200);
+    } finally {
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.subscription.deleteMany({ where: { schoolId } }),
+      );
+    }
   });
 
   // ---------------------------------------------------------------------
@@ -922,6 +974,123 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     expect(q2Stored?.selectedOptionId).toBe(q2.options[0]!.optionId);
   });
 
+  it('audit P1-6: "no going back" is enforced by the server, offline batches in any order', async () => {
+    const examId = await buildReadyExam({ navigationPolicy: 'SEQUENTIAL_NO_REVISIT' });
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const [first, second] = [...pkg.questions].sort(
+      (a, b) => a.displaySequence - b.displaySequence,
+    );
+    const answersUrl = `/attempts/${pkg.attemptId}/answers`;
+
+    // An offline queue flushed in reverse order is applied in question
+    // order, so a forward-only sitting is accepted whole.
+    const flush = await post(studentA, `${answersUrl}/batch`, {
+      answers: [
+        {
+          examQuestionId: second!.examQuestionId,
+          selectedOptionId: second!.options[0]!.optionId,
+          sequenceNumber: 1,
+          source: 'offline-replay',
+        },
+        {
+          examQuestionId: first!.examQuestionId,
+          selectedOptionId: first!.options[0]!.optionId,
+          sequenceNumber: 1,
+          source: 'offline-replay',
+        },
+      ],
+    });
+    expect(flush.statusCode).toBe(200);
+    const flushed = flush.json<{ results: { examQuestionId: string; accepted: boolean }[] }>()
+      .results;
+    // Results come back in request order.
+    expect(flushed.map((r) => r.examQuestionId)).toEqual([
+      second!.examQuestionId,
+      first!.examQuestionId,
+    ]);
+    expect(flushed.every((r) => r.accepted)).toBe(true);
+
+    // Going back to change the first answer is refused, by either route.
+    const back = await put(studentA, `${answersUrl}/${first!.examQuestionId}`, {
+      selectedOptionId: first!.options[1]!.optionId,
+      sequenceNumber: 2,
+    });
+    expect(back.statusCode).toBe(409);
+    expect(back.json<{ error: { code: string } }>().error.code).toBe('ATTEMPT_QUESTION_LOCKED');
+    const backInBatch = await post(studentA, `${answersUrl}/batch`, {
+      answers: [
+        {
+          examQuestionId: first!.examQuestionId,
+          selectedOptionId: first!.options[1]!.optionId,
+          sequenceNumber: 3,
+        },
+      ],
+    });
+    expect(
+      backInBatch.json<{ results: { rejectionCode?: string }[] }>().results[0]!.rejectionCode,
+    ).toBe('ATTEMPT_QUESTION_LOCKED');
+
+    // The furthest question stays open for changes.
+    const current = await put(studentA, `${answersUrl}/${second!.examQuestionId}`, {
+      selectedOptionId: second!.options[1]!.optionId,
+      sequenceNumber: 2,
+    });
+    expect(current.statusCode).toBe(200);
+
+    const stored = await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptAnswer.findUniqueOrThrow({
+        where: {
+          schoolId_attemptId_examQuestionId: {
+            schoolId,
+            attemptId: pkg.attemptId,
+            examQuestionId: first!.examQuestionId,
+          },
+        },
+      }),
+    );
+    expect(stored.selectedOptionId).toBe(first!.options[0]!.optionId);
+
+    // A skipped question is locked too, once a later one has an answer.
+    const pkgB = (await post(studentB, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const [firstB, secondB] = [...pkgB.questions].sort(
+      (a, b) => a.displaySequence - b.displaySequence,
+    );
+    expect(
+      (
+        await put(studentB, `/attempts/${pkgB.attemptId}/answers/${secondB!.examQuestionId}`, {
+          selectedOptionId: secondB!.options[0]!.optionId,
+          sequenceNumber: 1,
+        })
+      ).statusCode,
+    ).toBe(200);
+    const skipped = await put(
+      studentB,
+      `/attempts/${pkgB.attemptId}/answers/${firstB!.examQuestionId}`,
+      { selectedOptionId: firstB!.options[0]!.optionId, sequenceNumber: 1 },
+    );
+    expect(skipped.statusCode).toBe(409);
+  });
+
+  it('audit P1-6: free navigation still lets a student go back and change an answer', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const [first, second] = [...pkg.questions].sort(
+      (a, b) => a.displaySequence - b.displaySequence,
+    );
+    const answersUrl = `/attempts/${pkg.attemptId}/answers`;
+    await put(studentA, `${answersUrl}/${second!.examQuestionId}`, {
+      selectedOptionId: second!.options[0]!.optionId,
+      sequenceNumber: 1,
+    });
+    const back = await put(studentA, `${answersUrl}/${first!.examQuestionId}`, {
+      selectedOptionId: first!.options[0]!.optionId,
+      sequenceNumber: 1,
+    });
+    expect(back.statusCode).toBe(200);
+  });
+
   it("rejects an answer naming a question/option not present in this attempt's own snapshot", async () => {
     const examId = await buildReadyExam();
     await openSession(examId);
@@ -1149,7 +1318,7 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     expect(body.marking.questionCount).toBe(2);
   });
 
-  it('B14 GET /status: COMPLETE with correct live-aggregated totals once marking output exists', async () => {
+  it('B14 GET /status: COMPLETE once marking output exists, with no marks or counts', async () => {
     const examId = await buildReadyExam();
     await openSession(examId);
     const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
@@ -1185,32 +1354,11 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
 
     const res = await get(studentA, `/attempts/${pkg.attemptId}/status`);
     expect(res.statusCode).toBe(200);
-    const body = res.json<{
-      marking: {
-        status: string;
-        questionCount: number;
-        markedCount: number;
-        correctCount: number;
-        incorrectCount: number;
-        unansweredCount: number;
-        partialCount: number;
-        awardedMarks: number;
-        maximumMarks: number;
-        percentage: number | null;
-      };
-    }>();
-    expect(body.marking).toEqual({
-      status: 'COMPLETE',
-      questionCount: 2,
-      markedCount: 2,
-      correctCount: 1,
-      incorrectCount: 1,
-      unansweredCount: 0,
-      partialCount: 0,
-      awardedMarks: 2,
-      maximumMarks: 4,
-      percentage: 50,
-    });
+    const body = res.json<{ marking: Record<string, unknown> }>();
+    // Marking is reported as finished, but no marks or counts: a student
+    // reads this before any release, so a score here would bypass ADR-0010's
+    // publication and visibility rules (04 §59).
+    expect(body.marking).toEqual({ status: 'COMPLETE', questionCount: 2, markedCount: 2 });
   });
 
   it("B14 security regression: a student cannot view another student's submission status", async () => {
@@ -1871,6 +2019,335 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     expect(restarted.statusCode).toBe(200);
     const replacement = restarted.json<AttemptPackage>();
     expect(replacement.attemptId).not.toBe(first.attemptId);
+  });
+
+  // ---------------------------------------------------------------------
+  // Bug audit 2026-10-06 — exam sitting fixes
+  // ---------------------------------------------------------------------
+
+  it('audit P1-2: a submit waits for an answer write still committing, so the answer is in the submitted attempt', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const question = pkg.questions[0]!;
+    expect(
+      (
+        await put(studentA, `/attempts/${pkg.attemptId}/answers/${question.examQuestionId}`, {
+          selectedOptionId: question.options[0]!.optionId,
+          sequenceNumber: 1,
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    // An answer write that has passed the trigger's state check and not yet
+    // committed (the audit's repro: a batch save holding its transaction).
+    let releaseWrite!: () => void;
+    const writeHeld = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    let writeStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      writeStarted = resolve;
+    });
+    const heldWrite = withTenant(prisma, schoolId, async (tx) => {
+      await tx.$executeRaw`
+        UPDATE attempt_answers SET selected_option_id = ${question.options[1]!.optionId}::uuid
+        WHERE attempt_id = ${pkg.attemptId}::uuid AND exam_question_id = ${question.examQuestionId}::uuid
+      `;
+      writeStarted();
+      await writeHeld;
+    });
+    await started;
+
+    let submitDone = false;
+    const submit = post(studentA, `/attempts/${pkg.attemptId}/submit`, {}).then((res) => {
+      submitDone = true;
+      return res;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    // Before the fix the submit returned at once, without the answer.
+    expect(submitDone).toBe(false);
+
+    releaseWrite();
+    await heldWrite;
+    expect((await submit).statusCode).toBe(200);
+    const answer = await withTenant(prisma, schoolId, (tx) =>
+      tx.attemptAnswer.findFirstOrThrow({
+        where: { schoolId, attemptId: pkg.attemptId, examQuestionId: question.examQuestionId },
+      }),
+    );
+    expect(answer.selectedOptionId).toBe(question.options[1]!.optionId);
+
+    // And a write after the submit is refused by the same guard.
+    await expect(
+      withTenant(
+        prisma,
+        schoolId,
+        (tx) =>
+          tx.$executeRaw`
+          UPDATE attempt_answers SET selected_option_id = ${question.options[0]!.optionId}::uuid
+          WHERE attempt_id = ${pkg.attemptId}::uuid
+        `,
+      ),
+    ).rejects.toThrow(/immutable/);
+  });
+
+  it('audit P1-5: the heartbeat returns the server clock', async () => {
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    const before = Date.now();
+    const res = await post(studentA, `/attempts/${pkg.attemptId}/heartbeat`, {});
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ status: string; serverTime: string }>();
+    expect(body.status).toBe('ok');
+    expect(Date.parse(body.serverTime)).toBeGreaterThanOrEqual(before - 1_000);
+  });
+
+  /** Earlier tests leave attempts running; the student home always offers
+   * a running attempt first, so end them before testing what it offers. */
+  async function endRunningAttempts(studentProfileId: string): Promise<void> {
+    const running = await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.findMany({
+        where: { schoolId, studentProfileId, state: 'IN_PROGRESS' },
+        select: { id: true },
+      }),
+    );
+    for (const attempt of running) {
+      expect((await post(teacher, `/attempts/${attempt.id}/end`, {})).statusCode).toBe(200);
+    }
+  }
+
+  it('audit P2-1: once the attempt limit is used, the student home stops offering the exam and shows another open one', async () => {
+    await endRunningAttempts(studentAProfileId);
+    const examId = await buildReadyExam({ attemptLimit: 1 });
+    await openSession(examId);
+    expect((await get(studentA, '/student/assessment')).json<{ examId: string }>().examId).toBe(
+      examId,
+    );
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await post(studentA, `/attempts/${pkg.attemptId}/submit`, {})).statusCode).toBe(200);
+
+    const after = (await get(studentA, '/student/assessment')).json<{
+      examId: string | null;
+      state: string | null;
+    }>();
+    expect(after.examId).not.toBe(examId);
+
+    // A second open exam, authorised earlier, is no longer hidden behind it.
+    const otherExamId = await buildReadyExam();
+    await openSession(otherExamId);
+    const next = (await get(studentA, '/student/assessment')).json<{
+      examId: string | null;
+      state: string | null;
+    }>();
+    expect(next.examId).toBe(otherExamId);
+    expect(next.state).toBe('NOT_STARTED');
+    // Leave nothing startable behind for later tests.
+    const other = (
+      await post(studentA, `/exams/${otherExamId}/attempts`, {})
+    ).json<AttemptPackage>();
+    await post(studentA, `/attempts/${other.attemptId}/submit`, {});
+  });
+
+  it('pilot feedback: the preview names the submitted attempt only once the student cannot start again', async () => {
+    await endRunningAttempts(studentAProfileId);
+    const examId = await buildReadyExam({ attemptLimit: 1 });
+    await openSession(examId);
+    const previewUrl = `/student/assessment/${examId}/preview`;
+    type Preview = { submittedAttemptId: string | null };
+    expect((await get(studentA, previewUrl)).json<Preview>().submittedAttemptId).toBeNull();
+
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await get(studentA, previewUrl)).json<Preview>().submittedAttemptId).toBeNull();
+    expect((await post(studentA, `/attempts/${pkg.attemptId}/submit`, {})).statusCode).toBe(200);
+    expect((await get(studentA, previewUrl)).json<Preview>().submittedAttemptId).toBe(
+      pkg.attemptId,
+    );
+    // Student B has not sat it and may still start.
+    expect((await get(studentB, previewUrl)).json<Preview>().submittedAttemptId).toBeNull();
+  });
+
+  it('audit P1-1: a makeup student sees the completed exam on their home screen and can start it', async () => {
+    await endRunningAttempts(studentAProfileId);
+    const examId = await buildReadyExam();
+    const originalSessionId = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${originalSessionId}/close`, {})).statusCode).toBe(
+      200,
+    );
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+          confirmedAbsentParticipations: [
+            { examSessionId: originalSessionId, studentProfileId: studentAProfileId },
+            { examSessionId: originalSessionId, studentProfileId: studentBProfileId },
+          ],
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await get(studentA, '/student/assessment')).json<{ examId: string | null }>().examId,
+    ).not.toBe(examId);
+
+    const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'Approved medical absence',
+    });
+    expect(grant.statusCode).toBe(201);
+
+    const home = (await get(studentA, '/student/assessment')).json<{
+      examId: string | null;
+      state: string | null;
+    }>();
+    expect(home).toMatchObject({ examId, state: 'NOT_STARTED' });
+    // Student B was not granted makeup and still sees nothing for this exam.
+    expect(
+      (await get(studentB, '/student/assessment')).json<{ examId: string | null }>().examId,
+    ).not.toBe(examId);
+
+    const started = await post(studentA, `/exams/${examId}/attempts`, {});
+    expect(started.statusCode).toBe(200);
+    const makeup = started.json<AttemptPackage>();
+    expect(
+      (await get(studentA, '/student/assessment')).json<{ attemptId: string }>().attemptId,
+    ).toBe(makeup.attemptId);
+    await post(studentA, `/attempts/${makeup.attemptId}/submit`, {});
+    expect(
+      (await get(studentA, '/student/assessment')).json<{ examId: string | null }>().examId,
+    ).not.toBe(examId);
+  });
+
+  it('audit P2-2: End Examination does not list a student who sat another batch', async () => {
+    const examId = await buildReadyExam();
+    const batchOne = await openSession(examId);
+    const sat = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await post(studentA, `/attempts/${sat.attemptId}/submit`, {})).statusCode).toBe(200);
+    expect((await post(teacher, `/exam-sessions/${batchOne}/close`, {})).statusCode).toBe(200);
+    const batchTwo = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${batchTwo}/close`, {})).statusCode).toBe(200);
+
+    // The list the End Examination dialog shows.
+    const roster = (await get(teacher, `/exams/${examId}/eligible-students`)).json<{
+      students: { studentProfileId: string; pendingAbsence: boolean }[];
+    }>().students;
+    const pendingIds = roster.filter((s) => s.pendingAbsence).map((s) => s.studentProfileId);
+    expect(pendingIds).not.toContain(studentAProfileId);
+    expect(pendingIds).toContain(studentBProfileId);
+
+    // And the server accepts exactly that list.
+    const complete = await post(teacher, `/exams/${examId}/complete`, {
+      confirmedAbsentStudentProfileIds: pendingIds,
+    });
+    expect(complete.statusCode).toBe(200);
+    const absences = await withTenant(prisma, schoolId, (tx) =>
+      tx.examParticipation.findMany({ where: { schoolId, examId, status: 'ABSENT' } }),
+    );
+    expect(absences.map((a) => a.studentProfileId)).not.toContain(studentAProfileId);
+  });
+
+  it('audit P2-2: makeup is refused for a student who sat the exam in another batch', async () => {
+    const examId = await buildReadyExam();
+    const batchOne = await openSession(examId);
+    const sat = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    expect((await post(studentA, `/attempts/${sat.attemptId}/submit`, {})).statusCode).toBe(200);
+    expect((await post(teacher, `/exam-sessions/${batchOne}/close`, {})).statusCode).toBe(200);
+    const batchTwo = await openSession(examId);
+    expect((await post(teacher, `/exam-sessions/${batchTwo}/close`, {})).statusCode).toBe(200);
+
+    const participation = (await get(teacher, `/exams/${examId}/participation`)).json<{
+      students: {
+        studentProfileId: string;
+        sessions: { examSessionId: string; status: string; attemptId: string | null }[];
+      }[];
+    }>();
+    // End Examination no longer records a student who sat batch one as
+    // absent from batch two (audit P2-2), so only students with no attempt
+    // at all are pending.
+    const pending = participation.students
+      .filter((student) => student.sessions.every((session) => session.attemptId === null))
+      .flatMap((student) =>
+        student.sessions
+          .filter((session) => session.status === 'PENDING')
+          .map((session) => ({
+            examSessionId: session.examSessionId,
+            studentProfileId: student.studentProfileId,
+          })),
+      );
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/participation/confirm-absences`, {
+          confirmedAbsentParticipations: pending,
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    // Absences recorded before that fix still exist on live data; the makeup
+    // grant must refuse those too.
+    await withTenant(prisma, schoolId, async (tx) => {
+      const membership = await tx.schoolMembership.findFirstOrThrow({
+        where: { schoolId, roleAssignments: { some: { role: 'TEACHER' } } },
+        select: { id: true },
+      });
+      await tx.examParticipation.create({
+        data: {
+          schoolId,
+          examId,
+          examSessionId: batchTwo,
+          studentProfileId: studentAProfileId,
+          status: 'ABSENT',
+          markedByMembershipId: membership.id,
+        },
+      });
+    });
+
+    const grant = await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+      studentProfileIds: [studentAProfileId],
+      reason: 'Absent from batch two',
+    });
+    expect(grant.statusCode).toBe(409);
+    expect(grant.json<{ error: { message: string } }>().error.message).toMatch(/already sat/);
+    // Student B missed both batches and still gets a makeup.
+    expect(
+      (
+        await post(teacher, `/exams/${examId}/makeup-authorizations`, {
+          studentProfileIds: [studentBProfileId],
+          reason: 'Absent from both batches',
+        })
+      ).statusCode,
+    ).toBe(201);
+  });
+
+  it('audit P3-1: Start again on an attempt past its time and grace finalises it instead of resuming it', async () => {
+    await endRunningAttempts(studentAProfileId);
+    const examId = await buildReadyExam();
+    await openSession(examId);
+    const pkg = (await post(studentA, `/exams/${examId}/attempts`, {})).json<AttemptPackage>();
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.examAttempt.update({
+        where: { id: pkg.attemptId },
+        data: { expiresAt: new Date(Date.now() - 10 * 60_000) },
+      }),
+    );
+
+    const again = await post(studentA, `/exams/${examId}/attempts`, {});
+    expect(again.statusCode).toBe(200);
+    expect(again.json<AttemptPackage & { state: string }>().state).toBe('AUTO_SUBMITTED');
+  });
+
+  it('audit P3-8: opening an exam whose academic session is not current says so', async () => {
+    const examId = await buildReadyExam();
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.academicSession.update({ where: { id: sessionId }, data: { status: 'UPCOMING' } }),
+    );
+    try {
+      const res = await post(teacher, `/exams/${examId}/sessions`, {});
+      expect(res.statusCode).toBeGreaterThanOrEqual(400);
+      expect(res.json<{ error: { message: string } }>().error.message).toMatch(/academic session/i);
+    } finally {
+      await withTenant(prisma, schoolId, (tx) =>
+        tx.academicSession.update({ where: { id: sessionId }, data: { status: 'CURRENT' } }),
+      );
+    }
   });
 
   // ---------------------------------------------------------------------

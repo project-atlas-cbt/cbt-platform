@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -52,17 +52,29 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 /**
- * `05 §47`/`§58`, ADR-0010 — F5/B3 gap-closure. These are *defaults* only:
- * no `Exam` exists yet (`B11`) to seed from them, and no `B15` marking/
- * publication logic exists yet to honour `resultPolicyLocked`. Saving here
- * stores the school's chosen defaults correctly and auditably, ahead of the
- * phases that will read them — DoD item 6 is real for the storage half,
- * honestly partial for the "applied to exams" half until `B11`/`B15` ship.
+ * `05 §47`/`§58`, ADR-0010 — the school's result defaults. New exams copy
+ * both values; ticking the lock fixes both for teachers and HODs, and every
+ * exam then follows the school's values (ADR-0010 2026-10-06 amendment).
  * Grading Scale (`05 §46`, ADR-0018) is its own section below, against
  * B15's versioned grading-scale API (closes F5 DoD item 7).
  */
 export default function SchoolResultsSettingsPage() {
   const resultPolicy = useResultPolicy();
+  if (resultPolicy.isPending) return <Skeleton className="h-64 w-full" />;
+  if (resultPolicy.isError) {
+    return <ErrorState error={resultPolicy.error} onRetry={() => void resultPolicy.refetch()} />;
+  }
+  return <ResultsSettingsForm initial={resultPolicy.data} />;
+}
+
+/**
+ * Mounted only once the saved values are known, so the selects start on them.
+ * Resetting the form after mount left Radix's closed Select blank for any
+ * value other than the form's initial default (SCORE_AND_COUNTS), which is
+ * why "Score only" and "Full per-question review" looked unsaved after a
+ * refresh although the server had stored them.
+ */
+function ResultsSettingsForm({ initial }: { initial: Values }) {
   const updateResultPolicy = useUpdateResultPolicy();
   const canEdit = useHasPermission('schoolConfig.settings.manage');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -72,18 +84,13 @@ export default function SchoolResultsSettingsPage() {
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
-      resultPolicy: 'SCHOOL_ADMIN',
-      resultDetailVisibility: 'SCORE_AND_COUNTS',
-      resultPolicyLocked: false,
+      resultPolicy: initial.resultPolicy,
+      resultDetailVisibility: initial.resultDetailVisibility,
+      resultPolicyLocked: initial.resultPolicyLocked,
     },
   });
   // One registration for both sections: two would overwrite each other.
   useRegisterFormDirty(form.formState.isDirty || gradingDirty);
-
-  useEffect(() => {
-    if (!resultPolicy.data) return;
-    form.reset(resultPolicy.data);
-  }, [resultPolicy.data, form]);
 
   async function onSubmit(values: Values) {
     setSaveError(null);
@@ -95,11 +102,6 @@ export default function SchoolResultsSettingsPage() {
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : 'Could not save result policy.');
     }
-  }
-
-  if (resultPolicy.isPending) return <Skeleton className="h-64 w-full" />;
-  if (resultPolicy.isError) {
-    return <ErrorState error={resultPolicy.error} onRetry={() => void resultPolicy.refetch()} />;
   }
 
   return (
@@ -176,7 +178,8 @@ export default function SchoolResultsSettingsPage() {
                   </FormControl>
                   <div>
                     <FormLabel className="font-normal">
-                      Lock this policy — teachers cannot override it on their own exams
+                      Lock these settings: teachers cannot change who releases results or what
+                      students see on their own exams
                     </FormLabel>
                     <FormMessage />
                   </div>

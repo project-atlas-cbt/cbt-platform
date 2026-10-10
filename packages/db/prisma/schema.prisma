@@ -107,6 +107,21 @@ model School {
   resultDetailVisibility ResultDetailVisibility @default(SCORE_AND_COUNTS) @map("result_detail_visibility")
   resultPolicyLocked     Boolean                @default(false) @map("result_policy_locked")
 
+  // --- Assessment Rules (05 §58, 03 §26): school-level exam defaults. Seed a
+  // new Exam's own rule fields at creation (ExamService.create); a teacher
+  // may still change every one of them on the exam's Rules step. Null
+  // duration = no default: the exam starts at 0 and stays unready until set.
+  defaultExamDurationSeconds Int?                 @map("default_exam_duration_seconds")
+  defaultAttemptLimit        Int                  @default(1) @map("default_attempt_limit")
+  defaultNavigationPolicy    ExamNavigationPolicy @default(FREE) @map("default_navigation_policy")
+  defaultRandomizeQuestions  Boolean              @default(false) @map("default_randomize_questions")
+  defaultRandomizeOptions    Boolean              @default(false) @map("default_randomize_options")
+  /// Passwordless student sign-in (owner decision 2026-10-08): while true,
+  /// every student of this school may sign in with Login ID + name instead
+  /// of a password. Students only; staff never. Stays on until a School
+  /// Admin or Moderator switches it off (which ends those sessions).
+  studentPasswordlessSignIn  Boolean              @default(false) @map("student_passwordless_sign_in")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -126,6 +141,8 @@ model School {
   // --- B5: academic structure back-relations.
   academicSessions    AcademicSession[]
   departments         Department[]
+  subjectChoiceGroups SubjectChoiceGroup[]
+  streams             Stream[]
   exportJobs          ExportJob[]
 
   @@map("schools")
@@ -256,6 +273,12 @@ model User {
   id              String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
   firstName       String          @map("first_name")
   lastName        String          @map("last_name")
+  /// Optional (owner decision 2026-10-09): most students have three names.
+  /// `lastName` is the surname; lists show "Surname First Middle" and sort
+  /// by surname, first name, middle name (`@atlas/domain` names.ts). Null,
+  /// never empty, when there is none.
+  middleName      String?         @map("middle_name")
+  /// The natural "First Middle Surname" order, used to greet the person.
   displayName     String          @map("display_name")
   /// ADR-0019: staff-facing flows (password reset, invitations) need an
   /// email address to deliver to; students have none by design (no
@@ -389,8 +412,9 @@ model TeacherProfile {
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  membership        SchoolMembership    @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  membership        SchoolMembership        @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
   assignments       TeacherAssignment[]
+  formClasses       FormTeacherAssignment[]
   // B8: a Question's author is always a TeacherProfile — see
   // Question.authorTeacherProfileId's own doc comment.
   authoredQuestions Question[]
@@ -421,6 +445,10 @@ model Session {
   rotatedFromId String?   @unique @map("rotated_from_id") @db.Uuid
   userAgent     String?   @map("user_agent")
   ipAddress     String?   @map("ip_address") @db.VarChar(64)
+  /// Issued by passwordless student sign-in (Login ID + name). Such a
+  /// session skips the forced first password change, can never change the
+  /// password, and is revoked when the school or class switch goes off.
+  passwordless  Boolean   @default(false)
 
   school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -938,6 +966,13 @@ enum DepartmentStatus {
   INACTIVE
 }
 
+/// ADR-0038: a stream (Science, Humanities, Business) can be retired but
+/// never deleted while a class or an enrollment names it.
+enum StreamStatus {
+  ACTIVE
+  INACTIVE
+}
+
 /// ADR-0001: "ClassGroup.level becomes load-bearing for authorization, so
 /// its values must be consistent within a school — level is now a
 /// controlled vocabulary, not free text." Fixed platform-wide enum
@@ -969,6 +1004,12 @@ enum SubjectStatus {
 enum ClassSubjectStatus {
   ACTIVE
   INACTIVE
+}
+
+/// ADR-0038. STREAM is added with streams.
+enum ClassSubjectKind {
+  COMPULSORY
+  ELECTIVE
 }
 
 enum HODAssignmentStatus {
@@ -1091,30 +1132,42 @@ model Department {
 /// platform targets first; streaming into Science/Arts/Commercial starts at
 /// SS level.
 model ClassGroup {
-  id                String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId          String           @map("school_id") @db.Uuid
-  academicSessionId String           @map("academic_session_id") @db.Uuid
-  departmentId      String?          @map("department_id") @db.Uuid
-  name              String           @db.VarChar(32)
-  level             ClassLevel
-  arm               String           @db.VarChar(16)
-  status            ClassGroupStatus @default(ACTIVE)
-  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                 String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId           String           @map("school_id") @db.Uuid
+  academicSessionId  String           @map("academic_session_id") @db.Uuid
+  /// ADR-0038: no longer written or read. Classes stopped carrying a
+  /// department; the migration copied each one to `defaultStreamId`. Kept
+  /// until a contract release drops it.
+  departmentId       String?          @map("department_id") @db.Uuid
+  /// ADR-0038: the stream a student joining this class takes unless set
+  /// otherwise (an "SS1 Science" arm). A mixed arm, and every JSS class,
+  /// has none.
+  defaultStreamId    String?          @map("default_stream_id") @db.Uuid
+  name               String           @db.VarChar(32)
+  level              ClassLevel
+  arm                String           @db.VarChar(16)
+  status             ClassGroupStatus @default(ACTIVE)
+  /// Passwordless student sign-in for this class only (see
+  /// School.studentPasswordlessSignIn).
+  passwordlessSignIn Boolean          @default(false) @map("passwordless_sign_in")
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  session                 AcademicSession     @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
+  session                 AcademicSession         @relation(fields: [schoolId, academicSessionId], references: [schoolId, id], onDelete: Cascade)
   /// Restrict, not SetNull: a composite FK can't null just one of its two
   /// columns (schoolId is required), and our own archival rule already
   /// blocks hard-deleting a Department while any ClassGroup references it —
   /// Restrict is a correct database-level backstop under that rule, not a
   /// contradiction of "departmentId is nullable" (nullable only means a
   /// class *may be created* with no department).
-  department              Department?         @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  department              Department?             @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  defaultStream           Stream?                 @relation(fields: [schoolId, defaultStreamId], references: [schoolId, id], onDelete: Restrict)
   classSubjects           ClassSubject[]
   // B6: StudentEnrollment FKs against the (schoolId, id, academicSessionId)
   // unique below (the same D-10-style guarantee ClassSubject already uses).
   studentEnrollments      StudentEnrollment[]
-  rolloverSourceDecisions RolloverDecision[]  @relation("RolloverDecisionSourceClass")
+  rolloverSourceDecisions RolloverDecision[]      @relation("RolloverDecisionSourceClass")
+  formTeachers            FormTeacherAssignment[]
 
   // Composite-FK target for ClassSubject's session-agreement check (D-10) —
   // a three-column unique, not just (schoolId, id), so ClassSubject can FK
@@ -1127,6 +1180,7 @@ model ClassGroup {
   @@index([schoolId])
   @@index([schoolId, academicSessionId])
   @@index([schoolId, departmentId])
+  @@index([schoolId, defaultStreamId])
   @@index([schoolId, status])
   @@map("class_groups")
 }
@@ -1136,17 +1190,21 @@ model ClassGroup {
 /// outside every HOD's automatic review scope and requires explicit
 /// assignment.
 model Subject {
-  id           String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId     String        @map("school_id") @db.Uuid
-  departmentId String?       @map("department_id") @db.Uuid
-  name         String        @db.VarChar(128)
-  code         String        @db.VarChar(16)
-  status       SubjectStatus @default(ACTIVE)
-  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId      String        @map("school_id") @db.Uuid
+  departmentId  String?       @map("department_id") @db.Uuid
+  /// ADR-0038: the "pick N of these" rule this subject belongs to, if any.
+  choiceGroupId String?       @map("choice_group_id") @db.Uuid
+  name          String        @db.VarChar(128)
+  code          String        @db.VarChar(16)
+  status        SubjectStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   /// Restrict, not SetNull — same reasoning as ClassGroup.department.
-  department    Department?    @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  department    Department?         @relation(fields: [schoolId, departmentId], references: [schoolId, id], onDelete: Restrict)
+  /// Restrict: a group is deleted only once no subject is in it.
+  choiceGroup   SubjectChoiceGroup? @relation(fields: [schoolId, choiceGroupId], references: [schoolId, id], onDelete: Restrict)
   classSubjects ClassSubject[]
   // B8: Question/Topic back-relations.
   questions     Question[]
@@ -1160,7 +1218,74 @@ model Subject {
   @@index([schoolId])
   @@index([schoolId, departmentId])
   @@index([schoolId, status])
+  @@index([schoolId, choiceGroupId])
   @@map("subjects")
+}
+
+/// ADR-0038: a school-wide "pick between min and max of these subjects"
+/// rule, such as Religion (CRS or IRS, exactly one) or Trade subject. It
+/// applies to a student only where their class offers at least one of its
+/// subjects. A rule that is not met is a warning on the class subject grid,
+/// never a block (owner decision 2026-10-08).
+model SubjectChoiceGroup {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  name       String   @db.VarChar(64)
+  minChoices Int      @map("min_choices")
+  maxChoices Int      @map("max_choices")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subjects Subject[]
+
+  @@unique([schoolId, id])
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@map("subject_choice_groups")
+}
+
+/// ADR-0038 — a student stream (Science, Humanities, Business), separate
+/// from the teaching departments HODs head. Set per enrollment, with an
+/// optional default on a class. School-wide, not session-scoped.
+model Stream {
+  id        String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId  String       @map("school_id") @db.Uuid
+  name      String       @db.VarChar(64)
+  code      String       @db.VarChar(16)
+  status    StreamStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  school        School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classGroups   ClassGroup[]
+  enrollments   StudentEnrollment[]
+  classSubjects ClassSubjectStream[]
+
+  @@unique([schoolId, id])
+  @@unique([schoolId, code])
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@map("streams")
+}
+
+/// ADR-0038 — an ELECTIVE offering's automatic streams. A student whose
+/// enrollment is in one of them is registered for it on enrollment, on a
+/// stream change, and when the stream is added here.
+model ClassSubjectStream {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  classSubjectId String   @map("class_subject_id") @db.Uuid
+  streamId       String   @map("stream_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  classSubject ClassSubject @relation(fields: [schoolId, classSubjectId], references: [schoolId, id], onDelete: Cascade)
+  stream       Stream       @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
+
+  @@unique([schoolId, classSubjectId, streamId])
+  @@index([schoolId])
+  @@index([schoolId, streamId])
+  @@map("class_subject_streams")
 }
 
 /// "Mathematics taught to SS2A in 2026/2027" (07 §6.6) — the future
@@ -1176,6 +1301,9 @@ model ClassSubject {
   subjectId         String             @map("subject_id") @db.Uuid
   academicSessionId String             @map("academic_session_id") @db.Uuid
   status            ClassSubjectStatus @default(ACTIVE)
+  /// ADR-0038: who is registered automatically. COMPULSORY registers every
+  /// student in the class; ELECTIVE registers nobody, and staff choose.
+  kind              ClassSubjectKind   @default(COMPULSORY)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -1190,6 +1318,10 @@ model ClassSubject {
   registrations      StudentSubjectRegistration[]
   // B11: ExamClass rows targeting this class+subject+session.
   examClasses        ExamClass[]
+  /// ADR-0038: on an ELECTIVE offering, the streams whose students are
+  /// registered automatically ("Physics for Science"). Empty means staff
+  /// choose every student.
+  streams            ClassSubjectStream[]
 
   @@unique([schoolId, classId, subjectId])
   // Composite-FK target for TeacherAssignment/StudentSubjectRegistration
@@ -1257,6 +1389,9 @@ model StudentEnrollment {
   studentProfileId  String                  @map("student_profile_id") @db.Uuid
   academicSessionId String                  @map("academic_session_id") @db.Uuid
   classId           String                  @map("class_id") @db.Uuid
+  /// ADR-0038: the student's stream for this session. Per enrollment, so
+  /// a change at SS1 → SS2 leaves last year's stream in history.
+  streamId          String?                 @map("stream_id") @db.Uuid
   startDate         DateTime                @map("start_date") @db.Date
   endDate           DateTime?               @map("end_date") @db.Date
   status            StudentEnrollmentStatus @default(ACTIVE)
@@ -1272,6 +1407,7 @@ model StudentEnrollment {
   /// live or historical enrollment still references it — backstops
   /// ClassGroupService.delete()'s own dependent-count check.
   classGroupSession       ClassGroup                   @relation(fields: [schoolId, classId, academicSessionId], references: [schoolId, id, academicSessionId], onDelete: Restrict)
+  stream                  Stream?                      @relation(fields: [schoolId, streamId], references: [schoolId, id], onDelete: Restrict)
   registrations           StudentSubjectRegistration[]
   rolloverSourceDecisions RolloverDecision[]           @relation("RolloverDecisionSourceEnrollment")
   // DoD item 9 ("a student cannot be enrolled twice concurrently in one
@@ -1291,6 +1427,7 @@ model StudentEnrollment {
   @@index([schoolId, classId])
   @@index([schoolId, academicSessionId])
   @@index([schoolId, status])
+  @@index([schoolId, streamId])
   @@map("student_enrollments")
 }
 
@@ -1336,6 +1473,32 @@ model TeacherAssignment {
 enum TeacherAssignmentStatus {
   ACTIVE
   ENDED
+}
+
+/// ADR-0038 amendment (2026-10-09) — a class's form teacher (Nigerian
+/// "form master/mistress"). An assignment, not a role: it lets a Teacher
+/// set the elective subjects of every student in that one arm. A class
+/// belongs to one session, so the assignment ends with it. Several form
+/// teachers per arm are allowed; "at most one ACTIVE row per (class,
+/// teacher)" is a partial unique index in the migration's raw SQL.
+model FormTeacherAssignment {
+  id               String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId         String                  @map("school_id") @db.Uuid
+  classId          String                  @map("class_id") @db.Uuid
+  teacherProfileId String                  @map("teacher_profile_id") @db.Uuid
+  status           TeacherAssignmentStatus @default(ACTIVE)
+  startDate        DateTime                @default(now()) @map("start_date") @db.Date
+  endDate          DateTime?               @map("end_date") @db.Date
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  classGroup     ClassGroup     @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
+  teacherProfile TeacherProfile @relation(fields: [schoolId, teacherProfileId], references: [schoolId, id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([schoolId, classId])
+  @@index([schoolId, teacherProfileId])
+  @@map("form_teacher_assignments")
 }
 
 /// ADR-0011 (Accepted, mandatory — resolves audit finding M-02). Keyed on
@@ -1432,17 +1595,20 @@ model RolloverDecision {
 }
 
 model RolloverClassDraft {
-  id             String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  schoolId       String     @map("school_id") @db.Uuid
-  rolloverPlanId String     @map("rollover_plan_id") @db.Uuid
-  sourceClassId  String     @map("source_class_id") @db.Uuid
-  departmentId   String?    @map("department_id") @db.Uuid
-  name           String     @db.VarChar(32)
-  level          ClassLevel
-  arm            String     @db.VarChar(16)
-  included       Boolean    @default(true)
-  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  schoolId        String     @map("school_id") @db.Uuid
+  rolloverPlanId  String     @map("rollover_plan_id") @db.Uuid
+  sourceClassId   String     @map("source_class_id") @db.Uuid
+  /// ADR-0038: no longer written; see `defaultStreamId`.
+  departmentId    String?    @map("department_id") @db.Uuid
+  /// ADR-0038: copied from the source class; the new class gets it.
+  defaultStreamId String?    @map("default_stream_id") @db.Uuid
+  name            String     @db.VarChar(32)
+  level           ClassLevel
+  arm             String     @db.VarChar(16)
+  included        Boolean    @default(true)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([schoolId, rolloverPlanId, sourceClassId])
   @@unique([schoolId, rolloverPlanId, id])
@@ -3107,6 +3273,9 @@ model ResultAdjustmentOperation {
   targetResultId       String? @map("target_result_id") @db.Uuid
   /// MANUAL_OVERRIDE only — the earned-marks value being set outright.
   overrideEarnedMarks  Int?    @map("override_earned_marks")
+  /// RECALCULATE only — "Grade now" (P2-21): touch only results that were
+  /// never graded, and grade them against the school's current scale.
+  ungradedOnly         Boolean @default(false) @map("ungraded_only")
 
   totalCount   Int @default(0) @map("total_count")
   appliedCount Int @default(0) @map("applied_count")

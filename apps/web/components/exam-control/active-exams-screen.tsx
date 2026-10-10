@@ -128,6 +128,7 @@ export function ActiveExamsScreen({
           columns={columns}
           rows={rows}
           getRowId={(row) => row.id}
+          getRowHref={(row) => examControlPath(basePath, row.id)}
           isLoading={exams.isPending}
           emptyState={
             <EmptyState

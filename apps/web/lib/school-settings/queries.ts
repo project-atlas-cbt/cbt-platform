@@ -33,6 +33,13 @@ export function useResultPolicy() {
   });
 }
 
+export function useAssessmentRules() {
+  return useQuery({
+    queryKey: ['school', 'assessment-rules'],
+    queryFn: () => unwrap(apiClient.GET('/school/assessment-rules', {})),
+  });
+}
+
 export function useSubscriptionStatus() {
   return useQuery({
     queryKey: ['school', 'subscription'],

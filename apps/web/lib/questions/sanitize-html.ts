@@ -11,10 +11,10 @@ import DOMPurify from 'dompurify';
  * directly.
  *
  * The allow-list mirrors `RichTextEditor`'s own enabled marks/nodes exactly
- * (bold/italic/underline/lists/paragraphs) — nothing this component can
+ * (bold/italic/underline/subscript/superscript/lists/paragraphs) — nothing this component can
  * produce is excluded, and nothing beyond it is admitted.
  */
-const ALLOWED_TAGS = ['p', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'br'];
+const ALLOWED_TAGS = ['p', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'br', 'sub', 'sup'];
 
 export function sanitizeQuestionHtml(html: string): string {
   if (typeof window === 'undefined') {

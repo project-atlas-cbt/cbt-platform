@@ -10,7 +10,7 @@ import {
 import { useExportQuestions } from '@/lib/questions/use-export-questions';
 import { useSubjects } from '@/lib/academics/queries';
 import { useHasPermission } from '@/lib/nav';
-import { useBulkSubmitQuestions } from '@/lib/questions/mutations';
+import { useBulkArchiveQuestions, useBulkSubmitQuestions } from '@/lib/questions/mutations';
 
 const replace = vi.fn();
 let params = new URLSearchParams();
@@ -23,7 +23,10 @@ vi.mock('@/lib/questions/queries', () => ({
   useQuestionsPaginated: vi.fn(),
   useAssignedSubjects: vi.fn(),
 }));
-vi.mock('@/lib/questions/mutations', () => ({ useBulkSubmitQuestions: vi.fn() }));
+vi.mock('@/lib/questions/mutations', () => ({
+  useBulkSubmitQuestions: vi.fn(),
+  useBulkArchiveQuestions: vi.fn(),
+}));
 vi.mock('@/lib/questions/use-export-questions', () => ({ useExportQuestions: vi.fn() }));
 vi.mock('@/lib/academics/queries', () => ({ useSubjects: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
@@ -35,6 +38,7 @@ const mockUseSubjects = vi.mocked(useSubjects);
 const mockUseAssignedSubjects = vi.mocked(useAssignedSubjects);
 const mockUseHasPermission = vi.mocked(useHasPermission);
 const mockUseBulkSubmitQuestions = vi.mocked(useBulkSubmitQuestions);
+const mockUseBulkArchiveQuestions = vi.mocked(useBulkArchiveQuestions);
 
 const QUESTIONS = [
   {
@@ -108,6 +112,10 @@ describe('QuestionBankScreen', () => {
     mockUseHasPermission.mockReturnValue(true);
     const mutateAsync = vi.fn().mockResolvedValue({ submitted: [], failed: [] });
     mockUseBulkSubmitQuestions.mockReturnValue({ mutateAsync, isPending: false } as never);
+    mockUseBulkArchiveQuestions.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue({ archived: [], failed: [] }),
+      isPending: false,
+    } as never);
   });
 
   it('shows a loading state', () => {
@@ -231,6 +239,16 @@ describe('QuestionBankScreen', () => {
     expect(screen.queryByRole('link', { name: /^import$/i })).not.toBeInTheDocument();
   });
 
+  it('hideCreate suppresses Create question for an HOD who also teaches (pilot feedback)', () => {
+    mockUseQuestionsPaginated.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { questions: [], total: 0, page: 1, pageSize: 25 },
+    } as never);
+    render(<QuestionBankScreen basePath="/hod/question-bank" hideImport hideCreate />);
+    expect(screen.queryByRole('link', { name: /create question/i })).not.toBeInTheDocument();
+  });
+
   // Gap-closure (found via live testing): the Subject filter shared TEACHER's
   // Question Editor bug — it called `useSubjects()`, denied to TEACHER,
   // degrading to an empty filter. `assignedSubjectsOnly` switches the source
@@ -276,14 +294,14 @@ describe('QuestionBankScreen', () => {
     expect(checkboxes[2]).toHaveAttribute('aria-label', expect.stringContaining('colleague'));
   });
 
-  it('F9 bulk submit: no selection strip outside the DRAFT tab', () => {
+  it('F9 bulk submit: no submit button outside the DRAFT tab (archive selection remains)', () => {
     mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
     render(<QuestionBankScreen basePath="/teacher/question-bank" />);
 
     expect(
       screen.queryByRole('button', { name: /submit selected for review/i }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /archive selected/i })).toBeInTheDocument();
   });
 
   it('F9 bulk submit: HOD / School Admin (no submitForReview grant) get no selection strips', () => {
@@ -318,7 +336,7 @@ describe('QuestionBankScreen', () => {
     expect(mutateAsync).toHaveBeenCalledWith(['q1', 'q2']);
     expect(screen.getByText(/2 questions submitted for review/i)).toBeInTheDocument();
     // Selection reseated after a successful submit.
-    expect(screen.getByText(/0 of 2 of your drafts selected/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 selected · 2 selectable/i)).toBeInTheDocument();
   });
 
   it('F9 bulk submit: partial failures are reported without blocking the batch', async () => {
@@ -368,7 +386,7 @@ describe('QuestionBankScreen', () => {
     const { rerender } = render(<QuestionBankScreen basePath="/teacher/question-bank" />);
 
     await user.click(screen.getAllByRole('checkbox')[0] as HTMLElement);
-    expect(screen.getByText(/1 of 2 of your drafts selected/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 selected · 2 selectable/i)).toBeInTheDocument();
 
     params.set('status', 'SUBMITTED');
     rerender(<QuestionBankScreen basePath="/teacher/question-bank" />);
@@ -378,7 +396,44 @@ describe('QuestionBankScreen', () => {
 
     params.set('status', 'DRAFT');
     rerender(<QuestionBankScreen basePath="/teacher/question-bank" />);
-    expect(screen.getByText(/0 of 2 of your drafts selected/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 selected · 2 selectable/i)).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')[0]).not.toBeChecked();
+  });
+
+  it('bulk archive: confirm step, one call with the selected ids, per-question failures reported', async () => {
+    const user = userEvent.setup();
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    const mutateAsync = vi.fn().mockResolvedValue({
+      archived: [{ questionId: 'q1' }],
+      failed: [{ questionId: 'q2', code: 'FORBIDDEN', message: 'Not yours to archive.' }],
+    });
+    mockUseBulkArchiveQuestions.mockReturnValue({ mutateAsync, isPending: false } as never);
+    params.set('status', 'APPROVED');
+    render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+
+    await user.click(screen.getByRole('button', { name: /select all on this page/i }));
+    await user.click(screen.getByRole('button', { name: /archive selected/i }));
+    // Nothing is sent until the dialog is confirmed.
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText(/archive 2 questions\?/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^archive$/i }));
+    expect(mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mutateAsync).toHaveBeenCalledWith(['q1', 'q2']);
+    expect(screen.getByText(/1 question archived/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 could not be archived/i)).toHaveTextContent('Not yours to archive.');
+  });
+
+  it('bulk archive: not offered on the Archived tab or without the permission', () => {
+    mockUseQuestionsPaginated.mockReturnValue(draftResult(MIXED_DRAFTS));
+    params.set('status', 'ARCHIVED');
+    const { unmount } = render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+    expect(screen.queryByRole('button', { name: /archive selected/i })).not.toBeInTheDocument();
+    unmount();
+
+    mockUseHasPermission.mockReturnValue(false);
+    params.set('status', 'APPROVED');
+    render(<QuestionBankScreen basePath="/teacher/question-bank" />);
+    expect(screen.queryByRole('button', { name: /archive selected/i })).not.toBeInTheDocument();
   });
 });

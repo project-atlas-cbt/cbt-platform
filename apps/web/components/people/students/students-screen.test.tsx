@@ -14,7 +14,15 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
   useSearchParams: () => params,
 }));
-vi.mock('@/lib/people/queries', () => ({ useStudentsPaginated: vi.fn() }));
+vi.mock('@/lib/people/queries', () => ({
+  useStudentsPaginated: vi.fn(),
+  useStudentPasswordlessSettings: () => ({
+    isPending: false,
+    isError: false,
+    data: { allStudents: false, classIds: [] },
+  }),
+}));
+vi.mock('./locked-out-panel', () => ({ LockedOutPanel: () => null }));
 vi.mock('@/lib/academics/queries', () => ({ useAcademicsContext: vi.fn(), useClasses: vi.fn() }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 
@@ -54,9 +62,10 @@ const STUDENTS = [
   {
     studentProfileId: 'sp1',
     displayName: 'Ada Okoye',
+    formalName: 'Okoye Ada',
     studentId: 'ST001',
     currentClassName: 'SS2A',
-    departmentName: 'Sciences',
+    streamName: 'Sciences',
     userStatus: 'ACTIVE',
   },
 ];
@@ -89,10 +98,10 @@ describe('StudentsScreen', () => {
     expect(screen.getByText('No students yet')).toBeInTheDocument();
   });
 
-  it('renders real rows with class, department, and status', () => {
+  it('renders real rows with class, stream, and status', () => {
     mockUseStudentsPaginated.mockReturnValue(result(STUDENTS) as never);
     renderWithClient(<StudentsScreen basePath="/school/people" />);
-    expect(screen.getByRole('link', { name: 'Ada Okoye' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Okoye Ada' })).toHaveAttribute(
       'href',
       '/school/people/students/sp1',
     );

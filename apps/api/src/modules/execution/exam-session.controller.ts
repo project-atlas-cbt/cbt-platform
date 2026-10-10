@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, HttpCode, HttpStatus, Param, Post, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
-import { Authorized } from '../authorization/decorators.js';
+import { Authorized, AuthorizedWrite } from '../authorization/decorators.js';
 import { actorFromAuthenticatedUser } from '../authorization/permission.guard.js';
 import { type AuthenticatedUser } from '../identity/auth.guard.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
@@ -53,7 +53,7 @@ export class ExamSessionController {
 
   @Post(':id/reopen')
   @HttpCode(HttpStatus.OK)
-  @Authorized('exam.reopen')
+  @AuthorizedWrite('exam.reopen')
   @ApiOperation({ summary: 'Reopen this session for new starts (ADR-0009).' })
   @ApiOkResponse({ type: ExamSessionResponseDto })
   async reopen(

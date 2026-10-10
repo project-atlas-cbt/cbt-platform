@@ -2,7 +2,7 @@
 
 This directory holds the project's ADRs.
 
-**Status: 33 of 33 decided and accepted (2026-08-24).** All gates are resolved. Implementation may begin at `B0`. Later decisions, outside the gates: [ADR-0034](./ADR-0034-public-marketing-site.md) (2026-10-04), [ADR-0035](./ADR-0035-in-app-help.md) (2026-10-05) and [ADR-0036](./ADR-0036-platform-system-configuration.md) (2026-10-05).
+**Status: 33 of 33 decided and accepted (2026-08-24).** All gates are resolved. Implementation may begin at `B0`. Later decisions, outside the gates: [ADR-0034](./ADR-0034-public-marketing-site.md) (2026-10-04), [ADR-0035](./ADR-0035-in-app-help.md) (2026-10-05) [ADR-0036](./ADR-0036-platform-system-configuration.md) (2026-10-05) [ADR-0037](./ADR-0037-exam-visibility-own-exams.md) (2026-10-08), [ADR-0038](./ADR-0038-subjects-streams-departments.md) (2026-10-08) and [ADR-0039](./ADR-0039-person-names-register-order.md) (2026-10-09).
 
 Two carry conditions: [ADR-0028](./ADR-0028-data-protection-and-retention.md)'s retention schedule was formalised in B20 with its legal review carried to B23 as a launch-readiness item (2026-10-02 amendment), and [ADR-0032](./ADR-0032-aws-region.md)'s region was measured at B21: `af-south-1` was faster than `eu-west-1` from the one Nigerian connection probed, meeting the ADR's revisit condition, so the region is the project owner's decision at B23 (2026-10-03 amendment).
 
@@ -81,11 +81,14 @@ Unblocks `B11`–`B14`. The highest-integrity subsystem.
 
 ## After the gates
 
-| ADR                                                 | Decision             | Outcome                                                                                  |
-| --------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------- |
-| [0034](./ADR-0034-public-marketing-site.md)         | Marketing site       | Separate static `apps/marketing` on the root domain; no platform coupling; leads emailed |
-| [0035](./ADR-0035-in-app-help.md)                   | In-app help          | Role-tailored task guides in each staff workspace, filtered by permission; no AI agent   |
-| [0036](./ADR-0036-platform-system-configuration.md) | System Configuration | Ops and sign-in settings editable by Software Admin; env stays the default; audited      |
+| ADR                                                 | Decision             | Outcome                                                                                     |
+| --------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
+| [0034](./ADR-0034-public-marketing-site.md)         | Marketing site       | Separate static `apps/marketing` on the root domain; no platform coupling; leads emailed    |
+| [0035](./ADR-0035-in-app-help.md)                   | In-app help          | Role-tailored task guides in each staff workspace, filtered by permission; no AI agent      |
+| [0036](./ADR-0036-platform-system-configuration.md) | System Configuration | Ops and sign-in settings editable by Software Admin; env stays the default; audited         |
+| [0037](./ADR-0037-exam-visibility-own-exams.md)     | Exam visibility      | A teacher sees only exams they created or were delegated; HOD sees their department         |
+| [0038](./ADR-0038-subjects-streams-departments.md)  | Subjects and streams | Compulsory/elective offerings, choice rules that warn, streams, teaching departments        |
+| [0039](./ADR-0039-person-names-register-order.md)   | Person names         | Optional middle name, register order (Surname First Middle), A to Z lists, number-order IDs |
 
 ---
 

@@ -18,6 +18,7 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
       steps: [
         'After activating with the emailed key, sign in. The setup steps open by themselves.',
         'Work through them in order: profile, branding, academic session, terms, departments, classes, subjects, staff, students. **Skip for now** leaves an optional step for later.',
+        'On **Departments**, **Use standard setup** adds Science, Business and Humanities, matching streams and the usual subjects, which you can untick first.',
         'Review the summary and press **Complete Setup**. You need a current session and at least one class.',
       ],
       notes: [
@@ -25,6 +26,24 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
         'Before the first real exam, run a short practice exam in the lab with one class.',
       ],
       related: ['classes-and-subjects', 'add-teachers', 'add-students'],
+    },
+    {
+      id: 'review-without-hod',
+      title: 'Review questions that have no HOD',
+      summary: 'Approve or send back questions no HOD can review.',
+      area: 'questions',
+      keywords: ['review', 'approve', 'no hod', 'question review', 'fallback', 'pending'],
+      requires: ['questionBank.approve'],
+      steps: [
+        'Open **Question Review**. It lists only the questions no HOD can review, and why.',
+        'Press **Open review**, then **Approve**, **Reject** or **Request changes**, as an HOD would.',
+      ],
+      notes: [
+        'A question comes to you when its subject has no department, its department has no HOD, or the department’s only HOD wrote it.',
+        'To send future questions to an HOD, give the subject a department on **Academics › Subjects**, or make someone the department’s HOD.',
+      ],
+      screen: { label: 'Question Review', href: 'question-review' },
+      related: ['standard-setup', 'make-hod'],
     },
     {
       id: 'school-profile',
@@ -53,11 +72,39 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
       steps: [
         'Open **School Settings**, then **Results**.',
         'Choose **Who releases results by default** and **What students see once a result is released**.',
-        'Tick **Lock this policy** if teachers must not change it on their own exams.',
+        'Tick **Lock these settings** if teachers must not change either setting on their own exams. While locked, every exam follows the school’s settings, including exams made before you locked them.',
         'Press **Save result policy**.',
       ],
       screen: { label: 'Result settings', href: 'settings/results' },
       related: ['publish-results', 'grading-scale'],
+    },
+    {
+      id: 'exam-defaults',
+      title: 'Set the default rules for new exams',
+      summary:
+        'Choose the duration, attempts, navigation and shuffling every new exam starts with.',
+      area: 'setup',
+      keywords: [
+        'assessment rules',
+        'default',
+        'duration',
+        'attempts',
+        'navigation',
+        'shuffle',
+        'randomize',
+      ],
+      requires: ['schoolConfig.settings.manage'],
+      steps: [
+        'Open **School Settings**, then **Assessment Rules**.',
+        'Enter the **Duration (minutes)** and **Number of attempts**, choose the **Question navigation**, and tick the randomization options you want.',
+        'Press **Save assessment rules**.',
+      ],
+      notes: [
+        'These are starting values only. Teachers can still change each rule on their own exam before it is ready.',
+        'Exams already created keep their own rules.',
+      ],
+      screen: { label: 'Assessment Rules', href: 'settings/assessment' },
+      related: ['result-policy'],
     },
     {
       id: 'grading-scale',
@@ -74,7 +121,8 @@ export const SCHOOL_ADMIN_GUIDES: RoleGuideSet = {
         'If a class level grades differently, choose it under **Scale for** and press **Give … its own scale**, then edit and save. Other levels keep using the school-wide scale.',
       ],
       notes: [
-        'Set the bands before the first exam is marked. A grade is worked out once, when a result is finalised, so results finalised with no scale stay **Ungraded** and have no pass rate.',
+        'Set the bands before the first exam is marked. A grade is worked out once, when a result is finalised, so results finalised with no scale show **Ungraded** and have no pass rate.',
+        'If results came out **Ungraded** because the bands were not set yet, set them, then open that exam under **Results** and press **Grade now**. Only the ungraded results are graded, with the bands in place now; results that already have a grade keep it. A result is graded only when there are bands for its class level or for the whole school; any other stays ungraded until you add them.',
         'Saving creates a new version. Grades already given never change; only results finalised afterwards use the new bands. **Version history** shows which versions have been used for grades.',
         'Once a class level has its own scale it can be changed but not removed.',
       ],

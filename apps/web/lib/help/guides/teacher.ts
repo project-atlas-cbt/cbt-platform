@@ -51,7 +51,10 @@ export const TEACHER_GUIDES: RoleGuideSet = {
         'Rows that need attention are listed with the reason. Press **Download error file** to fix them in your spreadsheet.',
         'Press the **Import … valid rows** button to add the rows that passed. They arrive as drafts for you to submit for review.',
       ],
-      notes: ['A checked file is held for 24 hours. After that, upload it again.'],
+      notes: [
+        'A checked file is held for 24 hours. After that, upload it again.',
+        'In Excel, format the option columns as **Text** before you type, so an answer like 1/2 is not changed into a date.',
+      ],
       screen: { label: 'Import questions', href: 'question-bank/import' },
       related: ['write-a-question'],
     },
@@ -100,7 +103,7 @@ export const TEACHER_GUIDES: RoleGuideSet = {
         'Open **Exams** and press **New exam**.',
         '**Details**: choose the session, term, subject and classes, and give the exam a title and type (for example CA or Examination). Press **Continue to Questions**.',
         '**Questions**: add approved questions from the bank on the left and set their marks. Press **Save selection**, then **Continue to Rules**.',
-        '**Rules**: set the duration, number of attempts, question navigation, shuffling, who can start, and how results are released. Press **Save rules**, then **Continue to Review**.',
+        '**Rules**: set the duration, number of attempts, question navigation, shuffling, who can start, and how results are released. If your school has locked its result settings, you can’t change how results are released or what students see. Press **Save rules**, then **Continue to Review**.',
         '**Review**: work through the readiness checklist. **Save as Ready** works once every item passes.',
       ],
       notes: [
@@ -126,7 +129,11 @@ export const TEACHER_GUIDES: RoleGuideSet = {
         'Under **Delegated administrators**, press **Add delegate**.',
         'Search for the teacher by name or staff ID, choose them and press **Add delegate**.',
       ],
-      notes: ['Press **Revoke** on their row to take control back.'],
+      notes: [
+        'The exam then shows under their **Exam Control**. They cannot edit it or see its results.',
+        'Other teachers do not see your exams, even if they teach the same class and subject.',
+        'Press **Revoke** on their row to take control back.',
+      ],
       screen: { label: 'Exam Control', href: 'exam-control' },
       related: ['run-a-sitting'],
     },
@@ -143,7 +150,7 @@ export const TEACHER_GUIDES: RoleGuideSet = {
         'If you release results yourself, press **Publish results**. Every result for the exam is released except those withheld.',
       ],
       notes: [
-        'Your school’s result policy decides who releases results. If it is locked, the publish button may be refused.',
+        'Your school’s result policy decides who releases results. If the school has locked it, you can’t publish, unpublish or withhold results yourself.',
         '**Unpublish** takes results back from students and asks for a reason.',
       ],
       screen: { label: 'Results', href: 'results' },
@@ -166,6 +173,27 @@ export const TEACHER_GUIDES: RoleGuideSet = {
       ],
       screen: { label: 'Results', href: 'results' },
       related: ['publish-results'],
+    },
+    {
+      id: 'set-student-electives',
+      title: 'Choose who takes your elective',
+      summary:
+        'Tick the students who take an elective you teach, or every elective of your form class.',
+      area: 'academics',
+      keywords: ['elective', 'register', 'subject registration', 'form teacher', 'form class'],
+      requires: ['registrations.manage'],
+      steps: [
+        'Open **My Classes** and choose the class.',
+        'Under **Subject registrations**, pick the subject and tick the students who take it. Search finds a student by name or student ID.',
+        'Press **Save**.',
+      ],
+      notes: [
+        'You see the electives you teach in that class. A form teacher sees every elective of their form class.',
+        'Compulsory subjects are set by the school office, not here.',
+        'Changes apply to future exams only.',
+      ],
+      screen: { label: 'My Classes', href: 'my-classes' },
+      related: [],
     },
     {
       id: 'export-results',

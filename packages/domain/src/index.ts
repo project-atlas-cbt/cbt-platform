@@ -59,8 +59,11 @@ export {
 export {
   RESULT_POLICIES,
   RESULT_DETAIL_VISIBILITIES,
+  effectiveResultSettings,
   type ResultPolicy,
   type ResultDetailVisibility,
+  type SchoolResultSettings,
+  type ExamResultSettings,
 } from './platform/result-policy.js';
 export {
   derivePalette,
@@ -77,24 +80,45 @@ export {
   ACADEMIC_SESSION_STATUSES,
   ACADEMIC_TERM_STATUSES,
   DEPARTMENT_STATUSES,
+  STREAM_STATUSES,
   CLASS_LEVELS,
   CLASS_GROUP_STATUSES,
   SUBJECT_STATUSES,
   CLASS_SUBJECT_STATUSES,
+  CLASS_SUBJECT_KINDS,
   HOD_ASSIGNMENT_STATUSES,
   ROLLOVER_PLAN_STATUSES,
   ROLLOVER_OUTCOMES,
   type AcademicSessionStatus,
   type AcademicTermStatus,
   type DepartmentStatus,
+  type StreamStatus,
   type ClassLevel,
   type ClassGroupStatus,
   type SubjectStatus,
   type ClassSubjectStatus,
+  type ClassSubjectKind,
   type HODAssignmentStatus,
   type RolloverPlanStatus,
   type RolloverOutcome,
 } from './academics/constants.js';
+export {
+  choiceGroupWarnings,
+  describeRule,
+  type ChoiceGroupRule,
+  type ChoiceGroupWarning,
+} from './academics/choice-rules.js';
+export {
+  STANDARD_CHOICE_GROUPS,
+  STANDARD_DEPARTMENTS,
+  STANDARD_STREAMS,
+  STANDARD_SUBJECTS,
+  type StandardChoiceGroup,
+  type StandardDepartment,
+  type StandardSetupStage,
+  type StandardStream,
+  type StandardSubject,
+} from './academics/standard-setup.js';
 export {
   USER_STATUSES,
   STUDENT_PROFILE_STATUSES,
@@ -124,6 +148,8 @@ export {
   QUESTION_DIFFICULTIES,
   QUESTION_REVISION_STATUSES,
   QUESTION_REVIEW_DECISIONS,
+  QUESTION_REVIEW_FALLBACK_REASONS,
+  type QuestionReviewFallbackReason,
   type QuestionType,
   type QuestionDifficulty,
   type QuestionRevisionStatus,
@@ -162,6 +188,8 @@ export {
   type AttemptAnswerState,
   type AttemptEventType,
   type AttemptQuestionCorrectness,
+  MAX_EXAM_DURATION_SECONDS,
+  MAX_EXAM_ATTEMPT_LIMIT,
 } from './exams/constants.js';
 export {
   CANONICAL_AUDIT_ACTIONS,
@@ -257,3 +285,12 @@ export {
   type RetentionRule,
   type RetentionAction,
 } from './compliance/retention.js';
+export {
+  formalName,
+  naturalName,
+  normaliseMiddleName,
+  compareText,
+  comparePersonNames,
+  sortByPersonName,
+  type PersonNameParts,
+} from './people/names.js';

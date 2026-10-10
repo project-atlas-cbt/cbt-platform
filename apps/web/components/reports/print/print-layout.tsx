@@ -7,10 +7,6 @@ import { Button } from '@/components/ui/button';
 import { useTenant } from '@/lib/tenant';
 import { useAuth } from '@/lib/auth';
 
-// Same source as app-shell.tsx: the product name is configuration, never
-// hardcoded (the internal codename is not a commercial name).
-const PRODUCT_NAME = process.env.NEXT_PUBLIC_PRODUCT_NAME ?? 'CBT Platform';
-
 export interface PrintLayoutProps {
   title: string;
   subtitle?: string;
@@ -22,14 +18,18 @@ export function PrintLayout({ title, subtitle, children }: PrintLayoutProps) {
   const { school } = useTenant();
   const { me } = useAuth();
 
+  // P2-24: the school's own time, whatever the printing PC's clock says.
+  const timeZone = school?.timezone ? { timeZone: school.timezone } : {};
   const generatedDate = new Date().toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    ...timeZone,
   });
   const generatedTime = new Date().toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
+    ...timeZone,
   });
 
   return (
@@ -131,7 +131,8 @@ export function PrintLayout({ title, subtitle, children }: PrintLayoutProps) {
             </div>
 
             <div className="flex items-center justify-between text-[11px] text-black/60 border-t border-black/10 pt-3">
-              <span>{PRODUCT_NAME}</span>
+              {/* The school's document: its name, never the product's (Haneef, 2026-10-09). */}
+              <span>{school?.name ?? ''}</span>
               <span>Official Academic Record</span>
             </div>
           </div>

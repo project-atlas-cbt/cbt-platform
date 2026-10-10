@@ -153,7 +153,7 @@ export function ModeratorDashboard() {
       {/* Actionable Workspaces Quick Access */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link
-          href="/moderator/people/assignments"
+          href="/moderator/people/teachers"
           className="group rounded-lg border border-border bg-surface p-4 transition-colors hover:border-brand-primary/50"
         >
           <div className="flex items-center gap-2.5 text-brand-primary">

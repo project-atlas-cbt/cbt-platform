@@ -11,12 +11,18 @@ import {
 } from '@/lib/academics/mutations';
 import { useHasPermission } from '@/lib/nav';
 
-vi.mock('@/lib/academics/queries', () => ({ useDepartments: vi.fn(), useSubjects: vi.fn() }));
+vi.mock('@/lib/academics/queries', () => ({
+  useDepartments: vi.fn(),
+  useSubjects: vi.fn(),
+  useSubjectChoiceGroups: () => ({ data: { choiceGroups: [] }, isPending: false, isError: false }),
+}));
 vi.mock('@/lib/onboarding/mutations', () => ({ useCreateSubject: vi.fn() }));
 vi.mock('@/lib/academics/mutations', () => ({
   useDeactivateSubject: vi.fn(),
   useDeleteSubject: vi.fn(),
   useUpdateSubject: vi.fn(),
+  useCreateChoiceGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteChoiceGroup: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 
@@ -101,6 +107,18 @@ describe('SubjectsScreen', () => {
     expect(within(screen.getByRole('table')).getByText('Mathematics')).toBeInTheDocument();
   });
 
+  it('warns about a subject with no department: the School Admin reviews it (ADR-0038)', () => {
+    mockUseSubjects.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { subjects: SUBJECTS },
+    } as never);
+    render(<SubjectsScreen />);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /Mathematics has no department, so the School Admin reviews its questions/,
+    );
+  });
+
   it('the create form reflects ADR-0001: a department picker with the review-scope help text (exit criterion)', async () => {
     mockUseSubjects.mockReturnValue({
       isPending: false,
@@ -111,7 +129,7 @@ describe('SubjectsScreen', () => {
     await userEvent.click(screen.getAllByRole('button', { name: /add subject/i })[0]!);
     expect(screen.getByText(/department \(optional\)/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/falls outside every hod.s automatic review scope/i),
+      screen.getByText(/without a\s+department, the school admin reviews its questions/i),
     ).toBeInTheDocument();
   });
 

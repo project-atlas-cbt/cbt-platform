@@ -826,6 +826,44 @@ describe('B11 Exam Builder & Readiness', () => {
     expect(getRes.statusCode).toBe(404);
   });
 
+  it("Assessment Rules (05 §58): a new exam starts from the school's defaults", async () => {
+    const defaults = {
+      defaultExamDurationSeconds: 2400,
+      defaultAttemptLimit: 2,
+      defaultNavigationPolicy: 'SEQUENTIAL_NO_REVISIT',
+      defaultRandomizeQuestions: true,
+      defaultRandomizeOptions: true,
+    };
+    expect((await put(admin, '/school/assessment-rules', defaults)).statusCode).toBe(200);
+    try {
+      const res = await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'Seeded from school defaults',
+        examType: 'Mock Examination',
+        classIds: [classAId],
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({
+        durationSeconds: 2400,
+        attemptLimit: 2,
+        navigationPolicy: 'SEQUENTIAL_NO_REVISIT',
+        randomizeQuestions: true,
+        randomizeOptions: true,
+      });
+    } finally {
+      // Later tests rely on a new exam starting with no duration.
+      await put(admin, '/school/assessment-rules', {
+        defaultExamDurationSeconds: null,
+        defaultAttemptLimit: 1,
+        defaultNavigationPolicy: 'FREE',
+        defaultRandomizeQuestions: false,
+        defaultRandomizeOptions: false,
+      });
+    }
+  });
+
   it('DoD 10: cross-tenant — a revision id from a different school cannot be bound (NOT_FOUND, never FORBIDDEN)', async () => {
     const otherSchool = await createSchool();
     createdSchoolIds.push(otherSchool.id);
@@ -865,6 +903,115 @@ describe('B11 Exam Builder & Readiness', () => {
       questions: [{ questionRevisionId: foreignRevisionId }],
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("bug audit P1-8: a draft cannot be moved to classes or a department outside the editor's scope", async () => {
+    const created = await post(teacher, '/exams', {
+      academicSessionId: sessionId,
+      academicTermId: termId,
+      subjectId: mathSubjectId,
+      title: 'Retarget fixture',
+      examType: 'Mock Examination',
+      classIds: [classAId],
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json<{ id: string }>().id;
+    const code = (res: { json: <T>() => T }) => res.json<{ error: { code: string } }>().error.code;
+
+    // A teacher: only to classes they teach, as at create().
+    const toSs1 = await patch(teacher, `/exams/${id}`, { classIds: [classDId] });
+    expect(code(toSs1)).toBe('EXAM_OUT_OF_SCOPE');
+    const toUntaught = await patch(teacher, `/exams/${id}`, { classIds: [classBId] });
+    expect(code(toUntaught)).toBe('EXAM_OUT_OF_SCOPE');
+    const kept = await patch(teacher, `/exams/${id}`, { classIds: [classAId, classBId] });
+    expect(kept.statusCode).toBe(200);
+
+    // An HOD: not into another department's subject.
+    const otherDeptId = (
+      await post(admin, '/academics/departments', {
+        name: `Arts ${randomUUID().slice(0, 6)}`,
+        code: `ART-${randomUUID().slice(0, 6)}`,
+      })
+    ).json<{ id: string }>().id;
+    const englishId = (
+      await post(admin, '/academics/subjects', {
+        name: `English ${randomUUID().slice(0, 6)}`,
+        code: `ENG-${randomUUID().slice(0, 6)}`,
+      })
+    ).json<{ id: string }>().id;
+    await patch(admin, `/academics/subjects/${englishId}`, { departmentId: otherDeptId });
+    await post(admin, `/academics/classes/${classAId}/subjects`, { subjectId: englishId });
+    const hodMove = await patch(hod, `/exams/${id}`, {
+      subjectId: englishId,
+      classIds: [classAId],
+    });
+    expect(code(hodMove)).toBe('EXAM_OUT_OF_SCOPE');
+    const teacherMove = await patch(teacher, `/exams/${id}`, {
+      subjectId: englishId,
+      classIds: [classAId],
+    });
+    expect(code(teacherMove)).toBe('EXAM_OUT_OF_SCOPE');
+
+    // School Admin holds every draft by school scope.
+    const adminMove = await patch(admin, `/exams/${id}`, {
+      subjectId: englishId,
+      classIds: [classAId],
+    });
+    expect(adminMove.statusCode).toBe(200);
+  });
+
+  it('bug audit P2-5: a question under revision stays bindable as its approved revision, and one question cannot be bound twice', async () => {
+    const created = (
+      await post(teacher, '/questions', {
+        subjectId: mathSubjectId,
+        level: 'SS2',
+        questionType: 'SINGLE_CHOICE',
+        content: `What is 9 - 4? ${randomUUID().slice(0, 6)}`,
+        difficulty: 'EASY',
+        marks: 1,
+        options: [
+          { content: '5', correctFlag: true },
+          { content: '4', correctFlag: false },
+        ],
+      })
+    ).json<{ id: string; revisions: { id: string }[] }>();
+    const firstRev = created.revisions[0]!.id;
+    await post(teacher, `/questions/${created.id}/revisions/${firstRev}/submit`);
+    expect((await post(hod, `/reviews/questions/${created.id}/approve`, {})).statusCode).toBe(200);
+    const secondRev = (
+      await post(teacher, `/questions/${created.id}/revisions`, { content: 'What is 9 - 4 now?' })
+    ).json<{ id: string }>().id;
+
+    const exam = (
+      await post(teacher, '/exams', {
+        academicSessionId: sessionId,
+        academicTermId: termId,
+        subjectId: mathSubjectId,
+        title: 'Revision binding fixture',
+        examType: 'Mock Examination',
+        classIds: [classAId],
+      })
+    ).json<{ id: string }>();
+    const available = await get(teacher, `/exams/${exam.id}/available-questions?pageSize=100`);
+    const row = available
+      .json<{ questions: { id: string; currentRevisionId: string }[] }>()
+      .questions.find((q) => q.id === created.id);
+    expect(row?.currentRevisionId).toBe(firstRev);
+
+    await post(teacher, `/questions/${created.id}/revisions/${secondRev}/submit`);
+    await post(hod, `/reviews/questions/${created.id}/approve`, {});
+    const both = await put(teacher, `/exams/${exam.id}/questions`, {
+      questions: [{ questionRevisionId: firstRev }, { questionRevisionId: secondRev }],
+    });
+    expect(both.statusCode).toBe(400);
+    expect(both.json<{ error: { code: string } }>().error.code).toBe('VALIDATION_ERROR');
+
+    // P3-7: an absurd duration or attempt limit is a validation error, not a 500.
+    const huge = await put(teacher, `/exams/${exam.id}/configuration`, {
+      durationSeconds: 10_000_000_000,
+      attemptLimit: 10_000_000_000,
+    });
+    expect(huge.statusCode).toBe(400);
   });
 
   it('concurrency: two simultaneous ready() calls on one DRAFT exam — exactly one succeeds', async () => {

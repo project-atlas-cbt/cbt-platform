@@ -34,7 +34,9 @@ describe('GlobalSearch', () => {
   it('renders trigger button for staff roles', () => {
     renderWithClient(<GlobalSearch role="TEACHER" />);
     expect(screen.getByTestId('global-search-trigger')).toBeInTheDocument();
-    expect(screen.getByText(/Search\.\.\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Search students, exams, questions/i)).toBeInTheDocument();
+    // The shortcut is listed on Help, not printed in the box.
+    expect(screen.queryByText(/⌘K|Ctrl\+K/)).toBeNull();
   });
 
   it('opens SearchDialog when clicked', async () => {

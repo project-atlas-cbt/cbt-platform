@@ -4,6 +4,8 @@ export interface AuthCardProps {
   eyebrow?: ReactNode;
   title: string;
   description?: string;
+  /** Below the form, at the foot of the page (the school sign-in's "Powered by" credit). */
+  footer?: ReactNode;
   children: ReactNode;
 }
 
@@ -15,7 +17,7 @@ export interface AuthCardProps {
  * "Shadows": reserve elevation for things that are actually elevated) —
  * this is a full-page task, not a panel floating over other content.
  */
-export function AuthCard({ eyebrow, title, description, children }: AuthCardProps) {
+export function AuthCard({ eyebrow, title, description, footer, children }: AuthCardProps) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm space-y-6">
@@ -26,6 +28,7 @@ export function AuthCard({ eyebrow, title, description, children }: AuthCardProp
         </div>
         {children}
       </div>
+      {footer ? <div className="mt-12">{footer}</div> : null}
     </main>
   );
 }

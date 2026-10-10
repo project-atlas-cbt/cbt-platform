@@ -2,6 +2,7 @@ import { apiClient, unwrap } from '@/lib/api';
 import { getAttemptDb, type OutboxRow } from './db';
 import { getDeviceId } from './device-id';
 import { connectivityStore } from './connectivity-store';
+import { anchorServerClock } from './server-clock';
 
 /**
  * F13 — the integrity-signal / heartbeat outbox (ADR-0020). Physically
@@ -39,14 +40,18 @@ export function recordAttemptEvent(attemptId: string, eventType: AttemptEventTyp
  * `connectivity-store.ts`'s own doc comment): its outcome, not
  * `navigator.onLine`, is what the connection banner actually reflects. */
 export async function sendHeartbeat(attemptId: string): Promise<boolean> {
+  const sentAt = performance.now();
   try {
-    await unwrap(
+    const response = await unwrap(
       apiClient.POST('/attempts/{id}/heartbeat', {
         params: { path: { id: attemptId } },
         headers: { 'X-Device-Id': getDeviceId() },
       }),
     );
     connectivityStore.reportSuccess();
+    // Audit P1-5: every heartbeat re-anchors the exam clock to the server's
+    // (a server older than this field sends none; the last anchor stands).
+    if (response.serverTime) anchorServerClock(response.serverTime, sentAt);
     return true;
   } catch {
     connectivityStore.reportFailure();

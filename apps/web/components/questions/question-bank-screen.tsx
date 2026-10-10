@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { BookOpen, Download, Plus, Upload, XCircle } from 'lucide-react';
+import { Archive, BookOpen, Download, Plus, Upload, XCircle } from 'lucide-react';
 import {
   CLASS_LEVELS,
   QUESTION_DIFFICULTIES,
@@ -16,7 +16,16 @@ import { Label } from '@/components/ui/label';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -31,7 +40,12 @@ import {
   useQuestionCounts,
   useQuestionsPaginated,
 } from '@/lib/questions/queries';
-import { useBulkSubmitQuestions, type BulkSubmitResult } from '@/lib/questions/mutations';
+import {
+  useBulkArchiveQuestions,
+  useBulkSubmitQuestions,
+  type BulkArchiveResult,
+  type BulkSubmitResult,
+} from '@/lib/questions/mutations';
 import { useExportQuestions } from '@/lib/questions/use-export-questions';
 import { QuestionStatusBadge } from './question-status-badge';
 import { QuestionStatusTabs } from './question-status-tabs';
@@ -93,6 +107,13 @@ interface QuestionRow {
  * closing it) — recorded again here as Candidate/Deferred, not silently
  * dropped.
  *
+ * `hideCreate` (pilot feedback, 2026-10-08): the same reasoning for Create
+ * question. HOD and School Admin are denied `questionBank.create`, but a
+ * member who also teaches holds it through the TEACHER role, so the button
+ * showed in the HOD workspace and led to a `basePath/new` route that only
+ * exists under `/teacher/question-bank`. Authoring stays in the Teacher
+ * workspace.
+ *
  * `assignedSubjectsOnly` (gap closure, found via live testing): the Subject
  * *filter* dropdown had the identical root cause as F9's Subject-picker bug
  * — it called `useSubjects()` (`schoolConfig.subject.view`), denied to
@@ -109,11 +130,13 @@ export function QuestionBankScreen({
   basePath,
   pinnedStatus,
   hideImport = false,
+  hideCreate = false,
   assignedSubjectsOnly = false,
 }: {
   basePath: string;
   pinnedStatus?: string;
   hideImport?: boolean;
+  hideCreate?: boolean;
   assignedSubjectsOnly?: boolean;
 }) {
   const router = useRouter();
@@ -124,34 +147,47 @@ export function QuestionBankScreen({
   const level = searchParams.get('level') ?? '';
   const difficulty = searchParams.get('difficulty') ?? '';
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
 
-  const canCreate = useHasPermission('questionBank.create');
+  const canCreate = useHasPermission('questionBank.create') && !hideCreate;
   const canImport = useHasPermission('questionBank.import');
   const canExport = useHasPermission('questionBank.export');
   const canSubmitForReview = useHasPermission('questionBank.submitForReview');
+  const canArchive = useHasPermission('questionBank.archive');
 
   // F9 — best-effort bulk "submit for review" (04 §38, user instruction
   // 2026-09 — "submit valid ones, report the rest"): only shown on the
   // DRAFT tab and only for callers holding `questionBank.submitForReview`
   // (TEACHER-only — `granted('OWNED')`, denied to HOD / School Admin).
   const bulkSubmit = useBulkSubmitQuestions();
-  const bulkMode = Boolean(canSubmitForReview) && status === 'DRAFT';
+  const bulkArchive = useBulkArchiveQuestions();
+  const submitMode = Boolean(canSubmitForReview) && status === 'DRAFT';
+  // Bulk archive (2026-10-08): available on every tab except Archived to any
+  // role holding `questionBank.archive`; the server re-checks each question.
+  const archiveMode = Boolean(canArchive) && status !== 'ARCHIVED';
+  const bulkMode = submitMode || archiveMode;
+  // A caller who can submit for review is a teacher, whose archive scope is
+  // OWNED too — so only own rows are selectable. HOD/School Admin can select
+  // any row; the server still decides per question.
+  const ownOnly = Boolean(canSubmitForReview);
+  const [archiveResult, setArchiveResult] = useState<BulkArchiveResult | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [bulkResult, setBulkResult] = useState<BulkSubmitResult | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
 
-  // Leaving the DRAFT tab reseats the selection/result state. Done via the
+  // Changing tab (or leaving bulk mode) reseats the selection/result state. Done via the
   // "adjust state during render" pattern (rather than an effect, which the
   // `react-hooks/set-state-in-effect` rule forbids) so a tab change can never
   // carry a half-remembered selection into a later visit of the DRAFT tab.
-  const [prevBulkMode, setPrevBulkMode] = useState(bulkMode);
-  if (prevBulkMode !== bulkMode) {
-    setPrevBulkMode(bulkMode);
-    if (!bulkMode) {
-      setSelectedIds(new Set());
-      setBulkResult(null);
-      setBulkError(null);
-    }
+  const selectionKey = `${bulkMode}:${status ?? ''}`;
+  const [prevSelectionKey, setPrevSelectionKey] = useState(selectionKey);
+  if (prevSelectionKey !== selectionKey) {
+    setPrevSelectionKey(selectionKey);
+    setSelectedIds(new Set());
+    setBulkResult(null);
+    setBulkError(null);
+    setArchiveResult(null);
   }
 
   // Exactly one of these two is ever `enabled` — see `assignedSubjectsOnly`'s
@@ -183,23 +219,26 @@ export function QuestionBankScreen({
     const difficultyValue = difficulty ? asDifficulty(difficulty) : undefined;
     return {
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
       ...(statusValue ? { status: statusValue } : {}),
       ...(subjectId ? { subjectId } : {}),
       ...(levelValue ? { level: levelValue } : {}),
       ...(difficultyValue ? { difficulty: difficultyValue } : {}),
     };
-  }, [page, status, subjectId, level, difficulty]);
+  }, [page, pageSize, status, subjectId, level, difficulty]);
 
   const questions = useQuestionsPaginated(filters);
   const rows: QuestionRow[] = questions.data?.questions ?? [];
-  const pageCount = Math.max(1, Math.ceil((questions.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((questions.data?.total ?? 0) / pageSize));
 
-  const selectableRows = rows.filter((row) => row.mine);
+  const selectableRows = ownOnly ? rows.filter((row) => row.mine) : rows;
   const allSelectableSelected =
     selectableRows.length > 0 && selectableRows.every((row) => selectedIds.has(row.id));
   const failedReasons = bulkResult
     ? Array.from(new Set(bulkResult.failed.map((failure) => failure.message)))
+    : [];
+  const archiveFailedReasons = archiveResult
+    ? Array.from(new Set(archiveResult.failed.map((failure) => failure.message)))
     : [];
 
   function toggleSelect(id: string, checked: boolean) {
@@ -228,12 +267,31 @@ export function QuestionBankScreen({
     if (ids.length === 0) return;
     setBulkError(null);
     setBulkResult(null);
+    setArchiveResult(null);
     try {
       const result = await bulkSubmit.mutateAsync(ids);
       setBulkResult(result);
       setSelectedIds(new Set());
     } catch {
       setBulkError('Could not submit for review. Please try again.');
+    }
+  }
+
+  async function archiveSelected() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkError(null);
+    setBulkResult(null);
+    setArchiveResult(null);
+    try {
+      const result = await bulkArchive.mutateAsync(ids);
+      setArchiveResult(result);
+      // Keep only what failed selected, so the teacher can see and untick it.
+      setSelectedIds(new Set(result.failed.map((failure) => failure.questionId)));
+    } catch {
+      setBulkError('Could not archive the selected questions. Please try again.');
+    } finally {
+      setConfirmArchive(false);
     }
   }
 
@@ -244,13 +302,13 @@ export function QuestionBankScreen({
       header: '',
       cell: (row) => (
         <Checkbox
-          checked={row.mine && selectedIds.has(row.id)}
+          checked={(!ownOnly || row.mine) && selectedIds.has(row.id)}
           onCheckedChange={(checked) => toggleSelect(row.id, checked === true)}
-          disabled={!row.mine}
+          disabled={ownOnly && !row.mine}
           aria-label={
-            row.mine
-              ? `Select ${row.subjectName} for review`
-              : 'Written by a colleague — only your own drafts can be submitted'
+            !ownOnly || row.mine
+              ? `Select ${row.subjectName} question`
+              : 'Written by a colleague — only your own questions can be selected'
           }
         />
       ),
@@ -411,7 +469,7 @@ export function QuestionBankScreen({
       {bulkMode ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface-muted px-3 py-2">
           <p className="text-sm text-text-secondary">
-            {selectedIds.size} of {selectableRows.length} of your drafts selected
+            {selectedIds.size} selected · {selectableRows.length} selectable on this page
           </p>
           <div className="flex items-center gap-2">
             {selectableRows.length > 0 ? (
@@ -419,15 +477,47 @@ export function QuestionBankScreen({
                 {allSelectableSelected ? 'Clear selection' : 'Select all on this page'}
               </Button>
             ) : null}
-            <Button
-              size="sm"
-              loading={bulkSubmit.isPending}
-              disabled={selectedIds.size === 0}
-              onClick={() => void submitSelected()}
-            >
-              Submit selected for review
-            </Button>
+            {archiveMode ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={selectedIds.size === 0}
+                onClick={() => setConfirmArchive(true)}
+              >
+                <Archive aria-hidden /> Archive selected
+              </Button>
+            ) : null}
+            {submitMode ? (
+              <Button
+                size="sm"
+                loading={bulkSubmit.isPending}
+                disabled={selectedIds.size === 0}
+                onClick={() => void submitSelected()}
+              >
+                Submit selected for review
+              </Button>
+            ) : null}
           </div>
+        </div>
+      ) : null}
+
+      {bulkMode && archiveResult ? (
+        <div
+          role="status"
+          className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm"
+        >
+          {archiveResult.archived.length > 0 ? (
+            <p className="text-text-primary">
+              {archiveResult.archived.length} question
+              {archiveResult.archived.length === 1 ? '' : 's'} archived.
+            </p>
+          ) : null}
+          {archiveResult.failed.length > 0 ? (
+            <p className="mt-1 text-text-secondary">
+              {archiveResult.failed.length} could not be archived (still selected) —{' '}
+              {archiveFailedReasons.join(' · ')}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -460,6 +550,28 @@ export function QuestionBankScreen({
         </p>
       ) : null}
 
+      <Dialog open={confirmArchive} onOpenChange={setConfirmArchive}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Archive {selectedIds.size} question{selectedIds.size === 1 ? '' : 's'}?
+            </DialogTitle>
+            <DialogDescription>
+              Archived questions leave the bank and can no longer be added to new exams. Exams that
+              already use them are not changed, and no question text is deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setConfirmArchive(false)}>
+              Cancel
+            </Button>
+            <Button loading={bulkArchive.isPending} onClick={() => void archiveSelected()}>
+              Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {questions.isError ? (
         <ErrorState error={questions.error} onRetry={() => void questions.refetch()} />
       ) : (
@@ -467,9 +579,15 @@ export function QuestionBankScreen({
           columns={columns}
           rows={rows}
           getRowId={(r) => r.id}
+          getRowHref={(row) => `${basePath}/${row.id}`}
           isLoading={questions.isPending}
           page={page}
           pageCount={pageCount}
+          total={questions.data?.total}
+          pageSize={pageSize}
+          onPageSizeChange={(next) =>
+            updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+          }
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             !hasFilters ? (

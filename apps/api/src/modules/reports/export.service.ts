@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import { EXPORT_ARTEFACT_TTL_MS, type Role } from '@atlas/domain';
+import {
+  EXPORT_ARTEFACT_TTL_MS,
+  compareText,
+  comparePersonNames,
+  formalName,
+  sortByPersonName,
+  type Role,
+} from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import type { AuthenticatedUser } from '../identity/auth.guard.js';
@@ -98,6 +105,7 @@ export class ExportService {
     const scope = await this.validateScope(
       {
         kind: 'SCHOOL',
+        passwordless: false,
         userId,
         schoolId,
         membershipId: '__platform__',
@@ -159,6 +167,7 @@ export class ExportService {
     const result = await this.get(
       {
         kind: 'SCHOOL',
+        passwordless: false,
         userId,
         schoolId,
         membershipId: '__platform__',
@@ -219,6 +228,7 @@ export class ExportService {
     return this.download(
       {
         kind: 'SCHOOL',
+        passwordless: false,
         userId,
         schoolId,
         membershipId: '__platform__',
@@ -371,22 +381,49 @@ export class ExportService {
         const classId = this.stringScope(scope, 'classId');
         const departmentId = this.stringScope(scope, 'departmentId');
         const rows = await tx.studentProfile.findMany({
+          // P2-20: both filters narrow the same relation, so they are ANDed
+          // (spread into one object, the department filter replaced the
+          // class one), and both count only current enrolments.
           where: {
-            ...(classId ? { enrollments: { some: { schoolId, classId, status: 'ACTIVE' } } } : {}),
-            ...(departmentId
-              ? { enrollments: { some: { classGroupSession: { departmentId } } } }
-              : {}),
+            AND: [
+              ...(classId
+                ? [{ enrollments: { some: { schoolId, classId, status: 'ACTIVE' as const } } }]
+                : []),
+              ...(departmentId
+                ? [
+                    {
+                      // ADR-0038: a department's students are those taking
+                      // its subjects, not those in a class of it.
+                      enrollments: {
+                        some: {
+                          status: 'ACTIVE' as const,
+                          registrations: {
+                            some: {
+                              status: 'REGISTERED' as const,
+                              classSubject: { subject: { departmentId } },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  ]
+                : []),
+            ],
           },
           include: { membership: { include: { user: true } } },
         });
+        // Owner decision 2026-10-09: A to Z by surname, register-order columns.
+        sortByPersonName(rows, (r) => ({ ...r.membership.user, identifier: r.studentId }));
         return {
           rows: rows.length,
           csv: csv([
-            ['Admission Number', 'First Name', 'Last Name', 'Email'],
+            ['Login ID', 'Admission Number', 'Surname', 'First Name', 'Middle Name', 'Email'],
             ...rows.map((r) => [
+              r.membership.loginIdentifier,
               r.admissionNumber,
-              r.membership.user.firstName,
               r.membership.user.lastName,
+              r.membership.user.firstName,
+              r.membership.user.middleName,
               r.membership.user.email,
             ]),
           ]),
@@ -400,14 +437,16 @@ export class ExportService {
             : {},
           include: { membership: { include: { user: true } } },
         });
+        sortByPersonName(rows, (r) => ({ ...r.membership.user, identifier: r.staffId }));
         return {
           rows: rows.length,
           csv: csv([
-            ['Staff ID', 'First Name', 'Last Name', 'Email'],
+            ['Staff ID', 'Surname', 'First Name', 'Middle Name', 'Email'],
             ...rows.map((r) => [
               r.staffId,
-              r.membership.user.firstName,
               r.membership.user.lastName,
+              r.membership.user.firstName,
+              r.membership.user.middleName,
               r.membership.user.email,
             ]),
           ]),
@@ -417,7 +456,13 @@ export class ExportService {
         const departmentId = this.stringScope(scope, 'departmentId');
         const classId = this.stringScope(scope, 'classId');
         const rows = await tx.classGroup.findMany({
-          where: { ...(departmentId && { departmentId }), ...(classId && { id: classId }) },
+          where: {
+            // ADR-0038: classes taught a subject of the department.
+            ...(departmentId && {
+              classSubjects: { some: { subject: { departmentId } } },
+            }),
+            ...(classId && { id: classId }),
+          },
         });
         return {
           rows: rows.length,
@@ -504,23 +549,33 @@ export class ExportService {
               studentProfile: r.studentProfile,
             })),
         ];
+        sortByPersonName(source, (entry) => ({
+          ...entry.studentProfile.membership.user,
+          identifier: entry.studentProfile.studentId,
+        }));
         const output = source.map((entry) => {
           const result = resultByParticipant.get(key(entry.studentProfileId, entry.examSessionId));
-          if (result)
+          if (result) {
+            // P2-12: a result still being marked, or voided, has no score to
+            // report; its state decides the status before the attempt's.
+            const scored = result.state === 'FINAL' || result.state === 'ADJUSTED';
             return [
               result.exam.title,
               result.studentProfile.studentId,
-              result.studentProfile.membership.user.displayName,
-              `${result.earnedMarks}/${result.totalMarks}`,
-              result.percentage,
-              result.grade ?? '',
-              result.attempt.state === 'AUTO_SUBMITTED'
-                ? 'AUTO-SUBMITTED'
-                : result.state === 'VOIDED'
-                  ? 'VOIDED'
-                  : 'COMPLETED',
+              formalName(result.studentProfile.membership.user),
+              scored ? `${result.earnedMarks}/${result.totalMarks}` : '',
+              scored ? result.percentage : '',
+              scored ? (result.grade ?? '') : '',
+              result.state === 'VOIDED'
+                ? 'VOIDED'
+                : result.state === 'PROCESSING'
+                  ? 'MARKING'
+                  : result.attempt.state === 'AUTO_SUBMITTED'
+                    ? 'AUTO-SUBMITTED'
+                    : 'COMPLETED',
               result.attempt.submittedAt?.toISOString() ?? '',
             ];
+          }
           const status =
             participationByParticipant.get(key(entry.studentProfileId, entry.examSessionId)) ===
             'ABSENT'
@@ -529,7 +584,7 @@ export class ExportService {
           return [
             exam.title,
             entry.studentProfile.studentId,
-            entry.studentProfile.membership.user.displayName,
+            formalName(entry.studentProfile.membership.user),
             '',
             '',
             '',
@@ -564,13 +619,21 @@ export class ExportService {
             studentProfile: { include: { membership: { include: { user: true } } } },
           },
         });
+        rows.sort(
+          (a, b) =>
+            compareText(a.exam.title, b.exam.title) ||
+            comparePersonNames(
+              { ...a.studentProfile.membership.user, identifier: a.studentProfile.studentId },
+              { ...b.studentProfile.membership.user, identifier: b.studentProfile.studentId },
+            ),
+        );
         return {
           rows: rows.length,
           csv: csv([
             ['Exam', 'Student', 'Session Type', 'Status', 'Marked At'],
             ...rows.map((r) => [
               r.exam.title,
-              r.studentProfile.membership.user.displayName,
+              formalName(r.studentProfile.membership.user),
               r.examSession.sessionType,
               r.status,
               r.markedAt.toISOString(),
@@ -741,7 +804,10 @@ export class ExportService {
         const classGroup = await withTenant(prisma, user.schoolId, (tx) =>
           tx.classGroup.findUnique({
             where: { id: classId },
-            select: { id: true, departmentId: true },
+            select: {
+              id: true,
+              classSubjects: { select: { subject: { select: { departmentId: true } } } },
+            },
           }),
         );
         if (!classGroup)
@@ -749,7 +815,9 @@ export class ExportService {
         scope.classId = classGroup.id;
         if (isHod) {
           const departmentId = await requireDepartment();
-          if (classGroup.departmentId !== departmentId)
+          // ADR-0038: a class is in an HOD's scope when it is taught a
+          // subject of their department.
+          if (!classGroup.classSubjects.some((cs) => cs.subject.departmentId === departmentId))
             throw new AppHttpException({
               code: 'FORBIDDEN',
               message: 'Class is outside your department.',

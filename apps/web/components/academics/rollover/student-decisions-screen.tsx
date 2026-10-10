@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formalName, sortByPersonName } from '@atlas/domain';
 import Link from 'next/link';
 import {
   Filter,
@@ -25,7 +26,7 @@ import {
 import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { useRolloverPlan, useDepartments, type RolloverQueryParams } from '@/lib/academics/queries';
+import { useRolloverPlan, useStreams, type RolloverQueryParams } from '@/lib/academics/queries';
 import { useHasPermission } from '@/lib/nav';
 import { RolloverStepper } from './rollover-stepper';
 import { OverrideDecisionDialog, type RolloverOutcomeType } from './override-decision-dialog';
@@ -62,6 +63,7 @@ interface DecisionRecord {
         user?: {
           id: string;
           firstName: string;
+          middleName?: string | null;
           lastName: string;
           displayName?: string;
         };
@@ -80,14 +82,14 @@ interface ClassDraftItem {
 
 export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScreenProps) {
   const canExecute = useHasPermission('progression.promote.execute');
-  const departmentsQuery = useDepartments();
+  const streamsQuery = useStreams();
 
   // Filters & Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [selectedOutcome, setSelectedOutcome] = useState<string>('ALL');
   const [selectedLevel, setSelectedLevel] = useState<string>('ALL');
-  const [selectedDept, setSelectedDept] = useState<string>('ALL');
+  const [selectedStream, setSelectedStream] = useState<string>('ALL');
   const [overriddenOnly, setOverriddenOnly] = useState(false);
 
   // Selection for batch actions
@@ -106,7 +108,7 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
     ...(selectedLevel !== 'ALL'
       ? { sourceLevel: selectedLevel as 'JSS1' | 'JSS2' | 'JSS3' | 'SS1' | 'SS2' | 'SS3' }
       : {}),
-    ...(selectedDept !== 'ALL' ? { departmentId: selectedDept } : {}),
+    ...(selectedStream !== 'ALL' ? { streamId: selectedStream } : {}),
     ...(overriddenOnly ? { overriddenOnly: true as const } : {}),
   };
 
@@ -161,8 +163,7 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
 
   const openSingleOverride = (rec: DecisionRecord) => {
     const studentUser = rec.sourceEnrollment?.studentProfile?.membership?.user;
-    const fullName = `${studentUser?.firstName ?? ''} ${studentUser?.lastName ?? ''}`.trim();
-    const name = studentUser?.displayName || fullName || 'Student';
+    const name = (studentUser && formalName(studentUser)) || 'Student';
     setDialogDecisions([rec.id]);
     setDialogStudentLabels([name]);
     setDialogSourceLevel(rec.sourceClass?.level);
@@ -183,8 +184,6 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
         return <Badge status="success">Promote</Badge>;
       case 'REPEAT':
         return <Badge status="warning">Repeat Year</Badge>;
-      case 'CHANGE_DEPARTMENT':
-        return <Badge status="info">Change Dept</Badge>;
       case 'GRADUATE':
         return <Badge status="info">Graduate</Badge>;
       case 'TRANSFER':
@@ -261,29 +260,31 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
             </Select>
           </div>
 
-          {/* Department Filter */}
-          <div>
-            <label className="text-xs text-text-muted mb-1 block">Department</label>
-            <Select
-              value={selectedDept}
-              onValueChange={(val) => {
-                setSelectedDept(val);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All Departments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Departments</SelectItem>
-                {(departmentsQuery.data?.departments ?? []).map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Stream Filter (ADR-0038: by the source class's default stream) */}
+          {(streamsQuery.data?.streams ?? []).length > 0 ? (
+            <div>
+              <label className="text-xs text-text-muted mb-1 block">Stream</label>
+              <Select
+                value={selectedStream}
+                onValueChange={(val) => {
+                  setSelectedStream(val);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger aria-label="Stream">
+                  <SelectValue placeholder="All streams" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All streams</SelectItem>
+                  {(streamsQuery.data?.streams ?? []).map((st) => (
+                    <SelectItem key={st.id} value={st.id}>
+                      {st.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           {/* Outcome Filter */}
           <div>
@@ -302,7 +303,6 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
                 <SelectItem value="ALL">All Outcomes</SelectItem>
                 <SelectItem value="PROMOTE">Promote</SelectItem>
                 <SelectItem value="REPEAT">Repeat</SelectItem>
-                <SelectItem value="CHANGE_DEPARTMENT">Change Department</SelectItem>
                 <SelectItem value="GRADUATE">Graduate</SelectItem>
                 <SelectItem value="TRANSFER">Transfer</SelectItem>
                 <SelectItem value="WITHDRAW">Withdraw</SelectItem>
@@ -402,15 +402,17 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
                 </td>
               </tr>
             ) : (
-              decisions.map((rec) => {
+              sortByPersonName([...decisions], (rec) => ({
+                firstName: rec.sourceEnrollment?.studentProfile?.membership?.user?.firstName ?? '',
+                middleName: rec.sourceEnrollment?.studentProfile?.membership?.user?.middleName,
+                lastName: rec.sourceEnrollment?.studentProfile?.membership?.user?.lastName ?? '',
+                identifier: rec.sourceEnrollment?.studentProfile?.studentId,
+              })).map((rec) => {
                 const isSelected = selectedDecisionIds.includes(rec.id);
                 const isOverridden = Boolean(rec.overriddenAt);
                 const studentUser = rec.sourceEnrollment?.studentProfile?.membership?.user;
                 const studentProfile = rec.sourceEnrollment?.studentProfile;
-                const studentName =
-                  studentUser?.displayName ??
-                  (`${studentUser?.firstName ?? ''} ${studentUser?.lastName ?? ''}`.trim() ||
-                    'Student Candidate');
+                const studentName = (studentUser && formalName(studentUser)) || 'Student Candidate';
                 const regNo =
                   studentProfile?.studentId ??
                   rec.sourceEnrollment?.studentProfile?.membership?.loginIdentifier ??

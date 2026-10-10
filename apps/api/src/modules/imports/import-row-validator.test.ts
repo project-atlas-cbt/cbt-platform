@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  splitElectives,
   validateStudentRow,
   validateTeacherRow,
   type StudentValidationContext,
@@ -10,8 +11,23 @@ function studentCtx(overrides: Partial<StudentValidationContext> = {}): StudentV
   return {
     existingStudentIds: new Set(),
     idCountsInFile: new Map(),
-    classesByName: new Map([['ss1a', { id: 'class-1', departmentId: null }]]),
-    departmentsByName: new Map([['science', { id: 'dept-1' }]]),
+    classesByName: new Map([
+      [
+        'ss1a',
+        {
+          id: 'class-1',
+          offeringsByName: new Map([
+            ['further mathematics', { classSubjectId: 'cs-fm', kind: 'ELECTIVE' }],
+            ['fmt', { classSubjectId: 'cs-fm', kind: 'ELECTIVE' }],
+            ['mathematics', { classSubjectId: 'cs-m', kind: 'COMPULSORY' }],
+          ]),
+        },
+      ],
+    ]),
+    streamsByName: new Map([
+      ['science', { id: 'stream-1' }],
+      ['sci', { id: 'stream-1' }],
+    ]),
     ...overrides,
   };
 }
@@ -41,14 +57,23 @@ describe('validateStudentRow', () => {
       studentCtx(),
     );
     expect(errors.map((e) => e.field).sort()).toEqual(
-      ['Class', 'First Name', 'Last Name', 'Student ID'].sort(),
+      ['Class', 'First Name', 'Surname', 'Student ID'].sort(),
+    );
+  });
+
+  it('reads the surname from the Surname column, or Last Name in an older file', () => {
+    const row = { 'Student ID': 'ST001', 'First Name': 'Abiola', Class: 'SS1A', Department: '' };
+    expect(validateStudentRow({ ...row, Surname: 'Ojo' }, studentCtx())).toEqual([]);
+    expect(validateStudentRow({ ...row, 'Last Name': 'Ojo' }, studentCtx())).toEqual([]);
+    expect(validateStudentRow({ ...row, Surname: '  ' }, studentCtx()).map((e) => e.field)).toEqual(
+      ['Surname'],
     );
   });
 
   it('flags a Student ID that appears more than once in the file', () => {
     const errors = validateStudentRow(
       { 'Student ID': 'ST001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A', Department: '' },
-      studentCtx({ idCountsInFile: new Map([['ST001', 2]]) }),
+      studentCtx({ idCountsInFile: new Map([['st001', 2]]) }),
     );
     expect(errors.some((e) => e.message.includes('more than once'))).toBe(true);
   });
@@ -56,9 +81,21 @@ describe('validateStudentRow', () => {
   it('flags a Student ID that already exists at this school', () => {
     const errors = validateStudentRow(
       { 'Student ID': 'ST001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A', Department: '' },
-      studentCtx({ existingStudentIds: new Set(['ST001']) }),
+      studentCtx({ existingStudentIds: new Set(['st001']) }),
     );
     expect(errors.some((e) => e.message.includes('already exists'))).toBe(true);
+  });
+
+  it('bug audit P2-6: matches existing and repeated IDs regardless of case', () => {
+    const errors = validateStudentRow(
+      { 'Student ID': 'St001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A', Department: '' },
+      studentCtx({
+        existingStudentIds: new Set(['st001']),
+        idCountsInFile: new Map([['st001', 2]]),
+      }),
+    );
+    expect(errors.some((e) => e.message.includes('already exists'))).toBe(true);
+    expect(errors.some((e) => e.message.includes('more than once'))).toBe(true);
   });
 
   it('flags an unresolvable Class', () => {
@@ -77,61 +114,49 @@ describe('validateStudentRow', () => {
     expect(errors).toEqual([]);
   });
 
-  it('accepts a blank Department even when the class has one — supplementary, not required', () => {
-    const errors = validateStudentRow(
-      { 'Student ID': 'ST001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A', Department: '' },
-      studentCtx({ classesByName: new Map([['ss1a', { id: 'class-1', departmentId: 'dept-1' }]]) }),
-    );
-    expect(errors).toEqual([]);
+  const base = { 'Student ID': 'ST001', 'First Name': 'A', 'Last Name': 'B', Class: 'SS1A' };
+
+  it('accepts a blank Stream: the class default applies', () => {
+    expect(validateStudentRow({ ...base, Stream: '' }, studentCtx())).toEqual([]);
   });
 
-  it('flags an unresolvable Department', () => {
-    const errors = validateStudentRow(
-      {
-        'Student ID': 'ST001',
-        'First Name': 'A',
-        'Last Name': 'B',
-        Class: 'SS1A',
-        Department: 'Nonexistent',
-      },
-      studentCtx(),
-    );
-    expect(errors.some((e) => e.field === 'Department' && e.message.includes('not found'))).toBe(
-      true,
-    );
+  it('accepts a stream by name or code, in any case', () => {
+    expect(validateStudentRow({ ...base, Stream: 'science' }, studentCtx())).toEqual([]);
+    expect(validateStudentRow({ ...base, Stream: 'SCI' }, studentCtx())).toEqual([]);
   });
 
-  it('flags a Department that disagrees with the resolved Class', () => {
-    const errors = validateStudentRow(
-      {
-        'Student ID': 'ST001',
-        'First Name': 'A',
-        'Last Name': 'B',
-        Class: 'SS1A',
-        Department: 'Science',
-      },
-      studentCtx({
-        classesByName: new Map([['ss1a', { id: 'class-1', departmentId: 'dept-other' }]]),
-        departmentsByName: new Map([['science', { id: 'dept-1' }]]),
-      }),
-    );
+  it('flags an unknown stream', () => {
+    const errors = validateStudentRow({ ...base, Stream: 'Arts' }, studentCtx());
+    expect(errors.some((e) => e.field === 'Stream' && e.message.includes('not found'))).toBe(true);
+  });
+
+  it("reads an old file's Department column as the stream", () => {
+    expect(validateStudentRow({ ...base, Department: 'Science' }, studentCtx())).toEqual([]);
+    const errors = validateStudentRow({ ...base, Department: 'Arts' }, studentCtx());
+    expect(errors.some((e) => e.field === 'Department')).toBe(true);
+  });
+
+  it('accepts electives the class offers, by name or code', () => {
     expect(
-      errors.some((e) => e.field === 'Department' && e.message.includes('does not match')),
-    ).toBe(true);
+      validateStudentRow({ ...base, Electives: 'Further Mathematics; mathematics' }, studentCtx()),
+    ).toEqual([]);
+    expect(validateStudentRow({ ...base, Electives: 'FMT' }, studentCtx())).toEqual([]);
   });
 
-  it('accepts a Department that agrees with the resolved Class', () => {
-    const errors = validateStudentRow(
-      {
-        'Student ID': 'ST001',
-        'First Name': 'A',
-        'Last Name': 'B',
-        Class: 'SS1A',
-        Department: 'Science',
-      },
-      studentCtx({ classesByName: new Map([['ss1a', { id: 'class-1', departmentId: 'dept-1' }]]) }),
-    );
-    expect(errors).toEqual([]);
+  it('flags an elective the class does not offer', () => {
+    const errors = validateStudentRow({ ...base, Electives: 'FMT; Latin' }, studentCtx());
+    expect(errors).toEqual([
+      { field: 'Electives', message: 'Class "SS1A" does not offer "Latin".' },
+    ]);
+  });
+});
+
+describe('splitElectives', () => {
+  it('splits on semicolons or commas and drops blanks and repeats', () => {
+    expect(splitElectives(' Further Mathematics ;Data Processing,, further mathematics ')).toEqual([
+      'Further Mathematics',
+      'Data Processing',
+    ]);
   });
 });
 
@@ -169,8 +194,8 @@ describe('validateTeacherRow', () => {
     const errors = validateTeacherRow(
       { 'Staff ID': 'STF001', 'First Name': 'N', 'Last Name': 'O', Email: 'n@example.com' },
       teacherCtx({
-        idCountsInFile: new Map([['STF001', 2]]),
-        existingStaffIds: new Set(['STF001']),
+        idCountsInFile: new Map([['stf001', 2]]),
+        existingStaffIds: new Set(['stf001']),
       }),
     );
     expect(errors.filter((e) => e.field === 'Staff ID')).toHaveLength(2);

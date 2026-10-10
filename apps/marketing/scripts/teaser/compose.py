@@ -3,10 +3,10 @@
 Each scene folder (from record-teaser.mjs) holds screencast JPEGs and meta.json: frame
 timestamps plus a timeline of cursor moves, clicks, keys, zooms, captions and sounds. This
 draws the cursor and click marks, applies the gentle zoom, lays captions over the picture,
-synthesises soft interface sounds and a quiet room ambience, and encodes one MP4.
+adds the soundtrack (sound.py) and encodes one MP4.
 
-Sound rule (from the product owner): never music, musical instruments or melodic tones. The
-clicks and keys are short filtered noise, and the ambience is air and distant keyboards.
+The sound comes from sound.py, which follows the product owner's rule: no music, no
+instruments, nothing pitched.
 """
 import json, math, os, subprocess, sys, wave
 import numpy as np
@@ -50,64 +50,9 @@ def make_cursor(h=36):
 
 CURSOR, CURSOR_PAD = make_cursor()
 
-# --- sounds, synthesised so nothing is downloaded ----------------------------------
-rng = np.random.default_rng(7)
-
-def env(n, attack, decay):
-    t = np.arange(n) / SR
-    a = np.minimum(1, t / max(attack, 1e-4))
-    return a * np.exp(-t / decay)
-
-def smooth(x, width, passes=2):
-    """Box-filter low-pass, repeated: takes the edge off noise so nothing sounds sharp."""
-    k = np.ones(width) / width
-    for _ in range(passes):
-        x = np.convolve(x, k, mode='same')
-    return x
-
-def s_click():
-    # a muted tap: low-passed noise with a soft body, nothing tonal
-    n = int(0.06 * SR)
-    tap = smooth(rng.standard_normal(n), 10) * env(n, 0.0008, 0.007)
-    body = smooth(rng.standard_normal(n), 60, 3) * env(n, 0.002, 0.016) * 6
-    v = tap + body
-    return v / np.max(np.abs(v)) * 0.11 * rng.uniform(0.85, 1.0)
-
-def s_key():
-    n = int(0.04 * SR)
-    v = smooth(rng.standard_normal(n), 12) * env(n, 0.0006, 0.005)
-    return v / np.max(np.abs(v)) * 0.055 * rng.uniform(0.7, 1.0)
-
-def shaped_noise(n, lo, hi, tilt):
-    """White noise shaped in the frequency domain: band lo..hi Hz, falling tilt dB per octave."""
-    spec = np.fft.rfft(rng.standard_normal(n))
-    f = np.fft.rfftfreq(n, 1 / SR)
-    g = np.where(f > 0, (np.maximum(f, 1) / 100.0) ** (tilt / 6.02), 0)
-    g *= 1 / (1 + (lo / np.maximum(f, 1)) ** 4)
-    g *= 1 / (1 + (f / hi) ** 4)
-    out = np.fft.irfft(spec * g, n)
-    return out / (np.sqrt(np.mean(out ** 2)) or 1)
-
-def ambience(n, lab_spans):
-    """Room tone throughout, plus faint distant typing while a lab sitting is on screen."""
-    t = np.arange(n) / SR
-    air = shaped_noise(n, 50, 1400, -4.5) * 0.014 * (1 + 0.15 * np.sin(2 * np.pi * 0.06 * t))
-    far = np.zeros(n)
-    for a, b in lab_spans:
-        x = a + rng.uniform(0.1, 0.6)
-        while x < b:
-            for _ in range(rng.integers(3, 9)):  # a burst of keystrokes from somewhere in the room
-                k = int(x * SR)
-                tick = smooth(rng.standard_normal(int(0.03 * SR)), 24) * env(int(0.03 * SR), 0.001, 0.006)
-                tick = tick / np.max(np.abs(tick)) * 0.008 * rng.uniform(0.4, 1.0)
-                far[k:k + len(tick)] += tick[: max(0, n - k)]
-                x += rng.uniform(0.09, 0.22)
-            x += rng.uniform(0.6, 2.2)
-    bed = air + far
-    fade = np.minimum(1, np.minimum(t / 1.5, (t[-1] - t) / 2.0))
-    return bed * np.clip(fade, 0, 1)
-
-SOUNDS = {'click': s_click, 'key': s_key}
+# --- sound: see sound.py ---------------------------------------------------------
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sound  # noqa: E402
 
 # --- segments ----------------------------------------------------------------------
 class Card:
@@ -115,6 +60,7 @@ class Card:
         self.img = Image.open(png).convert('RGB').resize((W, H), Image.LANCZOS)
         self.dur = dur
         self.sounds = []
+        self.spans = []
         self.captions = []
     def frame(self, t):
         return self.img.copy()
@@ -166,10 +112,24 @@ class SceneSeg:
         self.drag = (drags[0]['t'], drops[0]['t']) if drags and drops else None
         start = next(e for e in ev if e['kind'] == 'cursor')
         self.c0 = (start['x'], start['y'])
-        self.sounds = [(e['t'], e.get('sound', 'click')) for e in self.clicks if e.get('sound')]
-        self.sounds += [(e['t'], 'key') for e in ev if e['kind'] == 'key']
-        # older recordings also carried tone cues; tones are no longer used
-        self.sounds = [x for x in self.sounds if x[1] in SOUNDS]
+        # interface sounds: a click's own sound, explicit cues, and a breath of air for each
+        # zoom in; plain cursor movement stays silent
+        self.sounds = [(e['t'], e.get('sound') or 'tik') for e in self.clicks]
+        self.sounds += [(e['t'], e['name']) for e in ev if e['kind'] == 'sound']
+        scale = 1.0
+        for z in self.zooms:
+            if z['scale'] > scale + 0.05:
+                self.sounds.append((z['t'], 'zoom'))
+            scale = z['scale']
+        self.sounds = [x for x in self.sounds if x[1] in sound.POINT]
+        self.spans, opened = [], None
+        for e in ev:
+            if e['kind'] == 'span':
+                if e['on']:
+                    opened = e['t']
+                elif opened is not None:
+                    self.spans.append((opened, e['t']))
+                    opened = None
         caps, cur = [], None
         for e in ev:
             if e['kind'] != 'caption':
@@ -294,15 +254,18 @@ def apply_caption(frame, seg, t):
 
 # --- the cut -----------------------------------------------------------------------
 PLAN = [
-    ('card', 'title', 3.6),
+    ('card', 'title', 3.2),
     ('scene', 'import', 0.2, 0.2),
+    ('scene', 'qimport', 0.2, 0.1),
+    ('scene', 'qsubmit', 0.2, 0.1),
     ('scene', 'review', 0.2, 0.2),
     ('scene', 'control', 0.2, 0.1),
     ('scene', 'exam', 0.2, 0.1),
     ('scene', 'offline', 0.0, 0.1),
     ('scene', 'submit', 0.0, 0.2),
     ('scene', 'results', 0.2, 0.2),
-    ('card', 'end', 4.6),
+    ('scene', 'myresult', 0.2, 0.2),
+    ('card', 'end', 4.0),
 ]
 only = os.environ.get('ONLY')
 segs = []
@@ -315,19 +278,18 @@ for item in PLAN:
         segs.append(SceneSeg(item[1], item[2], item[3]))
 
 total = sum(s.dur for s in segs)
-audio = np.zeros(int((total + 1) * SR))
-ff = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}',
-                       '-r', str(FPS), '-i', '-', '-c:v', 'libx264', '-crf', '18', '-preset', 'slow', '-pix_fmt', 'yuv420p',
-                       VIDEO_ONLY], stdin=subprocess.PIPE)
+# AUDIO_ONLY=1 remixes the sound over the last rendered picture, for quick sound passes
+AUDIO_ONLY = bool(os.environ.get('AUDIO_ONLY')) and os.path.exists(VIDEO_ONLY)
+ff = None if AUDIO_ONLY else subprocess.Popen(
+    ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS),
+     '-i', '-', '-c:v', 'libx264', '-crf', '18', '-preset', 'slow', '-pix_fmt', 'yuv420p', VIDEO_ONLY],
+    stdin=subprocess.PIPE)
 white = Image.new('RGB', (W, H), (255, 255, 255))
-LAB = {'control', 'exam', 'offline', 'submit'}  # scenes set in the computer lab
-lab_spans = []
+points, spans, sections = [], [], []
 offset = 0.0
 for seg in segs:
-    if os.path.basename(getattr(seg, 'dir', '')) in LAB:
-        lab_spans.append((offset, offset + seg.dur))
     n = int(round(seg.dur * FPS))
-    for i in range(n):
+    for i in range(0 if AUDIO_ONLY else n):
         t = i / FPS
         f = seg.frame(t)
         f = apply_caption(f, seg, t)
@@ -335,17 +297,21 @@ for seg in segs:
         if fade < 1:
             f = Image.blend(white, f, max(0, fade))
         ff.stdin.write(f.tobytes())
-    for st, name in seg.sounds:
-        if 0 <= st < seg.dur:
-            snd = SOUNDS[name]()
-            a = int((offset + st) * SR)
-            audio[a:a + len(snd)] += snd[: max(0, len(audio) - a)]
+    points += [(offset + st, name) for st, name in seg.sounds if 0 <= st < seg.dur]
+    spans += [(offset + a, offset + min(b, seg.dur)) for a, b in seg.spans]
+    sections.append((offset, offset + n / FPS))
     offset += n / FPS
     print('segment', getattr(seg, 'dir', 'card'), f'{seg.dur:.1f}s', file=sys.stderr)
-ff.stdin.close(); ff.wait()
+if ff:
+    ff.stdin.close(); ff.wait()
 
-audio = audio[: int(offset * SR)]
-audio += ambience(len(audio), lab_spans)
+# the room drops back while the network is out: from the interruption to the reconnection
+drops = [t for t, nm in points if nm == 'interrupt']
+backs = [t for t, nm in points if nm == 'sync']
+dips = [(a, min([b for b in backs if b > a] or [a + 3])) for a in drops]
+intro = segs[0].dur if isinstance(segs[0], Card) else 0.0
+outro = segs[-1].dur if isinstance(segs[-1], Card) else 0.0
+audio = sound.mix(offset, points, spans, sections, dips, intro, outro)
 peak = np.max(np.abs(audio)) or 1
 if peak > 0.9:
     audio *= 0.9 / peak

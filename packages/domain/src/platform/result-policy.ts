@@ -26,3 +26,29 @@ export const RESULT_DETAIL_VISIBILITIES = [
   'FULL_REVIEW',
 ] as const;
 export type ResultDetailVisibility = (typeof RESULT_DETAIL_VISIBILITIES)[number];
+
+export interface SchoolResultSettings {
+  resultPolicy: ResultPolicy;
+  resultDetailVisibility: ResultDetailVisibility;
+  resultPolicyLocked: boolean;
+}
+
+export interface ExamResultSettings {
+  resultPolicy: ResultPolicy;
+  resultDetailVisibility: ResultDetailVisibility;
+}
+
+/// ADR-0010 (2026-10-06 amendment): the values that actually govern an
+/// exam. While the school's lock is on, BOTH axes come from the school —
+/// who releases and what students see — whatever an exam row says (an exam
+/// created before the lock was switched on keeps its own stored values, so
+/// every reader must go through this rather than the exam row). With the
+/// lock off, the exam's own values apply.
+export function effectiveResultSettings(
+  school: SchoolResultSettings,
+  exam: ExamResultSettings,
+): ExamResultSettings {
+  return school.resultPolicyLocked
+    ? { resultPolicy: school.resultPolicy, resultDetailVisibility: school.resultDetailVisibility }
+    : { resultPolicy: exam.resultPolicy, resultDetailVisibility: exam.resultDetailVisibility };
+}

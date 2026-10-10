@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { compareText, comparePersonNames, formalName, type Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { HodAssignmentService } from '../academics/hod-assignment.service.js';
 import { AuditService } from '../operations/audit-event.service.js';
@@ -13,7 +13,14 @@ import {
   PromoteHodDto,
   UpdateHodDto,
 } from './dto/hod.dto.js';
-import { notFound } from './person.util.js';
+import {
+  NAME_SORT_SELECT,
+  inIdOrder,
+  mergeNameEdit,
+  notFound,
+  pageIdsInOrder,
+  searchWords,
+} from './person.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -63,7 +70,12 @@ function toResponseDto(
     membership: {
       id: string;
       userId: string;
-      user: { firstName: string; lastName: string; displayName: string };
+      user: {
+        firstName: string;
+        middleName: string | null;
+        lastName: string;
+        displayName: string;
+      };
     };
   },
   currentAssignment?: CurrentDepartmentAssignment,
@@ -73,8 +85,10 @@ function toResponseDto(
     userId: row.membership.userId,
     teacherProfileId: row.id,
     firstName: row.membership.user.firstName,
+    middleName: row.membership.user.middleName,
     lastName: row.membership.user.lastName,
     displayName: row.membership.user.displayName,
+    formalName: formalName(row.membership.user),
     staffId: row.staffId,
     departmentId: currentAssignment?.departmentId ?? null,
     departmentName: currentAssignment?.departmentName ?? null,
@@ -104,38 +118,50 @@ export class HodService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 25;
     const sortDir = query.sortDir ?? 'asc';
-    const sortBy = query.sortBy ?? 'staffId';
-    const q = query.q?.trim();
+    const sortBy = query.sortBy ?? 'lastName';
+    const words = searchWords(query.q);
 
     const where: Prisma.TeacherProfileWhereInput = {
       schoolId,
       membership: {
         roleAssignments: { some: { schoolId, role: 'HOD', status: 'ACTIVE' } },
       },
-      ...(q && {
-        OR: [
-          { staffId: { contains: q, mode: 'insensitive' } },
-          { membership: { user: { firstName: { contains: q, mode: 'insensitive' } } } },
-          { membership: { user: { lastName: { contains: q, mode: 'insensitive' } } } },
-        ],
+      ...(words.length > 0 && {
+        AND: words.map((word) => ({
+          OR: [
+            { staffId: { contains: word, mode: 'insensitive' } },
+            { membership: { user: { firstName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { middleName: { contains: word, mode: 'insensitive' } } } },
+            { membership: { user: { lastName: { contains: word, mode: 'insensitive' } } } },
+          ],
+        })),
       }),
     };
-    const orderBy: Prisma.TeacherProfileOrderByWithRelationInput =
-      sortBy === 'lastName'
-        ? { membership: { user: { lastName: sortDir } } }
-        : { staffId: sortDir };
-
     const { hods, total } = await withTenant(prisma, schoolId, async (tx) => {
-      const [rows, total] = await Promise.all([
-        tx.teacherProfile.findMany({
+      const keys = (
+        await tx.teacherProfile.findMany({
           where,
-          include: INCLUDE,
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-        tx.teacherProfile.count({ where }),
-      ]);
+          select: {
+            id: true,
+            staffId: true,
+            membership: { select: { user: { select: NAME_SORT_SELECT } } },
+          },
+        })
+      ).map((key) => ({ id: key.id, identifier: key.staffId, ...key.membership.user }));
+      const ids = pageIdsInOrder(
+        keys,
+        sortBy === 'lastName'
+          ? comparePersonNames
+          : (a, b) => compareText(a.identifier, b.identifier),
+        sortDir,
+        page,
+        pageSize,
+      );
+      const rows = inIdOrder(
+        ids,
+        await tx.teacherProfile.findMany({ where: { id: { in: ids } }, include: INCLUDE }),
+      );
+      const total = keys.length;
       const assignmentMap = await resolveCurrentDepartmentAssignments(
         tx,
         schoolId,
@@ -256,17 +282,11 @@ export class HodService {
       });
       if (!existing) return notFound('HOD');
 
-      if (dto.firstName !== undefined || dto.lastName !== undefined || dto.email !== undefined) {
-        const firstName = dto.firstName ?? existing.membership.user.firstName;
-        const lastName = dto.lastName ?? existing.membership.user.lastName;
+      const name = mergeNameEdit(existing.membership.user, dto);
+      if (name || dto.email !== undefined) {
         await tx.user.update({
           where: { id: existing.membership.userId },
-          data: {
-            firstName,
-            lastName,
-            displayName: `${firstName} ${lastName}`,
-            ...(dto.email !== undefined && { email: dto.email }),
-          },
+          data: { ...name, ...(dto.email !== undefined && { email: dto.email }) },
         });
       }
     });

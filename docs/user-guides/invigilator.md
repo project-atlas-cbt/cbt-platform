@@ -20,11 +20,15 @@ the card at the end and keep it at the front desk.
 
 ## Before students arrive
 
-1. Open the exam in **Exam Control**. Check the session for this group is open (or use **Open
+1. Open the exam in **Exam Control** (teachers and HODs) or **Exam Operations** (School Admins and
+   Moderators); it is the same screen. Check the session for this group is open (or use **Open
    session**).
 2. On each computer, open the school's address and sign out any previous user. Do not use
    private or incognito windows.
 3. Keep the spare computers signed out and ready.
+4. If students will sign in without a password, a School Admin or Moderator switches it on for
+   their classes under **People** > **Students** (**Sign-in without password**). Students then
+   type their name and Login ID.
 
 ## During the sitting
 
@@ -42,6 +46,11 @@ submitted, or **Disconnected**.
   and press **Resume assessment**; the attempt continues with the time it has left. Tell the exam officer
   which computer failed. Turn it back on later and open the exam page once, so anything it had not
   sent yet is sent.
+- **A student cannot sign in** after several wrong passwords: the account locks for a while. Ask a
+  School Admin or Moderator to open **People › Students**: locked-out students are listed at the
+  top with an **Unlock** button (or open the student and press **Unlock sign-in**); the student then signs in with their usual password and presses **Resume
+  assessment**. If the student has forgotten the password, **Reset credentials** gives a new one
+  and also ends the lock.
 - **Do not** reload the page, close the browser, clear browser data or restart a computer that is
   working, even if the network is down.
 - Students who do not turn up need nothing from you during the sitting. When the teacher ends the
@@ -53,6 +62,8 @@ submitted, or **Disconnected**.
 - When this group is done, use **Close session** so nobody else can start in it. Students still writing finish their own time; the platform submits for them when it
   runs out.
 - Tell the exam officer about any failed computers and anything you wrote down.
+- If sign-in without a password was on, ask a School Admin or Moderator to press **Switch off**
+  once every student has submitted.
 
 ## If the platform itself is unavailable
 

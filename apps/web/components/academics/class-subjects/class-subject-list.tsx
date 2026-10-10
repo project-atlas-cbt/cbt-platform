@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
@@ -14,26 +15,33 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useHasPermission } from '@/lib/nav';
-import { useClassSubjects, useSubjects } from '@/lib/academics/queries';
-import { useAddClassSubject, useRemoveClassSubject } from '@/lib/academics/mutations';
+import { useClassSubjects, useStreams, useSubjects } from '@/lib/academics/queries';
+import {
+  useAddClassSubject,
+  useRemoveClassSubject,
+  useSetClassSubjectKind,
+} from '@/lib/academics/mutations';
 import { ConfirmActionDialog } from '../confirm-action-dialog';
+import { WhoTakesItPicker, whoTakesItLabel, type WhoTakesIt } from './who-takes-it-picker';
 
 /**
- * The class's "Subjects offered" tab. The only backend surface is a
- * per-class list (`GET/POST /academics/classes/:id/subjects`, `DELETE
- * /academics/class-subjects/:id`) — there is no cross-class matrix/batch
- * endpoint, so this is deliberately a per-class list, not a matrix UI (see
- * this phase's plan for the full reasoning: a client-side matrix would mean
- * unatomic N-call toggles with no real backend support behind it).
+ * The class's "Subjects offered" tab: a per-class list. ADR-0038: each
+ * offering is compulsory (every student in the class is registered), offered
+ * to one or more streams (every student in them is registered), or a plain
+ * elective (staff choose who takes it on the Subject registrations tab).
  */
 export function ClassSubjectList({ classId }: { classId: string }) {
   const offerings = useClassSubjects(classId);
   const subjects = useSubjects();
+  const streams = useStreams();
   const canManage = useHasPermission('schoolConfig.subject.manage');
   const addOffering = useAddClassSubject(classId);
   const removeOffering = useRemoveClassSubject();
+  const setKind = useSetClassSubjectKind();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | undefined>(undefined);
+  const [newWho, setNewWho] = useState<WhoTakesIt>({ kind: 'COMPULSORY', streamIds: [] });
+  const [kindError, setKindError] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<{ id: string; subjectName: string } | null>(null);
 
@@ -43,6 +51,11 @@ export function ClassSubjectList({ classId }: { classId: string }) {
   }
 
   const offered = offerings.data.offerings;
+  const allStreams = streams.data?.streams ?? [];
+  // Inactive streams can't be newly picked, but an offering keeps showing one
+  // it already has.
+  const streamsFor = (current: string[]) =>
+    allStreams.filter((st) => st.status === 'ACTIVE' || current.includes(st.id));
   const offeredSubjectIds = new Set(offered.map((o) => o.subjectId));
   const availableSubjects = (subjects.data?.subjects ?? []).filter(
     (s) => !offeredSubjectIds.has(s.id) && s.status === 'ACTIVE',
@@ -52,7 +65,7 @@ export function ClassSubjectList({ classId }: { classId: string }) {
     if (!selectedSubjectId) return;
     setAddError(null);
     try {
-      await addOffering.mutateAsync(selectedSubjectId);
+      await addOffering.mutateAsync({ subjectId: selectedSubjectId, ...newWho });
       setSelectedSubjectId(undefined);
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Could not offer this subject.');
@@ -62,7 +75,7 @@ export function ClassSubjectList({ classId }: { classId: string }) {
   return (
     <div className="space-y-4">
       {canManage ? (
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Genuinely starts unselected and only ever becomes selected —
               unlike the session pickers elsewhere in this phase (which
               already have a value on first render), this needs a real
@@ -81,6 +94,12 @@ export function ClassSubjectList({ classId }: { classId: string }) {
               ))}
             </SelectContent>
           </Select>
+          <WhoTakesItPicker
+            value={newWho}
+            onChange={setNewWho}
+            streams={streamsFor([])}
+            label="Who takes the new subject"
+          />
           <Button
             variant="secondary"
             disabled={!selectedSubjectId}
@@ -94,6 +113,19 @@ export function ClassSubjectList({ classId }: { classId: string }) {
       {addError ? (
         <p role="alert" className="text-sm font-medium text-danger">
           {addError}
+        </p>
+      ) : null}
+      <p className="text-sm text-text-secondary">
+        A <strong className="font-medium text-text-primary">compulsory</strong> subject is taken by
+        every student in this class. A{' '}
+        <strong className="font-medium text-text-primary">stream</strong> subject is taken by every
+        student in the streams you tick. An{' '}
+        <strong className="font-medium text-text-primary">elective</strong> is taken only by the
+        students you choose on the Subject registrations tab.
+      </p>
+      {kindError ? (
+        <p role="alert" className="text-sm font-medium text-danger">
+          {kindError}
         </p>
       ) : null}
 
@@ -114,18 +146,45 @@ export function ClassSubjectList({ classId }: { classId: string }) {
                 {offering.subjectName}{' '}
                 <span className="text-text-muted">({offering.subjectCode})</span>
               </span>
-              {canManage ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Remove ${offering.subjectName}`}
-                  onClick={() =>
-                    setRemoving({ id: offering.id, subjectName: offering.subjectName })
-                  }
-                >
-                  <X aria-hidden />
-                </Button>
-              ) : null}
+              <span className="flex items-center gap-2">
+                {canManage ? (
+                  <WhoTakesItPicker
+                    value={{ kind: offering.kind, streamIds: offering.streamIds }}
+                    streams={streamsFor(offering.streamIds)}
+                    label={`Who takes ${offering.subjectName}`}
+                    disabled={setKind.isPending}
+                    onChange={(next) => {
+                      setKindError(null);
+                      setKind
+                        .mutateAsync({ id: offering.id, ...next })
+                        .catch((err: unknown) =>
+                          setKindError(
+                            err instanceof Error ? err.message : 'Could not change this subject.',
+                          ),
+                        );
+                    }}
+                  />
+                ) : (
+                  <Badge status={offering.kind === 'ELECTIVE' ? 'info' : 'neutral'}>
+                    {whoTakesItLabel(
+                      { kind: offering.kind, streamIds: offering.streamIds },
+                      allStreams,
+                    )}
+                  </Badge>
+                )}
+                {canManage ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Remove ${offering.subjectName}`}
+                    onClick={() =>
+                      setRemoving({ id: offering.id, subjectName: offering.subjectName })
+                    }
+                  >
+                    <X aria-hidden />
+                  </Button>
+                ) : null}
+              </span>
             </li>
           ))}
         </ul>

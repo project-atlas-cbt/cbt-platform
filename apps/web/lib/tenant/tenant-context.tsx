@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient, setCsrfToken, unwrap } from '@/lib/api';
 import { ThemeProvider } from '@/lib/theme/theme-provider';
 import { useNonce } from '@/lib/security/nonce-context';
+import { setDisplayTimeZone } from '@/lib/format/date';
 
 export interface TenantSchool {
   name: string;
@@ -17,6 +18,9 @@ export interface TenantSchool {
   /** B4: "#rrggbb", or null if the school hasn't set one — see
    * `<TenantProvider>` below for how this reaches `<ThemeProvider>`. */
   primaryColor: string | null;
+  /** Some students may sign in with name + Login ID right now
+   * (passwordless student sign-in) — the sign-in page then offers it. */
+  studentPasswordlessSignIn?: boolean;
 }
 
 export interface TenantResolution {
@@ -92,6 +96,10 @@ const TenantContext = createContext<TenantResolution | null>(null);
 export function TenantProvider({ children }: { children: ReactNode }) {
   const resolution = useTenantResolution();
   const nonce = useNonce();
+  // P2-24: render times in the school's timezone (ADR-0027). Set during
+  // render, not in an effect, so the first screen that formats a date
+  // already sees it; it is a plain idempotent assignment.
+  setDisplayTimeZone(resolution.school?.timezone);
   // exactOptionalPropertyTypes forbids `primaryColor={undefined}` as an
   // explicit prop value — the key must be entirely absent, not present
   // with an undefined value, to mean "use the platform default".
@@ -114,4 +122,12 @@ export function useTenant(): TenantResolution {
     throw new Error('useTenant must be used within <TenantProvider>');
   }
   return ctx;
+}
+
+/**
+ * `useTenant` for components that also render outside a school's subtree
+ * (the loading splash on the platform host): null there instead of a throw.
+ */
+export function useOptionalTenant(): TenantResolution | null {
+  return useContext(TenantContext);
 }

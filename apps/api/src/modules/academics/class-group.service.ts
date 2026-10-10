@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { prisma, withTenant } from '@atlas/db';
+import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
 import { assertNoDependents } from './archival.util.js';
 import { runUniqueGuarded } from './prisma-error.util.js';
+import { changeEnrollmentStream } from './subject-registration-sync.util.js';
 import type {
   ClassGroupResponseDto,
   CreateClassGroupDto,
@@ -19,7 +20,8 @@ interface ActorContext {
 function toResponseDto(classGroup: {
   id: string;
   academicSessionId: string;
-  departmentId: string | null;
+  defaultStreamId: string | null;
+  defaultStream?: { name: string } | null;
   name: string;
   level: string;
   arm: string;
@@ -28,12 +30,30 @@ function toResponseDto(classGroup: {
   return {
     id: classGroup.id,
     academicSessionId: classGroup.academicSessionId,
-    departmentId: classGroup.departmentId,
+    defaultStreamId: classGroup.defaultStreamId,
+    defaultStreamName: classGroup.defaultStream?.name ?? null,
     name: classGroup.name,
     level: classGroup.level as ClassGroupResponseDto['level'],
     arm: classGroup.arm,
     status: classGroup.status as ClassGroupResponseDto['status'],
   };
+}
+
+const withStream = { defaultStream: { select: { name: true } } } as const;
+
+/** ADR-0038: a class's default stream must be an ACTIVE stream of the
+ * school. Null clears it. */
+async function assertUsableStream(schoolId: string, streamId: string | null | undefined) {
+  if (!streamId) return;
+  const stream = await withTenant(prisma, schoolId, (tx) =>
+    tx.stream.findUnique({ where: { id: streamId } }),
+  );
+  if (!stream) throw new AppHttpException({ code: 'NOT_FOUND', message: 'Stream not found.' });
+  if (stream.status !== 'ACTIVE')
+    throw new AppHttpException({
+      code: 'VALIDATION_ERROR',
+      message: `The ${stream.name} stream is retired; choose an active stream.`,
+    });
 }
 
 /** `academics.v1` — ClassGroup CRUD-with-archival. Session-scoped
@@ -42,11 +62,24 @@ function toResponseDto(classGroup: {
 export class ClassGroupService {
   constructor(private readonly audit: AuditService) {}
 
-  async list(schoolId: string, academicSessionId?: string): Promise<ClassGroupResponseDto[]> {
+  async list(
+    schoolId: string,
+    academicSessionId?: string,
+    departmentId?: string,
+  ): Promise<ClassGroupResponseDto[]> {
     const classGroups = await withTenant(prisma, schoolId, (tx) =>
       tx.classGroup.findMany({
-        where: { schoolId, ...(academicSessionId !== undefined && { academicSessionId }) },
+        where: {
+          schoolId,
+          ...(academicSessionId !== undefined && { academicSessionId }),
+          // ADR-0038: a class belongs to a department only through the
+          // subjects it offers.
+          ...(departmentId !== undefined && {
+            classSubjects: { some: { subject: { departmentId } } },
+          }),
+        },
         orderBy: [{ level: 'asc' }, { arm: 'asc' }],
+        include: withStream,
       }),
     );
     return classGroups.map(toResponseDto);
@@ -54,7 +87,7 @@ export class ClassGroupService {
 
   async get(schoolId: string, id: string): Promise<ClassGroupResponseDto> {
     const classGroup = await withTenant(prisma, schoolId, (tx) =>
-      tx.classGroup.findUnique({ where: { id } }),
+      tx.classGroup.findUnique({ where: { id }, include: withStream }),
     );
     if (!classGroup) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Class not found.' });
@@ -73,14 +106,7 @@ export class ClassGroupService {
     if (!session) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Academic session not found.' });
     }
-    if (dto.departmentId) {
-      const department = await withTenant(prisma, schoolId, (tx) =>
-        tx.department.findUnique({ where: { id: dto.departmentId as string } }),
-      );
-      if (!department) {
-        throw new AppHttpException({ code: 'NOT_FOUND', message: 'Department not found.' });
-      }
-    }
+    await assertUsableStream(schoolId, dto.defaultStreamId);
 
     const created = await runUniqueGuarded(
       () =>
@@ -89,11 +115,12 @@ export class ClassGroupService {
             data: {
               schoolId,
               academicSessionId: dto.academicSessionId,
-              departmentId: dto.departmentId ?? null,
+              defaultStreamId: dto.defaultStreamId ?? null,
               name: dto.name,
               level: dto.level,
               arm: dto.arm,
             },
+            include: withStream,
           }),
         ),
       `A class with level ${dto.level} and arm "${dto.arm}" already exists in this session.`,
@@ -121,19 +148,24 @@ export class ClassGroupService {
     if (!existing) {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Class not found.' });
     }
+    await assertUsableStream(schoolId, dto.defaultStreamId);
+    const placeInStream = dto.placeStudentsWithoutStream ? dto.defaultStreamId : null;
     const updated = await runUniqueGuarded(
       () =>
-        withTenant(prisma, schoolId, (tx) =>
-          tx.classGroup.update({
+        withTenant(prisma, schoolId, async (tx) => {
+          const row = await tx.classGroup.update({
             where: { id },
+            include: withStream,
             data: {
-              ...(dto.departmentId !== undefined && { departmentId: dto.departmentId }),
+              ...(dto.defaultStreamId !== undefined && { defaultStreamId: dto.defaultStreamId }),
               ...(dto.name !== undefined && { name: dto.name }),
               ...(dto.level !== undefined && { level: dto.level }),
               ...(dto.arm !== undefined && { arm: dto.arm }),
             },
-          }),
-        ),
+          });
+          if (placeInStream) await this.placeUnstreamed(tx, schoolId, id, placeInStream, actor);
+          return row;
+        }),
       'A class with this level and arm already exists in this session.',
     );
     await this.audit.record({
@@ -145,6 +177,49 @@ export class ClassGroupService {
       entityId: id,
     });
     return toResponseDto(updated);
+  }
+
+  /**
+   * ADR-0038: when a class gets a stream, its current students who are in
+   * no stream join it, each audited as a stream change like one made on the
+   * student's page. Students already in a stream are left alone.
+   */
+  private async placeUnstreamed(
+    tx: Prisma.TransactionClient,
+    schoolId: string,
+    classId: string,
+    streamId: string,
+    actor: ActorContext,
+  ): Promise<void> {
+    const enrollments = await tx.studentEnrollment.findMany({
+      where: {
+        schoolId,
+        classId,
+        status: 'ACTIVE',
+        streamId: null,
+        session: { status: { notIn: ['CLOSED', 'ARCHIVED'] } },
+      },
+    });
+    for (const enrollment of enrollments) {
+      const changes = await changeEnrollmentStream(tx, schoolId, enrollment, streamId);
+      const base = { schoolId, actorUserId: actor.actorUserId, actorRole: actor.actorRole };
+      await this.audit.recordInTx(tx, {
+        ...base,
+        action: 'STUDENT_STREAM_CHANGED',
+        entityType: 'StudentEnrollment',
+        entityId: enrollment.id,
+        metadata: { fromStreamId: null, toStreamId: streamId, viaClass: true },
+      });
+      for (const change of changes) {
+        await this.audit.recordInTx(tx, {
+          ...base,
+          action: change.action,
+          entityType: 'StudentSubjectRegistration',
+          entityId: change.id,
+          metadata: { reason: 'STREAM_CHANGED' },
+        });
+      }
+    }
   }
 
   async archive(schoolId: string, id: string, actor: ActorContext): Promise<ClassGroupResponseDto> {

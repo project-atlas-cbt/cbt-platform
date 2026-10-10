@@ -41,6 +41,9 @@ interface AvailableRow {
 }
 
 interface SelectedQuestion {
+  /** Matched on, not the revision: two revisions of one question are the
+   * same question (bug audit P2-5). */
+  questionId: string;
   questionRevisionId: string;
   marks: number;
   topicName: string | null;
@@ -72,6 +75,7 @@ function deriveInitialSelection(
     .slice()
     .sort((a, b) => a.sequence - b.sequence)
     .map((q) => ({
+      questionId: q.questionId,
       questionRevisionId: q.questionRevisionId,
       marks: q.marks,
       topicName: q.topicName,
@@ -112,7 +116,7 @@ function ExamQuestionSelectorLoaded({
   const [difficulty, setDifficulty] = useState<QuestionDifficulty | ''>('');
   const [page, setPage] = useState(1);
 
-  const selectedIds = useMemo(() => new Set(selected.map((s) => s.questionRevisionId)), [selected]);
+  const selectedIds = useMemo(() => new Set(selected.map((s) => s.questionId)), [selected]);
   const currentKey = JSON.stringify(selected);
   const hasUnsavedChanges = currentKey !== lastSavedKey;
   // Guards browser refresh/close (`beforeunload`) and this screen's own
@@ -137,10 +141,11 @@ function ExamQuestionSelectorLoaded({
   const pageCount = Math.max(1, Math.ceil((available.data?.total ?? 0) / PAGE_SIZE));
 
   function addQuestion(row: AvailableRow) {
-    if (!row.currentRevisionId || selectedIds.has(row.currentRevisionId)) return;
+    if (!row.currentRevisionId || selectedIds.has(row.id)) return;
     setSelected((prev) => [
       ...prev,
       {
+        questionId: row.id,
         questionRevisionId: row.currentRevisionId as string,
         marks: row.marks,
         topicName: row.topicName,
@@ -193,7 +198,7 @@ function ExamQuestionSelectorLoaded({
       header: '',
       align: 'right',
       cell: (row) => {
-        const isSelected = Boolean(row.currentRevisionId && selectedIds.has(row.currentRevisionId));
+        const isSelected = selectedIds.has(row.id);
         return (
           <Button
             type="button"

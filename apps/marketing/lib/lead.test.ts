@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RateLimiter, leadEmail, parseLead, readMailSettings, sendLead, type Lead } from './lead';
+import {
+  RateLimiter,
+  isOwnOrigin,
+  leadEmail,
+  parseLead,
+  readMailSettings,
+  sendLead,
+  type Lead,
+} from './lead';
 
 function form(overrides: Record<string, string> = {}): FormData {
   const data = new FormData();
@@ -180,5 +188,18 @@ describe('sendLead', () => {
     await expect(
       sendLead(lead, { ...settings, provider: 'brevo' }, 'ExamKeep', fetchImpl),
     ).resolves.toBe(false);
+  });
+});
+
+describe('isOwnOrigin (P3-12)', () => {
+  const site = 'https://examkeep.test';
+  it('allows this site and a missing header', () => {
+    expect(isOwnOrigin('https://examkeep.test', site)).toBe(true);
+    expect(isOwnOrigin(null, site)).toBe(true);
+  });
+  it('refuses another site, Origin: null and junk without throwing', () => {
+    expect(isOwnOrigin('https://evil.test', site)).toBe(false);
+    expect(isOwnOrigin('null', site)).toBe(false);
+    expect(isOwnOrigin('not a url', site)).toBe(false);
   });
 });

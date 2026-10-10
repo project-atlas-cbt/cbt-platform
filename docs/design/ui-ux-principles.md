@@ -202,6 +202,13 @@ school's brand colour — a rejected question must read as "danger" the same way
 Branding propagates everywhere a school's identity should appear — login, dashboard, buttons,
 tables, exam interface — but never rewrites historical reports retroactively.
 
+**The school's identity leads; the product credits itself quietly** (owner decision, 2026-10-09).
+A school's interface opens with its own logo (or its initials on its brand colour) and name; the
+product's name appears only as a grey "Powered by" line at the sidebar foot and on the sign-in
+page, in a neutral tone that never competes with the school's colour. Printed reports are the
+school's documents and carry no product branding at all. Only the Software Admin workspace shows
+the product's own logo.
+
 The full semantic token list lives in the skill (`SKILL.md` §9) since it's an implementation
 detail; the principle to hold onto here is: **components read tokens, never raw school colours.**
 

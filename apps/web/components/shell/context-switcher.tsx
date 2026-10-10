@@ -76,9 +76,11 @@ export function ContextSwitcher({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex min-w-0 items-center gap-2 rounded-md border border-border px-3 py-1.5 text-left text-sm hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
+      <DropdownMenuTrigger className="flex min-w-0 max-w-72 items-center gap-2 rounded-md border border-border px-3 py-1.5 text-left text-sm hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
         <div className="min-w-0">
-          <p className="truncate font-medium text-text-primary">{schoolName ?? productName}</p>
+          <p className="truncate font-medium text-text-primary" title={schoolName ?? productName}>
+            {schoolName ?? productName}
+          </p>
           <p className="truncate text-xs text-text-muted">{subtitle}</p>
         </div>
         <ChevronsUpDown className="size-3.5 shrink-0 text-text-muted" aria-hidden />

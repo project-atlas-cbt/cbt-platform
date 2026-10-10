@@ -7,6 +7,7 @@ import { useUpdateRolloverDecisions } from '@/lib/academics/mutations';
 import { useHasPermission } from '@/lib/nav';
 
 vi.mock('@/lib/academics/queries', () => ({
+  useStreams: () => ({ data: { streams: [] }, isSuccess: true, isPending: false }),
   useRolloverPlan: vi.fn(),
   useDepartments: vi.fn(),
 }));
@@ -130,9 +131,9 @@ describe('StudentDecisionsScreen', () => {
 
     render(<StudentDecisionsScreen planId="plan-1" basePath="/school/academics" />);
 
-    expect(screen.getByText('Ahmed Ibrahim')).toBeInTheDocument();
+    expect(screen.getByText('Ibrahim Ahmed')).toBeInTheDocument();
     expect(screen.getByText('ST-001')).toBeInTheDocument();
-    expect(screen.getByText('Fatima Bello')).toBeInTheDocument();
+    expect(screen.getByText('Bello Fatima')).toBeInTheDocument();
     expect(screen.getByText('ST-002')).toBeInTheDocument();
     expect(screen.getByText('JSS2A')).toBeInTheDocument();
     expect(screen.getByText('Repeat Year')).toBeInTheDocument();
@@ -149,12 +150,13 @@ describe('StudentDecisionsScreen', () => {
 
     render(<StudentDecisionsScreen planId="plan-1" basePath="/school/academics" />);
 
+    // Rows run A to Z by surname, so Bello comes before Ibrahim.
     const overrideButtons = screen.getAllByRole('button', { name: /Override/i });
-    await user.click(overrideButtons[0]!);
+    await user.click(overrideButtons[1]!);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText(/Override Promotion Decision/i)).toBeInTheDocument();
-    expect(screen.getByText(/Student: Ahmed Ibrahim/i)).toBeInTheDocument();
+    expect(screen.getByText(/Student: Ibrahim Ahmed/i)).toBeInTheDocument();
   });
 
   it('supports batch selection and opens batch override dialog', async () => {

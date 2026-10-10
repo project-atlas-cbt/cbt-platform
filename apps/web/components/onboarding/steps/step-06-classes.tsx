@@ -25,28 +25,27 @@ import {
 } from '@/components/ui/form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
-import { useAcademicsContext, useClasses, useDepartments } from '@/lib/onboarding/queries';
+import { useAcademicsContext, useClasses } from '@/lib/onboarding/queries';
 import { useCreateClass } from '@/lib/onboarding/mutations';
 import { StepList } from '../step-list';
 
 const LEVELS = ['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'] as const;
-const NO_DEPARTMENT = '__none__';
 
 const schema = z.object({
   name: z.string().min(1, 'Enter a class name, e.g. "SS2A".'),
   level: z.enum(LEVELS, { message: 'Select a level.' }),
   arm: z.string().min(1, 'Enter an arm, e.g. "A".'),
-  departmentId: z.string(),
 });
 type Values = z.infer<typeof schema>;
 
 /** ON-06 (`05 §5.1`) — the other hard blocker (`05 §5.2`: "no class").
+ * A class's default stream (ADR-0038) is set after onboarding: streams are
+ * optional and most schools set them up only for senior classes.
  * Class-Subject linking is explicitly deferred to F6 (Academic Structure
  * Workspace) — Candidate/Deferred, not built here. */
 export function Step06Classes() {
   const context = useAcademicsContext();
   const sessionId = context.data?.session?.id;
-  const departments = useDepartments();
   const classes = useClasses(sessionId);
   const createClass = useCreateClass();
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +56,7 @@ export function Step06Classes() {
     // (`exactOptionalPropertyTypes` forbids defaulting it to `undefined`),
     // so it starts pre-selected at the first level rather than blank —
     // harmless, since the admin can change it before submitting.
-    defaultValues: { name: '', level: LEVELS[0], arm: '', departmentId: NO_DEPARTMENT },
+    defaultValues: { name: '', level: LEVELS[0], arm: '' },
   });
 
   async function onSubmit(values: Values) {
@@ -69,15 +68,14 @@ export function Step06Classes() {
         name: values.name,
         level: values.level,
         arm: values.arm,
-        ...(values.departmentId !== NO_DEPARTMENT ? { departmentId: values.departmentId } : {}),
       });
-      form.reset({ name: '', level: LEVELS[0], arm: '', departmentId: NO_DEPARTMENT });
+      form.reset({ name: '', level: LEVELS[0], arm: '' });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create the class.');
     }
   }
 
-  if (context.isPending || departments.isPending) return <Skeleton className="h-48 w-full" />;
+  if (context.isPending) return <Skeleton className="h-48 w-full" />;
 
   if (!sessionId) {
     return (
@@ -148,31 +146,10 @@ export function Step06Classes() {
               )}
             />
           </div>
-          <FormField
-            control={form.control}
-            name="departmentId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Department (optional)</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="No department" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={NO_DEPARTMENT}>No department</SelectItem>
-                    {(departments.data?.departments ?? []).map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <p className="text-sm text-text-secondary">
+            Senior classes that split students into streams (Science, Business) get a default stream
+            later, under Academics › Streams.
+          </p>
           {error ? (
             <p role="alert" className="text-sm font-medium text-danger">
               {error}

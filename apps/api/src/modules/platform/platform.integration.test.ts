@@ -505,6 +505,39 @@ describe('Full activation lifecycle (B3 DoD items 1-4, 6)', () => {
     // session cookie at all.
     expect(res.statusCode).toBe(401);
   });
+
+  it('ADR-0038: "Standard setup" on Create school starts the school with the standard structure', async () => {
+    const res = await post(platformCtx, '/platform/schools', {
+      name: `Standard Setup School ${randomUUID()}`,
+      adminFirstName: 'Sade',
+      adminLastName: 'Setup',
+      adminEmail: `std-${randomUUID().slice(0, 8)}@example.com`,
+      adminLoginIdentifier: `std-${randomUUID().slice(0, 8)}`,
+      plan: 'STANDARD',
+      initialPeriodDays: 30,
+      startingStructure: 'STANDARD',
+    });
+    expect(res.statusCode).toBe(201);
+    const id = res.json<{ id: string }>().id;
+    createdSchoolIds.push(id);
+    const [departments, streams, maths] = await withTenant(prisma, id, (tx) =>
+      Promise.all([
+        tx.department.findMany({ where: { schoolId: id }, orderBy: { code: 'asc' } }),
+        tx.stream.count({ where: { schoolId: id } }),
+        tx.subject.findFirstOrThrow({
+          where: { schoolId: id, code: 'MTH' },
+          include: { department: true },
+        }),
+      ]),
+    );
+    expect(departments.map((d) => d.name)).toEqual(['Business', 'Humanities', 'Science']);
+    expect(streams).toBe(3);
+    expect(maths.department?.name).toBe('Science');
+    const audit = await withTenant(prisma, id, (tx) =>
+      tx.auditEvent.findFirst({ where: { schoolId: id, action: 'STANDARD_SETUP_APPLIED' } }),
+    );
+    expect(audit?.actorRole).toBe('SOFTWARE_ADMIN');
+  });
 });
 
 /**

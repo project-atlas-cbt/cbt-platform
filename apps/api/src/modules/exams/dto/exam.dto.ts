@@ -19,6 +19,8 @@ import {
 import {
   EXAM_ACCESS_MODES,
   EXAM_NAVIGATION_POLICIES,
+  MAX_EXAM_ATTEMPT_LIMIT,
+  MAX_EXAM_DURATION_SECONDS,
   EXAM_READINESS_CHECK_CODES,
   EXAM_STATUSES,
   RESULT_DETAIL_VISIBILITIES,
@@ -174,19 +176,27 @@ export class SetExamQuestionsDto {
  * field. `resultPolicy`/`resultDetailVisibility` are pre-seeded from the
  * school's current values at creation (see `ExamService.create`'s own doc
  * comment) — this endpoint is what lets a teacher override them while
- * `DRAFT`; `School.resultPolicyLocked` is deliberately not enforced here
- * (B15's job). */
+ * `DRAFT`. While `School.resultPolicyLocked` is on, a teacher or HOD may not
+ * set either result setting to anything but the school's value (ADR-0010,
+ * 2026-10-06 amendment). */
 export class UpdateExamConfigurationDto {
-  @ApiPropertyOptional({ type: Number, minimum: 1, description: 'Duration in whole seconds.' })
+  @ApiPropertyOptional({
+    type: Number,
+    minimum: 1,
+    maximum: MAX_EXAM_DURATION_SECONDS,
+    description: 'Duration in whole seconds.',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(MAX_EXAM_DURATION_SECONDS)
   durationSeconds?: number;
 
-  @ApiPropertyOptional({ type: Number, minimum: 1 })
+  @ApiPropertyOptional({ type: Number, minimum: 1, maximum: MAX_EXAM_ATTEMPT_LIMIT })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(MAX_EXAM_ATTEMPT_LIMIT)
   attemptLimit?: number;
 
   @ApiPropertyOptional({ type: String, enum: EXAM_NAVIGATION_POLICIES })
@@ -448,6 +458,13 @@ export class ExamResponseDto extends ExamListItemResponseDto {
 
   @ApiProperty({ type: String, enum: RESULT_DETAIL_VISIBILITIES })
   resultDetailVisibility!: ResultDetailVisibility;
+
+  /** ADR-0010 (2026-10-06 amendment): the school has locked both result
+   * settings. `resultPolicy`/`resultDetailVisibility` above are then the
+   * school's values, and only a School Admin or Moderator may change them
+   * on an exam. */
+  @ApiProperty({ type: Boolean })
+  resultSettingsLocked!: boolean;
 
   @ApiProperty({ type: String, enum: EXAM_ACCESS_MODES })
   accessMode!: ExamAccessMode;

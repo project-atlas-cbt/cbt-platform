@@ -17,20 +17,30 @@ const SECTIONS = [
   { slug: 'sessions', label: 'Sessions' },
   { slug: 'terms', label: 'Terms' },
   { slug: 'departments', label: 'Departments' },
+  { slug: 'streams', label: 'Streams' },
   { slug: 'classes', label: 'Classes' },
   { slug: 'subjects', label: 'Subjects' },
   { slug: 'rollover', label: 'Rollover' },
 ] as const;
 
-export function AcademicsTabs({ basePath }: { basePath: string }) {
+/** Rollover is run by School Admins and Moderators. HODs have no rollover
+ * screen, so their strip leaves the tab out (owner decision 2026-10-06). */
+export function AcademicsTabs({
+  basePath,
+  showRollover = true,
+}: {
+  basePath: string;
+  showRollover?: boolean;
+}) {
   const pathname = usePathname();
+  const sections = showRollover ? SECTIONS : SECTIONS.filter((s) => s.slug !== 'rollover');
 
   return (
     <nav
       className="inline-flex items-center gap-1 border-b border-border"
       aria-label="Academic structure sections"
     >
-      {SECTIONS.map((section) => {
+      {sections.map((section) => {
         const href = `${basePath}/${section.slug}`;
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (

@@ -283,7 +283,6 @@ describe('B5 Academic Structure — full structure creation, activation, archiva
 
     const classRes = await post(admin, '/academics/classes', {
       academicSessionId: sessionAId,
-      departmentId,
       name: 'SS2A',
       level: 'SS2',
       arm: 'A',
@@ -372,7 +371,7 @@ describe('B5 Academic Structure — full structure creation, activation, archiva
 
     const classStillThere = await get(admin, `/academics/classes/${classId}`);
     expect(classStillThere.statusCode).toBe(200);
-    expect(classStillThere.json<{ departmentId: string }>().departmentId).toBe(departmentId);
+    expect(classStillThere.json<{ status: string }>().status).toBe('ACTIVE');
   });
 
   it('destructive deletion is refused where dependents exist, with a clear error (DoD item 5)', async () => {
@@ -608,6 +607,29 @@ describe('B5 HODAssignment — active-HOD-role invariant (DoD item 8)', () => {
     const listRes = await get(admin, `/academics/departments/${departmentId}/hod-assignments`);
     expect(listRes.statusCode).toBe(200);
     expect(listRes.json<{ assignments: unknown[] }>().assignments).toHaveLength(1);
+  });
+
+  it("marks only the HOD's own department as headedByMe (P1-12)", async () => {
+    // An alphabetically earlier department the HOD does not head: the HOD
+    // screens used to open the first department in the list.
+    await post(admin, '/academics/departments', {
+      name: 'Arts',
+      code: `ART-${randomUUID().slice(0, 6)}`,
+    });
+    const hod = await freshCtx(host, `10.${RUN}.4.2`);
+    await login(hod, 'hod03', 'a-real-password-123');
+
+    const res = await get(hod, '/academics/departments');
+    expect(res.statusCode).toBe(200);
+    const { departments } = res.json<{
+      departments: { id: string; name: string; headedByMe?: boolean }[];
+    }>();
+    expect(departments[0]?.name).toBe('Arts');
+    expect(departments.filter((d) => d.headedByMe).map((d) => d.id)).toEqual([departmentId]);
+
+    const adminRes = await get(admin, '/academics/departments');
+    const adminDepartments = adminRes.json<{ departments: { headedByMe?: boolean }[] }>();
+    expect(adminDepartments.departments.some((d) => d.headedByMe)).toBe(false);
   });
 });
 

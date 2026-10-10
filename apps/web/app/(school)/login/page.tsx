@@ -1,15 +1,16 @@
 import { AuthCard } from '@/components/auth/auth-card';
 import { TenantBrandLine } from '@/components/auth/tenant-brand-line';
-import { LoginForm } from '@/components/auth/login-form';
+import { SchoolSignIn } from '@/components/auth/school-sign-in';
+import { PoweredBy } from '@/components/shell/powered-by';
 
 export default function LoginPage() {
   return (
     <AuthCard
       eyebrow={<TenantBrandLine />}
       title="Sign in"
-      description="Enter your credentials to continue."
+      footer={<PoweredBy className="justify-center" />}
     >
-      <LoginForm />
+      <SchoolSignIn />
     </AuthCard>
   );
 }

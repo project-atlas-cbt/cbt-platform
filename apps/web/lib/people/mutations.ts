@@ -22,7 +22,12 @@ function invalidatePeople(client: QueryClient) {
 export function useUpdateStudent(studentProfileId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName?: string; lastName?: string; admissionNumber?: string }) =>
+    mutationFn: (body: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      admissionNumber?: string;
+    }) =>
       unwrap(
         apiClient.PATCH('/students/{id}', { params: { path: { id: studentProfileId } }, body }),
       ),
@@ -73,6 +78,18 @@ export function useResetStudentCredentials() {
   });
 }
 
+/** P1-4 — ends a sign-in lockout (too many wrong passwords) without
+ * changing the student's password. */
+export function useUnlockStudentSignIn() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(apiClient.POST('/students/{id}/unlock-sign-in', { params: { path: { id } } })),
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: ['people', 'students', 'locked-out'], exact: true }),
+  });
+}
+
 export function useDeregisterElective(studentProfileId: string) {
   const client = useQueryClient();
   return useMutation({
@@ -104,7 +121,12 @@ export function useReRegisterElective(studentProfileId: string) {
 export function useUpdateTeacher(teacherProfileId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName?: string; lastName?: string; email?: string }) =>
+    mutationFn: (body: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      email?: string;
+    }) =>
       unwrap(
         apiClient.PATCH('/teachers/{id}', { params: { path: { id: teacherProfileId } }, body }),
       ),
@@ -183,8 +205,12 @@ export function useSetHodDepartment(membershipId: string) {
 export function useUpdateHod(membershipId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName?: string; lastName?: string; email?: string }) =>
-      unwrap(apiClient.PATCH('/hods/{id}', { params: { path: { id: membershipId } }, body })),
+    mutationFn: (body: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      email?: string;
+    }) => unwrap(apiClient.PATCH('/hods/{id}', { params: { path: { id: membershipId } }, body })),
     onSuccess: () => invalidatePeople(client),
   });
 }
@@ -212,7 +238,12 @@ export function useRemoveHod() {
 export function useUpdateModerator(membershipId: string) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: { firstName?: string; lastName?: string; email?: string }) =>
+    mutationFn: (body: {
+      firstName?: string;
+      middleName?: string;
+      lastName?: string;
+      email?: string;
+    }) =>
       unwrap(apiClient.PATCH('/moderators/{id}', { params: { path: { id: membershipId } }, body })),
     onSuccess: () => invalidatePeople(client),
   });
@@ -284,6 +315,21 @@ export function useClassCredentialSheet() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
+    },
+  });
+}
+
+/** Replaces the passwordless student sign-in setting. Switching a class or
+ * the school off signs those students out (server side). */
+export function useUpdateStudentPasswordlessSettings() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { allStudents: boolean; classIds: string[] }) =>
+      unwrap(apiClient.PUT('/school/student-passwordless-sign-in', { body })),
+    onSuccess: (data) => {
+      client.setQueryData(['people', 'student-passwordless-sign-in'], data);
+      // The sign-in page reads the on/off state from tenant/resolve.
+      return client.invalidateQueries({ queryKey: ['tenant'], exact: false });
     },
   });
 }

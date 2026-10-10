@@ -46,3 +46,12 @@ Without a registration entity, an elective exam becomes visible to — and start
 - B12: eligibility predicate checks registration.
 - B19: rollover regenerates registrations for the new session.
 - F7: elective management on the student profile and class roster.
+
+## Amendment — 2026-10-08 (ADR-0038)
+
+Auto-registration now covers only **compulsory** offerings. An **elective** offering registers
+nobody; staff choose students on the class subject grid or the student's page, which can also
+register a student for an elective they never had. A class move and rollover carry the student's
+registered subjects into the new class where it offers them, instead of registering every
+offering. Choice groups warn, never block. See
+[ADR-0038](./ADR-0038-subjects-streams-departments.md).

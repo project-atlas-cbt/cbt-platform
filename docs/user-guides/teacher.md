@@ -22,10 +22,13 @@ a place for notes, homework or messages.
   questions only for subjects and levels you teach.
 - To change an approved question, edit it: that creates a new revision, which goes through review
   again. Exams that already use the old revision keep it, so past results stay exactly as marked.
-- Many questions at once: **Question Bank → Import**, from the CSV template.
+- Many questions at once: **Question Bank → Import**, from the CSV template. In Excel, format the
+  option columns as Text before typing, so an answer like 1/2 is not turned into a date.
 
 **HODs:** **Question Review** is a queue. For each question: **Approve**, **Reject** with a reason
-the teacher will read, or **Request changes**. Keyboard shortcuts are shown on the screen.
+the teacher will read, or **Request changes**. Keyboard shortcuts are shown on the screen. A
+question you wrote goes to another HOD of the department, or to the School Admin if you are its only
+HOD; so does any question in a subject with no department.
 
 ## 2. Exams
 
@@ -34,7 +37,8 @@ the teacher will read, or **Request changes**. Keyboard shortcuts are shown on t
 1. **Details**: subject, title, duration, attempts allowed, the classes (arms) sitting it.
 2. **Questions**: choose approved questions and their marks. Every student gets the same
    questions; their order, and the order of options, is shuffled per student.
-3. **Rules**: how results are shown and when (your school's result policy applies).
+3. **Rules**: how results are shown and when (your school's result policy applies). If your school
+   has locked its result settings, you can't change who releases results or what students see.
 4. **Review**: the readiness checklist. **Save as Ready** works only once every item passes.
 
 A ready exam does nothing until a session is opened for it in **Exam Control**.
@@ -56,7 +60,9 @@ starts when **they** press Start, and the server keeps it.
 - Signals such as "left the exam window" appear as plain counts. They are not evidence of
   cheating; read them only alongside what the invigilator saw.
 - **Delegated administrators** lets another staff member run Exam Control for this exam (for
-  example the invigilator in the lab).
+  example the invigilator in the lab). The exam then shows under their Exam Control, but they
+  cannot edit it or see its results. Other teachers, even those teaching the same class and
+  subject, do not see your exams at all; your HOD and the school office do.
 
 Ending the exam, absence and makeups (Exam Control → Participation, Makeup):
 
@@ -79,6 +85,17 @@ out). **Results** shows each exam's results as they are marked.
 - **Override marks** is for a recorded, justified correction. It needs a reason, keeps the
   original score, and is audited.
 - **Reports** exports results as CSV and prints result sheets.
+
+## 5. Who takes your elective
+
+Open **My Classes** and choose the class. Under **Subject registrations**, pick a subject and tick
+the students who take it, then press **Save**. Search finds a student by name or student ID.
+
+- You see the electives you teach in that class. If you are the class's **form teacher**, you see
+  every elective of that class. The school office makes you a form teacher.
+- Compulsory subjects are set by the school office. A subject offered to a stream (for example
+  Physics for Science) is ticked already for everyone in that stream.
+- Changes apply to future exams only; past exams and results don't change.
 
 ## Getting help
 

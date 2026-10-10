@@ -79,3 +79,24 @@ email goes through **SMTP** to a provider such as Brevo or Resend, not SES. `app
 - Launch items: verify the sender domain with the provider (SPF, DKIM) and publish DMARC.
 - Deliverability monitoring moves to the provider's dashboard; there is no bounce alarm on
   this deployment.
+
+## Amendment — 2026-10-08: passwordless student sign-in
+
+**Decision (project owner, 2026-10-08, for the OLA Maryway pilot):** a School Admin or Moderator
+may switch on **sign-in without password** for every student of the school or for chosen classes.
+While it is on, a student of those classes signs in with their **name and Login ID** instead of a
+password; it stays on until someone switches it off (the owner chose this over an automatic end
+time). The printed credential sheet and the forced first-login change above remain the default.
+
+- Students only: the membership must hold the STUDENT role and no other, with an active student
+  profile, and the school switch or one of the student's active classes must be on.
+- The typed name must contain the recorded first name and surname, in any order and any case;
+  middle names are optional and any other word fails. Failures are the same generic
+  `UNAUTHENTICATED` response as password sign-in and count towards the same per-identifier lockout.
+- The session is marked passwordless (`sessions.passwordless`): it skips the forced first password
+  change and may never change the password, so signing in as a classmate cannot take over their
+  account. Switching the setting off revokes every passwordless session it no longer covers.
+- Accepted risk: while it is on, anyone who knows a student's name and Login ID can sign in as
+  them from any device. Invigilation is the control; the screen says so.
+- Audited: `STUDENT_PASSWORDLESS_SIGN_IN_CHANGED` (who, before/after, sessions ended) and
+  `USER_SIGNED_IN_PASSWORDLESS` per sign-in.

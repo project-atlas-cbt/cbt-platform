@@ -2,9 +2,11 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingSplash } from '@/components/shell/loading-splash';
+import { ServerUnavailable } from '@/components/auth/server-unavailable';
 import { resolveLandingRoute, useAuth } from '@/lib/auth';
 import { useOnboardingStatus } from '@/lib/onboarding/queries';
+import { TenantProvider } from '@/lib/tenant';
 
 /**
  * F1's tenant-entry/redirect route (frontend-roadmap.md's F1 route table).
@@ -25,8 +27,18 @@ import { useOnboardingStatus } from '@/lib/onboarding/queries';
  * `/login` to the Software Admin console (`lib/tenant/admin-host.ts`).
  */
 export default function TenantEntryPage() {
+  // Outside the (school) group, so it brings its own TenantProvider: the
+  // loading splash shows the school's mark here too.
+  return (
+    <TenantProvider>
+      <TenantEntry />
+    </TenantProvider>
+  );
+}
+
+function TenantEntry() {
   const router = useRouter();
-  const { status, me } = useAuth();
+  const { status, me, reload } = useAuth();
   const isSchoolAdmin = status === 'authenticated' && !!me?.roles.includes('SCHOOL_ADMIN');
   const onboarding = useOnboardingStatus();
 
@@ -52,9 +64,7 @@ export default function TenantEntryPage() {
     }
   }, [status, me, isSchoolAdmin, onboarding.isPending, onboarding.data, router]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Skeleton className="h-8 w-48" />
-    </div>
-  );
+  if (status === 'unavailable') return <ServerUnavailable onRetry={() => void reload()} />;
+
+  return <LoadingSplash />;
 }

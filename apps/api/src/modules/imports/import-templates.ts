@@ -31,6 +31,12 @@ export interface ImportTemplateDef {
   columns: readonly string[];
   /** Subset of `columns` that must be non-empty (after trim) on every row. */
   requiredColumns: readonly string[];
+  /** Subset of `columns` an upload may leave out entirely, so a file made
+   * from an earlier template with the same version still imports. */
+  optionalColumns?: readonly string[];
+  /** A column's name in an earlier template with the same version; an
+   * upload with the old name still imports (read through `templateCell`). */
+  columnAliases?: Readonly<Record<string, string>>;
 }
 
 // B8 — 05 §18.1's own literal column list: Question, Option A-D, Correct
@@ -38,13 +44,24 @@ export interface ImportTemplateDef {
 // Question.level exactly like STUDENTS' own "Class" column resolves to a
 // ClassGroup — see import-row-validator.ts's validateQuestionRow.
 export const IMPORT_TEMPLATES: Record<ImportJobType, ImportTemplateDef> = {
+  // ADR-0038: Stream replaces Department (a file with the old Department
+  // column still imports; it is read as the stream), and Electives lists
+  // the elective subjects a student takes, separated by semicolons.
+  //
+  // Owner decision 2026-10-09: names run in register order, Surname first,
+  // with an optional Middle Name. Surname was "Last Name", which a file made
+  // from the earlier template may still use.
   STUDENTS: {
-    columns: ['Student ID', 'First Name', 'Last Name', 'Class', 'Department'],
-    requiredColumns: ['Student ID', 'First Name', 'Last Name', 'Class'],
+    columns: ['Student ID', 'Surname', 'First Name', 'Middle Name', 'Class', 'Stream', 'Electives'],
+    requiredColumns: ['Student ID', 'Surname', 'First Name', 'Class'],
+    optionalColumns: ['Middle Name', 'Stream', 'Electives'],
+    columnAliases: { Surname: 'Last Name' },
   },
   TEACHERS: {
-    columns: ['Staff ID', 'First Name', 'Last Name', 'Email'],
-    requiredColumns: ['Staff ID', 'First Name', 'Last Name', 'Email'],
+    columns: ['Staff ID', 'Surname', 'First Name', 'Middle Name', 'Email'],
+    requiredColumns: ['Staff ID', 'Surname', 'First Name', 'Email'],
+    optionalColumns: ['Middle Name'],
+    columnAliases: { Surname: 'Last Name' },
   },
   QUESTIONS: {
     columns: [
@@ -73,30 +90,6 @@ export const IMPORT_TEMPLATES: Record<ImportJobType, ImportTemplateDef> = {
   },
 };
 
-const SAMPLE_ROWS: Record<ImportJobType, readonly (readonly string[])[]> = {
-  // 01 §7's own worked example, verbatim.
-  STUDENTS: [
-    ['ST001', 'Ahmed', 'Bello', 'SS1A', 'Science'],
-    ['ST002', 'David', 'John', 'SS1A', 'Science'],
-  ],
-  TEACHERS: [['STF001', 'Ngozi', 'Okafor', 'ngozi.okafor@example.com']],
-  QUESTIONS: [
-    [
-      'What is the capital of Nigeria?',
-      'Lagos',
-      'Abuja',
-      'Kano',
-      'Ibadan',
-      'B',
-      'Geography',
-      'SS1A',
-      'Nigerian States',
-      'EASY',
-      '2',
-    ],
-  ],
-};
-
 function toCsvLine(cells: readonly string[]): string {
   return cells
     .map((cell) => {
@@ -109,14 +102,35 @@ function toCsvLine(cells: readonly string[]): string {
     .join(',');
 }
 
-/** `GET /v1/imports/templates/:type` — a static, versioned CSV download. */
+/** A row's value for a template column, falling back to the column's
+ * earlier name (`columnAliases`), trimmed. */
+export function templateCell(
+  type: ImportJobType,
+  row: Record<string, string>,
+  column: string,
+): string {
+  const alias = IMPORT_TEMPLATES[type].columnAliases?.[column];
+  return (row[column] || (alias ? row[alias] : '') || '').trim();
+}
+
+/** Whether an upload's header row carries `column`, under its own name or
+ * its earlier one. */
+export function hasTemplateColumn(
+  type: ImportJobType,
+  headers: readonly string[],
+  column: string,
+): boolean {
+  const alias = IMPORT_TEMPLATES[type].columnAliases?.[column];
+  return headers.includes(column) || (alias !== undefined && headers.includes(alias));
+}
+
+/** `GET /v1/imports/templates/:type` — a static, versioned CSV download.
+ * Headers only: the sample rows it once carried (01 §7's worked example)
+ * were imported as real students whenever a school typed below them
+ * (bug audit P2-8). */
 export function buildTemplateCsv(type: ImportJobType): string {
   const def = IMPORT_TEMPLATES[type];
-  const lines = [
-    templateVersionMarker(IMPORT_TEMPLATE_VERSION),
-    toCsvLine(def.columns),
-    ...SAMPLE_ROWS[type].map(toCsvLine),
-  ];
+  const lines = [templateVersionMarker(IMPORT_TEMPLATE_VERSION), toCsvLine(def.columns)];
   return lines.join('\r\n') + '\r\n';
 }
 
@@ -141,7 +155,13 @@ export function buildErrorRowsCsv(
     templateVersionMarker(IMPORT_TEMPLATE_VERSION),
     toCsvLine([...def.columns, 'Errors']),
     ...rows.map((row) => {
-      const cells = def.columns.map((column) => row.rawData[column] ?? '');
+      // A row from a file made on the old students template keeps its
+      // Department value, now under Stream (ADR-0038).
+      const cells = def.columns.map(
+        (column) =>
+          templateCell(type, row.rawData, column) ||
+          (column === 'Stream' ? (row.rawData['Department'] ?? '') : ''),
+      );
       const errorText = (row.errors ?? []).map((e) => `${e.field}: ${e.message}`).join('; ');
       return toCsvLine([...cells, errorText]);
     }),

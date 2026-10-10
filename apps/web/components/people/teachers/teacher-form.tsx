@@ -15,18 +15,17 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ApiError } from '@/lib/api';
+import { PersonNameFields, personNameSchema } from '@/components/people/person-name-fields';
 import { useCreateTeacher } from '@/lib/onboarding/mutations';
 import { useUpdateTeacher } from '@/lib/people/mutations';
 
 const createSchema = z.object({
-  firstName: z.string().min(1, 'Enter a first name.'),
-  lastName: z.string().min(1, 'Enter a last name.'),
+  ...personNameSchema,
   email: z.string().min(1, 'Enter an email address.').email('Enter a valid email address.'),
   staffId: z.string().min(1, 'Enter a staff ID, e.g. "STF001".'),
 });
 const editSchema = z.object({
-  firstName: z.string().min(1, 'Enter a first name.'),
-  lastName: z.string().min(1, 'Enter a last name.'),
+  ...personNameSchema,
   email: z.string().min(1, 'Enter an email address.').email('Enter a valid email address.'),
 });
 type CreateValues = z.infer<typeof createSchema>;
@@ -36,6 +35,7 @@ export interface TeacherFormTeacher {
   teacherProfileId: string;
   firstName: string;
   lastName: string;
+  middleName?: string | null;
   email: string | null;
 }
 
@@ -57,12 +57,13 @@ export function TeacherForm({
     defaultValues: {
       firstName: teacher?.firstName ?? '',
       lastName: teacher?.lastName ?? '',
+      middleName: teacher?.middleName ?? '',
       email: teacher?.email ?? '',
     },
   });
   const createForm = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { firstName: '', lastName: '', email: '', staffId: '' },
+    defaultValues: { firstName: '', middleName: '', lastName: '', email: '', staffId: '' },
   });
 
   async function onSubmitCreate(values: CreateValues) {
@@ -93,34 +94,7 @@ export function TeacherForm({
           className="space-y-4"
           noValidate
         >
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={editForm.control}
-              name="firstName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>First name</FormLabel>
-                  <FormControl>
-                    <Input autoFocus {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={editForm.control}
-              name="lastName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Last name</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+          <PersonNameFields control={editForm.control} autoFocus />
           <FormField
             control={editForm.control}
             name="email"
@@ -154,34 +128,7 @@ export function TeacherForm({
         className="space-y-4"
         noValidate
       >
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={createForm.control}
-            name="firstName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>First name</FormLabel>
-                <FormControl>
-                  <Input autoFocus {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={createForm.control}
-            name="lastName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Last name</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+        <PersonNameFields control={createForm.control} autoFocus />
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={createForm.control}

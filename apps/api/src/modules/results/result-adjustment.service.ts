@@ -76,6 +76,22 @@ export class ResultAdjustmentService {
     }
 
     this.assertTypeArgumentsValid(dto);
+    if (dto.type === 'VOID_QUESTION') {
+      // P2-18: a question from another exam (or none) would mark the whole
+      // cohort ADJUSTED, irreversibly, while changing no score.
+      const question = await withTenant(prisma, schoolId, (tx) =>
+        tx.examQuestion.findFirst({
+          where: { schoolId, examId: dto.examId, id: dto.targetExamQuestionId as string },
+          select: { id: true },
+        }),
+      );
+      if (!question) {
+        throw new AppHttpException({
+          code: 'VALIDATION_ERROR',
+          message: 'That question is not part of this exam.',
+        });
+      }
+    }
 
     const targetResults = await this.resolveTargets(schoolId, dto);
     if (targetResults.length === 0) {
@@ -118,6 +134,7 @@ export class ResultAdjustmentService {
           ...(dto.overrideEarnedMarks !== undefined && {
             overrideEarnedMarks: dto.overrideEarnedMarks,
           }),
+          ...(dto.ungradedOnly && { ungradedOnly: true }),
         },
       });
 
@@ -136,6 +153,7 @@ export class ResultAdjustmentService {
         examId: dto.examId,
         type: dto.type,
         targetCount: targetResults.length,
+        ...(dto.ungradedOnly && { ungradedOnly: true }),
         ...(dto.targetExamQuestionId !== undefined && {
           targetExamQuestionId: dto.targetExamQuestionId,
         }),
@@ -186,6 +204,10 @@ export class ResultAdjustmentService {
     const fail = (message: string): never => {
       throw new AppHttpException({ code: 'VALIDATION_ERROR', message });
     };
+
+    if (dto.ungradedOnly && dto.type !== 'RECALCULATE') {
+      fail('ungradedOnly applies to RECALCULATE only.');
+    }
 
     switch (dto.type) {
       case 'VOID_QUESTION':
@@ -247,11 +269,98 @@ export class ResultAdjustmentService {
       return [{ id: result.id }];
     }
 
+    if (dto.ungradedOnly) return this.resolveGradableUngraded(schoolId, dto.examId);
+
     return withTenant(prisma, schoolId, (tx) =>
       tx.result.findMany({
         where: { schoolId, examId: dto.examId, state: { in: ['FINAL', 'ADJUSTED'] } },
         select: { id: true },
       }),
     );
+  }
+
+  /**
+   * P2-21 "Grade now": the ungraded results that bands exist for. A result is
+   * graded against the scale for the level the student sat the exam in, or
+   * the school-wide scale, exactly as the worker resolves it
+   * (`levelForResult` and `resolveGradingScaleVersion` in apps/worker). A
+   * result with no scale to grade against is left out, so the run never
+   * marks a result ADJUSTED while leaving it ungraded.
+   */
+  private async resolveGradableUngraded(
+    schoolId: string,
+    examId: string,
+  ): Promise<{ id: string }[]> {
+    const { results, scales, academicSessionId } = await withTenant(
+      prisma,
+      schoolId,
+      async (tx) => {
+        const exam = await tx.exam.findUniqueOrThrow({
+          where: { id: examId },
+          select: { academicSessionId: true },
+        });
+        return {
+          academicSessionId: exam.academicSessionId,
+          scales: await tx.gradingScale.findMany({
+            where: { schoolId, archivedAt: null, currentVersionId: { not: null } },
+            select: { level: true },
+          }),
+          results: await tx.result.findMany({
+            where: {
+              schoolId,
+              examId,
+              state: { in: ['FINAL', 'ADJUSTED'] },
+              gradingScaleVersionId: null,
+            },
+            select: {
+              id: true,
+              studentProfile: {
+                select: {
+                  enrollments: {
+                    orderBy: { startDate: 'desc' },
+                    select: {
+                      status: true,
+                      academicSessionId: true,
+                      classGroupSession: { select: { level: true } },
+                    },
+                  },
+                },
+              },
+            },
+          }),
+        };
+      },
+    );
+    if (results.length === 0) {
+      throw new AppHttpException({
+        code: 'CONFLICT',
+        message: 'Every finalised result for this exam already has a grade.',
+      });
+    }
+
+    const schoolWide = scales.some((scale) => scale.level === null);
+    const levels = new Set(scales.map((scale) => scale.level).filter((l) => l !== null));
+    const missingLevels = new Set<string>();
+    const gradable = results.filter((result) => {
+      const enrollments = result.studentProfile.enrollments;
+      const level =
+        (
+          enrollments.find((e) => e.academicSessionId === academicSessionId) ??
+          enrollments.find((e) => e.status === 'ACTIVE')
+        )?.classGroupSession.level ?? null;
+      if (schoolWide || (level !== null && levels.has(level))) return true;
+      if (level !== null) missingLevels.add(level);
+      return false;
+    });
+    if (gradable.length === 0) {
+      const named = [...missingLevels].sort().join(', ');
+      throw new AppHttpException({
+        code: 'CONFLICT',
+        message: named
+          ? `Set up grading bands for ${named} (or for the whole school) first, then grade these results.`
+          : 'Set up grading bands first, then grade these results.',
+      });
+    }
+    return gradable.map((result) => ({ id: result.id }));
   }
 }

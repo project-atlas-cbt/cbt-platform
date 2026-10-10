@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, prisma, withTenant, type Prisma as PrismaTypes } from '@atlas/db';
+import { formalName } from '@atlas/domain';
 import type { AuthenticatedUser } from '../identity/auth.guard.js';
 import type { SearchResponseDto } from './dto/search.dto.js';
 
@@ -98,7 +99,7 @@ export class SearchService {
         });
         out.students = rows.map((r) => ({
           id: r.id,
-          label: r.membership.user.displayName,
+          label: formalName(r.membership.user),
           detail: r.studentId,
         }));
       }
@@ -266,7 +267,7 @@ export class SearchService {
         });
         out.results = rows.map((r) => ({
           id: r.id,
-          label: r.studentProfile.membership.user.displayName,
+          label: formalName(r.studentProfile.membership.user),
           detail: r.exam.title,
         }));
       }
@@ -303,15 +304,15 @@ export class SearchService {
     const rows =
       corpus === 'students'
         ? await tx.$queryRaw<{ id: string }[]>(
-            Prisma.sql`SELECT sp.id FROM student_profiles sp JOIN school_memberships sm ON sm.id=sp.membership_id JOIN users u ON u.id=sm.user_id WHERE to_tsvector('simple', coalesce(sp.admission_number,'')) @@ websearch_to_tsquery('simple', ${q}) OR to_tsvector('simple', coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'') || ' ' || coalesce(u.email,'')) @@ websearch_to_tsquery('simple', ${q}) LIMIT 50`,
+            Prisma.sql`SELECT sp.id FROM student_profiles sp JOIN school_memberships sm ON sm.id=sp.membership_id JOIN users u ON u.id=sm.user_id WHERE to_tsvector('simple', coalesce(sp.admission_number,'')) @@ websearch_to_tsquery('simple', ${q}) OR to_tsvector('simple', coalesce(u.first_name,'') || ' ' || coalesce(u.middle_name,'') || ' ' || coalesce(u.last_name,'') || ' ' || coalesce(u.email,'')) @@ websearch_to_tsquery('simple', ${q}) LIMIT 50`,
           )
         : corpus === 'teachers'
           ? await tx.$queryRaw<{ id: string }[]>(
-              Prisma.sql`SELECT tp.id FROM teacher_profiles tp JOIN school_memberships sm ON sm.id=tp.membership_id JOIN users u ON u.id=sm.user_id WHERE to_tsvector('simple', coalesce(tp.staff_id,'')) @@ websearch_to_tsquery('simple', ${q}) OR to_tsvector('simple', coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'') || ' ' || coalesce(u.email,'')) @@ websearch_to_tsquery('simple', ${q}) LIMIT 50`,
+              Prisma.sql`SELECT tp.id FROM teacher_profiles tp JOIN school_memberships sm ON sm.id=tp.membership_id JOIN users u ON u.id=sm.user_id WHERE to_tsvector('simple', coalesce(tp.staff_id,'')) @@ websearch_to_tsquery('simple', ${q}) OR to_tsvector('simple', coalesce(u.first_name,'') || ' ' || coalesce(u.middle_name,'') || ' ' || coalesce(u.last_name,'') || ' ' || coalesce(u.email,'')) @@ websearch_to_tsquery('simple', ${q}) LIMIT 50`,
             )
           : corpus === 'hods'
             ? await tx.$queryRaw<{ id: string }[]>(
-                Prisma.sql`SELECT sm.id FROM school_memberships sm JOIN users u ON u.id=sm.user_id WHERE to_tsvector('simple', coalesce(u.first_name,'') || ' ' || coalesce(u.last_name,'') || ' ' || coalesce(u.email,'')) @@ websearch_to_tsquery('simple', ${q}) LIMIT 50`,
+                Prisma.sql`SELECT sm.id FROM school_memberships sm JOIN users u ON u.id=sm.user_id WHERE to_tsvector('simple', coalesce(u.first_name,'') || ' ' || coalesce(u.middle_name,'') || ' ' || coalesce(u.last_name,'') || ' ' || coalesce(u.email,'')) @@ websearch_to_tsquery('simple', ${q}) LIMIT 50`,
               )
             : corpus === 'classes'
               ? await tx.$queryRaw<{ id: string }[]>(

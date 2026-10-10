@@ -9,6 +9,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHasPermission } from '@/lib/nav';
 import { formatDate } from '@/lib/format/date';
+import { QuestionOptionsReview } from '@/components/results/question-options-review';
 import { sanitizeQuestionHtml } from '@/lib/questions/sanitize-html';
 import { formatResultPercentage } from '@/lib/results/format';
 import { useStaffResult } from '@/lib/results/staff-queries';
@@ -151,7 +152,7 @@ export function StaffResultDetailScreen({
           <div className="flex flex-wrap items-center gap-1">
             <ResultStateBadge value={result.state} />
             {result.withheld ? <WithheldBadge /> : null}
-            <ResultGradeBadge grade={result.grade} />
+            <ResultGradeBadge grade={result.grade} passing={result.gradePassing} />
           </div>
         </div>
       </div>
@@ -261,6 +262,11 @@ export function StaffResultDetailScreen({
               <div
                 className="mt-2 text-sm text-text-primary [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
                 dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(question.content) }}
+              />
+              <QuestionOptionsReview
+                options={question.options}
+                chosenLabel="Student's answer"
+                unansweredNote="The student did not answer this question."
               />
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-text-muted">

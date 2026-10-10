@@ -66,7 +66,7 @@ export function ResultsListScreen() {
             </p>
             <div className="mt-1 flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-text-primary">{item.examTitle}</h2>
-              <ResultGradeBadge grade={item.grade} />
+              <ResultGradeBadge grade={item.grade} passing={item.gradePassing} />
             </div>
             <div className="mt-2 flex items-center justify-between text-sm text-text-muted">
               <span>{formatResultPercentage(item.percentage)}</span>

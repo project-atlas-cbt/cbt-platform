@@ -29,6 +29,10 @@ export type AcademicTermStatus = (typeof ACADEMIC_TERM_STATUSES)[number];
 export const DEPARTMENT_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
 export type DepartmentStatus = (typeof DEPARTMENT_STATUSES)[number];
 
+/// ADR-0038: a student stream (Science, Humanities, Business).
+export const STREAM_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+export type StreamStatus = (typeof STREAM_STATUSES)[number];
+
 /// ADR-0001: fixed platform-wide controlled vocabulary (confirmed with the
 /// project owner during B5 planning) — never a school-editable list, since
 /// B8/B9/B11 compare against this value directly.
@@ -43,6 +47,11 @@ export type SubjectStatus = (typeof SUBJECT_STATUSES)[number];
 
 export const CLASS_SUBJECT_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
 export type ClassSubjectStatus = (typeof CLASS_SUBJECT_STATUSES)[number];
+
+/** ADR-0038: who an offering registers automatically. COMPULSORY: every
+ * student in the class. ELECTIVE: nobody; staff choose per student. */
+export const CLASS_SUBJECT_KINDS = ['COMPULSORY', 'ELECTIVE'] as const;
+export type ClassSubjectKind = (typeof CLASS_SUBJECT_KINDS)[number];
 
 export const HOD_ASSIGNMENT_STATUSES = ['ACTIVE', 'ENDED'] as const;
 export type HODAssignmentStatus = (typeof HOD_ASSIGNMENT_STATUSES)[number];

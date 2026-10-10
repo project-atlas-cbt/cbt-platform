@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { useClasses, useDepartments, useSubjects, useTeachers } from '@/lib/academics/queries';
 import { useMyTeacherAssignments } from '@/lib/exams/queries';
+import { useHasPermission } from '@/lib/nav';
 
 const ALL = '__all__';
 
@@ -49,7 +50,11 @@ export function ExamFiltersBar({
   const myAssignments = useMyTeacherAssignments({ enabled: scope === 'own' });
   const allClasses = useClasses(undefined, { enabled: scope === 'oversight' });
   const departments = useDepartments({ enabled: scope === 'oversight' });
-  const teachers = useTeachers({ enabled: scope === 'oversight' });
+  // P3-17: an HOD may not list teachers (`users.teacher.view`), so they get
+  // no Teacher filter rather than a refused request on every load.
+  const canListTeachers = useHasPermission('users.teacher.view');
+  const showTeacherFilter = scope === 'oversight' && canListTeachers;
+  const teachers = useTeachers({ enabled: showTeacherFilter });
 
   const subjectOptions =
     scope === 'own'
@@ -132,25 +137,29 @@ export function ExamFiltersBar({
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label htmlFor="exam-teacher-filter">Teacher</Label>
-            <Select
-              value={value.teacherMembershipId || ALL}
-              onValueChange={(next) => onChange({ teacherMembershipId: next === ALL ? '' : next })}
-            >
-              <SelectTrigger id="exam-teacher-filter" className="w-48">
-                <SelectValue placeholder="All teachers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All teachers</SelectItem>
-                {(teachers.data?.teachers ?? []).map((t) => (
-                  <SelectItem key={t.membershipId} value={t.membershipId}>
-                    {t.displayName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {showTeacherFilter ? (
+            <div>
+              <Label htmlFor="exam-teacher-filter">Teacher</Label>
+              <Select
+                value={value.teacherMembershipId || ALL}
+                onValueChange={(next) =>
+                  onChange({ teacherMembershipId: next === ALL ? '' : next })
+                }
+              >
+                <SelectTrigger id="exam-teacher-filter" className="w-48">
+                  <SelectValue placeholder="All teachers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All teachers</SelectItem>
+                  {(teachers.data?.teachers ?? []).map((t) => (
+                    <SelectItem key={t.membershipId} value={t.membershipId}>
+                      {t.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
         </>
       ) : null}
     </div>

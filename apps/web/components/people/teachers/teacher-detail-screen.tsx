@@ -56,7 +56,7 @@ export function TeacherDetailScreen({
       <div className="flex items-start justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary">
-            {data.displayName}
+            {data.formalName}
             {data.isHod ? <Badge status="info">HOD</Badge> : null}
           </h2>
           <p className="text-sm text-text-muted">{data.staffId}</p>
@@ -123,6 +123,7 @@ export function TeacherDetailScreen({
             teacher={{
               teacherProfileId: data.teacherProfileId,
               firstName: data.firstName,
+              middleName: data.middleName,
               lastName: data.lastName,
               email: data.email,
             }}
@@ -141,7 +142,7 @@ export function TeacherDetailScreen({
       <ConfirmActionDialog
         open={confirmDeactivate}
         onOpenChange={setConfirmDeactivate}
-        title={`Deactivate ${data.displayName}?`}
+        title={`Deactivate ${data.formalName}?`}
         body="This blocks the teacher's account access. Every question and exam they've authored remains in the question bank, still attributed to them — deactivating never removes or reassigns their work."
         confirmLabel="Deactivate"
         destructive

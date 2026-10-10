@@ -25,6 +25,7 @@ import {
   useSession,
   useSessions,
   useDepartments,
+  useStreams,
   useSubjects,
 } from '@/lib/academics/queries';
 import { useUpdateRolloverStructure } from '@/lib/academics/mutations';
@@ -42,7 +43,7 @@ interface ClassDraftItem {
   name: string;
   level: string;
   arm: string;
-  departmentId?: string | null;
+  defaultStreamId?: string | null;
   included: boolean;
 }
 
@@ -73,6 +74,7 @@ export function RolloverPlanScreen({ planId, basePath }: RolloverPlanScreenProps
   const sourceSessionQuery = useSession(plan?.sourceAcademicSessionId);
   const targetSessionQuery = useSession(plan?.targetAcademicSessionId);
   const departmentsQuery = useDepartments();
+  const streamsQuery = useStreams();
   const subjectsQuery = useSubjects();
 
   // Local state for structure modifications before saving
@@ -226,6 +228,7 @@ export function RolloverPlanScreen({ planId, basePath }: RolloverPlanScreenProps
   const staffList = struct.staffAssignments ?? [];
 
   // Lookups for rendering
+  const streamMap = new Map((streamsQuery.data?.streams ?? []).map((st) => [st.id, st.name]));
   const departmentMap = new Map(
     (departmentsQuery.data?.departments ?? []).map((d) => [d.id, d.name]),
   );
@@ -423,7 +426,7 @@ export function RolloverPlanScreen({ planId, basePath }: RolloverPlanScreenProps
                     Arm
                   </th>
                   <th scope="col" className="p-3">
-                    Department
+                    Stream
                   </th>
                 </tr>
               </thead>
@@ -450,9 +453,9 @@ export function RolloverPlanScreen({ planId, basePath }: RolloverPlanScreenProps
                       <td className="p-3 text-text-secondary">{cls.level}</td>
                       <td className="p-3 text-text-secondary">{cls.arm}</td>
                       <td className="p-3 text-text-secondary">
-                        {cls.departmentId
-                          ? (departmentMap.get(cls.departmentId) ?? 'Department')
-                          : 'General'}
+                        {cls.defaultStreamId
+                          ? (streamMap.get(cls.defaultStreamId) ?? 'Stream')
+                          : '—'}
                       </td>
                     </tr>
                   );

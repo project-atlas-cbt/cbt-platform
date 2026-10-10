@@ -11,6 +11,7 @@ import {
   useSessions,
   useRolloverPlan,
   useDepartments,
+  useStreams,
   useSubjects,
 } from '@/lib/academics/queries';
 import {
@@ -78,6 +79,7 @@ describe('Rollover Workflow Integration', () => {
     } as never);
 
     mockUseDepartments.mockReturnValue({ data: { departments: [] } } as never);
+    vi.mocked(useStreams).mockReturnValue({ data: { streams: [] } } as never);
     mockUseSubjects.mockReturnValue({ data: { subjects: [] } } as never);
     mockUseSessions.mockReturnValue({ data: { sessions: [] } } as never);
   });
@@ -195,7 +197,7 @@ describe('Rollover Workflow Integration', () => {
     const { unmount: unmountDecisions } = render(
       <StudentDecisionsScreen planId="plan-101" basePath="/school/academics" />,
     );
-    expect(screen.getByText('Ahmed Ibrahim')).toBeInTheDocument();
+    expect(screen.getByText('Ibrahim Ahmed')).toBeInTheDocument();
     const overrideBtn = screen.getByRole('button', { name: /Override/i });
     await user.click(overrideBtn);
 

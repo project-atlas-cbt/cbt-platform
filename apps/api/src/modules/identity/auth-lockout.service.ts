@@ -70,6 +70,44 @@ export class AuthLockoutService {
     );
   }
 
+  /** Lower-cased login identifiers of one school that are locked right now,
+   * for the staff "locked out" list. Scans only this school's keys; a Redis
+   * outage degrades to this process's own in-memory counters. */
+  async lockedIdentifiers(schoolId: string): Promise<string[]> {
+    const prefix = `${KEY_PREFIX}${schoolId}:`;
+    const locked = new Set<string>();
+    const max = await this.max();
+    const fallbackMax = await this.fallbackMax();
+
+    const now = Date.now();
+    for (const [key, entry] of this.memory) {
+      if (key.startsWith(prefix) && entry.expiresAt > now && entry.count >= fallbackMax) {
+        locked.add(key.slice(prefix.length));
+      }
+    }
+
+    if (this.health.shouldTry('redis')) {
+      try {
+        let cursor = '0';
+        do {
+          const [next, keys] = await this.redis.scan(cursor, 'MATCH', `${prefix}*`, 'COUNT', 500);
+          cursor = next;
+          if (keys.length === 0) continue;
+          const counts = await this.redis.mget(...keys);
+          keys.forEach((key, i) => {
+            if (Number(counts[i] ?? 0) >= max) locked.add(key.slice(prefix.length));
+          });
+        } while (cursor !== '0');
+        this.health.succeeded('redis');
+      } catch (err) {
+        this.health.fellBack('redis', 'auth-lockout', err);
+      }
+    } else {
+      this.health.skipped('redis', 'auth-lockout');
+    }
+    return [...locked];
+  }
+
   /** Increments the failure counter, starting its window on the first
    * failure. B20: returns `lockedNow` on the exact failure that crosses the
    * threshold (so the caller audits a lockout once, not on every further
@@ -115,6 +153,14 @@ export class AuthLockoutService {
       // The Redis counter (if any) still expires with its window.
       this.health.fellBack('redis', 'auth-lockout', err);
     }
+  }
+
+  /** P1-4: a credential reset, a password change or a staff "Unlock
+   * sign-in" ends the lockout at once. Without this a student locked out
+   * mid-exam (five wrong guesses at a guessable student ID) waits out the
+   * whole window while their attempt timer runs. */
+  async clear(schoolId: string, loginIdentifier: string): Promise<void> {
+    await this.recordSuccess(schoolId, loginIdentifier);
   }
 
   private memoryCount(key: string): number {

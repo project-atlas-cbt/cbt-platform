@@ -317,6 +317,9 @@ describe('B9 Question Review & Governance', () => {
   let mathSubjectId: string;
   let hodSciMembershipId: string;
   let teacherHodMembershipId: string;
+  let classId: string;
+  let mathOfferingId: string;
+  let teacherAProfileId: string;
 
   beforeAll(async () => {
     const school = await createSchool();
@@ -341,7 +344,7 @@ describe('B9 Question Review & Governance', () => {
         endDate: '2027-07-31',
       })
     ).json<{ id: string }>().id;
-    const classId = (
+    classId = (
       await post(admin, '/academics/classes', {
         academicSessionId: sessionId,
         name: 'SS2A',
@@ -378,7 +381,7 @@ describe('B9 Question Review & Governance', () => {
     ).json<{ id: string }>().id;
     await patch(admin, `/academics/subjects/${govSubjectId}`, { departmentId: artsDeptId });
 
-    const mathOfferingId = (
+    mathOfferingId = (
       await post(admin, `/academics/classes/${classId}/subjects`, { subjectId: mathSubjectId })
     ).json<{ id: string }>().id;
     await post(admin, `/academics/classes/${classId}/subjects`, { subjectId: govSubjectId });
@@ -396,6 +399,7 @@ describe('B9 Question Review & Governance', () => {
       membershipId: string;
       loginIdentifier: string;
     }>();
+    teacherAProfileId = teacherABody.teacherProfileId;
     await setPassword(schoolId, teacherABody.membershipId);
     await put(admin, `/teachers/${teacherABody.teacherProfileId}/assignments`, {
       academicSessionId: sessionId,
@@ -543,6 +547,142 @@ describe('B9 Question Review & Governance', () => {
     expect(res.json<{ error: { code: string } }>().error.code).toBe(
       'QUESTION_SELF_REVIEW_FORBIDDEN',
     );
+  });
+
+  describe('ADR-0038: the School Admin reviews only when no HOD can', () => {
+    /** A subject teacherA teaches in classId, optionally in a department. */
+    async function subjectTaughtByTeacherA(departmentId?: string): Promise<string> {
+      const subjectId = (
+        await post(admin, '/academics/subjects', {
+          name: `Fallback ${randomUUID().slice(0, 6)}`,
+          code: `FB-${randomUUID().slice(0, 6)}`,
+          ...(departmentId !== undefined && { departmentId }),
+        })
+      ).json<{ id: string }>().id;
+      const offeringId = (
+        await post(admin, `/academics/classes/${classId}/subjects`, { subjectId })
+      ).json<{ id: string }>().id;
+      fallbackOfferingIds.push(offeringId);
+      const res = await put(admin, `/teachers/${teacherAProfileId}/assignments`, {
+        academicSessionId: sessionId,
+        classSubjectIds: [mathOfferingId, ...fallbackOfferingIds],
+      });
+      expect(res.statusCode).toBe(200);
+      return subjectId;
+    }
+    const fallbackOfferingIds: string[] = [];
+
+    async function newDepartment(): Promise<string> {
+      return (
+        await post(admin, '/academics/departments', {
+          name: `Fallback dept ${randomUUID().slice(0, 6)}`,
+          code: `FD-${randomUUID().slice(0, 6)}`,
+        })
+      ).json<{ id: string }>().id;
+    }
+
+    function queueItem(
+      queue: Awaited<ReturnType<typeof get>>,
+      questionId: string,
+    ): { fallbackReason: string | null } | undefined {
+      return queue
+        .json<{
+          subjects: { items: { questionId: string; fallbackReason: string | null }[] }[];
+        }>()
+        .subjects.flatMap((s) => s.items)
+        .find((i) => i.questionId === questionId);
+    }
+
+    it('refuses the School Admin while the department has an HOD', async () => {
+      const { questionId } = await createAndSubmitQuestion(teacherA, mathSubjectId, 'HOD-owned Q');
+      expect(queueItem(await get(admin, '/reviews/queue'), questionId)?.fallbackReason).toBeNull();
+      const res = await post(admin, `/reviews/questions/${questionId}/approve`, {});
+      expect(res.statusCode).toBe(403);
+      expect(res.json<{ error: { code: string } }>().error.code).toBe(
+        'QUESTION_REVIEW_HOD_AVAILABLE',
+      );
+    });
+
+    it('lets the School Admin approve a subject with no department, audited as School Admin', async () => {
+      const subjectId = await subjectTaughtByTeacherA();
+      const { questionId, revisionId } = await createAndSubmitQuestion(
+        teacherA,
+        subjectId,
+        'No-department Q',
+      );
+      expect(queueItem(await get(admin, '/reviews/queue'), questionId)?.fallbackReason).toBe(
+        'NO_DEPARTMENT',
+      );
+      const res = await post(admin, `/reviews/questions/${questionId}/approve`, { note: 'Fine' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ currentRevision: { status: string } }>().currentRevision.status).toBe(
+        'APPROVED',
+      );
+      const events = await withTenant(prisma, schoolId, (tx) =>
+        tx.auditEvent.findMany({ where: { schoolId, entityId: revisionId } }),
+      );
+      const approved = events.find((e) => e.action === 'QUESTION_APPROVED');
+      expect(approved?.actorRole).toBe('SCHOOL_ADMIN');
+      expect(approved?.metadata).toMatchObject({ fallbackReason: 'NO_DEPARTMENT' });
+    });
+
+    it('lets the School Admin reject when the department has no HOD', async () => {
+      const subjectId = await subjectTaughtByTeacherA(await newDepartment());
+      const { questionId } = await createAndSubmitQuestion(teacherA, subjectId, 'No-HOD Q');
+      const workspace = await get(admin, `/reviews/questions/${questionId}`);
+      expect(workspace.json<{ fallbackReason: string | null }>().fallbackReason).toBe('NO_HOD');
+      const res = await post(admin, `/reviews/questions/${questionId}/reject`, {
+        reason: 'Option B is also correct.',
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it("lets the School Admin decide when the author is the department's only HOD, but never the author", async () => {
+      const departmentId = await newDepartment();
+      const soloRes = await post(admin, '/teachers', {
+        firstName: 'Sola',
+        lastName: 'Ade',
+        email: `sola-${randomUUID().slice(0, 8)}@example.com`,
+        staffId: `STF-${randomUUID().slice(0, 8)}`,
+      });
+      const solo = soloRes.json<{
+        teacherProfileId: string;
+        membershipId: string;
+        loginIdentifier: string;
+      }>();
+      await setPassword(schoolId, solo.membershipId);
+      const subjectId = (
+        await post(admin, '/academics/subjects', {
+          name: `Solo ${randomUUID().slice(0, 6)}`,
+          code: `SO-${randomUUID().slice(0, 6)}`,
+          departmentId,
+        })
+      ).json<{ id: string }>().id;
+      const offeringId = (
+        await post(admin, `/academics/classes/${classId}/subjects`, { subjectId })
+      ).json<{ id: string }>().id;
+      await put(admin, `/teachers/${solo.teacherProfileId}/assignments`, {
+        academicSessionId: sessionId,
+        classSubjectIds: [offeringId],
+      });
+      await post(admin, '/hods', { membershipId: solo.membershipId });
+      await put(admin, `/hods/${solo.membershipId}/department`, {
+        departmentId,
+        academicSessionId: sessionId,
+      });
+      const soloCtx = await loginAs(host, `10.${RUN}.10.9`, solo.loginIdentifier);
+
+      const { questionId } = await createAndSubmitQuestion(soloCtx, subjectId, 'Solo HOD Q');
+      const self = await post(soloCtx, `/reviews/questions/${questionId}/approve`, {});
+      expect(self.statusCode).toBe(400);
+      expect(queueItem(await get(admin, '/reviews/queue'), questionId)?.fallbackReason).toBe(
+        'AUTHOR_IS_ONLY_HOD',
+      );
+      const res = await post(admin, `/reviews/questions/${questionId}/request-changes`, {
+        reason: 'Add a diagram.',
+      });
+      expect(res.statusCode).toBe(200);
+    });
   });
 
   it('reject requires a reason; rejection without one is refused (DoD item 3)', async () => {

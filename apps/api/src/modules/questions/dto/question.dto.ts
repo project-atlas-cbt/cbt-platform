@@ -483,6 +483,33 @@ export class BulkSubmitResultDto {
   failed!: QuestionBulkSubmitFailureDto[];
 }
 
+export class BulkArchiveQuestionsDto {
+  @ApiProperty({
+    type: String,
+    isArray: true,
+    maxItems: 200,
+    description: 'Question ids to archive, each checked against the single-archive rules.',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsUUID('all', { each: true })
+  questionIds!: string[];
+}
+
+export class QuestionBulkArchiveItemDto {
+  @ApiProperty({ type: String })
+  questionId!: string;
+}
+
+export class BulkArchiveResultDto {
+  @ApiProperty({ type: QuestionBulkArchiveItemDto, isArray: true })
+  archived!: QuestionBulkArchiveItemDto[];
+
+  @ApiProperty({ type: QuestionBulkSubmitFailureDto, isArray: true })
+  failed!: QuestionBulkSubmitFailureDto[];
+}
+
 export class AttachQuestionMediaDto {
   @ApiProperty({
     type: String,

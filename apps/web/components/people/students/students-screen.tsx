@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn, type DataTableSort } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Select,
@@ -24,15 +25,18 @@ import { useAcademicsContext, useClasses } from '@/lib/academics/queries';
 import { useStudentsPaginated } from '@/lib/people/queries';
 import { UserStatusBadge } from '../people-status-badges';
 import { StudentForm } from './student-form';
+import { PasswordlessSignInPanel } from './passwordless-sign-in-panel';
+import { LockedOutPanel } from './locked-out-panel';
 
 const PAGE_SIZE = 25;
 
 interface StudentRow {
   studentProfileId: string;
   displayName: string;
+  formalName: string;
   studentId: string;
   currentClassName: string | null;
-  departmentName: string | null;
+  streamName: string | null;
   userStatus: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
 }
 
@@ -52,11 +56,13 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
   const sortColumn = searchParams.get('sortBy');
   const sortDir = searchParams.get('sortDir');
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
-  const sort = useMemo<DataTableSort | null>(
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
+  const sort = useMemo<DataTableSort>(
     () =>
       sortColumn && (sortDir === 'asc' || sortDir === 'desc')
         ? { columnId: sortColumn, direction: sortDir }
-        : null,
+        : // Owner decision 2026-10-09: lists open A to Z by surname.
+          { columnId: 'lastName', direction: 'asc' },
     [sortColumn, sortDir],
   );
 
@@ -69,6 +75,7 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
   // permission table happens to grant both to the same actors.
   const canImport = useHasPermission('users.import.students');
   const canExport = useHasPermission('reporting.exportStudentList');
+  const canManageSignIn = useHasPermission('users.student.resetCredentials');
   const context = useAcademicsContext();
   const classes = useClasses(context.data?.session?.id);
 
@@ -88,14 +95,14 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
   const students = useStudentsPaginated({
     q: search,
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     sortBy: sortColumn === 'studentId' || sortColumn === 'lastName' ? sortColumn : null,
     sortDir: sortDir === 'asc' || sortDir === 'desc' ? sortDir : null,
     ...(classFilter ? { classId: classFilter } : {}),
   });
 
   const rows: StudentRow[] = students.data?.students ?? [];
-  const pageCount = Math.max(1, Math.ceil((students.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((students.data?.total ?? 0) / pageSize));
 
   const columns: DataTableColumn<StudentRow>[] = [
     {
@@ -107,13 +114,13 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
           href={`${basePath}/students/${row.studentProfileId}`}
           className="font-medium text-text-primary hover:underline"
         >
-          {row.displayName}
+          {row.formalName}
         </Link>
       ),
     },
     { id: 'studentId', header: 'Student ID', sortable: true, cell: (row) => row.studentId },
     { id: 'class', header: 'Class', cell: (row) => row.currentClassName ?? '—' },
-    { id: 'department', header: 'Department', cell: (row) => row.departmentName ?? '—' },
+    { id: 'stream', header: 'Stream', cell: (row) => row.streamName ?? '—' },
     { id: 'status', header: 'Status', cell: (row) => <UserStatusBadge value={row.userStatus} /> },
     {
       id: 'view',
@@ -155,6 +162,9 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
           ) : null}
         </div>
       </div>
+
+      {canManageSignIn ? <LockedOutPanel basePath={basePath} /> : null}
+      {canManageSignIn ? <PasswordlessSignInPanel /> : null}
 
       <div className="flex flex-wrap items-end gap-4">
         <div>
@@ -201,6 +211,7 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
           columns={columns}
           rows={rows}
           getRowId={(r) => r.studentProfileId}
+          getRowHref={(row) => `${basePath}/students/${row.studentProfileId}`}
           isLoading={students.isPending}
           sort={sort}
           onSortChange={(next) =>
@@ -208,6 +219,11 @@ export function StudentsScreen({ basePath }: { basePath: string }) {
           }
           page={page}
           pageCount={pageCount}
+          total={students.data?.total}
+          pageSize={pageSize}
+          onPageSizeChange={(next) =>
+            updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+          }
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             !search && !classFilter ? (

@@ -22,6 +22,13 @@ export class TenantResolveSchoolDto {
 
   @ApiProperty({ type: String, nullable: true })
   primaryColor!: string | null;
+
+  @ApiProperty({
+    type: Boolean,
+    description:
+      'Some students of this school may sign in with Login ID + name right now — the sign-in page offers the student form.',
+  })
+  studentPasswordlessSignIn!: boolean;
 }
 
 export class TenantResolveResponseDto {

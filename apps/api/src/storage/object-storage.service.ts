@@ -27,6 +27,20 @@ export interface SignedDownload {
   expiresAt: Date;
 }
 
+/** The only types the media host ever serves inline: the raster images
+ * `validateContent` can sniff. Anything else (an import CSV, a ciphertext,
+ * an asset with no sniffed type) is a download, never a page. */
+const INLINE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+export function mediaResponseFor(sniffedMimeType: string | null | undefined): {
+  contentType: string;
+  disposition: 'inline' | 'attachment';
+} {
+  return sniffedMimeType && INLINE_MEDIA_TYPES.has(sniffedMimeType)
+    ? { contentType: sniffedMimeType, disposition: 'inline' }
+    : { contentType: 'application/octet-stream', disposition: 'attachment' };
+}
+
 /** Ranged-GET default: enough bytes for file-type's magic-byte sniffing and
  * image-size's dimension parsing without downloading a whole multi-MB file. */
 const DEFAULT_PREFIX_BYTES = 4100;
@@ -226,9 +240,24 @@ export class ObjectStorageService implements OnModuleInit {
    * media via `GET /v1/media/:id/url`, a longer TTL for the logo URL
    * embedded in the public `GET /v1/tenant/resolve` (ADR-0021: "logo may
    * be cacheable").
+   *
+   * `response` is required, not optional: the media host serves whatever
+   * Content-Type the object was PUT with, and that header came from the
+   * uploading browser. Forcing the type (and disposition) in the signed
+   * URL means a file stored as `text/html` can never be served as a page
+   * on the media origin (bug audit P0-1).
    */
-  async createSignedDownloadUrl(storageKey: string, ttlSeconds: number): Promise<SignedDownload> {
-    const command = new GetObjectCommand({ Bucket: this.bucket, Key: storageKey });
+  async createSignedDownloadUrl(
+    storageKey: string,
+    ttlSeconds: number,
+    response: { contentType: string; disposition: 'inline' | 'attachment' },
+  ): Promise<SignedDownload> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: storageKey,
+      ResponseContentType: response.contentType,
+      ResponseContentDisposition: response.disposition,
+    });
     const url = await getSignedUrl(this.s3, command, {
       expiresIn: ttlSeconds,
       signingDate: this.signingDate(),

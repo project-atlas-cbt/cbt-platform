@@ -8,6 +8,8 @@ import { IdentityService } from '../identity/identity.service.js';
 import { createPersonMembership } from '../users/person.util.js';
 import { QuestionService } from '../questions/question.service.js';
 import { TopicService } from '../questions/topic.service.js';
+import { splitElectives, streamCell } from './import-row-validator.js';
+import { templateCell } from './import-templates.js';
 
 const CHUNK_SIZE = 100;
 
@@ -263,7 +265,8 @@ export class ImportCommitService {
         const person = await createPersonMembership(tx, {
           schoolId,
           firstName: rawData['First Name'] ?? '',
-          lastName: rawData['Last Name'] ?? '',
+          middleName: rawData['Middle Name'] ?? null,
+          lastName: templateCell('STUDENTS', rawData, 'Surname'),
           loginIdentifier: rawData['Student ID'] ?? '',
           role: 'STUDENT',
         });
@@ -292,7 +295,8 @@ export class ImportCommitService {
       const person = await createPersonMembership(tx, {
         schoolId,
         firstName: rawData['First Name'] ?? '',
-        lastName: rawData['Last Name'] ?? '',
+        middleName: rawData['Middle Name'] ?? null,
+        lastName: templateCell('TEACHERS', rawData, 'Surname'),
         email: rawData['Email'] ?? '',
         loginIdentifier: rawData['Staff ID'] ?? '',
         role: 'TEACHER',
@@ -445,11 +449,63 @@ export class ImportCommitService {
         `Class "${className}" could not be resolved (it may have been archived since validation).`,
       );
     }
-    await this.enrollments.enroll(
+    // ADR-0038: the row's stream (blank: the class's default) and its
+    // electives, re-resolved by name as the validator did.
+    const stream = streamCell(rawData);
+    const streamRow = stream.value
+      ? await withTenant(prisma, schoolId, (tx) =>
+          tx.stream.findFirst({
+            where: {
+              schoolId,
+              status: 'ACTIVE',
+              OR: [
+                { name: { equals: stream.value, mode: 'insensitive' } },
+                { code: { equals: stream.value, mode: 'insensitive' } },
+              ],
+            },
+          }),
+        )
+      : null;
+    if (stream.value && !streamRow) {
+      throw new Error(`Stream "${stream.value}" could not be resolved.`);
+    }
+    const enrollment = await this.enrollments.enroll(
       schoolId,
       person.studentProfileId,
-      { classId: classGroup.id, academicSessionId: targetAcademicSessionId },
+      {
+        classId: classGroup.id,
+        academicSessionId: targetAcademicSessionId,
+        ...(streamRow && { streamId: streamRow.id }),
+      },
       actor,
     );
+    const electives = splitElectives(rawData['Electives'] ?? '');
+    if (electives.length > 0) {
+      await withTenant(prisma, schoolId, async (tx) => {
+        const offerings = await tx.classSubject.findMany({
+          where: { schoolId, classId: classGroup.id, status: 'ACTIVE' },
+          select: { id: true, subject: { select: { name: true, code: true } } },
+        });
+        const byName = new Map(
+          offerings.flatMap((o) => [
+            [o.subject.name.toLowerCase(), o.id],
+            [o.subject.code.toLowerCase(), o.id],
+          ]),
+        );
+        const ids = electives.map((name) => byName.get(name.toLowerCase()));
+        const missing = electives.filter((_, i) => ids[i] === undefined);
+        if (missing.length > 0) {
+          throw new Error(`Class "${className}" does not offer ${missing.join(', ')}.`);
+        }
+        await tx.studentSubjectRegistration.createMany({
+          data: [...new Set(ids as string[])].map((classSubjectId) => ({
+            schoolId,
+            studentEnrollmentId: enrollment.id,
+            classSubjectId,
+          })),
+          skipDuplicates: true,
+        });
+      });
+    }
   }
 }

@@ -25,12 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CLASS_LEVELS } from '@atlas/domain';
 import { useHasPermission } from '@/lib/nav';
-import {
-  useAcademicsContext,
-  useClasses,
-  useDepartments,
-  useSessions,
-} from '@/lib/academics/queries';
+import { useAcademicsContext, useClasses, useSessions } from '@/lib/academics/queries';
 import { useArchiveClass, useDeleteClass } from '@/lib/academics/mutations';
 import { ClassStatusBadge } from '../academic-status-badges';
 import { ConfirmActionDialog } from '../confirm-action-dialog';
@@ -39,7 +34,8 @@ import { ClassForm } from './class-form';
 interface ClassRow {
   id: string;
   academicSessionId: string;
-  departmentId: string | null;
+  defaultStreamId: string | null;
+  defaultStreamName: string | null;
   name: string;
   level: (typeof CLASS_LEVELS)[number];
   arm: string;
@@ -72,7 +68,6 @@ export function ClassesScreen({
 }) {
   const context = useAcademicsContext();
   const sessions = useSessions();
-  const departments = useDepartments();
   const canManage = useHasPermission('schoolConfig.class.manage');
   const canMoveStudents = useHasPermission('assignments.studentToClass');
   const archiveClass = useArchiveClass();
@@ -106,8 +101,6 @@ export function ClassesScreen({
   }
 
   const selectedSession = sessions.data?.sessions.find((s) => s.id === sessionId);
-  const departmentName = (id: string | null) =>
-    id ? (departments.data?.departments.find((d) => d.id === id)?.name ?? '—') : '—';
 
   const rows: ClassRow[] = classes.data?.classes ?? [];
 
@@ -129,7 +122,7 @@ export function ClassesScreen({
     },
     { id: 'level', header: 'Level', cell: (row) => row.level },
     { id: 'arm', header: 'Arm', cell: (row) => row.arm },
-    { id: 'department', header: 'Department', cell: (row) => departmentName(row.departmentId) },
+    { id: 'stream', header: 'Stream', cell: (row) => row.defaultStreamName ?? '—' },
     { id: 'status', header: 'Status', cell: (row) => <ClassStatusBadge value={row.status} /> },
     {
       id: 'view',
@@ -247,6 +240,7 @@ export function ClassesScreen({
         columns={columns}
         rows={rows}
         getRowId={(r) => r.id}
+        getRowHref={(row) => `${basePath}/classes/${row.id}`}
         isLoading={classes.isPending}
         emptyState={
           <EmptyState

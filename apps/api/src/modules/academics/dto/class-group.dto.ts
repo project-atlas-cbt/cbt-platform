@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import {
   CLASS_GROUP_STATUSES,
   CLASS_LEVELS,
@@ -15,11 +15,12 @@ export class CreateClassGroupDto {
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: 'Null for classes with no department (e.g. JSS levels before streaming).',
+    description:
+      'ADR-0038: the stream students joining this class take unless set otherwise. Null for a mixed arm and for JSS.',
   })
   @IsOptional()
   @IsUUID()
-  departmentId?: string | null;
+  defaultStreamId?: string | null;
 
   @ApiProperty({ type: String, maxLength: 32, example: 'SS2A' })
   @IsString()
@@ -40,7 +41,7 @@ export class UpdateClassGroupDto {
   @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @IsUUID()
-  departmentId?: string | null;
+  defaultStreamId?: string | null;
 
   @ApiPropertyOptional({ type: String, maxLength: 32 })
   @IsOptional()
@@ -58,6 +59,16 @@ export class UpdateClassGroupDto {
   @IsString()
   @MaxLength(16)
   arm?: string;
+
+  @ApiPropertyOptional({
+    type: Boolean,
+    description:
+      'ADR-0038: with a new defaultStreamId, also put the class’s current students who are in ' +
+      'no stream into it (registering its stream subjects). Students already in a stream keep it.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  placeStudentsWithoutStream?: boolean;
 }
 
 export class ClassGroupResponseDto {
@@ -68,7 +79,10 @@ export class ClassGroupResponseDto {
   academicSessionId!: string;
 
   @ApiProperty({ type: String, nullable: true })
-  departmentId!: string | null;
+  defaultStreamId!: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  defaultStreamName!: string | null;
 
   @ApiProperty({ type: String })
   name!: string;

@@ -22,6 +22,7 @@ import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
 import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
+import { registerEnrolledStudentsForOfferings } from './subject-registration-sync.util.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -431,6 +432,103 @@ describe('B6 StudentEnrollment / StudentSubjectRegistration', () => {
         }),
       ),
     ).rejects.toThrow();
+  });
+
+  it('a subject offered after students are enrolled registers those students (ADR-0011)', async () => {
+    const classRes = await post(admin, '/academics/classes', {
+      academicSessionId: sessionId,
+      name: 'SS2C',
+      level: 'SS2',
+      arm: 'C',
+    });
+    const classCId = classRes.json<{ id: string }>().id;
+    const studentRes = await post(admin, '/students', {
+      firstName: 'Chidi',
+      lastName: 'Okeke',
+      studentId: `ST-${randomUUID().slice(0, 8)}`,
+    });
+    const lateStudentProfileId = studentRes.json<{ studentProfileId: string }>().studentProfileId;
+    const enrollRes = await post(admin, `/students/${lateStudentProfileId}/enrollments`, {
+      academicSessionId: sessionId,
+      classId: classCId,
+    });
+    expect(enrollRes.statusCode).toBe(200);
+
+    // Enrolled into a class with no subjects yet: nothing to register.
+    const before = await get(admin, `/students/${lateStudentProfileId}/subject-registrations`);
+    expect(before.json<{ registrations: unknown[] }>().registrations).toEqual([]);
+
+    const offeringRes = await post(admin, `/academics/classes/${classCId}/subjects`, {
+      subjectId: mathSubjectId,
+    });
+    expect(offeringRes.statusCode).toBe(201);
+    const offeringId = offeringRes.json<{ id: string }>().id;
+
+    const after = await get(admin, `/students/${lateStudentProfileId}/subject-registrations`);
+    const registrations = after.json<{
+      registrations: { classSubjectId: string; status: string }[];
+    }>().registrations;
+    expect(registrations).toEqual([
+      expect.objectContaining({ classSubjectId: offeringId, status: 'REGISTERED' }),
+    ]);
+  });
+
+  it('the registration backfill fills gaps but leaves a deregistration standing', async () => {
+    const classRes = await post(admin, '/academics/classes', {
+      academicSessionId: sessionId,
+      name: 'SS2D',
+      level: 'SS2',
+      arm: 'D',
+    });
+    const classDId = classRes.json<{ id: string }>().id;
+    const mathOfferingId = (
+      await post(admin, `/academics/classes/${classDId}/subjects`, { subjectId: mathSubjectId })
+    ).json<{ id: string }>().id;
+    const furtherMathOfferingId = (
+      await post(admin, `/academics/classes/${classDId}/subjects`, {
+        subjectId: furtherMathSubjectId,
+      })
+    ).json<{ id: string }>().id;
+    const studentRes = await post(admin, '/students', {
+      firstName: 'Dayo',
+      lastName: 'Ige',
+      studentId: `ST-${randomUUID().slice(0, 8)}`,
+    });
+    const profileId = studentRes.json<{ studentProfileId: string }>().studentProfileId;
+    await post(admin, `/students/${profileId}/enrollments`, {
+      academicSessionId: sessionId,
+      classId: classDId,
+    });
+    await post(
+      admin,
+      `/students/${profileId}/subject-registrations/${furtherMathOfferingId}/deregister`,
+    );
+    // Simulate the pre-fix gap: the Mathematics registration was never written.
+    await withTenant(prisma, schoolId, (tx) =>
+      tx.studentSubjectRegistration.deleteMany({
+        where: { schoolId, classSubjectId: mathOfferingId },
+      }),
+    );
+
+    const created = await withTenant(prisma, schoolId, (tx) =>
+      registerEnrolledStudentsForOfferings(tx, schoolId),
+    );
+    expect(created).toBe(1);
+    const again = await withTenant(prisma, schoolId, (tx) =>
+      registerEnrolledStudentsForOfferings(tx, schoolId),
+    );
+    expect(again).toBe(0);
+
+    const res = await get(admin, `/students/${profileId}/subject-registrations`);
+    const byOffering = Object.fromEntries(
+      res
+        .json<{ registrations: { classSubjectId: string; status: string }[] }>()
+        .registrations.map((r) => [r.classSubjectId, r.status]),
+    );
+    expect(byOffering).toEqual({
+      [mathOfferingId]: 'REGISTERED',
+      [furtherMathOfferingId]: 'DEREGISTERED',
+    });
   });
 
   it("ClassGroupService.delete()'s B6 extension: a class with a live enrollment cannot be hard-deleted", async () => {

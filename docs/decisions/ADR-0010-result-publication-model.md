@@ -61,3 +61,52 @@ PROCESSING → FINAL → ADJUSTED
 - B15: `ResultPublication` per exam; reduced `Result.state`; `withheld` flag; shared visibility helper; both policy axes.
 - B5/B3: school-level defaults and the lock flag.
 - F5: policy configuration. F15: publication and withholding. F14: visibility honoured.
+
+## Amendment — 2026-10-06: the lock covers both axes
+
+**Decided by:** Haneef (project owner), on a decision card in the result policy check.
+
+`result_policy_locked` now fixes **both** axes, not only `result_policy`: while a school's policy is
+locked, teachers and HODs can change neither who releases results nor what students see on their
+own exams. School Admins and Moderators are not constrained. The settings screen's checkbox sits
+under both settings and now says so.
+
+While the lock is on, the **school's** two values are the effective values for every exam,
+including exams created before the lock, so locking cannot be side-stepped by an exam's own copy.
+Unlocking returns each exam to its own copy. One domain function,
+`effectiveResultSettings` (`packages/domain/src/platform/result-policy.ts`), owns the rule and is
+used everywhere it applies:
+
+- **Configuration:** `PUT /exams/:id/configuration` refuses (403) a teacher's or HOD's change to
+  either value while locked; resending the school's own values is accepted. `GET /exams/:id`
+  returns the effective values and `resultSettingsLocked`.
+- **Publication:** manual publish, unpublish, withhold and release check the effective release
+  setting.
+- **Automatic release:** the worker auto-publishes only when the effective release setting is
+  `AUTOMATIC`. Before this amendment an exam set to `AUTOMATIC` by a teacher auto-published under
+  a lock to `SCHOOL_ADMIN`.
+- **Student visibility:** the student result detail uses the effective visibility.
+
+Found in the same check: `GET /attempts/:id/status` returned marks and correct/incorrect counts to
+the student as soon as marking finished, before any release and regardless of visibility. It now
+returns only marking progress, and the submitted screen shows `04 §59`'s message instead.
+
+## Amendment — 2026-10-08: full review shows the answer key
+
+**Decided by:** Haneef (project owner), by instruction in the project thread.
+
+`FULL_REVIEW` previously showed a student which questions were right or wrong, deliberately without
+the options or the key (`04 §61` offers "question review"). It now shows, per question, **all
+options, the correct option and the option the student chose**. Staff (result detail) see the same
+for any student they may view.
+
+- Student side: only through `GET /student/results/:id`, only after the result is released (the same
+  `studentVisibleResultWhere` rule as before), and only when the effective visibility is
+  `FULL_REVIEW`. Under `SCORE_ONLY` and `SCORE_AND_COUNTS` the response carries no per-question data
+  at all (integration-tested on the serialised payload).
+- The live attempt payload and the post-submit status still never carry the key (audit `X-05`).
+- The key is read from the frozen attempt snapshot, so a later edit to the question bank does not
+  change what a student or teacher sees.
+- Unchanged: the result settings lock and already-finalised results. Visibility is evaluated on
+  every read, so switching an exam (or the locked school value) to `FULL_REVIEW` applies at once to
+  results already finalised and released; nothing is stored per result.

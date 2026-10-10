@@ -21,6 +21,9 @@
     "ops:restore-verify": "tsx src/ops/restore-verify.ts",
     "ops:anonymise-copy": "tsx src/ops/anonymise-copy-cli.ts",
     "ops:attempts-affected": "tsx src/ops/attempts-affected-cli.ts",
+    "ops:backfill-subject-registrations": "tsx src/ops/backfill-subject-registrations.ts",
+    "ops:fix-name-order": "tsx src/ops/fix-name-order.ts",
+    "ops:send-alert": "tsx src/ops/send-alert.ts",
     "test:security": "vitest run --config vitest.security.config.ts"
   },
   "dependencies": {

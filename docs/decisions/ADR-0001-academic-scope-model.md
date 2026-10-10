@@ -67,3 +67,10 @@ Resolving `A-16`, which `06 §31` explicitly deferred. `Topic` is scoped to (sch
 - B9: HOD queue query via the two-hop join.
 - B11: readiness check validates question scope against the exam's classes.
 - F6/F9: department picker on subjects, level and topic pickers on questions.
+
+## Amendment — 2026-10-08 (ADR-0038)
+
+A department is a **teaching** department (Mathematics, Languages, Sciences), not a student stream;
+streams become their own entity. A subject still has at most one department. When no HOD can review
+a question (no department, no active HOD, or the only HOD is the author), School Admin may decide it.
+See [ADR-0038](./ADR-0038-subjects-streams-departments.md).

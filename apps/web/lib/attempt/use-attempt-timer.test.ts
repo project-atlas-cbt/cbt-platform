@@ -1,10 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAttemptTimer } from './use-attempt-timer';
+import { anchorServerClock, resetServerClock } from './server-clock';
 
 describe('useAttemptTimer', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    resetServerClock();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -56,6 +58,48 @@ describe('useAttemptTimer', () => {
     // Remaining time is unaffected: it's still ~10 minutes from the true
     // expiry, not "now (which just jumped back) + skew".
     expect(result.current.remainingMs).toBeGreaterThan(9 * 60_000);
+  });
+
+  it('audit P1-5 — a wall-clock jump forward (a lab PC resyncing its time) neither moves the countdown nor ends the exam', () => {
+    const now = Date.parse('2026-01-01T10:00:00.000Z');
+    vi.setSystemTime(now);
+    const expiresAt = new Date(now + 10 * 60_000).toISOString();
+    const onExpire = vi.fn();
+    const { result } = renderHook(() => useAttemptTimer('attempt-1', expiresAt, 0, onExpire));
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+    const before = result.current.remainingMs;
+
+    // Windows Time corrects the PC's clock by 30 minutes, without any real
+    // time passing.
+    act(() => {
+      vi.setSystemTime(Date.now() + 30 * 60_000);
+      vi.advanceTimersByTime(1_000);
+    });
+    expect(onExpire).not.toHaveBeenCalled();
+    expect(result.current.expired).toBe(false);
+    // Only the one real second elapsed.
+    expect(before - result.current.remainingMs).toBeGreaterThanOrEqual(900);
+    expect(before - result.current.remainingMs).toBeLessThanOrEqual(1_100);
+  });
+
+  it('audit P1-5 — a heartbeat re-anchors the countdown to the server clock', () => {
+    const now = Date.parse('2026-01-01T10:00:00.000Z');
+    vi.setSystemTime(now);
+    const expiresAt = new Date(now + 10 * 60_000).toISOString();
+    const { result } = renderHook(() => useAttemptTimer('attempt-1', expiresAt, 0, vi.fn()));
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    // The server says two minutes more have passed than this page counted
+    // (for example, the PC slept and its monotonic clock paused).
+    act(() => {
+      anchorServerClock(new Date(now + 2 * 60_000).toISOString());
+      vi.advanceTimersByTime(250);
+    });
+    expect(result.current.remainingMs).toBeLessThanOrEqual(8 * 60_000);
+    expect(result.current.remainingMs).toBeGreaterThan(7.9 * 60_000);
   });
 
   it('DoD 13 — fires each warning exactly once at its threshold', () => {

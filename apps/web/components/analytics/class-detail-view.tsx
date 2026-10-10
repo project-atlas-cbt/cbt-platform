@@ -1,31 +1,72 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, GraduationCap, School, TrendingUp, Users } from 'lucide-react';
-import { useClass } from '@/lib/academics/queries';
 import {
   formatCount,
   formatPercentage,
   useClassAnalytics,
   useClassStudents,
+  useTeacherMyAssignments,
 } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
+import { ErrorState } from '@/components/ui/error-state';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { MetricTile } from './metric-tile';
+import { useClassRegistrationGrid, useMyFormClasses } from '@/lib/academics/queries';
+import { ApiError } from '@/lib/api';
+import { SubjectRoster } from '@/components/academics/class-subjects/subject-roster';
 import { ComparisonChart } from './comparison-chart';
 
 export interface ClassDetailViewProps {
   classId: string;
 }
 
+/**
+ * Teacher › My Classes › a class. A Teacher may not read the class record
+ * itself (`academics.classes`), and class analytics for a Teacher are scoped
+ * to one subject they teach there, so both the heading and the subject list
+ * come from the teacher's own assignments.
+ */
 export function ClassDetailView({ classId }: ClassDetailViewProps) {
-  const classQuery = useClass(classId);
-  const analyticsQuery = useClassAnalytics(classId);
+  const assignmentsQuery = useTeacherMyAssignments();
+  const assignments = useMemo(
+    () => (assignmentsQuery.data?.assignments ?? []).filter((a) => a.classId === classId),
+    [assignmentsQuery.data, classId],
+  );
+  const subjects = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const a of assignments) seen.set(a.subjectId, a.subjectName);
+    return Array.from(seen, ([id, name]) => ({ id, name }));
+  }, [assignments]);
+  const [chosenSubjectId, setChosenSubjectId] = useState<string | undefined>();
+  const subjectId =
+    chosenSubjectId && subjects.some((s) => s.id === chosenSubjectId)
+      ? chosenSubjectId
+      : subjects[0]?.id;
+
+  const analyticsQuery = useClassAnalytics(classId, { subjectId }, { enabled: Boolean(subjectId) });
   const studentsQuery = useClassStudents(classId);
 
-  const cls = classQuery.data;
+  const formClassesQuery = useMyFormClasses();
+  const formClass = formClassesQuery.data?.classes.find((c) => c.classId === classId);
+  const first = assignments[0];
+  const cls = first
+    ? { name: first.className, level: first.level, arm: first.arm }
+    : formClass
+      ? { name: formClass.className, level: formClass.level, arm: formClass.arm }
+      : undefined;
   const analytics = analyticsQuery.data;
+  const analyticsLoading = Boolean(subjectId) && analyticsQuery.isPending;
   const students = studentsQuery.data?.students ?? [];
 
   return (
@@ -49,7 +90,25 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
         </div>
 
         {cls ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {subjects.length > 1 ? (
+              <Select value={subjectId ?? ''} onValueChange={setChosenSubjectId}>
+                <SelectTrigger className="h-8 w-44 text-xs" aria-label="Subject">
+                  <SelectValue placeholder="Subject" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subjects.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : subjects[0] ? (
+              <span className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text-secondary">
+                {subjects[0].name}
+              </span>
+            ) : null}
             <span className="rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-text-secondary">
               Level: {cls.level}
             </span>
@@ -60,34 +119,46 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
         ) : null}
       </div>
 
+      {!assignmentsQuery.isPending && !formClassesQuery.isPending && !cls ? (
+        <p className="rounded-lg border border-border bg-surface p-5 text-sm text-text-muted">
+          You don&apos;t teach a subject in this class.
+        </p>
+      ) : null}
+
+      {analyticsQuery.isError ? (
+        <ErrorState
+          error={analyticsQuery.error}
+          title="Class scores couldn't be loaded"
+          onRetry={() => void analyticsQuery.refetch()}
+        />
+      ) : null}
+
       {/* Class Performance Metrics */}
       <ErrorBoundary>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MetricTile
             label="Average Performance"
-            value={analyticsQuery.isPending ? '—' : formatPercentage(analytics?.averagePercentage)}
+            value={analyticsLoading ? '—' : formatPercentage(analytics?.averagePercentage)}
             subtitle="Class score average"
             icon={<TrendingUp className="h-4 w-4" />}
             emphasis
-            isLoading={analyticsQuery.isPending}
+            isLoading={analyticsLoading}
           />
           <MetricTile
             label="Pass Rate"
-            value={analyticsQuery.isPending ? '—' : formatPercentage(analytics?.passRate)}
+            value={analyticsLoading ? '—' : formatPercentage(analytics?.passRate)}
             subtitle="Passing grades"
             icon={<GraduationCap className="h-4 w-4" />}
-            isLoading={analyticsQuery.isPending}
+            isLoading={analyticsLoading}
           />
           <MetricTile
             label="Completion Rate"
             value={
-              analyticsQuery.isPending
-                ? '—'
-                : formatPercentage(analytics?.participation?.completionRate)
+              analyticsLoading ? '—' : formatPercentage(analytics?.participation?.completionRate)
             }
             subtitle="Assessment attendance"
             icon={<Users className="h-4 w-4" />}
-            isLoading={analyticsQuery.isPending}
+            isLoading={analyticsLoading}
           />
           <MetricTile
             label="Enrolled Students"
@@ -104,8 +175,8 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
         <ErrorBoundary>
           <ComparisonChart
             items={analytics?.subjects ?? []}
-            title="Subjects Taught"
-            subtitle="Performance comparison across subjects for this class"
+            title="Subject"
+            subtitle="Performance in the subject you teach this class"
             metricLabel="Class Avg"
             emptyMessage="No subject assessment results recorded for this class yet."
           />
@@ -121,6 +192,8 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
           />
         </ErrorBoundary>
       </div>
+
+      {cls ? <TeacherRegistrations classId={classId} isFormClass={Boolean(formClass)} /> : null}
 
       {/* Student Roster Table */}
       <ErrorBoundary>
@@ -185,5 +258,28 @@ export function ClassDetailView({ classId }: ClassDetailViewProps) {
         </div>
       </ErrorBoundary>
     </div>
+  );
+}
+
+/** ADR-0038 amendment: the electives this teacher may set in this class (the
+ * ones they teach, or all of them as form teacher). Hidden when there are
+ * none, which the server answers with 403. */
+function TeacherRegistrations({ classId, isFormClass }: { classId: string; isFormClass: boolean }) {
+  const grid = useClassRegistrationGrid(classId);
+  if (grid.isError && grid.error instanceof ApiError && grid.error.httpStatus === 403) return null;
+  return (
+    <ErrorBoundary>
+      <section className="space-y-3 rounded-lg border border-border bg-surface p-5">
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary">Subject registrations</h3>
+          <p className="text-xs text-text-muted">
+            {isFormClass
+              ? 'As form teacher you can set every elective for this class.'
+              : 'Choose who takes the electives you teach in this class.'}
+          </p>
+        </div>
+        <SubjectRoster classId={classId} />
+      </section>
+    </ErrorBoundary>
   );
 }

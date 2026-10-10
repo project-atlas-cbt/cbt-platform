@@ -17,4 +17,13 @@ describe('RichTextEditor', () => {
     render(<RichTextEditor value="<p>Hello</p>" onChange={vi.fn()} disabled />);
     expect(screen.getByRole('button', { name: 'Bold' })).toBeDisabled();
   });
+
+  it('round-trips subscript and superscript', () => {
+    const onChange = vi.fn();
+    render(<RichTextEditor value="<p>H<sub>2</sub>O x<sup>2</sup></p>" onChange={onChange} />);
+    expect(screen.getByRole('button', { name: 'Subscript' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Superscript' })).toBeInTheDocument();
+    expect(document.querySelector('.tiptap sub')?.textContent).toBe('2');
+    expect(document.querySelector('.tiptap sup')?.textContent).toBe('2');
+  });
 });

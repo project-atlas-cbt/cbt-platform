@@ -59,9 +59,9 @@ const SECURITY_ALERT_CHANGES = {
     'New recovery codes were created for your account. Your old recovery codes no longer work.',
 } as const;
 
+/** Wrong-code attempts are counted under `<key>:attempts` (P3-15). */
 interface ChallengeState {
   userId: string;
-  attempts: number;
 }
 
 const invalidCode = () =>
@@ -322,7 +322,7 @@ export class PlatformMfaService {
 
   async createChallenge(userId: string): Promise<string> {
     const token = randomBytes(32).toString('base64url');
-    const state: ChallengeState = { userId, attempts: 0 };
+    const state: ChallengeState = { userId };
     await this.redis.set(
       CHALLENGE_PREFIX + sha256(token),
       JSON.stringify(state),
@@ -347,11 +347,22 @@ export class PlatformMfaService {
     if (!raw) throw invalidCode();
     const state = JSON.parse(raw) as ChallengeState;
 
+    // P3-15: each guess reserves its attempt with an atomic INCR before the
+    // code is checked, so parallel guesses can't all read "0 attempts" and
+    // go over the limit.
+    const attemptsKey = `${key}:attempts`;
+    const attempt = await this.redis.incr(attemptsKey);
+    if (attempt === 1) await this.redis.expire(attemptsKey, CHALLENGE_TTL_SECONDS);
+    if (attempt > CHALLENGE_MAX_ATTEMPTS) {
+      await this.redis.del(key, attemptsKey);
+      throw invalidCode();
+    }
+
     const credential = await prisma.platformMfaCredential.findUnique({
       where: { userId: state.userId },
     });
     if (!credential?.confirmedAt) {
-      await this.redis.del(key);
+      await this.redis.del(key, attemptsKey);
       throw invalidCode();
     }
 
@@ -366,16 +377,10 @@ export class PlatformMfaService {
         : await this.acceptRecoveryCode(credential.id, state.userId, proof.recoveryCode);
 
     if (!ok) {
-      state.attempts += 1;
-      if (state.attempts >= CHALLENGE_MAX_ATTEMPTS) {
-        await this.redis.del(key);
-      } else {
-        const ttl = await this.redis.ttl(key);
-        await this.redis.set(key, JSON.stringify(state), 'EX', Math.max(ttl, 1));
-      }
+      if (attempt >= CHALLENGE_MAX_ATTEMPTS) await this.redis.del(key, attemptsKey);
       throw invalidCode();
     }
-    await this.redis.del(key);
+    await this.redis.del(key, attemptsKey);
     return state.userId;
   }
 

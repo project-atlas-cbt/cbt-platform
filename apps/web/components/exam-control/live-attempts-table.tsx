@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ApiComponents } from '@atlas/contracts';
+import { compareText } from '@atlas/domain';
 import { Users } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -47,6 +48,16 @@ export function describeSignals(signals: SignalCounts | null): string | null {
     ([type, label]) => `${label} ${signals[type]}`,
   );
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** Leaves of the exam window at which a row is flagged for the invigilator to
+ * look at. A tab switch fires both Left window and Tab hidden, so only Left
+ * window and Left full screen are summed. A prompt to check, never a verdict. */
+export const FREQUENT_LEAVES_THRESHOLD = 3;
+
+export function hasFrequentLeaves(signals: SignalCounts | null): boolean {
+  if (!signals) return false;
+  return signals.WINDOW_BLUR + signals.FULLSCREEN_EXIT >= FREQUENT_LEAVES_THRESHOLD;
 }
 
 function fromLive(live: LiveAttempt): LiveAttemptTableRow {
@@ -131,7 +142,7 @@ function buildRows(
     (a, b) =>
       STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
       Number(b.disconnected) - Number(a.disconnected) ||
-      a.studentName.localeCompare(b.studentName),
+      compareText(a.studentName, b.studentName),
   );
 }
 
@@ -239,7 +250,10 @@ export function LiveAttemptsTable({
       cell: (row) => {
         const text = describeSignals(row.signals);
         return text ? (
-          <span className="tabular-nums text-text-secondary">{text}</span>
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {hasFrequentLeaves(row.signals) && <Badge status="warning">Check on student</Badge>}
+            <span className="tabular-nums text-text-secondary">{text}</span>
+          </span>
         ) : (
           <span className="text-text-muted">—</span>
         );

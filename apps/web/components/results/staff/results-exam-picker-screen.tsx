@@ -5,10 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { parsePageSize, pageListHref as listHref } from '@/lib/query/page-size';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { formatDate } from '@/lib/format/date';
-import { useExamsPaginated } from '@/lib/exams/queries';
+import { useExamsPaginated, useOwnExamsFilter } from '@/lib/exams/queries';
 import { ExamStatusBadge } from '@/components/exams/exam-status-badge';
 
 const PAGE_SIZE = 25;
@@ -42,10 +43,13 @@ export function ResultsExamPickerScreen({ basePath }: { basePath: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
 
-  const exams = useExamsPaginated({ page, pageSize: PAGE_SIZE });
+  // Only an exam's author sees its results among teachers (ADR-0037).
+  const ownFilter = useOwnExamsFilter(basePath.startsWith('/teacher'));
+  const exams = useExamsPaginated({ page, pageSize, ...ownFilter });
   const rows: ExamRow[] = exams.data?.exams ?? [];
-  const pageCount = Math.max(1, Math.ceil((exams.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((exams.data?.total ?? 0) / pageSize));
 
   const columns: DataTableColumn<ExamRow>[] = [
     {
@@ -96,7 +100,11 @@ export function ResultsExamPickerScreen({ basePath }: { basePath: string }) {
         isLoading={exams.isPending}
         page={page}
         pageCount={pageCount}
-        onPageChange={(next) => router.replace(next > 1 ? `${basePath}?page=${next}` : basePath)}
+        onPageChange={(next) => router.replace(listHref(basePath, next, pageSize))}
+        total={exams.data?.total}
+        pageSize={pageSize}
+        onPageSizeChange={(next) => router.replace(listHref(basePath, 1, next))}
+        getRowHref={(row) => `${basePath}/${row.id}`}
         emptyState={
           <EmptyState
             icon={ClipboardList}

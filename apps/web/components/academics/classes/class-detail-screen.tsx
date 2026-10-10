@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ClipboardList, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,24 +15,22 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  useClass,
-  useClassRoster,
-  useClassTeachers,
-  useDepartments,
-  useSession,
-} from '@/lib/academics/queries';
+import { useClass, useClassRoster, useClassTeachers, useSession } from '@/lib/academics/queries';
 import { useHasPermission } from '@/lib/nav';
 import { useClassCredentialSheet } from '@/lib/people/mutations';
 import { describeAcademicsError } from '../error-utils';
 import { ClassStatusBadge } from '../academic-status-badges';
+import { SubjectRoster } from '../class-subjects/subject-roster';
+import { FormTeachersPanel } from './form-teachers-panel';
 import { ClassSubjectList } from '../class-subjects/class-subject-list';
+import { ClassExamsTable } from './class-exams-table';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { id: 'students', label: 'Students' },
   { id: 'teachers', label: 'Teachers' },
   { id: 'subjects', label: 'Subjects offered' },
+  { id: 'registrations', label: 'Subject registrations' },
   { id: 'exams', label: 'Exams' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -41,22 +39,19 @@ type TabId = (typeof TABS)[number]['id'];
  * tab state, not nested routes — no independent deep-link need for a
  * within-page concern, avoiding four more thin route files per role root.
  * Teachers comes from this phase's own `GET /v1/classes/:id/teachers`
- * gap-closure; Exams is an honest "not yet available" placeholder — no exam
- * backend exists at all yet (B9+), so nothing is fabricated here. */
+ * gap-closure; Exams lists the exams targeting this class (`ClassExamsTable`). */
 export function ClassDetailScreen({ classId }: { classId: string }) {
   const classGroup = useClass(classId);
   const session = useSession(classGroup.data?.academicSessionId);
-  const departments = useDepartments();
   const [tab, setTab] = useState<TabId>('students');
+  // ADR-0038: who takes each subject, for the staff who set registrations.
+  const canManageRegistrations = useHasPermission('registrations.manage');
+  const tabs = TABS.filter((t) => t.id !== 'registrations' || canManageRegistrations);
 
   if (classGroup.isPending) return <Skeleton className="h-48 w-full" />;
   if (classGroup.isError) {
     return <ErrorState error={classGroup.error} onRetry={() => void classGroup.refetch()} />;
   }
-
-  const department = classGroup.data.departmentId
-    ? departments.data?.departments.find((d) => d.id === classGroup.data.departmentId)
-    : undefined;
 
   return (
     <div className="space-y-6">
@@ -64,7 +59,9 @@ export function ClassDetailScreen({ classId }: { classId: string }) {
         <h2 className="text-base font-semibold text-text-primary">{classGroup.data.name}</h2>
         <Badge status="neutral">{classGroup.data.level}</Badge>
         {session.data ? <Badge status="neutral">{session.data.name}</Badge> : null}
-        {department ? <Badge status="info">{department.name}</Badge> : null}
+        {classGroup.data.defaultStreamName ? (
+          <Badge status="info">{classGroup.data.defaultStreamName} stream</Badge>
+        ) : null}
         <ClassStatusBadge value={classGroup.data.status} />
       </div>
 
@@ -72,7 +69,7 @@ export function ClassDetailScreen({ classId }: { classId: string }) {
         className="inline-flex items-center gap-1 border-b border-border"
         aria-label="Class detail sections"
       >
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -90,15 +87,17 @@ export function ClassDetailScreen({ classId }: { classId: string }) {
       </nav>
 
       {tab === 'students' ? <ClassRosterTable classId={classId} /> : null}
-      {tab === 'teachers' ? <ClassTeachersTable classId={classId} /> : null}
-      {tab === 'subjects' ? <ClassSubjectList classId={classId} /> : null}
-      {tab === 'exams' ? (
-        <EmptyState
-          icon={ClipboardList}
-          title="Exams aren't available yet"
-          description="This arrives with a later phase — the exam engine hasn't been built yet."
-        />
+      {tab === 'teachers' ? (
+        <div className="space-y-4">
+          <FormTeachersPanel classId={classId} />
+          <ClassTeachersTable classId={classId} />
+        </div>
       ) : null}
+      {tab === 'subjects' ? <ClassSubjectList classId={classId} /> : null}
+      {tab === 'registrations' && canManageRegistrations ? (
+        <SubjectRoster classId={classId} />
+      ) : null}
+      {tab === 'exams' ? <ClassExamsTable classId={classId} /> : null}
     </div>
   );
 }
@@ -133,6 +132,8 @@ function ClassRosterTable({ classId }: { classId: string }) {
       <EmptyState title="No students enrolled yet" description="Enroll students from People." />
     );
   }
+  // ADR-0038: the column shows only when some student here has a stream.
+  const showStream = roster.data.students.some((s) => s.streamName);
   return (
     <div className="space-y-3">
       {canResetCredentials ? (
@@ -160,6 +161,7 @@ function ClassRosterTable({ classId }: { classId: string }) {
           <TableRow>
             <TableHead>Student ID</TableHead>
             <TableHead>Name</TableHead>
+            {showStream ? <TableHead>Stream</TableHead> : null}
             <TableHead>Enrolled since</TableHead>
           </TableRow>
         </TableHeader>
@@ -168,6 +170,7 @@ function ClassRosterTable({ classId }: { classId: string }) {
             <TableRow key={s.enrollmentId}>
               <TableCell>{s.studentId}</TableCell>
               <TableCell>{s.displayName}</TableCell>
+              {showStream ? <TableCell>{s.streamName ?? '—'}</TableCell> : null}
               <TableCell>{s.startDate}</TableCell>
             </TableRow>
           ))}

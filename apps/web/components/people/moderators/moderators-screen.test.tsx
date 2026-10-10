@@ -25,6 +25,7 @@ const MODERATORS = [
     firstName: 'Mod',
     lastName: 'Erator',
     displayName: 'Mod Erator',
+    formalName: 'Erator Mod',
     loginIdentifier: 'mod01',
     email: 'mod@example.com',
     userStatus: 'ACTIVE',
@@ -48,9 +49,9 @@ describe('ModeratorsScreen', () => {
       refetch: vi.fn(),
     } as never);
     render(<ModeratorsScreen basePath="/school/people" />);
-    expect(screen.getByText('Mod Erator')).toBeInTheDocument();
+    expect(screen.getByText('Erator Mod')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add moderator/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /actions for mod erator/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /actions for erator mod/i })).toBeInTheDocument();
   });
 
   it('05 §14 — a Moderator viewer sees no create/edit/remove controls (Moderator cannot manage Moderators)', () => {
@@ -64,12 +65,12 @@ describe('ModeratorsScreen', () => {
     render(<ModeratorsScreen basePath="/moderator/people" />);
     expect(screen.queryByRole('button', { name: /add moderator/i })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /actions for mod erator/i }),
+      screen.queryByRole('button', { name: /actions for erator mod/i }),
     ).not.toBeInTheDocument();
     // The row itself is still visible — this screen is unreachable for
     // MODERATOR in practice (users.moderator.view is also denied, and
     // PeopleTabs hides the tab), but every control is defensively gated too.
-    expect(screen.getByText('Mod Erator')).toBeInTheDocument();
+    expect(screen.getByText('Erator Mod')).toBeInTheDocument();
   });
 
   it('shows the first-run empty state', () => {

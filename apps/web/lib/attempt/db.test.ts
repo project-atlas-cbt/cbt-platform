@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { getAttemptDb, clearAttemptData, type AnswerRow, type QuestionRow } from './db';
 
 const ATTEMPT_ID = 'attempt-1';
@@ -70,6 +70,52 @@ describe('attempt Dexie schema', () => {
     expect(await db.questions.where('attemptId').equals(ATTEMPT_ID).count()).toBe(0);
     expect(await db.answers.where('attemptId').equals(ATTEMPT_ID).count()).toBe(0);
     expect(await db.eventOutbox.where('attemptId').equals(ATTEMPT_ID).count()).toBe(0);
+  });
+
+  it('audit P0-2 — clearAttemptData keeps answers the server never acknowledged', async () => {
+    const db = getAttemptDb();
+    await db.answers.put(makeAnswer({ examQuestionId: 'q1', syncStatus: 'synced' }));
+    await db.answers.put(makeAnswer({ examQuestionId: 'q2', syncStatus: 'pending' }));
+    await db.answers.put(makeAnswer({ examQuestionId: 'q3', syncStatus: 'in-flight' }));
+
+    await clearAttemptData(ATTEMPT_ID);
+
+    const left = await db.answers.where('attemptId').equals(ATTEMPT_ID).toArray();
+    expect(left.map((row) => row.examQuestionId).sort()).toEqual(['q2', 'q3']);
+    await db.answers.where('attemptId').equals(ATTEMPT_ID).delete();
+  });
+
+  it('audit P3-10 — clearAttemptData removes the service worker copy of the exam images too', async () => {
+    const stores = new Map<string, Set<string>>();
+    const open = (name: string) => {
+      const store = stores.get(name) ?? new Set<string>();
+      stores.set(name, store);
+      return Promise.resolve({
+        delete: (key: string) => Promise.resolve(store.delete(key)),
+      });
+    };
+    vi.stubGlobal('caches', { open });
+    try {
+      const signedUrl = 'https://media.example.test/school/asset-1?X-Amz-Signature=abc';
+      stores.set('atlas-exam-media-sw-v1', new Set([signedUrl]));
+      const db = getAttemptDb();
+      await db.mediaManifest.put({
+        attemptId: ATTEMPT_ID,
+        mediaAssetId: 'asset-1',
+        examQuestionIds: ['q1'],
+        url: signedUrl,
+        urlExpiresAt: new Date().toISOString(),
+        mediaType: 'image/png',
+        cacheStatus: 'cached',
+        cachedAt: new Date().toISOString(),
+      });
+
+      await clearAttemptData(ATTEMPT_ID);
+
+      expect(stores.get('atlas-exam-media-sw-v1')!.has(signedUrl)).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   /**

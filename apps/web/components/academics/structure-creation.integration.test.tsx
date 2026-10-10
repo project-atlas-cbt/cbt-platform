@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionsScreen } from './sessions/sessions-screen';
 import { TermsScreen } from './terms/terms-screen';
 import { DepartmentsScreen } from './departments/departments-screen';
+import { StreamsScreen } from './streams/streams-screen';
 import { ClassesScreen } from './classes/classes-screen';
 import { SubjectsScreen } from './subjects/subjects-screen';
 import { ClassSubjectList } from './class-subjects/class-subject-list';
@@ -60,11 +61,20 @@ describe('F6 structure creation', () => {
     classes: [] as {
       id: string;
       academicSessionId: string;
-      departmentId: string | null;
+      defaultStreamId: string | null;
+      defaultStreamName: string | null;
       name: string;
       level: string;
       arm: string;
       status: string;
+    }[],
+    streams: [] as {
+      id: string;
+      name: string;
+      code: string;
+      status: string;
+      classCount: number;
+      studentCount: number;
     }[],
     subjects: [] as {
       id: string;
@@ -81,6 +91,9 @@ describe('F6 structure creation', () => {
       subjectCode: string;
       academicSessionId: string;
       status: string;
+      kind: string;
+      streamIds: string[];
+      streamNames: string[];
     }[],
   };
   let nextId = 1;
@@ -90,6 +103,7 @@ describe('F6 structure creation', () => {
     state.terms = [];
     state.departments = [];
     state.classes = [];
+    state.streams = [];
     state.subjects = [];
     state.classSubjects = [];
     nextId = 1;
@@ -108,6 +122,8 @@ describe('F6 structure creation', () => {
           });
         case '/academics/departments':
           return ok({ departments: state.departments });
+        case '/academics/streams':
+          return ok({ streams: state.streams });
         case '/academics/classes': {
           const sessionId = opts.params?.query?.academicSessionId;
           return ok({
@@ -118,6 +134,8 @@ describe('F6 structure creation', () => {
         }
         case '/academics/subjects':
           return ok({ subjects: state.subjects });
+        case '/academics/subject-choice-groups':
+          return ok({ choiceGroups: [] });
         case '/academics/classes/{id}/subjects':
           return ok({
             offerings: state.classSubjects.filter((cs) => cs.classId === opts.params?.path?.id),
@@ -188,11 +206,25 @@ describe('F6 structure creation', () => {
           state.departments.push(department);
           return ok(department);
         }
+        case '/academics/streams': {
+          const stream = {
+            id: `stream-${nextId++}`,
+            name: body.name as string,
+            code: (body.code as string).toUpperCase(),
+            status: 'ACTIVE',
+            classCount: 0,
+            studentCount: 0,
+          };
+          state.streams.push(stream);
+          return ok(stream);
+        }
         case '/academics/classes': {
           const classGroup = {
             id: `class-${nextId++}`,
             academicSessionId: body.academicSessionId as string,
-            departmentId: (body.departmentId as string | undefined) ?? null,
+            defaultStreamId: (body.defaultStreamId as string | undefined) ?? null,
+            defaultStreamName:
+              state.streams.find((st) => st.id === body.defaultStreamId)?.name ?? null,
             name: body.name as string,
             level: body.level as string,
             arm: body.arm as string,
@@ -224,6 +256,9 @@ describe('F6 structure creation', () => {
             subjectCode: subject!.code,
             academicSessionId: classGroup.academicSessionId,
             status: 'ACTIVE',
+            kind: (body.kind as string | undefined) ?? 'COMPULSORY',
+            streamIds: (body.streamIds as string[] | undefined) ?? [],
+            streamNames: [] as string[],
           };
           state.classSubjects.push(offering);
           return ok(offering);
@@ -284,18 +319,27 @@ describe('F6 structure creation', () => {
     await screen.findByText('Sciences');
     departmentsRender.unmount();
 
-    // 4. Class — the just-created department is available in its picker.
+    // 3b. Stream (ADR-0038) — students, not staff.
+    const streamsRender = render(wrap(<StreamsScreen />));
+    await userEvent.click(screen.getAllByRole('button', { name: /add stream/i })[0]!);
+    await userEvent.type(screen.getByLabelText(/stream name/i), 'Science');
+    await userEvent.type(screen.getByLabelText(/code/i), 'SCI');
+    await userEvent.click(screen.getByRole('button', { name: /create stream/i }));
+    await screen.findByText('Science');
+    streamsRender.unmount();
+
+    // 4. Class — the just-created stream is available in its picker.
     const classesRender = render(wrap(<ClassesScreen basePath="/school/academics" />));
     await screen.findByText('No classes in this session yet');
     await userEvent.click(screen.getAllByRole('button', { name: /add class/i })[0]!);
     await userEvent.type(screen.getByLabelText(/arm/i), 'A');
     await userEvent.type(screen.getByLabelText(/class name/i), 'SS2A');
-    await userEvent.click(screen.getByRole('combobox', { name: /department/i }));
-    await userEvent.click(screen.getByRole('option', { name: 'Sciences' }));
+    await userEvent.click(screen.getByRole('combobox', { name: /stream/i }));
+    await userEvent.click(screen.getByRole('option', { name: 'Science' }));
     await userEvent.click(screen.getByRole('button', { name: /create class/i }));
     await screen.findByText('SS2A');
     expect(state.classes).toHaveLength(1);
-    expect(state.classes[0]?.departmentId).toBe(state.departments[0]?.id);
+    expect(state.classes[0]?.defaultStreamId).toBe(state.streams[0]?.id);
     classesRender.unmount();
 
     // 5. Subject.

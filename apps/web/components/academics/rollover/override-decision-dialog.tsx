@@ -21,8 +21,7 @@ import {
 } from '@/components/ui/select';
 import { useUpdateRolloverDecisions } from '@/lib/academics/mutations';
 
-export type RolloverOutcomeType =
-  'PROMOTE' | 'REPEAT' | 'CHANGE_DEPARTMENT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
+export type RolloverOutcomeType = 'PROMOTE' | 'REPEAT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
 
 interface ClassDraftOption {
   id: string;
@@ -59,11 +58,6 @@ const OUTCOME_OPTIONS: Array<{ value: RolloverOutcomeType; label: string; descri
     value: 'REPEAT',
     label: 'Repeat Year',
     description: 'Retain student in the current academic level',
-  },
-  {
-    value: 'CHANGE_DEPARTMENT',
-    label: 'Change Department',
-    description: 'Move to a different department in next level',
   },
   {
     value: 'GRADUATE',
@@ -108,15 +102,16 @@ export function OverrideDecisionDialog({
     }
   }
 
-  const isContinuing =
-    outcome === 'PROMOTE' || outcome === 'REPEAT' || outcome === 'CHANGE_DEPARTMENT';
+  // A stream change is a Promote into a class of the other stream
+  // (bug audit P2-10: the separate option was one the server refuses).
+  const isContinuing = outcome === 'PROMOTE' || outcome === 'REPEAT';
   const isSingle = decisionIds.length === 1;
 
   // Filter available target class drafts
   const availableClasses = classDrafts.filter((c) => {
     if (!c.included) return false;
     if (!sourceLevel) return true;
-    if (outcome === 'PROMOTE' || outcome === 'CHANGE_DEPARTMENT') {
+    if (outcome === 'PROMOTE') {
       const targetLevel = NEXT_LEVEL_MAP[sourceLevel];
       return targetLevel ? c.level === targetLevel : false;
     }

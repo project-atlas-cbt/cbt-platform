@@ -83,7 +83,9 @@ What stays the same:
 
    This writes `.env` (Compose: domain and infrastructure passwords) and `app.env` (application
    secrets), each with fresh random secrets and mode 600. Then fill in:
-   - `.env`: `SCHOOLS` (comma-separated school labels), `ACME_EMAIL`, and the `BACKUP_S3_*` values.
+   - `.env`: `ACME_EMAIL` and the `BACKUP_S3_*` values. Leave `SCHOOLS` empty for now: the
+     post-deploy smoke checks that every listed school exists, and schools are created only after
+     the first deploy (see "Adding a school").
      `SUPPORT_EMAIL` and `SUPPORT_WHATSAPP` set the contacts on staff Help screens (ADR-0035); they
      are built into the web image, so changing them needs a rebuild. `MARKETING_LEAD_EMAIL_*`
      send the marketing site's demo requests (`apps/marketing/README.md`); left empty, the form
@@ -106,12 +108,21 @@ What stays the same:
 
    The password goes to that address by email only. Sign in at `https://admin.<root>/admin/login`.
 
-6. **Back up once by hand** (`bin/backup.sh`) and check the objects arrived off-site.
+6. **Back up once by hand** (`bin/backup.sh`) and check the objects arrived off-site. `backups/`
+   must belong to `atlas`: the deploy creates it that way, and stops with a message if root owns
+   it (fix with `chown -R atlas:atlas /home/atlas/cbt-platform/infra/vps/backups` as root).
 
 ## Adding a school
 
-Create the school in the Software Admin console, add its subdomain label to `SCHOOLS` in `.env`,
-and run `bin/deploy.sh`. Caddy fetches the new certificates on start.
+Create the school in the Software Admin console first, then add its subdomain label to `SCHOOLS`
+in `.env` (comma-separated) and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the
+new certificates; the smoke waits up to a minute for them, then checks every school in `SCHOOLS`.
+A listed school that does not exist fails the smoke with a message naming it. Until the school is
+listed, its addresses have no certificate (the browser shows ERR_SSL_PROTOCOL_ERROR).
+
+`CADDY_ON_DEMAND=1` in `.env` would give console-created schools their certificates on the first
+visit instead. Leave it off: the first deploys with it (2026-10-08) left every host without a
+certificate, and it needs a test on a non-pilot server first (CHANGE-LOG).
 
 ## Demo school (staging only)
 
@@ -142,6 +153,15 @@ or bounces.
   release runs against the newer schema; never roll a migration back by hand.
 - **Never during a sitting.** Deploying restarts API and worker; attempts tolerate it (offline
   queue, server-side timers), but do not deploy while an exam is running.
+- **Disk space.** Each release builds about 8 GB of images. A deploy stops before building when
+  less than 10 GB is free, and after a passing smoke it removes every `atlas-*` image except this
+  release's and the previous one's, plus build cache older than a week. To free space by hand,
+  keep the running release (`R=$(tail -n 1 releases.log)`):
+  `docker images --format '{{.Repository}}:{{.Tag}}' | grep '^atlas-' | grep -v ":$R" | xargs -r docker rmi`
+  then `docker builder prune -f`.
+- **Ops scripts by hand.** Images are tagged by release, and only `deploy.sh` sets it. Run
+  `export RELEASE=$(git rev-parse --short=12 HEAD)` first, or `docker compose --profile ops run`
+  uses (or builds) an image tagged `unset` instead of the deployed code.
 
 ## Maintenance page
 
@@ -169,22 +189,39 @@ real server, and refuses to run where `.env` belongs to another domain.
 ## Restore
 
 On a fresh server after setup steps 1 to 3 (with the old `.env` and `app.env`, which you must keep
-in a password manager: the database roles and MFA secrets depend on them):
+in a password manager: the database roles and MFA secrets depend on them). The order matters:
+PostgreSQL and Redis only start once their internal certificates exist, and the dump's security
+policies name the `atlas_app` and `atlas_audit_reader` roles, which the migrations create. A dump
+restored before those roles exist silently loses two audit policies, and every Software Admin
+password change, MFA and sign-out of other sessions then fails.
 
 ```sh
 cd ~/cbt-platform/infra/vps
+sudo bin/internal-tls.sh                      # 1. certificates (as root, or ssh root@ the server)
 docker compose up -d --wait postgres redis minio
-# fetch the latest dump from off-site storage into backups/, then:
-docker compose exec -T postgres pg_restore -U atlas -d atlas --clean --if-exists < backups/db-<stamp>.dump
-# copy media back:
-docker compose exec -T -e MC_HOST_local=... -e MC_HOST_offsite=... minio \
-  mc mirror offsite/<bucket>/media local/atlas-media
-bin/deploy.sh
+docker compose --profile ops run --rm ops     # 2. migrations: creates the database roles
+docker compose stop caddy web api worker 2>/dev/null || true   # 3. nothing writes during the restore
+# 4. fetch the latest dump from off-site storage into backups/, then:
+docker compose exec -T postgres pg_restore -U atlas -d atlas \
+  --clean --if-exists --exit-on-error < backups/db-<stamp>.dump
+# copy media back (keys passed by name from .env, as bin/backup.sh does):
+set -a; . ./.env; set +a
+docker compose exec -T -e BACKUP_S3_ENDPOINT -e BACKUP_S3_ACCESS_KEY_ID \
+  -e BACKUP_S3_SECRET_ACCESS_KEY -e BACKUP_S3_BUCKET minio sh -ec '
+  export MC_HOST_local="http://atlas-root:${MINIO_ROOT_PASSWORD}@localhost:9000"
+  export MC_HOST_offsite="https://${BACKUP_S3_ACCESS_KEY_ID}:${BACKUP_S3_SECRET_ACCESS_KEY}@${BACKUP_S3_ENDPOINT#https://}"
+  mc mirror offsite/$BACKUP_S3_BUCKET/media local/atlas-media'
+bin/deploy.sh                                 # 5. reasserts grants, starts the apps
 ```
+
+If `pg_restore` stops on an error, nothing after it ran: fix the cause and run it again rather than
+carrying on. On a server that already holds data, step 3 is what keeps the running apps from
+writing into a half-restored database.
 
 Then run `ops:restore-verify` and `ops:attempts-affected` through the `ops` service as
 [backup-and-restore.md](backup-and-restore.md) describes, to list attempts that changed after
-the dump.
+the dump. `ops:restore-verify` fails if either audit policy is missing. Rehearse this whole
+restore once before the pilot (launch checklist section 0).
 
 ## Watching it
 
@@ -192,5 +229,8 @@ the dump.
   `@atlas/observability`).
 - Exam Health Monitor alerts reach `OPS_ALERT_EMAILS` through SMTP (or the recipients set in System
   Configuration, ADR-0036, which override it).
-- `backups/backup.log` after each night; an empty off-site setting prints a warning there.
+- `backups/backup.log` after each night; an empty off-site setting prints a warning there. A
+  failed backup also emails the operations alert recipients ("Nightly backup failed", sent by
+  `ops:send-alert` from the last release in `releases.log`). A backup that never starts (cron
+  removed, server off) sends nothing, so still glance at the log or the off-site bucket weekly.
 - An external uptime check (any free service) on `https://api.<root>/v1/health`.

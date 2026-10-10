@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn, type DataTableSort } from '@/components/ui/data-table';
+import { parsePageSize } from '@/lib/query/page-size';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -30,7 +31,11 @@ const PAGE_SIZE = 25;
 
 interface HodRow {
   membershipId: string;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
   displayName: string;
+  formalName: string;
   staffId: string;
   departmentId: string | null;
   departmentName: string | null;
@@ -53,11 +58,13 @@ export function HodsScreen({ basePath: _basePath }: { basePath: string }) {
   const sortColumn = searchParams.get('sortBy');
   const sortDir = searchParams.get('sortDir');
   const page = Math.max(1, Number.parseInt(searchParams.get('page') ?? '1', 10) || 1);
-  const sort = useMemo<DataTableSort | null>(
+  const pageSize = parsePageSize(searchParams.get('size'), PAGE_SIZE);
+  const sort = useMemo<DataTableSort>(
     () =>
       sortColumn && (sortDir === 'asc' || sortDir === 'desc')
         ? { columnId: sortColumn, direction: sortDir }
-        : null,
+        : // Owner decision 2026-10-09: lists open A to Z by surname.
+          { columnId: 'lastName', direction: 'asc' },
     [sortColumn, sortDir],
   );
 
@@ -90,17 +97,17 @@ export function HodsScreen({ basePath: _basePath }: { basePath: string }) {
   const hods = useHodsPaginated({
     q: search,
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     sortBy: sortColumn === 'staffId' || sortColumn === 'lastName' ? sortColumn : null,
     sortDir: sortDir === 'asc' || sortDir === 'desc' ? sortDir : null,
   });
 
   const rows: HodRow[] = hods.data?.hods ?? [];
-  const pageCount = Math.max(1, Math.ceil((hods.data?.total ?? 0) / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil((hods.data?.total ?? 0) / pageSize));
   const canManageAny = canEdit || canAssign || canReset || canRemove;
 
   const columns: DataTableColumn<HodRow>[] = [
-    { id: 'lastName', header: 'Name', sortable: true, cell: (row) => row.displayName },
+    { id: 'lastName', header: 'Name', sortable: true, cell: (row) => row.formalName },
     { id: 'staffId', header: 'Staff ID', sortable: true, cell: (row) => row.staffId },
     { id: 'department', header: 'Department', cell: (row) => row.departmentName ?? '—' },
     ...(canManageAny
@@ -112,7 +119,7 @@ export function HodsScreen({ basePath: _basePath }: { basePath: string }) {
             cell: (row: HodRow) => (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label={`Actions for ${row.displayName}`}>
+                  <Button variant="ghost" size="icon" aria-label={`Actions for ${row.formalName}`}>
                     <MoreHorizontal aria-hidden />
                   </Button>
                 </DropdownMenuTrigger>
@@ -185,6 +192,11 @@ export function HodsScreen({ basePath: _basePath }: { basePath: string }) {
           }
           page={page}
           pageCount={pageCount}
+          total={hods.data?.total}
+          pageSize={pageSize}
+          onPageSizeChange={(next) =>
+            updateParams({ size: next === PAGE_SIZE ? null : String(next), page: null })
+          }
           onPageChange={(next) => updateParams({ page: next > 1 ? String(next) : null })}
           emptyState={
             !search ? (

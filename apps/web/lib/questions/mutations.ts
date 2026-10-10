@@ -157,6 +157,22 @@ export function useBulkSubmitQuestions() {
   });
 }
 
+/** Bulk archive — one request, per-question outcomes (the single-archive
+ * rules apply to each question). */
+export interface BulkArchiveResult {
+  archived: { questionId: string }[];
+  failed: { questionId: string; code: string; message: string }[];
+}
+
+export function useBulkArchiveQuestions() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (questionIds: string[]) =>
+      unwrap(apiClient.POST('/questions/bulk-archive', { body: { questionIds } })),
+    onSuccess: () => invalidateQuestions(client),
+  });
+}
+
 export function useAttachQuestionMedia(questionId: string, revisionId: string) {
   const client = useQueryClient();
   return useMutation({

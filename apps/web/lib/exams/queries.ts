@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ExamStatus, QuestionDifficulty } from '@atlas/domain';
 import { apiClient, unwrap } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 
 /**
  * F11 — the read-side data layer for `exams.v1` (B11), modeled on
@@ -19,6 +20,17 @@ export interface ExamListFilters {
   teacherMembershipId?: string;
   page?: number;
   pageSize?: number;
+}
+
+/**
+ * The `teacherMembershipId` filter that narrows `GET /exams` to the signed-in
+ * teacher's own exams. The server also lists exams a teacher was delegated to
+ * run (ADR-0037), which belong in Exam Control but not on the Exams, Results,
+ * Reports or Analytics screens, where only the author may act.
+ */
+export function useOwnExamsFilter(enabled: boolean): Pick<ExamListFilters, 'teacherMembershipId'> {
+  const { me } = useAuth();
+  return enabled && me ? { teacherMembershipId: me.membership.id } : {};
 }
 
 export function useExamsPaginated(filters: ExamListFilters) {

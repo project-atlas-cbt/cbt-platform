@@ -14,10 +14,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useHasPermission } from '@/lib/nav';
-import { useDepartments, useSubjects } from '@/lib/academics/queries';
+import { useDepartments, useSubjectChoiceGroups, useSubjects } from '@/lib/academics/queries';
 import { useDeactivateSubject, useDeleteSubject } from '@/lib/academics/mutations';
 import { SubjectStatusBadge } from '../academic-status-badges';
 import { ConfirmActionDialog } from '../confirm-action-dialog';
+import { StandardSetupDialog } from '../standard-setup/standard-setup-dialog';
+import { ChoiceGroupsPanel } from './choice-groups-panel';
 import { SubjectForm } from './subject-form';
 
 interface SubjectRow {
@@ -25,6 +27,7 @@ interface SubjectRow {
   name: string;
   code: string;
   departmentId: string | null;
+  choiceGroupId: string | null;
   status: 'ACTIVE' | 'INACTIVE';
 }
 
@@ -38,6 +41,7 @@ type ConfirmAction = { type: 'deactivate' | 'delete'; subject: SubjectRow };
 export function SubjectsScreen() {
   const subjects = useSubjects();
   const departments = useDepartments();
+  const choiceGroups = useSubjectChoiceGroups();
   const canManage = useHasPermission('schoolConfig.subject.manage');
   const deactivateSubject = useDeactivateSubject();
   const deleteSubject = useDeleteSubject();
@@ -45,6 +49,7 @@ export function SubjectsScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<SubjectRow | undefined>(undefined);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [standardOpen, setStandardOpen] = useState(false);
 
   if (subjects.isError) {
     return <ErrorState error={subjects.error} onRetry={() => void subjects.refetch()} />;
@@ -54,6 +59,7 @@ export function SubjectsScreen() {
     id ? (departments.data?.departments.find((d) => d.id === id)?.name ?? '—') : '—';
 
   const rows: SubjectRow[] = subjects.data?.subjects ?? [];
+  const withoutDepartment = rows.filter((r) => r.departmentId === null && r.status === 'ACTIVE');
 
   const columns: DataTableColumn<SubjectRow>[] = [
     {
@@ -62,7 +68,29 @@ export function SubjectsScreen() {
       cell: (row) => <span className="font-medium text-text-primary">{row.name}</span>,
     },
     { id: 'code', header: 'Code', cell: (row) => row.code },
-    { id: 'department', header: 'Department', cell: (row) => departmentName(row.departmentId) },
+    {
+      id: 'department',
+      header: 'Department (HOD review)',
+      cell: (row) =>
+        row.departmentId ? (
+          departmentName(row.departmentId)
+        ) : (
+          <span
+            className="text-warning-subtle-foreground"
+            title="The School Admin reviews its questions, and no HOD sees its exams or results"
+          >
+            None set
+          </span>
+        ),
+    },
+    {
+      id: 'choiceGroup',
+      header: 'Choice group',
+      cell: (row) =>
+        row.choiceGroupId
+          ? (choiceGroups.data?.choiceGroups.find((g) => g.id === row.choiceGroupId)?.name ?? '—')
+          : '—',
+    },
     { id: 'status', header: 'Status', cell: (row) => <SubjectStatusBadge value={row.status} /> },
     ...(canManage
       ? [
@@ -108,19 +136,46 @@ export function SubjectsScreen() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-text-primary">Subjects</h2>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Subjects</h2>
+          <p className="max-w-prose text-sm text-text-secondary">
+            A subject&apos;s department decides which HOD reviews its questions, not who takes it.
+            Class offerings decide who takes it.
+          </p>
+        </div>
         {canManage ? (
-          <Button
-            onClick={() => {
-              setEditing(undefined);
-              setFormOpen(true);
-            }}
-          >
-            <Plus aria-hidden /> Add subject
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="secondary" onClick={() => setStandardOpen(true)}>
+              Use standard setup
+            </Button>
+            <Button
+              onClick={() => {
+                setEditing(undefined);
+                setFormOpen(true);
+              }}
+            >
+              <Plus aria-hidden /> Add subject
+            </Button>
+          </div>
         ) : null}
       </div>
+
+      {withoutDepartment.length > 0 ? (
+        <div
+          role="status"
+          className="rounded-md border border-warning/30 bg-warning-subtle px-3 py-2 text-sm text-warning-subtle-foreground"
+        >
+          {withoutDepartment.length === 1
+            ? `${withoutDepartment[0]!.name} has no department, so the School Admin reviews its questions instead of an HOD, and no HOD sees its exams or results.`
+            : `${withoutDepartment.length} subjects have no department (${withoutDepartment
+                .map((r) => r.name)
+                .join(
+                  ', ',
+                )}), so the School Admin reviews their questions instead of an HOD, and no HOD sees their exams or results.`}{' '}
+          Give each one a department, even one every stream takes.
+        </div>
+      ) : null}
 
       <DataTable
         columns={columns}
@@ -152,6 +207,8 @@ export function SubjectsScreen() {
         }
       />
 
+      <ChoiceGroupsPanel />
+
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent>
           <DialogHeader>
@@ -163,6 +220,8 @@ export function SubjectsScreen() {
           />
         </DialogContent>
       </Dialog>
+
+      <StandardSetupDialog open={standardOpen} onOpenChange={setStandardOpen} />
 
       <ConfirmActionDialog
         open={confirmAction?.type === 'deactivate'}

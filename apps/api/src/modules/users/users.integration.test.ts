@@ -21,6 +21,16 @@ import { safeDeleteSchools } from '../../test-support/safe-delete-schools.js';
 import type { Role } from '@atlas/domain';
 import { AppModule } from '../../app.module.js';
 import { PasswordService } from '../identity/password.service.js';
+import { AuditActionRegistry } from '../operations/audit-action.registry.js';
+import { AuditService } from '../operations/audit-event.service.js';
+import {
+  NAME_ORDER_FIXED_ACTION,
+  NAME_ORDER_REVERTED_ACTION,
+  applyNameOrderFix,
+  planNameOrderFix,
+  revertNameOrderFix,
+  type NameOrderProposal,
+} from './name-order-fix.js';
 
 const ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN ?? 'localtest.me';
 const RUN = Math.floor(Math.random() * 200) + 1;
@@ -329,6 +339,64 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
     expect(loginCtx.sessionCookie).toBeDefined();
   });
 
+  // P1-4: five wrong guesses at a guessable student ID lock the account;
+  // staff must be able to end that lock (mid-exam the timer keeps running).
+  async function lockedOutStudent(ip: string) {
+    const createRes = await post(admin, '/students', {
+      firstName: 'Locked',
+      lastName: 'Out',
+      studentId: `LK-${randomUUID().slice(0, 8)}`,
+    });
+    const created = createRes.json<{ studentProfileId: string; loginIdentifier: string }>();
+    const resetRes = await post(admin, `/students/${created.studentProfileId}/reset-credentials`);
+    const { initialPassword } = resetRes.json<{ initialPassword: string }>();
+    const maxAttempts = Number(process.env.AUTH_LOCKOUT_MAX_ATTEMPTS ?? 5);
+    for (let i = 0; i < maxAttempts; i++) {
+      const res = await login(await freshCtx(host, ip), created.loginIdentifier, 'wrong-guess');
+      expect(res.statusCode).toBe(401);
+    }
+    const lockedRes = await login(
+      await freshCtx(host, ip),
+      created.loginIdentifier,
+      initialPassword,
+    );
+    expect(lockedRes.statusCode).toBe(401);
+    return { ...created, initialPassword };
+  }
+
+  it('fresh credentials end a sign-in lockout (P1-4)', async () => {
+    const student = await lockedOutStudent(`10.${RUN}.2.6`);
+    const resetRes = await post(admin, `/students/${student.studentProfileId}/reset-credentials`);
+    expect(resetRes.statusCode).toBe(200);
+    const { initialPassword } = resetRes.json<{ initialPassword: string }>();
+
+    const res = await login(
+      await freshCtx(host, `10.${RUN}.2.7`),
+      student.loginIdentifier,
+      initialPassword,
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('Unlock sign-in ends a lockout without changing the password, audited (P1-4)', async () => {
+    const student = await lockedOutStudent(`10.${RUN}.2.8`);
+    const unlockRes = await post(admin, `/students/${student.studentProfileId}/unlock-sign-in`);
+    expect(unlockRes.statusCode).toBe(204);
+
+    const res = await login(
+      await freshCtx(host, `10.${RUN}.2.9`),
+      student.loginIdentifier,
+      student.initialPassword,
+    );
+    expect(res.statusCode).toBe(200);
+    const events = await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.findMany({
+        where: { schoolId, action: 'STUDENT_SIGN_IN_UNLOCKED', entityId: student.studentProfileId },
+      }),
+    );
+    expect(events).toHaveLength(1);
+  });
+
   it('rejects a duplicate studentId as a clean 409, not a raw 500', async () => {
     const first = await post(admin, '/students', {
       firstName: 'B',
@@ -340,6 +408,15 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
       firstName: 'D',
       lastName: 'E',
       studentId: 'DUP-001',
+    });
+    expect(second.statusCode).toBe(409);
+  });
+
+  it('bug audit P2-6: rejects a studentId that differs only by case as a clean 409', async () => {
+    const second = await post(admin, '/students', {
+      firstName: 'F',
+      lastName: 'G',
+      studentId: 'dup-001',
     });
     expect(second.statusCode).toBe(409);
   });
@@ -410,6 +487,9 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
     // login attempt regardless of how correct the credential was.
     const logged = consoleLogSpy.mock.calls.map((c) => String(c[0])).join('\n');
     expect(logged).toContain(`to=${email}`);
+    // P3-16: a new staff member gets an invitation, not "Reset your password".
+    expect(logged).toContain('has created a staff account for you');
+    expect(logged).not.toContain('Reset your password');
     const match = /token=([\w-]+)/.exec(logged);
     expect(match).not.toBeNull();
     const token = match![1];
@@ -555,6 +635,8 @@ describe('B6 People — students, teachers, HODs, moderators', () => {
       studentId: 'SEC-001',
     });
     expect(res.statusCode).toBe(403);
+    const unlockRes = await post(teacherCtx, `/students/${studentProfileId}/unlock-sign-in`);
+    expect(unlockRes.statusCode).toBe(403);
   });
 
   it('a Moderator cannot create another Moderator (05 §14 — School Admin only)', async () => {
@@ -659,6 +741,18 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     expect(searchBody.total).toBe(1);
     expect(searchBody.students[0]?.firstName).toBe('Chidi');
 
+    // A full name matches word by word, in either order; a word that
+    // matches nothing on the person excludes them.
+    for (const fullName of ['Chidi PagTest', 'pagtest  chidi']) {
+      const fullRes = await get(admin, `/students?q=${encodeURIComponent(fullName)}`);
+      expect(fullRes.statusCode).toBe(200);
+      const fullBody = fullRes.json<{ students: { firstName: string }[]; total: number }>();
+      expect(fullBody.total).toBe(1);
+      expect(fullBody.students[0]?.firstName).toBe('Chidi');
+    }
+    const mismatch = await get(admin, `/students?q=${encodeURIComponent('Chidi Nobody')}`);
+    expect(mismatch.json<{ total: number }>().total).toBe(0);
+
     const outOfRange = await get(admin, '/students?page=999&pageSize=2');
     expect(outOfRange.statusCode).toBe(200);
     const outOfRangeBody = outOfRange.json<{ students: unknown[]; total: number }>();
@@ -680,6 +774,8 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
 
     const teacherList = await get(admin, '/teachers?q=Segun');
     expect(teacherList.statusCode).toBe(200);
+    const teacherFull = await get(admin, `/teachers?q=${encodeURIComponent('Segun PagTeacher')}`);
+    expect(teacherFull.json<{ total: number }>().total).toBe(1);
     const teacherBody = teacherList.json<{
       teachers: unknown[];
       total: number;
@@ -700,6 +796,8 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     const modList = await get(admin, '/moderators?q=Ngozi&sortBy=lastName&sortDir=desc');
     expect(modList.statusCode).toBe(200);
     expect(modList.json<{ total: number }>().total).toBe(1);
+    const modFull = await get(admin, `/moderators?q=${encodeURIComponent('Ngozi PagMod')}`);
+    expect(modFull.json<{ total: number }>().total).toBe(1);
 
     const hodPromote = await post(admin, '/hods', {
       membershipId: teacherRes.json<{ membershipId: string }>().membershipId,
@@ -708,6 +806,8 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     const hodList = await get(admin, '/hods?q=Segun');
     expect(hodList.statusCode).toBe(200);
     expect(hodList.json<{ total: number }>().total).toBe(1);
+    const hodFull = await get(admin, `/hods?q=${encodeURIComponent('PagTeacher Segun')}`);
+    expect(hodFull.json<{ total: number }>().total).toBe(1);
   });
 
   // Regression test for a real bug found during review: `HodService.list()`
@@ -783,15 +883,15 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
     });
     const sessionId = sessionRes.json<{ id: string }>().id;
 
-    const deptRes = await post(admin, '/academics/departments', {
-      name: 'F7 Dept',
-      code: `F7D-${randomUUID().slice(0, 6)}`,
+    const streamRes = await post(admin, '/academics/streams', {
+      name: `F7 Stream ${randomUUID().slice(0, 6)}`,
+      code: `F7S-${randomUUID().slice(0, 6)}`,
     });
-    const departmentId = deptRes.json<{ id: string }>().id;
+    const stream = streamRes.json<{ id: string; name: string }>();
 
     const classRes = await post(admin, '/academics/classes', {
       academicSessionId: sessionId,
-      departmentId,
+      defaultStreamId: stream.id,
       name: 'F7 Class',
       level: 'SS2',
       arm: 'A',
@@ -817,14 +917,15 @@ describe('F7 — People directory pagination, search, sort, and HOD edit routes'
       currentClassId: string | null;
       currentClassName: string | null;
       currentAcademicSessionId: string | null;
-      departmentId: string | null;
-      departmentName: string | null;
+      streamId: string | null;
+      streamName: string | null;
     }>();
     expect(detailBody.currentClassId).toBe(classId);
     expect(detailBody.currentClassName).toBe('F7 Class');
     expect(detailBody.currentAcademicSessionId).toBe(sessionId);
-    expect(detailBody.departmentId).toBe(departmentId);
-    expect(detailBody.departmentName).toBe('F7 Dept');
+    // ADR-0038: a new enrollment takes the class's default stream.
+    expect(detailBody.streamId).toBe(stream.id);
+    expect(detailBody.streamName).toBe(stream.name);
 
     const filtered = await get(admin, `/students?classId=${classId}`);
     expect(filtered.statusCode).toBe(200);
@@ -947,7 +1048,7 @@ describe('F14 gap closure — GET /students/me', () => {
     return body;
   }
 
-  it("returns the signed-in student's own name, student ID, and null class/department before enrollment", async () => {
+  it("returns the signed-in student's own name, student ID, and null class/stream before enrollment", async () => {
     const student = await seedLoggedInStudent({
       firstName: 'Fola',
       lastName: 'MeRoute',
@@ -966,29 +1067,29 @@ describe('F14 gap closure — GET /students/me', () => {
       displayName: string;
       studentId: string;
       currentClassName: string | null;
-      departmentName: string | null;
+      streamName: string | null;
     }>();
     expect(body.displayName).toBe(student.displayName);
     expect(body.studentId).toBe(student.studentId);
     expect(body.currentClassName).toBeNull();
-    expect(body.departmentName).toBeNull();
+    expect(body.streamName).toBeNull();
   });
 
-  it('reflects the current class and department once enrolled', async () => {
+  it('reflects the current class and stream once enrolled', async () => {
     const sessionRes = await post(admin, '/academics/sessions', {
       name: `F14 Session ${randomUUID().slice(0, 8)}`,
       startDate: '2026-09-01',
       endDate: '2027-07-31',
     });
     const sessionId = sessionRes.json<{ id: string }>().id;
-    const deptRes = await post(admin, '/academics/departments', {
-      name: 'F14 Dept',
-      code: `F14D-${randomUUID().slice(0, 6)}`,
+    const streamRes = await post(admin, '/academics/streams', {
+      name: `F14 Stream ${randomUUID().slice(0, 6)}`,
+      code: `F14S-${randomUUID().slice(0, 6)}`,
     });
-    const departmentId = deptRes.json<{ id: string }>().id;
+    const stream = streamRes.json<{ id: string; name: string }>();
     const classRes = await post(admin, '/academics/classes', {
       academicSessionId: sessionId,
-      departmentId,
+      defaultStreamId: stream.id,
       name: 'F14 Class',
       level: 'SS2',
       arm: 'A',
@@ -1009,13 +1110,187 @@ describe('F14 gap closure — GET /students/me', () => {
     await login(studentCtx, student.loginIdentifier, 'a-real-password-123');
     const res = await get(studentCtx, '/students/me');
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ currentClassName: string | null; departmentName: string | null }>();
+    const body = res.json<{ currentClassName: string | null; streamName: string | null }>();
     expect(body.currentClassName).toBe('F14 Class');
-    expect(body.departmentName).toBe('F14 Dept');
+    expect(body.streamName).toBe(stream.name);
   });
 
   it('denies a non-student actor (security boundary — this is a self-view route, not a directory read)', async () => {
     const res = await get(admin, '/students/me');
     expect(res.statusCode).toBe(403);
+  });
+});
+
+/**
+ * Owner decision 2026-10-09: an optional middle name, names shown
+ * "Surname First Middle", every people list A to Z by surname by default
+ * (capitals ignored), and Student IDs in number order.
+ */
+describe('Student names — middle name, A to Z, number-order IDs', () => {
+  let schoolId: string;
+  let adminUserId: string;
+  let admin: RequestCtx;
+
+  beforeAll(async () => {
+    const school = await createSchool();
+    schoolId = school.id;
+    createdSchoolIds.push(schoolId);
+    const { user } = await seedUser({
+      schoolId,
+      loginIdentifier: 'names-admin',
+      password: 'a-real-password-123',
+      role: 'SCHOOL_ADMIN',
+    });
+    adminUserId = user.id;
+    createdUserIds.push(user.id);
+    admin = await freshCtx(`${school.subdomain}.${ROOT_DOMAIN}`, `10.${RUN}.9.1`);
+    await login(admin, 'names-admin', 'a-real-password-123');
+    const students = [
+      { lastName: 'Ojo', firstName: 'Abiola', middleName: 'Bola', studentId: 'S10' },
+      { lastName: 'OJO', firstName: 'Abiola', middleName: 'Ade', studentId: 'S9' },
+      { lastName: 'adeyemi', firstName: 'Zainab', studentId: 'S2' },
+      { lastName: 'Zubair', firstName: 'Musa', middleName: '  ', studentId: 'S1' },
+    ];
+    for (const body of students) {
+      const res = await post(admin, '/students', body);
+      expect(res.statusCode).toBe(201);
+    }
+  });
+
+  type Listed = { formalName: string; displayName: string; middleName: string | null };
+  const formalNames = async (query: string) => {
+    const res = await get(admin, `/students${query}`);
+    expect(res.statusCode).toBe(200);
+    return res.json<{ students: Listed[] }>().students.map((s) => s.formalName);
+  };
+
+  it('stores the middle name and builds both name orders from it', async () => {
+    const res = await get(admin, '/students?q=Bola');
+    const [student] = res.json<{ students: Listed[] }>().students;
+    expect(student).toMatchObject({
+      middleName: 'Bola',
+      formalName: 'Ojo Abiola Bola',
+      displayName: 'Abiola Bola Ojo',
+    });
+    // A blank middle name is stored as none.
+    const zubair = (await get(admin, '/students?q=Zubair')).json<{ students: Listed[] }>();
+    expect(zubair.students[0]?.middleName).toBeNull();
+  });
+
+  it('lists students A to Z by surname, then first and middle name, by default', async () => {
+    expect(await formalNames('')).toEqual([
+      'adeyemi Zainab',
+      'OJO Abiola Ade',
+      'Ojo Abiola Bola',
+      'Zubair Musa',
+    ]);
+    expect(await formalNames('?sortBy=lastName&sortDir=desc')).toEqual([
+      'Zubair Musa',
+      'Ojo Abiola Bola',
+      'OJO Abiola Ade',
+      'adeyemi Zainab',
+    ]);
+    // Pages follow the same order.
+    expect(await formalNames('?pageSize=2&page=2')).toEqual(['Ojo Abiola Bola', 'Zubair Musa']);
+  });
+
+  it('sorts Student IDs by number value', async () => {
+    const res = await get(admin, '/students?sortBy=studentId&sortDir=asc');
+    expect(
+      res.json<{ students: { studentId: string }[] }>().students.map((s) => s.studentId),
+    ).toEqual(['S1', 'S2', 'S9', 'S10']);
+  });
+
+  it('edits and clears the middle name', async () => {
+    const res = await get(admin, '/students?q=Zainab');
+    const id = res.json<{ students: { studentProfileId: string }[] }>().students[0]!
+      .studentProfileId;
+    const set = await patch(admin, `/students/${id}`, { middleName: 'Kemi' });
+    expect(set.json<Listed>()).toMatchObject({
+      middleName: 'Kemi',
+      formalName: 'adeyemi Zainab Kemi',
+      displayName: 'Zainab Kemi adeyemi',
+    });
+    const cleared = await patch(admin, `/students/${id}`, { middleName: '' });
+    expect(cleared.json<Listed>().middleName).toBeNull();
+  });
+
+  it('ops:fix-name-order reorders swapped names once, flags the rest, and can be undone', async () => {
+    const swapped = [
+      { firstName: 'Bello', lastName: 'Ibrahim Tunde', studentId: 'FIX-1' },
+      { firstName: 'Okafor', lastName: 'Ada', studentId: 'FIX-2' },
+      { firstName: 'Eze', lastName: 'Chinedu Obi Kalu', studentId: 'FIX-3' },
+      { firstName: 'Musa', lastName: 'Sani', studentId: 'FIX-4' },
+    ];
+    for (const body of swapped) expect((await post(admin, '/students', body)).statusCode).toBe(201);
+
+    const registry = new AuditActionRegistry();
+    registry.registerAll([NAME_ORDER_FIXED_ACTION, NAME_ORDER_REVERTED_ACTION]);
+    const audit = new AuditService(registry);
+    const noteOf = (rows: NameOrderProposal[], id: string) =>
+      rows.find((r) => r.studentId === id)?.note;
+
+    const plan = await planNameOrderFix(schoolId, new Set(['fix-4']));
+    expect(noteOf(plan, 'FIX-1')).toBe('OK');
+    expect(plan.find((r) => r.studentId === 'FIX-1')?.proposed).toEqual({
+      lastName: 'Bello',
+      firstName: 'Ibrahim',
+      middleName: 'Tunde',
+    });
+    expect(noteOf(plan, 'FIX-2')).toBe('OK');
+    expect(noteOf(plan, 'FIX-3')).toBe('MORE_THAN_TWO_NAMES');
+    expect(noteOf(plan, 'FIX-4')).toBe('SKIPPED_BY_OPERATOR');
+    expect(noteOf(plan, 'S10')).toBe('HAS_MIDDLE_NAME');
+
+    const nameOf = async (id: string) =>
+      withTenant(prisma, schoolId, (tx) =>
+        tx.studentProfile.findFirstOrThrow({
+          where: { studentId: id },
+          select: {
+            membership: {
+              select: {
+                user: {
+                  select: { firstName: true, middleName: true, lastName: true, displayName: true },
+                },
+              },
+            },
+          },
+        }),
+      ).then((row) => row.membership.user);
+
+    const applied = await applyNameOrderFix(audit, {
+      schoolId,
+      actorUserId: adminUserId,
+      skipStudentIds: new Set(['FIX-4']),
+    });
+    // S2 (Zainab adeyemi, one word each, no middle name) fits the rule too:
+    // the review list is how the school catches students entered correctly.
+    expect(applied.map((r) => r.studentId).sort()).toEqual(['FIX-1', 'FIX-2', 'S1', 'S2']);
+    expect(await nameOf('FIX-1')).toEqual({
+      firstName: 'Ibrahim',
+      middleName: 'Tunde',
+      lastName: 'Bello',
+      displayName: 'Ibrahim Tunde Bello',
+    });
+    expect(await nameOf('FIX-3')).toMatchObject({ firstName: 'Eze', lastName: 'Chinedu Obi Kalu' });
+    expect(await nameOf('FIX-4')).toMatchObject({ firstName: 'Musa', lastName: 'Sani' });
+
+    // Never twice: a second run changes nobody.
+    expect(await applyNameOrderFix(audit, { schoolId, actorUserId: adminUserId })).toEqual([
+      expect.objectContaining({ studentId: 'FIX-4' }),
+    ]);
+    const audited = await withTenant(prisma, schoolId, (tx) =>
+      tx.auditEvent.count({ where: { schoolId, action: NAME_ORDER_FIXED_ACTION } }),
+    );
+    expect(audited).toBe(5);
+
+    const reverted = await revertNameOrderFix(audit, { schoolId, actorUserId: adminUserId });
+    expect(reverted.sort()).toEqual(['FIX-1', 'FIX-2', 'FIX-4', 'S1', 'S2']);
+    expect(await nameOf('FIX-1')).toEqual({
+      firstName: 'Bello',
+      middleName: null,
+      lastName: 'Ibrahim Tunde',
+      displayName: 'Bello Ibrahim Tunde',
+    });
   });
 });

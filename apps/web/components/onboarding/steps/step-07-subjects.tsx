@@ -16,6 +16,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -122,6 +123,10 @@ export function Step07Subjects() {
                     ))}
                   </SelectContent>
                 </Select>
+                <FormDescription>
+                  Its HOD reviews the subject&rsquo;s questions. A subject every student takes still
+                  needs one, such as Mathematics in Science or English in Humanities.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -142,9 +147,16 @@ export function Step07Subjects() {
         keyFor={(s) => s.id}
         emptyLabel="No subjects added yet."
         renderItem={(s) => (
-          <span className="font-medium text-text-primary">
-            {s.name} <span className="text-text-muted">({s.code})</span>
-          </span>
+          <>
+            <span className="font-medium text-text-primary">
+              {s.name} <span className="text-text-muted">({s.code})</span>
+            </span>
+            {s.departmentId === null ? (
+              <span className="text-xs text-warning-subtle-foreground">
+                No department: the School Admin reviews its questions
+              </span>
+            ) : null}
+          </>
         )}
       />
     </div>

@@ -40,14 +40,18 @@ const CAPTIONS = [
   'Bring a whole class list in from a spreadsheet.',
   'Every row is checked before anything is saved.',
   'Valid rows go in now. The one to fix is kept aside.',
-  'HODs check every question before it can go into an exam.',
+  'Teachers bring in their questions the same way.',
+  'Then send them all to the HOD for review in one go.',
+  'The HOD checks each question before it can go into an exam.',
   'One screen shows every student in the sitting, live.',
   'A computer that goes quiet is flagged and listed first.',
   'Each student sits the paper on their own timer.',
   'If the network drops, answers are kept on the computer.',
   'When it returns, they are sent to the server on their own.',
-  'Objective answers are marked the moment the paper is submitted.',
+  'Marked on submit. Students see results only when the school publishes them.',
   'Results are graded and kept until the school publishes them.',
+  'One click releases them to students.',
+  'Each student then sees their own result.',
 ];
 const map = {};
 for (const [i, t] of CAPTIONS.entries()) {

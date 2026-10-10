@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { prisma, withTenant } from '@atlas/db';
 import type { NotificationChannel } from '@atlas/notifications';
-import type { QuestionReviewDecision } from '@atlas/domain';
+import type { QuestionReviewDecision, QuestionReviewFallbackReason } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { NOTIFICATION_CHANNEL } from '../../notifications/notifications.module.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
@@ -10,8 +10,10 @@ import { AuditService } from '../operations/audit-event.service.js';
 import { NotificationService } from '../notification-center/notification.service.js';
 import { requireSchoolActor } from '../questions/question-scope.util.js';
 import {
+  fallbackReasonFor,
   QUESTION_FOR_REVIEW_INCLUDE,
   toHistoryItemDto,
+  type ActiveHodsByDepartment,
   toQueueItemDto,
   toWorkspaceResponseDto,
   type QuestionForReview,
@@ -80,6 +82,42 @@ export class QuestionReviewService {
     return [];
   }
 
+  /** ADR-0038: every department's active HODs (assignment ACTIVE, member
+   * ACTIVE), so a question can say whether any HOD but its author may decide
+   * it. `departmentIds` narrows the lookup; omitted means every department. */
+  private async loadActiveHods(
+    schoolId: string,
+    departmentIds?: readonly string[],
+  ): Promise<ActiveHodsByDepartment> {
+    const rows = await withTenant(prisma, schoolId, (tx) =>
+      tx.hODAssignment.findMany({
+        where: {
+          schoolId,
+          status: 'ACTIVE',
+          membership: { status: 'ACTIVE' },
+          ...(departmentIds !== undefined && { departmentId: { in: [...departmentIds] } }),
+        },
+        select: { departmentId: true, membershipId: true },
+      }),
+    );
+    const byDepartment = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const set = byDepartment.get(row.departmentId) ?? new Set<string>();
+      set.add(row.membershipId);
+      byDepartment.set(row.departmentId, set);
+    }
+    return byDepartment;
+  }
+
+  private async fallbackReason(
+    schoolId: string,
+    question: QuestionForReview,
+  ): Promise<QuestionReviewFallbackReason | null> {
+    const departmentId = question.subject.departmentId;
+    if (departmentId === null) return 'NO_DEPARTMENT';
+    return fallbackReasonFor(question, await this.loadActiveHods(schoolId, [departmentId]));
+  }
+
   async getQueue(
     schoolId: string,
     actor: AuthorizedActor,
@@ -112,6 +150,7 @@ export class QuestionReviewService {
       }),
     );
 
+    const hods = await this.loadActiveHods(schoolId);
     const bySubject = new Map<string, QuestionReviewQueueSubjectGroupDto>();
     for (const question of questions) {
       // Structurally shouldn't happen (a SUBMITTED/UNDER_REVIEW status can
@@ -119,7 +158,7 @@ export class QuestionReviewService {
       // than asserting.
       if (!question.currentRevision) continue;
       const withRevision = question as QuestionForReviewWithRevision;
-      const item = toQueueItemDto(withRevision);
+      const item = toQueueItemDto(withRevision, fallbackReasonFor(withRevision, hods));
       const existing = bySubject.get(question.subjectId);
       if (existing) {
         existing.pendingCount += 1;
@@ -152,7 +191,7 @@ export class QuestionReviewService {
       throw new AppHttpException({ code: 'NOT_FOUND', message: 'Question not found.' });
     }
     const history = await this.loadHistory(schoolId, questionId);
-    return toWorkspaceResponseDto(question, history);
+    return toWorkspaceResponseDto(question, history, await this.fallbackReason(schoolId, question));
   }
 
   async getHistory(
@@ -292,6 +331,22 @@ export class QuestionReviewService {
       });
     }
 
+    // ADR-0038 decision 6: a School Admin is only the fallback reviewer. One
+    // who is also an active HOD of this department acts as that HOD;
+    // otherwise they may decide only when no HOD can.
+    const fallbackReason = await this.fallbackReason(schoolId, question);
+    const actsAsHod =
+      schoolActor.roles.includes('HOD') &&
+      question.subject.departmentId !== null &&
+      (await this.isActiveHodOf(schoolId, schoolActor.membershipId, question.subject.departmentId));
+    if (!actsAsHod && fallbackReason === null) {
+      throw new AppHttpException({
+        code: 'QUESTION_REVIEW_HOD_AVAILABLE',
+        message: "This subject's HOD reviews this question.",
+      });
+    }
+    const actingRole = actsAsHod ? 'HOD' : 'SCHOOL_ADMIN';
+
     const revisionStatus = decision === 'APPROVED' ? 'APPROVED' : 'REJECTED';
     const review = await withTenant(prisma, schoolId, async (tx) => {
       // Concurrency guard: the SUBMITTED/UNDER_REVIEW precondition is
@@ -322,30 +377,39 @@ export class QuestionReviewService {
       });
     });
 
-    // Every actor reaching this point has already passed
-    // questionBank.{approve,reject,requestChanges} — all three are
-    // HOD-DEPARTMENT-only (ADR-0012 denies Software Admin outright, with no
-    // break-glass override; Moderator/School Admin/Teacher are denied()
-    // outright on all three) — so the actor is always genuinely acting as
-    // HOD here, never merely the caller's TEACHER-first display role
-    // (resolveQuestionActorRole's own precedent, built for B8's
-    // author-attribution case, would misattribute this call if reused).
+    // Every actor reaching this point passed questionBank.{approve,reject,
+    // requestChanges}: an HOD in this department, or a School Admin through
+    // the ADR-0038 fallback above (Software Admin is denied outright,
+    // ADR-0012). actingRole says which, rather than the caller's
+    // TEACHER-first display role.
     await this.audit.record({
       schoolId,
       actorUserId: auditCtx.actorUserId,
-      actorRole: 'HOD',
+      actorRole: actingRole,
       action: auditAction,
       entityType: 'QuestionRevision',
       entityId: revision.id,
       ...(comment !== undefined && { reason: comment }),
-      metadata: { decision, questionId, reviewId: review.id },
+      metadata: {
+        decision,
+        questionId,
+        reviewId: review.id,
+        ...(actingRole === 'SCHOOL_ADMIN' && { fallbackReason }),
+      },
     });
 
-    await this.dispatchDecisionNotification(schoolId, question, revision.id, decision, comment);
+    await this.dispatchDecisionNotification(
+      schoolId,
+      question,
+      revision.id,
+      decision,
+      comment,
+      actingRole,
+    );
 
     const updatedQuestion = await this.loadQuestionForReview(schoolId, questionId);
     const history = await this.loadHistory(schoolId, questionId);
-    return toWorkspaceResponseDto(updatedQuestion, history);
+    return toWorkspaceResponseDto(updatedQuestion, history, fallbackReason);
   }
 
   /** A transient failure in either half (in-app row, out-of-band email)
@@ -368,6 +432,7 @@ export class QuestionReviewService {
     revisionId: string,
     decision: QuestionReviewDecision,
     comment: string | undefined,
+    actingRole: 'HOD' | 'SCHOOL_ADMIN',
   ): Promise<void> {
     const recipientUserId = question.authorProfile.membership.user.id;
     const notificationType =
@@ -406,7 +471,7 @@ export class QuestionReviewService {
           ? QUESTION_REVIEW_REJECTED_TEMPLATE
           : QUESTION_REVIEW_CHANGES_REQUESTED_TEMPLATE;
     const detailLine = comment
-      ? `\n\n${decision === 'APPROVED' ? 'HOD note' : 'Reason'}: "${comment}"`
+      ? `\n\n${decision === 'APPROVED' ? (actingRole === 'HOD' ? 'HOD note' : 'School Admin note') : 'Reason'}: "${comment}"`
       : '';
 
     try {
@@ -421,6 +486,19 @@ export class QuestionReviewService {
     } catch {
       // Best-effort — see this method's own doc comment.
     }
+  }
+
+  private async isActiveHodOf(
+    schoolId: string,
+    membershipId: string,
+    departmentId: string,
+  ): Promise<boolean> {
+    const count = await withTenant(prisma, schoolId, (tx) =>
+      tx.hODAssignment.count({
+        where: { schoolId, membershipId, departmentId, status: 'ACTIVE' },
+      }),
+    );
+    return count > 0;
   }
 
   private async loadQuestionForReview(

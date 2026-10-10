@@ -67,6 +67,35 @@ export function useDepartments(options?: { enabled?: boolean }) {
   });
 }
 
+/** ADR-0038: the school's student streams (Science, Business, ...), with
+ * how many classes default to each and how many students are in each this
+ * session. */
+export function useStreams(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['academics', 'streams'],
+    queryFn: () => unwrap(apiClient.GET('/academics/streams', {})),
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/** ADR-0038: what applying the standard setup would add or place. */
+export function useStandardSetupPreview(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['academics', 'standard-setup'],
+    queryFn: () => unwrap(apiClient.GET('/academics/standard-setup', {})),
+    enabled: options?.enabled ?? true,
+  });
+}
+
+/** P1-12: the department the signed-in HOD heads (the first, by name, if
+ * they head several). `department` is undefined until loaded, and also when
+ * they head none — check `isSuccess` to tell the two apart. */
+export function useMyHodDepartment() {
+  const query = useDepartments();
+  const department = query.data?.departments.find((d) => d.headedByMe);
+  return { ...query, department };
+}
+
 export function useDepartment(id: string | undefined) {
   return useQuery({
     queryKey: ['academics', 'departments', id],
@@ -78,17 +107,30 @@ export function useDepartment(id: string | undefined) {
   });
 }
 
-/** `options.enabled` (F11): mirrors `useSubjects`'s own precedent — a caller
+/** `options.departmentId` (ADR-0038) keeps to classes offering a subject in
+ * that department.
+ *
+ * `options.enabled` (F11): mirrors `useSubjects`'s own precedent — a caller
  * reachable by TEACHER (`schoolConfig.class.view` is `denied()` there, the
  * same gap F6 already found for subjects) must pass `enabled: false` and
  * source classes from elsewhere instead (F11's `useMyTeacherAssignments`). */
-export function useClasses(academicSessionId: string | undefined, options?: { enabled?: boolean }) {
+export function useClasses(
+  academicSessionId: string | undefined,
+  options?: { enabled?: boolean; departmentId?: string | undefined },
+) {
+  const departmentId = options?.departmentId;
   return useQuery({
-    queryKey: ['academics', 'classes', academicSessionId ?? 'all'],
+    queryKey: ['academics', 'classes', academicSessionId ?? 'all', departmentId ?? 'any'],
     queryFn: () =>
       unwrap(
         apiClient.GET('/academics/classes', {
-          params: { query: academicSessionId ? { academicSessionId } : {} },
+          params: {
+            query: {
+              ...(academicSessionId ? { academicSessionId } : {}),
+              // ADR-0038: a department's classes are those offering its subjects.
+              ...(departmentId ? { departmentId } : {}),
+            },
+          },
         }),
       ),
     enabled: options?.enabled ?? true,
@@ -144,6 +186,28 @@ export function useClassSubjects(classId: string | undefined) {
         }),
       ),
     enabled: Boolean(classId),
+  });
+}
+
+/** ADR-0038 — the class subject grid (students × offerings). */
+export function useClassRegistrationGrid(classId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', classId, 'subject-registrations'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/classes/{id}/subject-registrations', {
+          params: { path: { id: classId as string } },
+        }),
+      ),
+    enabled: Boolean(classId),
+  });
+}
+
+/** ADR-0038 — subject choice groups ("pick one of CRS or IRS"). */
+export function useSubjectChoiceGroups() {
+  return useQuery({
+    queryKey: ['academics', 'subject-choice-groups'],
+    queryFn: () => unwrap(apiClient.GET('/academics/subject-choice-groups')),
   });
 }
 
@@ -228,9 +292,10 @@ export function useStudents() {
 export interface RolloverQueryParams {
   page?: number;
   pageSize?: number;
-  outcome?: 'PROMOTE' | 'REPEAT' | 'CHANGE_DEPARTMENT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
+  outcome?: 'PROMOTE' | 'REPEAT' | 'TRANSFER' | 'GRADUATE' | 'WITHDRAW';
   sourceClassId?: string;
-  departmentId?: string;
+  /** ADR-0038: students whose source class defaults to this stream. */
+  streamId?: string;
   sourceLevel?: 'JSS1' | 'JSS2' | 'JSS3' | 'SS1' | 'SS2' | 'SS3';
   overriddenOnly?: boolean;
 }
@@ -265,5 +330,28 @@ export function useRolloverPlan(
         }),
       ),
     enabled: isUuid(planId) && (options?.enabled ?? true),
+  });
+}
+
+/** ADR-0038 amendment — a class's current form teachers. */
+export function useFormTeachers(classId: string | undefined) {
+  return useQuery({
+    queryKey: ['academics', 'classes', classId, 'form-teachers'],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/academics/classes/{id}/form-teachers', {
+          params: { path: { id: classId as string } },
+        }),
+      ),
+    enabled: Boolean(classId),
+  });
+}
+
+/** Teacher › My classes: the classes the caller is form teacher of. */
+export function useMyFormClasses(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['teachers', 'me', 'form-classes'],
+    queryFn: () => unwrap(apiClient.GET('/teachers/me/form-classes', {})),
+    enabled: options?.enabled ?? true,
   });
 }

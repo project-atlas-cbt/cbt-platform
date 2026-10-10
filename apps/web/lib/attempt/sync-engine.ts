@@ -4,6 +4,7 @@ import type { ApiComponents } from '@atlas/contracts';
 import { getAttemptDb, type AnswerRow } from './db';
 import { getDeviceId } from './device-id';
 import { connectivityStore } from './connectivity-store';
+import { anchorServerClock } from './server-clock';
 import {
   isAttemptMissingError,
   isNotWritableError,
@@ -39,6 +40,9 @@ export function timeoutSignal(ms: number): AbortSignal {
  */
 export const FLUSH_BACKOFF_BASE_MS = 1_000;
 export const FLUSH_BACKOFF_MAX_MS = 30_000;
+
+/** Audit P0-2: the pause between pre-submit flush retries. */
+export const FLUSH_RETRY_BEFORE_SUBMIT_MS = 2_000;
 
 export function flushBackoffDelay(
   consecutiveFailures: number,
@@ -240,6 +244,7 @@ export class AttemptSyncEngine {
 
   private async reconcileWithServer(): Promise<void> {
     let pkg: AttemptPackage;
+    const sentAt = performance.now();
     try {
       pkg = await unwrap(
         apiClient.GET('/attempts/{id}', {
@@ -271,6 +276,7 @@ export class AttemptSyncEngine {
       return;
     }
     this.reconcileFailures = 0;
+    anchorServerClock(pkg.serverTime, sentAt);
     if (pkg.state !== 'IN_PROGRESS') {
       this.onNotWritable?.();
       return;
@@ -297,15 +303,48 @@ export class AttemptSyncEngine {
     this.reconcileRetry = null;
   }
 
-  /** Awaits the current flush chain to settle — used before a final submit
-   * to make a best-effort attempt at getting every answer to the server
-   * first (the server-side submit itself still works correctly even if some
-   * answers are still `pending` locally; this is a best-effort courtesy,
-   * not a correctness dependency). */
+  /** Awaits the current flush chain to settle after one forced flush (the
+   * student pressed Submit: one request now, whatever the backoff). Never
+   * throws; whether everything reached the server is `unsyncedCount()`'s
+   * answer, which every submit path checks (audit P0-2). */
   async flushNow(): Promise<void> {
-    // The student pressed Submit: one request now, whatever the backoff.
     this.scheduleFlush({ force: true, ignoreRetryAfter: true });
     await this.flushChain;
+  }
+
+  /** Answers on this device the server has not acknowledged yet (`pending`
+   * or `in-flight`). A `window-closed` row is final (ADR-0003), not
+   * counted; nor is a `locked` one (bug audit P1-6). */
+  async unsyncedCount(): Promise<number> {
+    const db = getAttemptDb();
+    const pending = await db.answers
+      .where('[attemptId+syncStatus]')
+      .equals([this.attemptId, 'pending'])
+      .count();
+    const inFlight = await db.answers
+      .where('[attemptId+syncStatus]')
+      .equals([this.attemptId, 'in-flight'])
+      .count();
+    return pending + inFlight;
+  }
+
+  /**
+   * Audit P0-2: before any submit, keep flushing until the server holds
+   * every answer, or `keepTrying()` says to stop. Returns how many answers
+   * are still unsynced (0 when all arrived). A submit that went ahead with
+   * answers still unsent lost them: the server then refuses them as not
+   * writable.
+   */
+  async flushUntilSynced(
+    keepTrying: () => boolean,
+    retryDelayMs = FLUSH_RETRY_BEFORE_SUBMIT_MS,
+  ): Promise<number> {
+    for (;;) {
+      await this.flushNow();
+      const left = await this.unsyncedCount();
+      if (left === 0 || !keepTrying()) return left;
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
   }
 
   private async flush(
@@ -432,6 +471,18 @@ export class AttemptSyncEngine {
           syncStatus: 'window-closed',
           rejectionCode: result.rejectionCode,
           acknowledged: false,
+          lastAttemptedAt: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      if (result.rejectionCode === 'ATTEMPT_QUESTION_LOCKED') {
+        // Bug audit P1-6: "no going back" already locked this question on
+        // the server. Final, never retried (a retry could never succeed and
+        // would hold Submit back forever), and not counted as answered.
+        await db.answers.update([this.attemptId, result.examQuestionId], {
+          syncStatus: 'locked',
+          rejectionCode: result.rejectionCode,
           lastAttemptedAt: new Date().toISOString(),
         });
         continue;

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
-import type { Role } from '@atlas/domain';
+import { formalName, sortByPersonName, type Role } from '@atlas/domain';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import type { AuthorizedActor } from '../authorization/authorization.types.js';
@@ -9,7 +9,7 @@ import { NotificationService } from '../notification-center/notification.service
 import { requireSchoolActor } from '../questions/question-scope.util.js';
 import { loadExamOrThrow } from '../exams/exam-mappers.js';
 import { evaluateExamEligibility } from './exam-eligibility.util.js';
-import { loadExamSessionOrThrow } from './exam-control-mappers.js';
+import { PERSON_NAME_SELECT, loadExamSessionOrThrow } from './exam-control-mappers.js';
 import { ExamControlStreamService } from './exam-control-stream.service.js';
 import type {
   AuthorizeParticipantsDto,
@@ -18,6 +18,7 @@ import type {
   RevokeParticipantDto,
 } from './dto/exam-session.dto.js';
 import type { GrantExtraTimeDto, GrantLargerTextDto } from './dto/attempt.dto.js';
+import { computePendingAbsences } from './pending-absences.util.js';
 
 interface ActorContext {
   actorUserId: string;
@@ -457,7 +458,7 @@ export class ExamSessionParticipantService {
                   select: {
                     id: true,
                     studentId: true,
-                    membership: { select: { user: { select: { displayName: true } } } },
+                    membership: { select: { user: { select: PERSON_NAME_SELECT } } },
                   },
                 },
               },
@@ -498,6 +499,15 @@ export class ExamSessionParticipantService {
         }
       }
 
+      // The End Examination dialog lists exactly these (bug audit P2-2).
+      const pendingAbsentStudents = new Set(
+        (await computePendingAbsences(tx, schoolId, examId)).map((p) => p.studentProfileId),
+      );
+
+      sortByPersonName(enrollments, (e) => ({
+        ...e.studentProfile.membership.user,
+        identifier: e.studentProfile.studentId,
+      }));
       const rows = [];
       for (const { studentProfile } of enrollments) {
         const eligibility = await evaluateExamEligibility(tx, {
@@ -509,13 +519,14 @@ export class ExamSessionParticipantService {
         rows.push({
           studentProfileId: studentProfile.id,
           studentIdNumber: studentProfile.studentId,
-          studentName: studentProfile.membership.user.displayName,
+          studentName: formalName(studentProfile.membership.user),
           eligible: eligibility.eligible,
           failedChecks: eligibility.failedChecks,
           participantStatus:
             (participant?.status as EligibleStudentsResponseDto['students'][number]['participantStatus']) ??
             null,
           examSessionId: participant?.examSessionId ?? null,
+          pendingAbsence: pendingAbsentStudents.has(studentProfile.id),
           // F20 (DoD 3): the accommodations staff grant from this roster.
           extraTimeSeconds: participant?.extraTimeSeconds ?? 0,
           largerText: participant?.largerText ?? false,

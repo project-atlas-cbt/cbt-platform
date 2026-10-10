@@ -10,15 +10,18 @@ import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/components/ui/error-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useReviewQueue, useReviewWorkspace } from '@/lib/question-review/queries';
-import { flattenQueueOrder, getAdjacentQuestionIds } from '@/lib/question-review/queue-order';
+import {
+  FALLBACK_REASON_TEXT,
+  fallbackOnlyQueue,
+  flattenQueueOrder,
+  getAdjacentQuestionIds,
+} from '@/lib/question-review/queue-order';
 import { sanitizeQuestionHtml } from '@/lib/questions/sanitize-html';
 import { QuestionStatusBadge } from '@/components/questions/question-status-badge';
 import { MediaPreview } from '@/components/questions/media-preview';
 import { DecisionPanel } from './decision-panel';
 import { ReviewHistoryTimeline } from './review-history-timeline';
 import { difficultyLabel } from '@/lib/format/labels';
-
-const QUEUE_BASE_PATH = '/hod/question-review';
 
 /**
  * F10 — `ReviewWorkspace` (`04 §30`, DoD items 3/4/6/7/9/10). One fetch
@@ -36,13 +39,23 @@ const QUEUE_BASE_PATH = '/hod/question-review';
  * optimistic navigation for this class of audited action — see the F10
  * plan's own "Decision, not asked" note).
  */
-export function ReviewWorkspace({ questionId }: { questionId: string }) {
+export function ReviewWorkspace({
+  questionId,
+  basePath = '/hod/question-review',
+  fallbackOnly = false,
+}: {
+  questionId: string;
+  basePath?: string;
+  /** ADR-0038: the School Admin's workspace — Previous/Next stay within the
+   * questions no HOD can review. */
+  fallbackOnly?: boolean;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const workspace = useReviewWorkspace(questionId);
   const queue = useReviewQueue();
 
-  const order = flattenQueueOrder(queue.data);
+  const order = flattenQueueOrder(fallbackOnly ? fallbackOnlyQueue(queue.data) : queue.data);
   const { previous, next } = getAdjacentQuestionIds(order, questionId);
 
   useEffect(() => {
@@ -59,8 +72,8 @@ export function ReviewWorkspace({ questionId }: { questionId: string }) {
   }, [next, previous, queryClient]);
 
   function goToQuestion(id: string | undefined) {
-    if (id) router.push(`${QUEUE_BASE_PATH}/${id}`);
-    else router.push(QUEUE_BASE_PATH);
+    if (id) router.push(`${basePath}/${id}`);
+    else router.push(basePath);
   }
 
   if (workspace.isPending) return <Skeleton className="h-96 w-full" />;
@@ -76,7 +89,7 @@ export function ReviewWorkspace({ questionId }: { questionId: string }) {
       <div className="flex items-center justify-between gap-4">
         <div>
           <Link
-            href={QUEUE_BASE_PATH}
+            href={basePath}
             className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
           >
             <ArrowLeft className="size-4" aria-hidden /> Back to queue
@@ -93,6 +106,12 @@ export function ReviewWorkspace({ questionId }: { questionId: string }) {
         </div>
         <QuestionStatusBadge value={revision.status} />
       </div>
+
+      {fallbackOnly && data.fallbackReason ? (
+        <p className="rounded-md border border-border bg-surface-muted px-3 py-2 text-sm text-text-secondary">
+          You&apos;re reviewing this because no HOD can. {FALLBACK_REASON_TEXT[data.fallbackReason]}
+        </p>
+      ) : null}
 
       <div className="flex items-center gap-2">
         <Button

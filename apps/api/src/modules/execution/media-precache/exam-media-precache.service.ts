@@ -247,6 +247,7 @@ export class ExamMediaPrecacheService {
         const url = await this.storage.createSignedDownloadUrl(
           c.storageKey,
           CIPHERTEXT_DOWNLOAD_TTL_SECONDS,
+          { contentType: 'application/octet-stream', disposition: 'attachment' },
         );
         return {
           mediaAssetId: c.mediaAssetId,

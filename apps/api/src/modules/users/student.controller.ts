@@ -10,7 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 import { resolveActorRole } from '../academics/actor.util.js';
 import { Authorized } from '../authorization/decorators.js';
@@ -19,6 +19,7 @@ import { CredentialResetResponseDto } from './dto/credential-reset.dto.js';
 import {
   CreateStudentDto,
   ListStudentsQueryDto,
+  LockedOutStudentsResponseDto,
   StudentListResponseDto,
   StudentOwnProfileResponseDto,
   StudentResponseDto,
@@ -48,6 +49,19 @@ export class StudentController {
     @Query() query: ListStudentsQueryDto,
   ): Promise<StudentListResponseDto> {
     return this.students.list(currentUser(req).schoolId, query);
+  }
+
+  // Literal path, registered before `:id` for the same reason as `me` below.
+  @Get('locked-out')
+  @Authorized('users.student.resetCredentials')
+  @ApiOperation({
+    summary:
+      'Students whose sign-in is locked right now (too many wrong tries), for one-click ' +
+      'unlocking. Same permission as Unlock sign-in.',
+  })
+  @ApiOkResponse({ type: LockedOutStudentsResponseDto })
+  async listLockedOut(@Req() req: FastifyRequest): Promise<LockedOutStudentsResponseDto> {
+    return { students: await this.students.listLockedOut(currentUser(req).schoolId) };
   }
 
   // F14 gap-closure — registered *before* `:id` below: 'me' is a literal
@@ -152,6 +166,23 @@ export class StudentController {
   ): Promise<CredentialResetResponseDto> {
     const user = currentUser(req);
     return this.students.resetCredentials(user.schoolId, id, {
+      actorUserId: user.userId,
+      actorRole: resolveActorRole(user),
+    });
+  }
+
+  @Post(':id/unlock-sign-in')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Authorized('users.student.resetCredentials')
+  @ApiOperation({
+    summary:
+      "End a student's sign-in lockout after too many wrong passwords, without changing " +
+      'their password (audited).',
+  })
+  @ApiNoContentResponse()
+  async unlockSignIn(@Req() req: FastifyRequest, @Param('id') id: string): Promise<void> {
+    const user = currentUser(req);
+    await this.students.unlockSignIn(user.schoolId, id, {
       actorUserId: user.userId,
       actorRole: resolveActorRole(user),
     });

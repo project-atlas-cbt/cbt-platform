@@ -2,14 +2,23 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClassSubjectList } from './class-subject-list';
-import { useClassSubjects, useSubjects } from '@/lib/academics/queries';
-import { useAddClassSubject, useRemoveClassSubject } from '@/lib/academics/mutations';
+import { useClassSubjects, useStreams, useSubjects } from '@/lib/academics/queries';
+import {
+  useAddClassSubject,
+  useRemoveClassSubject,
+  useSetClassSubjectKind,
+} from '@/lib/academics/mutations';
 import { useHasPermission } from '@/lib/nav';
 
-vi.mock('@/lib/academics/queries', () => ({ useClassSubjects: vi.fn(), useSubjects: vi.fn() }));
+vi.mock('@/lib/academics/queries', () => ({
+  useClassSubjects: vi.fn(),
+  useSubjects: vi.fn(),
+  useStreams: vi.fn(() => ({ data: { streams: [] }, isSuccess: true, isPending: false })),
+}));
 vi.mock('@/lib/academics/mutations', () => ({
   useAddClassSubject: vi.fn(),
   useRemoveClassSubject: vi.fn(),
+  useSetClassSubjectKind: vi.fn(),
 }));
 vi.mock('@/lib/nav', () => ({ useHasPermission: vi.fn() }));
 
@@ -32,12 +41,16 @@ const OFFERINGS = [
     subjectCode: 'MTH',
     academicSessionId: 's1',
     status: 'ACTIVE',
+    kind: 'COMPULSORY',
+    streamIds: [],
+    streamNames: [],
   },
 ];
 
 describe('ClassSubjectList', () => {
   const addMutateAsync = vi.fn();
   const removeMutateAsync = vi.fn();
+  const kindMutateAsync = vi.fn();
 
   beforeEach(() => {
     addMutateAsync.mockReset();
@@ -52,6 +65,11 @@ describe('ClassSubjectList', () => {
     } as never);
     mockUseSubjects.mockReturnValue({ data: { subjects: SUBJECTS } } as never);
     mockUseHasPermission.mockReturnValue(true);
+    kindMutateAsync.mockReset().mockResolvedValue({});
+    vi.mocked(useSetClassSubjectKind).mockReturnValue({
+      mutateAsync: kindMutateAsync,
+      isPending: false,
+    } as never);
   });
 
   it('shows a loading skeleton while offerings are loading', () => {
@@ -112,7 +130,38 @@ describe('ClassSubjectList', () => {
     await userEvent.click(screen.getByRole('combobox', { name: /choose a subject/i }));
     await userEvent.click(screen.getByRole('option', { name: 'Mathematics' }));
     await userEvent.click(screen.getByRole('button', { name: /offer subject/i }));
-    expect(addMutateAsync).toHaveBeenCalledWith('sub1');
+    expect(addMutateAsync).toHaveBeenCalledWith({
+      subjectId: 'sub1',
+      kind: 'COMPULSORY',
+      streamIds: [],
+    });
+  });
+
+  it('offers a subject to everyone in a stream (ADR-0038)', async () => {
+    vi.mocked(useStreams).mockReturnValue({
+      data: {
+        streams: [
+          { id: 'st1', name: 'Science', code: 'SCI', status: 'ACTIVE' },
+          { id: 'st2', name: 'Business', code: 'BUS', status: 'ACTIVE' },
+          { id: 'st3', name: 'Old', code: 'OLD', status: 'INACTIVE' },
+        ],
+      },
+    } as never);
+    mockUseClassSubjects.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { offerings: OFFERINGS },
+    } as never);
+    render(<ClassSubjectList classId="c1" />);
+
+    await userEvent.click(screen.getByRole('button', { name: /who takes mathematics/i }));
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Old' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Science' }));
+    expect(kindMutateAsync).toHaveBeenCalledWith({
+      id: 'cs1',
+      kind: 'ELECTIVE',
+      streamIds: ['st1'],
+    });
   });
 
   it('removing an offering shows a confirm dialog and calls the mutation', async () => {

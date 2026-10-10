@@ -64,3 +64,29 @@ export function formatQueueAge(submittedAt: string, now: Date = new Date()): str
   const diffDays = Math.floor(diffHours / 24);
   return `${diffDays}d`;
 }
+
+export type ReviewFallbackReason = 'NO_DEPARTMENT' | 'NO_HOD' | 'AUTHOR_IS_ONLY_HOD';
+
+/** ADR-0038: why the School Admin is reviewing a question no HOD can. */
+export const FALLBACK_REASON_TEXT: Record<ReviewFallbackReason, string> = {
+  NO_DEPARTMENT: 'Its subject has no department, so no HOD covers it.',
+  NO_HOD: 'Its department has no HOD.',
+  AUTHOR_IS_ONLY_HOD: "The department's only HOD wrote it, and nobody reviews their own question.",
+};
+
+/** ADR-0038: the School Admin's queue holds only the questions no HOD can
+ * review. Subjects left with none are dropped and counts recomputed. */
+export function fallbackOnlyQueue<
+  Item extends ReviewQueueItemLike & { fallbackReason: ReviewFallbackReason | null },
+  Group extends { items: Item[]; pendingCount: number },
+>(queue: { subjects: Group[] } | undefined): { subjects: Group[] } | undefined {
+  if (!queue) return queue;
+  return {
+    subjects: queue.subjects
+      .map((group) => {
+        const items = group.items.filter((item) => item.fallbackReason !== null);
+        return { ...group, items, pendingCount: items.length };
+      })
+      .filter((group) => group.items.length > 0),
+  };
+}

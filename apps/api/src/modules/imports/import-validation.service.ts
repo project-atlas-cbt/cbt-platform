@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import { ObjectStorageService } from '../../storage/object-storage.service.js';
 import { ImportParseError, parseImportFile } from './import-file-parser.js';
-import { IMPORT_TEMPLATES, IMPORT_TEMPLATE_VERSION } from './import-templates.js';
+import {
+  IMPORT_TEMPLATES,
+  IMPORT_TEMPLATE_VERSION,
+  hasTemplateColumn,
+} from './import-templates.js';
 import {
   validateStudentRow,
   validateTeacherRow,
@@ -18,6 +22,10 @@ import { classifyUnavailable } from '../../common/dependency-errors.js';
 /** A-17's own recommended number, adopted as the engineering default —
  * generous headroom above the DoD's 1,500-row fixture. */
 export const MAX_IMPORT_ROWS = 5000;
+
+export const EXCEL_DATE_MESSAGE =
+  'Excel changed this value into a date. Format the column as Text in Excel, type the value ' +
+  'again, and upload the file again.';
 
 const ID_COLUMN: Record<'STUDENTS' | 'TEACHERS', string> = {
   STUDENTS: 'Student ID',
@@ -38,7 +46,9 @@ function countOccurrences(values: string[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const value of values) {
     if (!value) continue;
-    counts.set(value, (counts.get(value) ?? 0) + 1);
+    // Lower-cased: sign-in ignores case, so ST001 and st001 are one ID (P2-6).
+    const key = value.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
 }
@@ -128,7 +138,10 @@ export class ImportValidationService {
       const templateVersion = parsed.version;
 
       const def = IMPORT_TEMPLATES[job.type];
-      const missingColumns = def.columns.filter((column) => !parsed.headers.includes(column));
+      const optional = new Set(def.optionalColumns ?? []);
+      const missingColumns = def.columns.filter(
+        (column) => !optional.has(column) && !hasTemplateColumn(job.type, parsed.headers, column),
+      );
       if (missingColumns.length > 0) {
         await this.fail(
           schoolId,
@@ -164,11 +177,16 @@ export class ImportValidationService {
       await withTenant(prisma, schoolId, async (tx) => {
         const existingMemberships = idColumn
           ? await tx.schoolMembership.findMany({
-              where: { schoolId, loginIdentifier: { in: idsInFile.filter(Boolean) } },
+              where: {
+                schoolId,
+                loginIdentifier: { in: idsInFile.filter(Boolean), mode: 'insensitive' },
+              },
               select: { loginIdentifier: true },
             })
           : [];
-        const existingIds = new Set(existingMemberships.map((m) => m.loginIdentifier));
+        const existingIds = new Set(
+          existingMemberships.map((m) => m.loginIdentifier.toLowerCase()),
+        );
 
         let outcomes: {
           rowNumber: number;
@@ -246,14 +264,21 @@ export class ImportValidationService {
           if (!job.targetAcademicSessionId) {
             throw new Error('This import job has no target academic session.');
           }
-          const [classes, departments] = await Promise.all([
+          const [classes, streams] = await Promise.all([
             tx.classGroup.findMany({
               where: { schoolId, academicSessionId: job.targetAcademicSessionId, status: 'ACTIVE' },
-              select: { id: true, name: true, departmentId: true },
+              select: {
+                id: true,
+                name: true,
+                classSubjects: {
+                  where: { status: 'ACTIVE' },
+                  select: { id: true, kind: true, subject: { select: { name: true, code: true } } },
+                },
+              },
             }),
-            tx.department.findMany({
+            tx.stream.findMany({
               where: { schoolId, status: 'ACTIVE' },
-              select: { id: true, name: true },
+              select: { id: true, name: true, code: true },
             }),
           ]);
           const ctx: StudentValidationContext = {
@@ -262,11 +287,25 @@ export class ImportValidationService {
             classesByName: new Map(
               classes.map((c) => [
                 c.name.toLowerCase(),
-                { id: c.id, departmentId: c.departmentId },
+                {
+                  id: c.id,
+                  offeringsByName: new Map(
+                    c.classSubjects.flatMap((o) => {
+                      const value = { classSubjectId: o.id, kind: o.kind };
+                      return [
+                        [o.subject.name.toLowerCase(), value],
+                        [o.subject.code.toLowerCase(), value],
+                      ] as const;
+                    }),
+                  ),
+                },
               ]),
             ),
-            departmentsByName: new Map(
-              departments.map((d) => [d.name.toLowerCase(), { id: d.id }]),
+            streamsByName: new Map(
+              streams.flatMap((st) => [
+                [st.name.toLowerCase(), { id: st.id }],
+                [st.code.toLowerCase(), { id: st.id }],
+              ]),
             ),
           };
           outcomes = parsed.rows.map((row, i) => ({
@@ -282,6 +321,20 @@ export class ImportValidationService {
             errors: validateTeacherRow(row, ctx),
           }));
         }
+
+        // P1-11: a date in any column is Excel's conversion of what was
+        // typed, never the value the school meant; report it on the row.
+        outcomes = outcomes.map((o, i) => {
+          const dateColumns = parsed.dateColumnsByRow[i] ?? [];
+          if (dateColumns.length === 0) return o;
+          return {
+            ...o,
+            errors: [
+              ...o.errors,
+              ...dateColumns.map((field) => ({ field, message: EXCEL_DATE_MESSAGE })),
+            ],
+          };
+        });
 
         const validRows = outcomes.filter((o) => o.errors.length === 0).length;
         const invalidRows = outcomes.length - validRows;
