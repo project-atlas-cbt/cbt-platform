@@ -2,6 +2,18 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-10 — Marketing site: founding offer and summary download on Pricing
+
+Owner decisions (marketing plan, 2026-10-06): the first 10 schools get the founding offer (price
+kept two years, billing per term, a guided first exam, in return for being a named reference). The
+Pricing page now shows it in a short panel, switched by `MARKETING_FOUNDING_OFFER` (set in
+`.env.production`; unset hides it), and offers the one-page summary as a PDF at
+`/downloads/examkeep-one-page-summary.pdf`. The detailed terms are still with the lawyer, so the
+panel says "ask us for the details". The price is fixed (owner, 2026-10-09), so Pricing shows
+"₦2,000 per student, per year" without "From". The founder is not named on the site or the summary
+sheet (owner decision, 2026-10-10); he is named on his own LinkedIn profile instead. Marketing unit
+tests, lint, typecheck and the production build pass.
+
 ### 2026-10-09 — Server errors reach Sentry on the VPS
 
 - The VPS Compose file passed `SENTRY_DSN` only into the web build, so the API and worker never

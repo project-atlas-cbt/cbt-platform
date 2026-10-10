@@ -22,8 +22,14 @@ describe('readSiteConfig', () => {
       MARKETING_WHATSAPP: ' ',
     });
     expect(config.priceFromNgn).toBeUndefined();
+    expect(config.foundingOffer).toBe(false);
     expect(config.whatsapp).toBeUndefined();
     expect(whatsappLink(config)).toBeUndefined();
+  });
+
+  it('shows the founding offer only when switched on', () => {
+    expect(readSiteConfig({ MARKETING_FOUNDING_OFFER: ' Yes ' }).foundingOffer).toBe(true);
+    expect(readSiteConfig({ MARKETING_FOUNDING_OFFER: 'no' }).foundingOffer).toBe(false);
   });
 
   it('normalises a WhatsApp number to international digits', () => {

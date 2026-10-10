@@ -33,6 +33,7 @@ static pages, so changing one needs a rebuild.
 | `MARKETING_CONTACT_ADDRESS`         | build   | As above                                                                            |
 | `MARKETING_WHATSAPP`                | build   | WhatsApp number, local (0803…) or international; adds the WhatsApp buttons          |
 | `MARKETING_COMPANY_NAME`            | build   | The company behind the product: copyright line, About and the privacy notice        |
+| `MARKETING_FOUNDING_OFFER`          | build   | `1` shows the founding-school offer on Pricing; unset hides it                      |
 | `MARKETING_PRICE_FROM_NGN`          | build   | Starting price per student per year; without it Pricing asks for a quote            |
 | `MARKETING_LEAD_EMAIL_PROVIDER`     | runtime | `zeptomail`, `resend` or `brevo`; unset means the form tells visitors to contact us |
 | `MARKETING_LEAD_EMAIL_API_KEY`      | runtime | The provider's API key                                                              |
