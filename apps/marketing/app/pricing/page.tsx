@@ -5,7 +5,7 @@ import { formatNaira, site } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Pricing',
-  description: `${site.name} is priced per student, per academic year, with every feature included. See the starting price or request a quote for your school.`,
+  description: `${site.name} is priced per student, per academic year, with every feature included. See the price or request a quote for your school.`,
   alternates: { canonical: '/pricing' },
 };
 
@@ -36,7 +36,6 @@ export default function PricingPage() {
             </h2>
             {price ? (
               <p className="mt-4 font-display text-ink">
-                <span className="text-lg text-ink-2">From </span>
                 <span className="text-5xl font-semibold tracking-tight">{formatNaira(price)}</span>
                 <span className="mt-2 block text-lg text-ink-2">per student, per year</span>
               </p>

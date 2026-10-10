@@ -247,7 +247,7 @@ export const faqs: { group: string; items: Faq[] }[] = [
       },
       {
         q: 'How is it priced?',
-        a: 'By the number of students, per academic year. See the pricing page for the starting price, or request a quote for your school.',
+        a: 'By the number of students, per academic year. See the pricing page for the price, or request a quote for your school.',
       },
       {
         q: 'How long does setup take?',

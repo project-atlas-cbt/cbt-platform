@@ -9,19 +9,10 @@ kept two years, billing per term, a guided first exam, in return for being a nam
 Pricing page now shows it in a short panel, switched by `MARKETING_FOUNDING_OFFER` (set in
 `.env.production`; unset hides it), and offers the one-page summary as a PDF at
 `/downloads/examkeep-one-page-summary.pdf`. The detailed terms are still with the lawyer, so the
-panel says "ask us for the details". The "Under discussion" price comment is now "decided". The
-summary sheet no longer names the founder (owner request); About still does. Marketing unit tests,
-lint, typecheck and the production build pass.
-
-### 2026-10-06 — Marketing site: the founder on About
-
-Owner decision (marketing plan, 2026-10-06): proprietors buy from a person, so the site names the
-founder with a photo. About's "Who we are" section now shows Haneef Ojutalayo, Founder, beside
-`public/team/founder.jpg`. The name comes from `MARKETING_FOUNDER_NAME` (set in
-`.env.production`); unset, the founder is hidden, like every other optional business detail.
-Marketing unit tests, lint, typecheck and 46 of 47 browser checks pass; "says plainly when a
-request could not be sent" fails the same way on `dev` in the cloud container (the browser lands
-on an error page), so it is not this change.
+panel says "ask us for the details". The price is fixed (owner, 2026-10-09), so Pricing shows
+"₦2,000 per student, per year" without "From". The founder is not named on the site or the summary
+sheet (owner decision, 2026-10-10); he is named on his own LinkedIn profile instead. Marketing unit
+tests, lint, typecheck and the production build pass.
 
 ### 2026-10-06 — Tour video: a bulk import, softer sound, no tones
 

@@ -22,8 +22,6 @@ export interface SiteConfig {
   company?: string | undefined;
   /** Starting price per student per year, in naira. */
   priceFromNgn?: number | undefined;
-  /** The founder named on About; their photo is public/team/founder.jpg. */
-  founder?: string | undefined;
   /** Show the founding-school offer on Pricing (the first 10 schools); off unless set. */
   foundingOffer: boolean;
 }
@@ -58,7 +56,6 @@ export function readSiteConfig(env: Record<string, string | undefined> = process
     address: optional(env.MARKETING_CONTACT_ADDRESS),
     company: optional(env.MARKETING_COMPANY_NAME),
     priceFromNgn: Number.isFinite(price) && price > 0 ? price : undefined,
-    founder: optional(env.MARKETING_FOUNDER_NAME),
     foundingOffer: ['1', 'true', 'yes'].includes(
       optional(env.MARKETING_FOUNDING_OFFER)?.toLowerCase() ?? '',
     ),

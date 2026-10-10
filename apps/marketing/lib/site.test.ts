@@ -22,7 +22,6 @@ describe('readSiteConfig', () => {
       MARKETING_WHATSAPP: ' ',
     });
     expect(config.priceFromNgn).toBeUndefined();
-    expect(config.founder).toBeUndefined();
     expect(config.foundingOffer).toBe(false);
     expect(config.whatsapp).toBeUndefined();
     expect(whatsappLink(config)).toBeUndefined();
@@ -31,10 +30,6 @@ describe('readSiteConfig', () => {
   it('shows the founding offer only when switched on', () => {
     expect(readSiteConfig({ MARKETING_FOUNDING_OFFER: ' Yes ' }).foundingOffer).toBe(true);
     expect(readSiteConfig({ MARKETING_FOUNDING_OFFER: 'no' }).foundingOffer).toBe(false);
-  });
-
-  it('reads the founder named on About', () => {
-    expect(readSiteConfig({ MARKETING_FOUNDER_NAME: ' Ada Obi ' }).founder).toBe('Ada Obi');
   });
 
   it('normalises a WhatsApp number to international digits', () => {
