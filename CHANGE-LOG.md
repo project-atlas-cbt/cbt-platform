@@ -2,6 +2,17 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-10 — Marketing site: founding offer and summary download on Pricing
+
+Owner decisions (marketing plan, 2026-10-06): the first 10 schools get the founding offer (price
+kept two years, billing per term, a guided first exam, in return for being a named reference). The
+Pricing page now shows it in a short panel, switched by `MARKETING_FOUNDING_OFFER` (set in
+`.env.production`; unset hides it), and offers the one-page summary as a PDF at
+`/downloads/examkeep-one-page-summary.pdf`. The detailed terms are still with the lawyer, so the
+panel says "ask us for the details". The "Under discussion" price comment is now "decided". The
+summary sheet no longer names the founder (owner request); About still does. Marketing unit tests,
+lint, typecheck and the production build pass.
+
 ### 2026-10-06 — Marketing site: the founder on About
 
 Owner decision (marketing plan, 2026-10-06): proprietors buy from a person, so the site names the
