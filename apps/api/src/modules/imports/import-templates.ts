@@ -1,4 +1,5 @@
 import type { ImportJobType } from '@atlas/domain';
+import { neutraliseFormula } from '../reports/csv.js';
 
 /**
  * A-17 "template versioning": the exact column sets from `01 §7`/`03 §15`
@@ -93,11 +94,9 @@ export const IMPORT_TEMPLATES: Record<ImportJobType, ImportTemplateDef> = {
 function toCsvLine(cells: readonly string[]): string {
   return cells
     .map((cell) => {
-      // Same formula-injection guard as CredentialSheetService.toCsv — a
-      // cell starting with =, +, -, or @ is prefixed with a tab so a
-      // spreadsheet application never interprets it as a formula.
-      const guarded = /^[=+\-@]/.test(cell) ? `\t${cell}` : cell;
-      return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
+      // Shared formula guard (see `neutraliseFormula`).
+      const guarded = neutraliseFormula(cell);
+      return /[",\r\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
     })
     .join(',');
 }

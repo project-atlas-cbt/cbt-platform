@@ -91,6 +91,26 @@ export class ResultAdjustmentService {
           message: 'That question is not part of this exam.',
         });
       }
+      // A question that is already voided (or being voided) is refused:
+      // running the void again would mark every result ADJUSTED for nothing.
+      const alreadyVoided = await withTenant(prisma, schoolId, (tx) =>
+        tx.resultAdjustmentOperation.findFirst({
+          where: {
+            schoolId,
+            examId: dto.examId,
+            type: 'VOID_QUESTION',
+            targetExamQuestionId: dto.targetExamQuestionId as string,
+            status: { in: ['PENDING', 'PROCESSING', 'COMPLETED'] },
+          },
+          select: { id: true },
+        }),
+      );
+      if (alreadyVoided) {
+        throw new AppHttpException({
+          code: 'CONFLICT',
+          message: 'That question has already been voided.',
+        });
+      }
     }
 
     const targetResults = await this.resolveTargets(schoolId, dto);

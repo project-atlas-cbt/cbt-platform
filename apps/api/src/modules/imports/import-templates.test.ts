@@ -94,9 +94,8 @@ describe('buildErrorRowsCsv', () => {
         errors: [{ field: 'Staff ID', message: 'bad' }],
       },
     ]);
-    // A tab-prefixed value is what content-validation's own convention
-    // guards against a spreadsheet application ever interpreting as a
-    // formula — confirmed present, not stripped.
-    expect(csv).toContain('\t=cmd|/c calc');
+    // The shared guard prefixes an apostrophe so a spreadsheet application
+    // never interprets the cell as a formula.
+    expect(csv).toContain("'=cmd|/c calc");
   });
 });

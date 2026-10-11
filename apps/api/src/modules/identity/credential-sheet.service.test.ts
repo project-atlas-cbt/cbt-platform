@@ -33,10 +33,11 @@ describe('CredentialSheetService.toCsv (ADR-0019/A-02 one-time-reveal primitive)
     expect(csv).toContain('"Mary ""MJ"" John"');
   });
 
-  it('defuses spreadsheet formula injection with a leading tab', () => {
-    // Every one of the dangerous leading characters gets the same guard.
-    for (const dangerous of ['=cmd|calc!A1', '+1+1', '-1+1', '@SUM(1,1)']) {
-      expect(service.toCsv([row({ displayName: dangerous })])).toContain(`"\t${dangerous}"`);
+  it('defuses spreadsheet formula injection with a leading apostrophe', () => {
+    // Every one of the dangerous leading characters gets the same guard,
+    // including a leading tab or carriage return.
+    for (const dangerous of ['=cmd|calc!A1', '+1+1', '-1+1', '@SUM(1,1)', '\t=1+1', '\r=1+1']) {
+      expect(service.toCsv([row({ displayName: dangerous })])).toContain(`"'${dangerous}"`);
     }
   });
 
