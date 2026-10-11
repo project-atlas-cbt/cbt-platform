@@ -231,6 +231,11 @@ restore once before the pilot (launch checklist section 0).
   Configuration, ADR-0036, which override it).
 - `backups/backup.log` after each night; an empty off-site setting prints a warning there. A
   failed backup also emails the operations alert recipients ("Nightly backup failed", sent by
-  `ops:send-alert` from the last release in `releases.log`). A backup that never starts (cron
-  removed, server off) sends nothing, so still glance at the log or the off-site bucket weekly.
+  `ops:send-alert` from the last release in `releases.log`). A second cron entry at 03:30 UTC
+  (`bin/backup-check.sh`, log in `backup-check.log`) emails "Nightly backup missing" when no dump
+  under 26 hours old is in `backups/`, or when `backups/` is missing or not writable by `atlas`
+  (a root-owned folder). It cannot run if the whole server is off, so keep the external uptime
+  check below. A server set up before this existed gets the entry by re-running `bin/setup-server.sh`
+  as root, or as `atlas`: `( crontab -l | grep -v backup-check.sh; echo '30 3 * * * cd
+/home/atlas/cbt-platform/infra/vps && bin/backup-check.sh >> backup-check.log 2>&1' ) | crontab -`.
 - An external uptime check (any free service) on `https://api.<root>/v1/health`.
