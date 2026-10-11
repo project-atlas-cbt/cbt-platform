@@ -2,6 +2,17 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-11 — Stale-backup check for the VPS pilot
+
+Closes the two small gaps left after #86. `infra/vps/bin/backup-check.sh` runs from cron at 03:30
+UTC, two hours after the backup, and emails the operations alert recipients ("Nightly backup
+missing", through `ops:send-alert`) when `backups/` holds no dump under 26 hours old, or the folder
+is missing or not writable by `atlas`. That also covers a root-owned `backups/` folder, where the
+cron log redirect fails before `backup.sh` can alert. Its log is `backup-check.log`, outside
+`backups/`. `setup-server.sh` installs the entry; an existing server adds it with the one-liner in
+`vps-pilot.md`. Tested by hand with a fresh, an old and an absent dump (the alert send itself needs
+the server's ops image). Does not run if the whole server is off; the external uptime check covers that.
+
 ### 2026-10-11 — Audit follow-ups: one CSV formula guard, extra-time cap, double void refused
 
 Three items left open from the 2026-10-06 bug audit. The credential sheet, question export and

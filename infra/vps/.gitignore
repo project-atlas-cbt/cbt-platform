@@ -6,3 +6,4 @@ certs/
 backups/
 releases.log
 maintenance/ON
+backup-check.log

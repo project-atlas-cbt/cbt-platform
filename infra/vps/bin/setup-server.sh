@@ -4,7 +4,7 @@
 #   bash setup-server.sh <deploy-user-public-key>
 # Installs Docker, opens only SSH/HTTP/HTTPS, turns on unattended security
 # updates and swap, creates the `atlas` deploy user, and installs the
-# nightly backup cron entry. Safe to re-run.
+# nightly backup cron entry and its stale-backup check. Safe to re-run.
 set -euo pipefail
 pubkey=${1:?usage: setup-server.sh "<ssh public key for the atlas user>"}
 
@@ -44,5 +44,8 @@ chmod 440 /etc/sudoers.d/atlas-tls
 cron_line='30 1 * * * cd /home/atlas/cbt-platform/infra/vps && mkdir -p backups && bin/backup.sh >> backups/backup.log 2>&1'
 # grep -v exits 1 when it keeps no lines (a fresh server has no crontab), which
 # set -e inside the subshell would turn into a silent early exit.
-( crontab -u atlas -l 2>/dev/null | grep -vF 'bin/backup.sh' || true; echo "$cron_line" ) | crontab -u atlas -
+# 03:30 UTC, two hours after the backup: alerts when no fresh dump exists.
+# The log sits outside backups/ so a root-owned backups/ cannot block the check.
+check_line='30 3 * * * cd /home/atlas/cbt-platform/infra/vps && bin/backup-check.sh >> backup-check.log 2>&1'
+( crontab -u atlas -l 2>/dev/null | grep -vE 'bin/backup(-check)?\.sh' || true; echo "$cron_line"; echo "$check_line" ) | crontab -u atlas -
 echo "server ready: sign in as atlas, clone the repository to ~/cbt-platform, then follow vps-pilot.md"
