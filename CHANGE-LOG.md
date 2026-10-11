@@ -2,6 +2,18 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-11 — Audit follow-ups: one CSV formula guard, extra-time cap, double void refused
+
+Three items left open from the 2026-10-06 bug audit. The credential sheet, question export and
+import template error file now share `neutraliseFormula` (reports `csv.ts`), which also catches a
+leading tab or carriage return; the old per-file checks missed them. `GrantExtraTimeDto` caps
+`extraTimeSeconds` at `MAX_EXAM_DURATION_SECONDS` (one day), so a huge grant can no longer overflow
+the column. `VOID_QUESTION` for a question that already has a pending, running or completed void is
+refused with 409, instead of marking every result ADJUSTED with no score change; a failed void can
+still be retried. Tests: unit tests for the three CSV writers and the DTO, and an integration
+assertion in `results.integration.test.ts`. CI was blocked by GitHub Actions billing, so it was
+run locally only.
+
 ### 2026-10-10 — Marketing site: founding offer and summary download on Pricing
 
 Owner decisions (marketing plan, 2026-10-06): the first 10 schools get the founding offer (price

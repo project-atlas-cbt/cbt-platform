@@ -8,12 +8,14 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
 import {
   ATTEMPT_EVENT_TYPES,
   ATTEMPT_STATES,
+  MAX_EXAM_DURATION_SECONDS,
   type AttemptEventType,
   type AttemptState,
 } from '@atlas/domain';
@@ -497,6 +499,7 @@ export class GrantExtraTimeDto {
   })
   @IsInt()
   @Min(0)
+  @Max(MAX_EXAM_DURATION_SECONDS)
   extraTimeSeconds!: number;
 }
 

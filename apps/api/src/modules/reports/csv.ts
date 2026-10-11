@@ -18,10 +18,15 @@ export function csvCell(value: unknown): string {
   // structured fallback avoids Object.prototype's meaningless
   // "[object Object]" output if a future column is accidentally complex.
   else text = JSON.stringify(value) ?? '';
-  // P3-3: a leading tab or carriage return also starts a formula in some
-  // spreadsheet programs.
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  text = neutraliseFormula(text);
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+/** The one spreadsheet formula guard every CSV writer uses. A leading =, +, -,
+ * @, tab or carriage return can start a formula (P3-3), so the cell gets a
+ * leading apostrophe. */
+export function neutraliseFormula(text: string): string {
+  return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
 }
 
 export function csv(rows: readonly (readonly unknown[])[]): string {

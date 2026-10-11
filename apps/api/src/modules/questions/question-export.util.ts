@@ -1,4 +1,5 @@
 import { IMPORT_TEMPLATE_VERSION, templateVersionMarker } from '../imports/import-templates.js';
+import { neutraliseFormula } from '../reports/csv.js';
 
 /** `CreateQuestionDto`/`UpdateQuestionRevisionDto` both cap `options` at 4
  * (`@ArrayMaxSize(4)`) specifically so this holds without truncating real
@@ -23,14 +24,11 @@ export interface ExportableQuestion {
   currentStatus: string;
 }
 
-/** Same formula-injection guard as `import-templates.ts`'s own `toCsvLine`
- * (not imported — that one is module-private, and duplicating four lines
- * is simpler than exporting infrastructure across an otherwise unrelated
- * module boundary for this one helper). */
+/** Uses the shared formula guard from the reports CSV writer. */
 function toCsvLine(cells: readonly string[]): string {
   return cells
     .map((cell) => {
-      const guarded = /^[=+\-@]/.test(cell) ? `\t${cell}` : cell;
+      const guarded = neutraliseFormula(cell);
       return /[",\r\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
     })
     .join(',');

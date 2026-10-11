@@ -1524,6 +1524,19 @@ describe('B15 Results & Publication (results.v1 / student-results.v1)', () => {
 
     const progress = (await get(admin, `/results/adjustments/${body.id}`)).json<{ id: string }>();
     expect(progress.id).toBe(body.id);
+
+    // Voiding the same question again is refused while the first void is
+    // pending, rather than marking the whole cohort ADJUSTED a second time.
+    const again = await post(admin, '/results/adjustments', {
+      examId,
+      type: 'VOID_QUESTION',
+      reason: 'Voiding it twice.',
+      targetExamQuestionId: examQuestion.examQuestionId,
+    });
+    expect(again.statusCode).toBe(409);
+    expect(again.json<{ error: { message: string } }>().error.message).toContain(
+      'already been voided',
+    );
   });
 
   it('P2-21 "Grade now": targets only ungraded results, and needs bands to grade against', async () => {

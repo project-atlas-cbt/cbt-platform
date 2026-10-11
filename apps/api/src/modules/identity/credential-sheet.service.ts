@@ -4,6 +4,7 @@ import { formalName, sortByPersonName } from '@atlas/domain';
 import { AuthLockoutService } from './auth-lockout.service.js';
 import { PasswordService } from './password.service.js';
 import { SessionService } from './session.service.js';
+import { neutraliseFormula } from '../reports/csv.js';
 
 export interface CredentialSheetRow {
   studentId: string;
@@ -107,13 +108,13 @@ export class CredentialSheetService {
   }
 
   /** RFC 4180-ish CSV — quotes every field, escapes embedded quotes, and
-   * prefixes any value starting with =, +, -, or @ with a leading tab to
-   * defuse spreadsheet formula injection (the same class of concern the
+   * neutralises any value that could start a spreadsheet formula (shared
+   * `neutraliseFormula` guard) to defuse spreadsheet formula injection (the same class of concern the
    * B18 export phase's own Testing requirements name explicitly). */
   toCsv(rows: CredentialSheetRow[]): string {
     const header = ['Student ID', 'Name', 'Login Identifier', 'Initial Password'];
     const escape = (value: string): string => {
-      const guarded = /^[=+\-@]/.test(value) ? `\t${value}` : value;
+      const guarded = neutraliseFormula(value);
       return `"${guarded.replace(/"/g, '""')}"`;
     };
     const lines = [

@@ -15,7 +15,7 @@ describe('buildQuestionsExportCsv', () => {
         currentStatus: 'DRAFT',
       },
     ]);
-    expect(output).toContain('"\t=unsafe\rcontent"');
+    expect(output).toContain('"\'=unsafe\rcontent"');
     expect(output.split('\r\n')).toHaveLength(4);
   });
 });
