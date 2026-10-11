@@ -184,6 +184,14 @@ async function applyCompletedVoids(
   questionResults: readonly ResultQuestionMarking[],
   scale: { versionId: string; bands: GradingBand[] } | null,
 ): Promise<void> {
+  // P1-7: take every void operation of the exam FOR SHARE (id order, so
+  // lockers cannot deadlock) before reading which are completed. A void that
+  // is completing holds the row FOR UPDATE and re-checks for unadjusted
+  // results; this wait guarantees that either its check sees this result, or
+  // the read below sees it COMPLETED. Without it a result finalising in that
+  // window is missed by both.
+  await tx.$queryRaw`SELECT id FROM result_adjustment_operations WHERE school_id = ${schoolId}::uuid AND exam_id = ${examId}::uuid AND type = 'VOID_QUESTION' ORDER BY id FOR SHARE`;
+
   const operations = await tx.resultAdjustmentOperation.findMany({
     where: {
       schoolId,

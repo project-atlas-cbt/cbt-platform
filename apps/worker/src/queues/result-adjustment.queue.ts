@@ -39,6 +39,10 @@ export interface ResultAdjustmentWorkerDeps {
    * is applied — lets a test force a crash mid-run deterministically and
    * prove property 1. Never set in production. */
   onBeforeChunk?: (chunkIndex: number) => void;
+  /** Test-only hook, called after the last pending result is applied and
+   * before the completion check — lets a test finalise a result inside that
+   * window deterministically (P1-7). Never set in production. */
+  onBeforeComplete?: () => Promise<void>;
   /** B17: invoked only after a completed operation releases its cohort. */
   invalidateAnalytics?: (schoolId: string) => Promise<void>;
 }
@@ -89,19 +93,26 @@ export async function runResultAdjustment(
 
   try {
     for (;;) {
-      const pending = await loadPendingResultIds(
-        schoolId,
-        operation,
-        RESULT_ADJUSTMENT_CHUNK_SIZE,
-        skipped,
-      );
-      if (pending.length === 0) break;
+      for (;;) {
+        const pending = await loadPendingResultIds(
+          schoolId,
+          operation,
+          RESULT_ADJUSTMENT_CHUNK_SIZE,
+          skipped,
+        );
+        if (pending.length === 0) break;
 
-      deps.onBeforeChunk?.(chunkIndex);
-      const notGraded = await applyChunk(schoolId, operation, pending, previouslyVoided);
-      for (const id of notGraded) skipped.add(id);
-      await refreshClaim(schoolId, operationId);
-      chunkIndex += 1;
+        deps.onBeforeChunk?.(chunkIndex);
+        const notGraded = await applyChunk(schoolId, operation, pending, previouslyVoided);
+        for (const id of notGraded) skipped.add(id);
+        await refreshClaim(schoolId, operationId);
+        chunkIndex += 1;
+      }
+
+      await deps.onBeforeComplete?.();
+      // P1-7: completion re-checks for results that finalised after the last
+      // pending query; if there are any, go round again instead of completing.
+      if (await completeOperation(schoolId, operation, skipped)) break;
     }
   } catch (error) {
     failureReason = String(error);
@@ -118,7 +129,6 @@ export async function runResultAdjustment(
     throw error;
   }
 
-  await completeOperation(schoolId, operationId, operation.examId);
   try {
     await deps.invalidateAnalytics?.(schoolId);
   } catch (error) {
@@ -176,6 +186,7 @@ async function loadPendingResultIds(
   },
   take: number,
   skipped: ReadonlySet<string>,
+  db?: Prisma.TransactionClient,
 ): Promise<string[]> {
   // P2-19: an override's one result may have been voided (attempt
   // invalidated) after the override was queued. VOIDED → ADJUSTED is refused
@@ -192,7 +203,7 @@ async function loadPendingResultIds(
           ...(operation.ungradedOnly && { gradingScaleVersionId: null }),
         };
 
-  const rows = await withTenant(prisma, schoolId, (tx) =>
+  const query = (tx: Prisma.TransactionClient) =>
     tx.result.findMany({
       where: {
         AND: [
@@ -204,8 +215,8 @@ async function loadPendingResultIds(
       select: { id: true },
       orderBy: { id: 'asc' },
       take,
-    }),
-  );
+    });
+  const rows = db ? await query(db) : await withTenant(prisma, schoolId, query);
   return rows.map((r) => r.id);
 }
 
@@ -472,15 +483,37 @@ async function resolveGradeForVersion(
 }
 
 /** Clears ADR-0025's hold — only ever on a fully completed run, so a cohort
- * is never revealed half-adjusted. */
+ * is never revealed half-adjusted.
+ *
+ * P1-7: a result can finalise (a makeup, retry or late auto-submit) after the
+ * last pending query but before this commit. `finalizeResultAfterMarking`
+ * applies only COMPLETED voids, so it would skip this one, and this run would
+ * never see the result either. Both sides therefore meet on the operation
+ * row: the finaliser takes it FOR SHARE before reading the completed voids,
+ * and this takes it FOR UPDATE, then re-checks for pending results in the
+ * same transaction. Either the finaliser committed first (its result is now
+ * visible here, so completion is refused and the caller goes round again), or
+ * this commit came first (the finaliser then sees COMPLETED and applies the
+ * void itself). Returns whether the operation was completed. */
 async function completeOperation(
   schoolId: string,
-  operationId: string,
-  examId: string,
-): Promise<void> {
-  await withTenant(prisma, schoolId, async (tx) => {
+  operation: {
+    id: string;
+    examId: string;
+    type: string;
+    targetResultId: string | null;
+    ungradedOnly: boolean;
+  },
+  skipped: ReadonlySet<string>,
+): Promise<boolean> {
+  return withTenant(prisma, schoolId, async (tx) => {
+    await tx.$queryRaw`SELECT id FROM result_adjustment_operations WHERE id = ${operation.id}::uuid FOR UPDATE`;
+
+    const stragglers = await loadPendingResultIds(schoolId, operation, 1, skipped, tx);
+    if (stragglers.length > 0) return false;
+
     await tx.resultAdjustmentOperation.update({
-      where: { id: operationId },
+      where: { id: operation.id },
       data: {
         status: 'COMPLETED',
         completedAt: new Date(),
@@ -493,14 +526,15 @@ async function completeOperation(
     // until none is outstanding, so two adjustments in quick succession never
     // expose the cohort between them.
     const outstanding = await tx.resultAdjustmentOperation.count({
-      where: { schoolId, examId, status: { in: ['PENDING', 'PROCESSING'] } },
+      where: { schoolId, examId: operation.examId, status: { in: ['PENDING', 'PROCESSING'] } },
     });
     if (outstanding === 0) {
       await tx.resultPublication.updateMany({
-        where: { schoolId, examId },
+        where: { schoolId, examId: operation.examId },
         data: { adjustmentInProgress: false },
       });
     }
+    return true;
   });
 }
 
