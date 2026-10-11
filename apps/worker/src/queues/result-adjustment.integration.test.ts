@@ -14,6 +14,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { prisma, withTenant } from '@atlas/db';
 import { RESULT_ADJUSTMENT_CLAIM_TTL_MS, type AdjustableResultValues } from '@atlas/domain';
 import { runResultAdjustment } from './result-adjustment.queue.js';
+import { finalizeResultAfterMarking } from './result-finalization.js';
 import {
   MARKING_RECONCILE_AFTER_MS,
   reconcileOwedAdjustments,
@@ -837,6 +838,96 @@ describe('B15 result adjustment worker (ADR-0025)', () => {
     );
     expect(history.map((h) => h.adjustmentType)).toEqual(['AWARD_MARK', 'VOID_QUESTION']);
     expect((history[0]!.oldValue as unknown as AdjustableResultValues).earnedMarks).toBe(5);
+  });
+
+  it('P1-7: a result that finalises just before a void completes is not missed', async () => {
+    const fixture = await createFixture(2);
+    schools.push(fixture.schoolId);
+    await createFinalisedResult(fixture, fixture.studentProfileIds[0]!, 1);
+
+    // A second student's attempt is submitted and marked, but not finalised.
+    const lateAttemptId = await withTenant(prisma, fixture.schoolId, async (tx) => {
+      const attempt = await tx.examAttempt.create({
+        data: {
+          schoolId: fixture.schoolId,
+          examId: fixture.examId,
+          examSessionId: fixture.examSessionId,
+          studentProfileId: fixture.studentProfileIds[1]!,
+          attemptNumber: 1,
+          state: 'IN_PROGRESS',
+          durationGrantedSeconds: 3600,
+          expiresAt: new Date(Date.now() + 3600 * 1000),
+        },
+      });
+      await tx.examAttempt.update({
+        where: { id: attempt.id },
+        data: { state: 'SUBMITTED', submittedAt: new Date() },
+      });
+      await tx.attemptQuestionResult.createMany({
+        data: [
+          {
+            schoolId: fixture.schoolId,
+            attemptId: attempt.id,
+            examQuestionId: Q1,
+            correctness: 'CORRECT',
+            awardedMarks: 5,
+            maximumMarks: 5,
+          },
+          {
+            schoolId: fixture.schoolId,
+            attemptId: attempt.id,
+            examQuestionId: Q2,
+            correctness: 'INCORRECT',
+            awardedMarks: 0,
+            maximumMarks: 3,
+          },
+        ],
+      });
+      return attempt.id;
+    });
+    const marking = [
+      { examQuestionId: Q1, correctness: 'CORRECT' as const, awardedMarks: 5, maximumMarks: 5 },
+      { examQuestionId: Q2, correctness: 'INCORRECT' as const, awardedMarks: 0, maximumMarks: 3 },
+    ];
+
+    const operationId = await createOperation(fixture, {
+      type: 'VOID_QUESTION',
+      reason: 'Question 2 was ambiguous.',
+      targetExamQuestionId: Q2,
+      totalCount: 1,
+    });
+
+    // The late result finalises after the run's last pending query and before
+    // its completion: the void is still PROCESSING, so finalisation skips it.
+    let finalisedInWindow = false;
+    await runResultAdjustment(
+      {
+        onBeforeComplete: async () => {
+          if (finalisedInWindow) return;
+          finalisedInWindow = true;
+          await withTenant(prisma, fixture.schoolId, (tx) =>
+            finalizeResultAfterMarking(tx, fixture.schoolId, lateAttemptId, marking),
+          );
+        },
+      },
+      { schoolId: fixture.schoolId, operationId },
+    );
+    expect(finalisedInWindow).toBe(true);
+
+    const results = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.result.findMany({ where: { schoolId: fixture.schoolId } }),
+    );
+    expect(results).toHaveLength(2);
+    for (const result of results) {
+      expect(result.totalMarks).toBe(5);
+      expect(result.earnedMarks).toBe(5);
+      expect(result.state).toBe('ADJUSTED');
+    }
+    const operation = await withTenant(prisma, fixture.schoolId, (tx) =>
+      tx.resultAdjustmentOperation.findUniqueOrThrow({ where: { id: operationId } }),
+    );
+    expect(operation.status).toBe('COMPLETED');
+    expect(operation.appliedCount).toBe(2);
   });
 
   it('B22: reconciliation re-queues an adjustment whose run died, and leaves live or finished ones alone', async () => {
