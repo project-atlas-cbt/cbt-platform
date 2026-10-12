@@ -81,4 +81,23 @@ describe('SmtpNotificationChannel (VPS pilot, ADR-0019 amendment)', () => {
     );
     expect(sendMail).not.toHaveBeenCalled();
   });
+
+  it('passes template attachments to the transport', async () => {
+    const sendMail = vi.fn<(mail: SmtpMail) => Promise<unknown>>(() => Promise.resolve({}));
+    const r = new TemplateRegistry();
+    const content = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d, 1]);
+    r.register({
+      name: 'guide',
+      subject: 'S',
+      text: 'T',
+      attachments: [{ filename: 'Guide.pdf', contentType: 'application/pdf', content }],
+    });
+    await new SmtpNotificationChannel(r, 'a@example.ng', sendMail).send({
+      to: 'x@school.ng',
+      template: 'guide',
+    });
+    expect(sendMail.mock.calls[0]?.[0].attachments).toEqual([
+      { filename: 'Guide.pdf', contentType: 'application/pdf', content },
+    ]);
+  });
 });

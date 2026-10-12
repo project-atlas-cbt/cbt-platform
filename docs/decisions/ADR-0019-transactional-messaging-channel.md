@@ -100,3 +100,20 @@ time). The printed credential sheet and the forced first-login change above rema
   them from any device. Invigilation is the control; the screen says so.
 - Audited: `STUDENT_PASSWORDLESS_SIGN_IN_CHANGED` (who, before/after, sessions ended) and
   `USER_SIGNED_IN_PASSWORDLESS` per sign-in.
+
+## Amendment — 2026-10-12: email attachments
+
+**Decision (project owner, for the school onboarding guide, later receipts and summaries):** an
+email template may carry **static attachments**, sent over SMTP.
+
+- Attachments belong to the template definition (`TemplateDefinition.attachments`), not to the
+  message, so the dispatch queue payload is unchanged and no call site can attach arbitrary content.
+- Validated when the template is registered, so a bad file fails at startup, not at send time:
+  **PDF only** (declared type and `%PDF-` signature), safe file name, at most 3 files, 2 MB in
+  total. Widening the types or the cap is a change to the constants in `template.ts` plus a test.
+- Attachment bytes and names are never logged; the console transport prints file names only in
+  development.
+- The SES transport refuses a template with attachments (its simple content cannot carry them)
+  rather than send the mail without them. Raw MIME is the route if the AWS design needs this.
+- Per-recipient generated attachments (a receipt for one school) are not covered; they need a
+  further amendment with a per-message, size-checked path.

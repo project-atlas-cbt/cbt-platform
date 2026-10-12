@@ -2,6 +2,14 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-12 — Email templates can carry PDF attachments
+
+Notification templates accept static attachments, sent over SMTP (ADR-0019 amendment of the same
+date). PDF only, at most 3 files and 2 MB in total, checked when the template is registered. The
+bytes belong to the template, so the queue payload is unchanged; contents are never logged. The SES
+transport refuses a template with attachments. First use, next: the onboarding guide on the school
+activation email. Tests: registry validation (`template.test.ts`) and the SMTP hand-off.
+
 ### 2026-10-12 — Tour video v10: result detail for teachers and students
 
 The tour is re-recorded on the current app (96 s, was 78 s). A new scene has a teacher open one
