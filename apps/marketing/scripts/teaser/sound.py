@@ -165,10 +165,24 @@ def room(n, sections, dips):
 UI_GAIN = 1.6
 
 
-def mix(total, points, spans, sections, dips, intro, outro):
-    """points: (t, name); spans: (start, end) of the 'data' texture; intro/outro: card lengths."""
+def mix(total, points, spans, sections, dips, intro, outro, bed=None):
+    """points: (t, name); spans: (start, end) of the 'data' texture; intro/outro: card lengths.
+
+    bed: optional recorded background (mono samples at SR, already at its final level) used in
+    place of the synthesised room tone; it dips with the network outage like the room does.
+    """
     n = int(total * SR)
-    out = room(n, sections, dips)
+    if bed is None:
+        out = room(n, sections, dips)
+    else:
+        out = np.resize(bed, n).astype(float)
+        g = np.ones(n)
+        for a, b in dips:
+            k0, k1, r = int(a * SR), int(b * SR), int(0.25 * SR)
+            g[k0:k1] = 0.5
+            g[k0:k0 + r] = np.linspace(1, 0.5, r)
+            g[k1:k1 + r] = np.linspace(0.5, 1, r)
+        out *= g
     t = np.arange(n) / SR
     # near silence under the title; the room settles in as the product appears, and leaves
     # under the closing card so the logo and address sit in almost nothing
