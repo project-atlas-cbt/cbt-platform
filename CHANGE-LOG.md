@@ -2,6 +2,13 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-12 — Marketing: public WhatsApp number moves to the business account
+
+The number the marketing site's WhatsApp buttons open (`MARKETING_WHATSAPP` in `apps/marketing/.env.production`)
+changes from the founder's personal number to the new WhatsApp Business number, by owner request.
+The one-page summary PDF in `apps/marketing/public/downloads/` is re-exported with the new number
+and nothing else changed. Takes effect on the next marketing build and deploy.
+
 ### 2026-10-12 — "Get your school ready" guide on the activation email
 
 A public page, `/get-started` on the marketing site, lists what a newly activated school should
