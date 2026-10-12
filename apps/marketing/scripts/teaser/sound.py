@@ -121,6 +121,43 @@ POINT = {
 }
 
 
+# --- recorded set -------------------------------------------------------------------------------
+# Real recordings (CC0, see sounds/README.md) instead of synthesised sounds. Chosen by the product
+# owner (2026-10-12): the click is a plain mouse click; moments after an action get a soft
+# recorded confirmation. SOUND_SET=synth keeps the synthesised set above.
+import os
+import wave
+
+_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds')
+
+
+def _load(name):
+    with wave.open(os.path.join(_DIR, name + '.wav')) as w:
+        return np.frombuffer(w.readframes(w.getnframes()), '<i2') / 32768.0
+
+
+def _rec_set():
+    click, page, thunk = _load('click'), _load('page'), _load('thunk')
+    on, off = _load('switch-on'), _load('switch-off')
+    quiet = lambda: np.zeros(1)
+    return {
+        'hover': quiet, 'zoom': quiet, 'settle': lambda: thunk * 0.04,
+        'tik': lambda: click * 0.12, 'click': lambda: click * 0.12,
+        'tuk': lambda: _at((0, click * 0.16), (0.012, thunk * 0.08)),
+        'confirm': lambda: _at((0.1, thunk * 0.07)),
+        'drop': lambda: page * 0.10,
+        'state': lambda: on * 0.06,
+        'interrupt': lambda: off * 0.10,
+        'sync': lambda: _at((0, on * 0.10), (0.25, click * 0.06)),
+        'final': lambda: _at((0, click * 0.16), (0.012, thunk * 0.14)),
+    }
+
+
+RECORDED = os.environ.get('SOUND_SET') != 'synth' and os.path.isdir(_DIR)
+if RECORDED:
+    POINT = _rec_set()
+
+
 def room(n, sections, dips):
     """The bed: broadband computer-room air, very low, a little different in each section.
 
@@ -188,12 +225,12 @@ def mix(total, points, spans, sections, dips, intro, outro, bed=None):
     # under the closing card so the logo and address sit in almost nothing
     out *= np.clip(0.15 + 0.85 * (t - intro + 0.8) / 1.6, 0.15, 1)
     out *= np.clip((total - 1.4 - t) / max(outro - 1.4, 0.5), 0, 1)
-    for a, b in spans:
+    for a, b in ([] if RECORDED else spans):
         g = _grains(max(0.2, b - a), 26, 2500, 9000, 0.011)
         k = int(a * SR)
         out[k:k + len(g)] += g[: max(0, n - k)]
     for st, name in points:
-        snd = POINT[name]() * UI_GAIN
+        snd = POINT[name]() * (1.0 if RECORDED else UI_GAIN)
         k = int(st * SR)
         if 0 <= k < n:
             out[k:k + len(snd)] += snd[: n - k]
