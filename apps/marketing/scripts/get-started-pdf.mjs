@@ -19,11 +19,14 @@ const logo = readFileSync(
   new URL('../public/brand/examkeep-horizontal-colour-1024.png', import.meta.url),
 ).toString('base64');
 await page.evaluate((src) => {
+  const strip = document.createElement('div');
+  strip.style.cssText = 'background:#fff;padding:6px 0 4px 32px';
   const img = document.createElement('img');
   img.src = src;
   img.alt = '';
-  img.style.cssText = 'height:34px;width:auto;margin:6px 0 4px 32px;display:block';
-  document.querySelector('main')?.prepend(img);
+  img.style.cssText = 'height:34px;width:auto;display:block';
+  strip.append(img);
+  document.querySelector('main')?.prepend(strip);
 }, `data:image/png;base64,${logo}`);
 await page.pdf({
   displayHeaderFooter: true,
