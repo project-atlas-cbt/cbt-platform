@@ -2,6 +2,19 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-12 — "Get your school ready" guide on the activation email
+
+A public page, `/get-started` on the marketing site, lists what a newly activated school should
+gather before the setup wizard, in the wizard's order: details, calendar, classes and subjects,
+the teacher and student import columns, grading bands (not a wizard step) and first questions. A
+3-page PDF is rendered from the same content (`lib/get-started.ts`) by
+`apps/marketing/scripts/get-started-pdf.mjs`, which also regenerates the copy embedded in the API
+(`onboarding-guide.generated.ts`; the runtime image holds only compiled code). The activation email
+now links the page and attaches the PDF, but only when `PRODUCT_NAME` matches the name the PDF was
+generated for. Also fixes a type error in the SMTP attachment hand-off (nodemailer wants a Buffer).
+SES refuses attachments, so the AWS design needs an attachment-capable path before it carries this
+email. Regenerate the PDF whenever `lib/get-started.ts` changes. Tests: `templates.test.ts`.
+
 ### 2026-10-12 — Email templates can carry PDF attachments
 
 Notification templates accept static attachments, sent over SMTP (ADR-0019 amendment of the same

@@ -21,6 +21,7 @@ export const footerNav = [
     heading: 'For schools',
     links: [
       { href: '/request-a-demo', label: 'Request a demo' },
+      { href: '/get-started', label: 'Get your school ready' },
       { href: '/find-your-school', label: 'Find your school' },
       { href: '/faq', label: 'FAQ' },
       { href: '/guides', label: 'Guides' },

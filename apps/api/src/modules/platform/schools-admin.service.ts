@@ -97,6 +97,12 @@ export class SchoolsAdminService {
     private readonly standardSetup: StandardSetupService,
   ) {}
 
+  /** The public "get your school ready" page on the marketing site (the root domain). */
+  private guideUrl(): string {
+    const origin = new URL(this.config.get('WEB_ORIGIN', { infer: true }));
+    return `${origin.protocol}//${this.config.get('PLATFORM_ROOT_DOMAIN', { infer: true })}/get-started`;
+  }
+
   /** A link to the school's own web host (`common/school-url.ts`). */
   private buildSchoolUrl(subdomain: string, path: string): string {
     return buildSchoolUrl(
@@ -278,6 +284,7 @@ export class SchoolsAdminService {
         // contract is fixed here, matching identity.service.ts's own
         // "placeholder route" precedent for the password-reset link.
         activationUrl: this.buildSchoolUrl(subdomain, `/activate?key=${rawKey}`),
+        guideUrl: this.guideUrl(),
       },
     });
 
@@ -719,6 +726,7 @@ export class SchoolsAdminService {
           displayName: admin.displayName,
           schoolName: school.name,
           activationUrl: this.buildSchoolUrl(school.subdomain, `/activate?key=${rawKey}`),
+          guideUrl: this.guideUrl(),
         },
       });
     } else {

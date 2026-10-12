@@ -23,7 +23,9 @@ these steps is `docs/03-school-lifecycle.md`.
    structure**: **Standard setup** creates the three departments, three matching streams and the
    usual JSS and SS subjects; **Start empty** leaves them to the school. Either way the school
    edits its structure itself afterwards.
-2. The platform **emails the activation key** to the school admin. If it does not arrive, check the
+2. The platform **emails the activation key** to the school admin, with a link to the public
+   page `/get-started` and the same guide attached as a PDF (what to gather before setup).
+   Regenerate the PDF when that page changes (`apps/marketing/scripts/get-started-pdf.mjs`). If it does not arrive, check the
    address, then re-issue from the school's key history; the old key stops working.
 3. Confirm the school appears as pending activation in the schools list.
 
