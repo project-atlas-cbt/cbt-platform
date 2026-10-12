@@ -293,7 +293,8 @@ for seg in segs:
         t = i / FPS
         f = seg.frame(t)
         f = apply_caption(f, seg, t)
-        fade = min(1, t / FADE, (seg.dur - t) / FADE)
+        # the first frame is the thumbnail, so the title card opens fully on its own colour
+        fade = min(1, (seg.dur - t) / FADE) if seg is segs[0] else min(1, t / FADE, (seg.dur - t) / FADE)
         if fade < 1:
             f = Image.blend(white, f, max(0, fade))
         ff.stdin.write(f.tobytes())
