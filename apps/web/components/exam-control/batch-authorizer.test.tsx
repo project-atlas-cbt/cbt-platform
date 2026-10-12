@@ -102,4 +102,32 @@ describe('BatchAuthorizer', () => {
     await userEvent.click(screen.getByRole('button', { name: /authorize selected/i }));
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
   });
+
+  it('keeps ticks when the roster is narrowed by a search and restored', async () => {
+    const user = userEvent.setup();
+    const all = [
+      student({ studentProfileId: 'sp1', studentName: 'Tunde Bello', studentIdNumber: 'ST-001' }),
+      student({ studentProfileId: 'sp2', studentName: 'Ada Okoye', studentIdNumber: 'ST-002' }),
+    ];
+    const { rerender } = render(
+      <BatchAuthorizer examId="e1" sessionId="s1" accessMode="OPEN_TO_ELIGIBLE" students={all} />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: /select tunde bello/i }));
+    rerender(
+      <BatchAuthorizer
+        examId="e1"
+        sessionId="s1"
+        accessMode="OPEN_TO_ELIGIBLE"
+        students={[all[1]!]}
+        filtered
+      />,
+    );
+    expect(screen.queryByText('Tunde Bello')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /authorize selected \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /select all eligible shown/i })).toBeInTheDocument();
+    rerender(
+      <BatchAuthorizer examId="e1" sessionId="s1" accessMode="OPEN_TO_ELIGIBLE" students={all} />,
+    );
+    expect(screen.getByRole('checkbox', { name: /select tunde bello/i })).toBeChecked();
+  });
 });

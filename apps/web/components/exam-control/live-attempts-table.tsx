@@ -8,6 +8,7 @@ import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { Badge } from '@/components/ui/badge';
+import { StudentSearch, filterStudents } from '@/components/ui/student-search';
 import { useExamParticipation } from '@/lib/exam-control/queries';
 import { formatDateTime } from '@/lib/format/date';
 
@@ -21,6 +22,8 @@ type SignalCounts = LiveAttempt['signals'];
 type LiveAttemptTableRow = {
   studentProfileId: string;
   studentName: string;
+  /** The school's student ID; '' when the roster has not loaded for a live attempt. */
+  studentIdNumber: string;
   status: AttemptStatus;
   startedAt: string | null;
   timeRemainingSeconds: number | null;
@@ -60,10 +63,11 @@ export function hasFrequentLeaves(signals: SignalCounts | null): boolean {
   return signals.WINDOW_BLUR + signals.FULLSCREEN_EXIT >= FREQUENT_LEAVES_THRESHOLD;
 }
 
-function fromLive(live: LiveAttempt): LiveAttemptTableRow {
+function fromLive(live: LiveAttempt, studentIdNumber: string): LiveAttemptTableRow {
   return {
     studentProfileId: live.studentProfileId,
     studentName: live.studentName,
+    studentIdNumber,
     status: 'IN_PROGRESS',
     startedAt: live.startedAt,
     timeRemainingSeconds: live.timeRemainingSeconds,
@@ -77,6 +81,7 @@ function idle(student: ParticipationStudent, status: AttemptStatus): LiveAttempt
   return {
     studentProfileId: student.studentProfileId,
     studentName: student.studentName,
+    studentIdNumber: student.studentIdNumber,
     status,
     startedAt: null,
     timeRemainingSeconds: null,
@@ -119,7 +124,10 @@ function buildRows(
     seen.add(student.studentProfileId);
     const live = liveByProfile.get(student.studentProfileId);
     if (live) {
-      rows.push({ ...fromLive(live), studentProfileId: student.studentProfileId });
+      rows.push({
+        ...fromLive(live, student.studentIdNumber),
+        studentProfileId: student.studentProfileId,
+      });
     } else if (student.rollupStatus === 'ATTENDED') {
       rows.push(idle(student, 'SUBMITTED'));
     } else {
@@ -132,7 +140,7 @@ function buildRows(
   // participant mid-attempt) — the attempt still exists and is still live.
   for (const live of liveAttempts) {
     if (seen.has(live.studentProfileId)) continue;
-    rows.push(fromLive(live));
+    rows.push(fromLive(live, ''));
   }
 
   // B23: disconnected students lead the in-progress group — "who's
@@ -189,6 +197,13 @@ export function LiveAttemptsTable({
     [liveAttempts, participation.data],
   );
 
+  const [query, setQuery] = useState('');
+  const shown = useMemo(
+    () =>
+      filterStudents(rows, query, (r) => ({ studentId: r.studentIdNumber, name: r.studentName })),
+    [rows, query],
+  );
+
   if (participation.isError)
     return (
       <ErrorState
@@ -204,6 +219,7 @@ export function LiveAttemptsTable({
       header: 'Student',
       cell: (row) => <span className="font-medium text-text-primary">{row.studentName}</span>,
     },
+    { id: 'student-id', header: 'ID', cell: (row) => row.studentIdNumber || '—' },
     {
       id: 'status',
       header: 'Attempt status',
@@ -288,19 +304,28 @@ export function LiveAttemptsTable({
   ];
 
   return (
-    <DataTable
-      columns={columns}
-      rows={rows}
-      getRowId={(row) => row.studentProfileId}
-      isLoading={participation.isPending}
-      caption="Live attempts"
-      emptyState={
-        <EmptyState
-          icon={Users}
-          title="No students to track"
-          description="Once students start their attempt or have been authorized for a session, their status and time remaining appear here."
-        />
-      }
-    />
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <StudentSearch value={query} onChange={setQuery} />
+      </div>
+      <DataTable
+        columns={columns}
+        rows={shown}
+        getRowId={(row) => row.studentProfileId}
+        isLoading={participation.isPending}
+        caption="Live attempts"
+        emptyState={
+          <EmptyState
+            icon={Users}
+            title={query.trim() ? 'No student matches' : 'No students to track'}
+            description={
+              query.trim()
+                ? `No student matches “${query.trim()}”. Try a different ID or name.`
+                : 'Once students start their attempt or have been authorized for a session, their status and time remaining appear here.'
+            }
+          />
+        }
+      />
+    </div>
   );
 }

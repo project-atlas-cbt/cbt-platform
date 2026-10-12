@@ -180,4 +180,22 @@ describe('StudentDecisionsScreen', () => {
     await user.click(batchBtn);
     expect(screen.getByText(/Override Decision for 2 Students/i)).toBeInTheDocument();
   });
+
+  it('sends the typed student ID or name to the server after a short pause', async () => {
+    mockUseRolloverPlan.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: SAMPLE_DECISIONS_PLAN,
+      refetch: vi.fn(),
+    } as never);
+    const user = userEvent.setup();
+    render(<StudentDecisionsScreen planId="plan-1" basePath="/school/academics" />);
+    await user.type(screen.getByRole('searchbox', { name: /search students/i }), 'ST-002');
+    await vi.waitFor(() =>
+      expect(mockUseRolloverPlan).toHaveBeenLastCalledWith(
+        'plan-1',
+        expect.objectContaining({ q: 'ST-002', page: 1 }),
+      ),
+    );
+  });
 });

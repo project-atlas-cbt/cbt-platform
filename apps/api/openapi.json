@@ -4784,6 +4784,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -16059,6 +16068,9 @@
           "studentName": {
             "type": "string"
           },
+          "studentIdNumber": {
+            "type": "string"
+          },
           "rollupStatus": {
             "type": "string"
           },
@@ -16072,6 +16084,7 @@
         "required": [
           "studentProfileId",
           "studentName",
+          "studentIdNumber",
           "rollupStatus",
           "sessions"
         ]

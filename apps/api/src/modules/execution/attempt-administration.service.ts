@@ -468,6 +468,7 @@ export class AttemptAdministrationService {
           studentProfile: {
             select: {
               id: true,
+              studentId: true,
               membership: { select: { user: { select: PERSON_NAME_SELECT } } },
             },
           },
@@ -501,6 +502,7 @@ export class AttemptAdministrationService {
       const current = students.get(row.studentProfileId) ?? {
         studentProfileId: row.studentProfileId,
         studentName: formalName(row.studentProfile.membership.user),
+        studentIdNumber: row.studentProfile.studentId,
         rollupStatus: 'PENDING',
         sessions: [],
       };

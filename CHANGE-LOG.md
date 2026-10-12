@@ -2,6 +2,23 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-12 — Search by student ID or name on every student list
+
+Owner request (urgent, pilot feedback). One shared `StudentSearch` box (`components/ui/student-search.tsx`)
+now sits on the student lists that had none, matching every typed word against the student ID or any
+name part, case-insensitively, the same way the server's student search works. Added to: exam
+Participation (regular and makeup), Manage students for an exam (the Authorize selected list and the
+roster table under it share one box), the Control Center live attempts table, the class Students tab,
+Move students between classes, and the locked-out students panel (shown above 5 students). Rollover
+student decisions are paged, so they search on the server (new `q` on `GET /academics/rollovers/{id}`,
+debounced 300 ms; the table now stays on screen while a filter loads). People > Students, the staff
+results table and the per-subject "who takes it" list already searched by ID and are unchanged.
+Ticks survive searching: selections are kept for students the search hides, and "Select all" acts on
+the students shown. API: `ParticipationStudentDto` gains `studentIdNumber` (additive; the live
+attempts table reads the ID from participation rather than changing the shared control snapshot).
+Tests: `student-search`, participation table, exam roster, batch authorizer, live attempts, class
+assignment, rollover decisions (web); rollover and participation integration tests (API).
+
 ### 2026-10-12 — Marketing: public WhatsApp number moves to the business account
 
 The number the marketing site's WhatsApp buttons open (`MARKETING_WHATSAPP` in `apps/marketing/.env.production`)

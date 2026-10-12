@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { apiClient, unwrap } from '@/lib/api';
 import { isUuid } from '@/lib/utils';
 
@@ -298,6 +298,8 @@ export interface RolloverQueryParams {
   streamId?: string;
   sourceLevel?: 'JSS1' | 'JSS2' | 'JSS3' | 'SS1' | 'SS2' | 'SS3';
   overriddenOnly?: boolean;
+  /** Student search: every word matches the student ID or a name part. */
+  q?: string;
 }
 
 export function useCloseReadiness(sessionId: string | undefined, options?: { enabled?: boolean }) {
@@ -330,6 +332,9 @@ export function useRolloverPlan(
         }),
       ),
     enabled: isUuid(planId) && (options?.enabled ?? true),
+    // A filter or search change keeps the table on screen (and the search box
+    // focused) while the next page of decisions loads.
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -24,11 +24,14 @@ export function BatchAuthorizer({
   sessionId,
   accessMode,
   students,
+  filtered = false,
 }: {
   examId: string;
   sessionId: string;
   accessMode: string;
+  /** The roster already narrowed by the screen's student search. */
   students: EligibleStudent[];
+  filtered?: boolean;
 }) {
   const [onlyUnauthorized, setOnlyUnauthorized] = useState(accessMode === 'EXPLICIT_AUTHORIZATION');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -100,7 +103,7 @@ export function BatchAuthorizer({
         </button>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={toggleAllVisible} type="button">
-            Select all eligible
+            {filtered ? 'Select all eligible shown' : 'Select all eligible'}
           </Button>
           <Button
             size="sm"
@@ -119,36 +122,43 @@ export function BatchAuthorizer({
         </p>
       ) : null}
 
-      <ul className="divide-y divide-border rounded-md border border-border">
-        {visible.map((student) => {
-          const result = results[student.studentProfileId];
-          return (
-            <li
-              key={student.studentProfileId}
-              className="flex items-center gap-3 px-3 py-2 text-sm"
-            >
-              <Checkbox
-                checked={selected.has(student.studentProfileId)}
-                disabled={!student.eligible}
-                onCheckedChange={() => toggle(student.studentProfileId)}
-                aria-label={`Select ${student.studentName}`}
-              />
-              <div className="flex-1">
-                <p className="font-medium text-text-primary">{student.studentName}</p>
-                <p className="text-xs text-text-muted">{student.studentIdNumber}</p>
-                {!student.eligible && student.failedChecks.length > 0 ? (
-                  <p className="text-xs text-danger">{student.failedChecks.join(', ')}</p>
-                ) : null}
-                {result && !result.authorized ? (
-                  <p className="text-xs text-danger">
-                    Not authorized: {result.failedChecks.join(', ')}
-                  </p>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      {visible.length === 0 ? (
+        <p className="rounded-md border border-border px-3 py-6 text-center text-sm text-text-muted">
+          {filtered ? 'No student matches your search.' : 'No students to show.'}
+        </p>
+      ) : null}
+      {visible.length > 0 ? (
+        <ul className="divide-y divide-border rounded-md border border-border">
+          {visible.map((student) => {
+            const result = results[student.studentProfileId];
+            return (
+              <li
+                key={student.studentProfileId}
+                className="flex items-center gap-3 px-3 py-2 text-sm"
+              >
+                <Checkbox
+                  checked={selected.has(student.studentProfileId)}
+                  disabled={!student.eligible}
+                  onCheckedChange={() => toggle(student.studentProfileId)}
+                  aria-label={`Select ${student.studentName}`}
+                />
+                <div className="flex-1">
+                  <p className="font-medium text-text-primary">{student.studentName}</p>
+                  <p className="text-xs text-text-muted">{student.studentIdNumber}</p>
+                  {!student.eligible && student.failedChecks.length > 0 ? (
+                    <p className="text-xs text-danger">{student.failedChecks.join(', ')}</p>
+                  ) : null}
+                  {result && !result.authorized ? (
+                    <p className="text-xs text-danger">
+                      Not authorized: {result.failedChecks.join(', ')}
+                    </p>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }

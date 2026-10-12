@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StudentSearch, filterStudents } from '@/components/ui/student-search';
 import {
   Table,
   TableBody,
@@ -114,6 +115,7 @@ function ClassRosterTable({ classId }: { classId: string }) {
   const canResetCredentials = useHasPermission('users.student.resetCredentials');
   const credentialSheet = useClassCredentialSheet();
   const [credentialSheetError, setCredentialSheetError] = useState<ReactNode | null>(null);
+  const [query, setQuery] = useState('');
 
   async function handleDownloadCredentialSheet() {
     setCredentialSheetError(null);
@@ -134,8 +136,15 @@ function ClassRosterTable({ classId }: { classId: string }) {
   }
   // ADR-0038: the column shows only when some student here has a stream.
   const showStream = roster.data.students.some((s) => s.streamName);
+  const shown = filterStudents(roster.data.students, query, (s) => ({
+    studentId: s.studentId,
+    name: s.displayName,
+  }));
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <StudentSearch value={query} onChange={setQuery} />
+      </div>
       {canResetCredentials ? (
         <div className="flex flex-col items-end gap-2">
           <Button
@@ -166,7 +175,7 @@ function ClassRosterTable({ classId }: { classId: string }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {roster.data.students.map((s) => (
+          {shown.map((s) => (
             <TableRow key={s.enrollmentId}>
               <TableCell>{s.studentId}</TableCell>
               <TableCell>{s.displayName}</TableCell>
@@ -176,6 +185,11 @@ function ClassRosterTable({ classId }: { classId: string }) {
           ))}
         </TableBody>
       </Table>
+      {shown.length === 0 ? (
+        <p className="rounded-md border border-border px-3 py-6 text-center text-sm text-text-muted">
+          No student matches &ldquo;{query.trim()}&rdquo;.
+        </p>
+      ) : null}
     </div>
   );
 }

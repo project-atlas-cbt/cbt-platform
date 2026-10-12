@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useHasPermission } from '@/lib/nav';
 import { useExam } from '@/lib/exams/queries';
 import { useExamControl, useEligibleStudents } from '@/lib/exam-control/queries';
@@ -180,5 +181,52 @@ describe('ExamRosterScreen', () => {
     } as never);
     render(<ExamRosterScreen basePath="/teacher/exam-control" examId="e1" />);
     expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('searches the roster by student ID or name', async () => {
+    searchParams = new URLSearchParams('sessionId=s1');
+    mockUseExamControl.mockReturnValue({
+      data: { sessions: [OPEN_SESSION] },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    mockUseEligibleStudents.mockReturnValue({
+      data: {
+        students: [
+          {
+            studentProfileId: 'sp1',
+            studentIdNumber: 'ST-001',
+            studentName: 'Tunde Bello',
+            eligible: true,
+            failedChecks: [],
+            participantStatus: 'AUTHORIZED',
+            examSessionId: 's1',
+          },
+          {
+            studentProfileId: 'sp2',
+            studentIdNumber: 'ST-002',
+            studentName: 'Ada Okoye',
+            eligible: true,
+            failedChecks: [],
+            participantStatus: 'AUTHORIZED',
+            examSessionId: 's1',
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    const user = userEvent.setup();
+    render(<ExamRosterScreen basePath="/teacher/exam-control" examId="e1" />);
+    const box = screen.getByRole('searchbox', { name: /search students/i });
+    await user.type(box, 'st-002');
+    expect(screen.getByText('Ada Okoye')).toBeInTheDocument();
+    expect(screen.queryByText('Tunde Bello')).not.toBeInTheDocument();
+    await user.clear(box);
+    await user.type(box, 'bello');
+    expect(screen.getByText('Tunde Bello')).toBeInTheDocument();
+    expect(screen.queryByText('Ada Okoye')).not.toBeInTheDocument();
   });
 });

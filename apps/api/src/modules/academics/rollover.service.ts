@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { prisma, withTenant, type Prisma } from '@atlas/db';
 import type { Role } from '@atlas/domain';
+import { searchWords } from '../users/person.util.js';
 import { registerNewEnrollment, registeredSubjectIds } from './subject-registration-sync.util.js';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { AuditService } from '../operations/audit-event.service.js';
@@ -359,6 +360,24 @@ export class RolloverService {
           sourceClass: { is: sourceClassFilter },
         }),
         ...(query.overriddenOnly && { overriddenAt: { not: null } }),
+        ...(searchWords(query.q).length > 0 && {
+          sourceEnrollment: {
+            is: {
+              AND: searchWords(query.q).map((word) => ({
+                studentProfile: {
+                  OR: [
+                    { studentId: { contains: word, mode: 'insensitive' as const } },
+                    ...(['firstName', 'middleName', 'lastName'] as const).map((field) => ({
+                      membership: {
+                        user: { [field]: { contains: word, mode: 'insensitive' as const } },
+                      },
+                    })),
+                  ],
+                },
+              })),
+            },
+          },
+        }),
       };
       const [total, decisions, classes, offerings, staffAssignments] = await Promise.all([
         tx.rolloverDecision.count({ where: decisionWhere }),

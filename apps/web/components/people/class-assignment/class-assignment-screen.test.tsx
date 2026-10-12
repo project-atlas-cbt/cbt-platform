@@ -121,4 +121,17 @@ describe('ClassAssignmentScreen (§24 — Moderator bulk class-move)', () => {
     });
     expect(mockPost).toHaveBeenCalledTimes(2);
   });
+
+  it('searches by student ID and keeps ticks on students the search hides', async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await user.click(screen.getByRole('checkbox', { name: /select ada okoye/i }));
+    await user.type(screen.getByRole('searchbox', { name: /search students/i }), 'ST002');
+    expect(screen.queryByText('Ada Okoye')).not.toBeInTheDocument();
+    expect(screen.getByText('Bola Ade')).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /select all students shown/i }));
+    await user.clear(screen.getByRole('searchbox', { name: /search students/i }));
+    expect(screen.getByRole('checkbox', { name: /select ada okoye/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /select bola ade/i })).toBeChecked();
+  });
 });

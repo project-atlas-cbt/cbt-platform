@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import type { ApiComponents } from '@atlas/contracts';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Users } from 'lucide-react';
+import { StudentSearch, filterStudents } from '@/components/ui/student-search';
 import { ParticipationStatusBadge } from './participation-status-badge';
 
 type ParticipationStudent = ApiComponents['schemas']['ParticipationStudentDto'];
@@ -41,7 +43,13 @@ export function ParticipationTable({
   onInvalidate: (student: ParticipationStudent, attemptId: string, sessionLabel: string) => void;
   makeupOnly?: boolean;
 }) {
-  const absent = students.filter((student) => student.rollupStatus === 'ABSENT');
+  const [query, setQuery] = useState('');
+  // The search only narrows what is shown; ticks on students it hides are kept.
+  const shown = filterStudents(students, query, (s) => ({
+    studentId: s.studentIdNumber,
+    name: s.studentName,
+  }));
+  const absent = shown.filter((student) => student.rollupStatus === 'ABSENT');
   const sessionTypes = new Map(sessions.map((session) => [session.id, session.sessionType]));
   function sessionLabel(sessionId: string) {
     const type = sessionTypes.get(sessionId);
@@ -77,6 +85,7 @@ export function ParticipationTable({
       header: 'Student',
       cell: (row) => <span className="font-medium text-text-primary">{row.studentName}</span>,
     },
+    { id: 'student-id', header: 'ID', cell: (row) => row.studentIdNumber },
     {
       id: 'rollup',
       header: 'Exam status',
@@ -163,34 +172,43 @@ export function ParticipationTable({
     absent.length > 0 && absent.every((student) => selectedIds.has(student.studentProfileId));
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <StudentSearch value={query} onChange={setQuery} />
+      </div>
       {canMakeup && absent.length > 0 ? (
         <div className="flex items-center gap-2 text-sm">
           <Checkbox
             aria-label="Select all absent students for makeup access"
             checked={allAbsentSelected}
-            onCheckedChange={(checked) =>
-              onSelectedChange(
-                checked === true
-                  ? new Set(absent.map((student) => student.studentProfileId))
-                  : new Set(),
-              )
-            }
+            onCheckedChange={(checked) => {
+              const next = new Set(selectedIds);
+              for (const student of absent) {
+                if (checked === true) next.add(student.studentProfileId);
+                else next.delete(student.studentProfileId);
+              }
+              onSelectedChange(next);
+            }}
           />
           <span>
             Select all {absent.length} absent student{absent.length === 1 ? '' : 's'}
+            {query.trim() ? ' shown' : ''}
           </span>
         </div>
       ) : null}
       <DataTable
         columns={columns}
-        rows={students}
+        rows={shown}
         getRowId={(row) => row.studentProfileId}
         caption="Exam participation"
         emptyState={
           <EmptyState
             icon={Users}
-            title="No participation records"
-            description="Participation becomes available once students have been authorized for an exam session."
+            title={query.trim() ? 'No student matches' : 'No participation records'}
+            description={
+              query.trim()
+                ? `No student matches “${query.trim()}”. Try a different ID or name.`
+                : 'Participation becomes available once students have been authorized for an exam session.'
+            }
           />
         }
       />
