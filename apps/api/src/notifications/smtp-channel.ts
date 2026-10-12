@@ -22,6 +22,8 @@ export interface SmtpMail {
   subject: string;
   text: string;
   html?: string;
+  /** Contents are never logged (B20); see TemplateAttachment for the caps. */
+  attachments?: { filename: string; contentType: string; content: Uint8Array }[];
 }
 
 export type SendMail = (mail: SmtpMail) => Promise<unknown>;
@@ -64,6 +66,13 @@ export class SmtpNotificationChannel implements NotificationChannel {
       subject: rendered.subject,
       text: rendered.text,
       ...(rendered.html !== undefined && { html: rendered.html }),
+      ...(rendered.attachments?.length && {
+        attachments: rendered.attachments.map((a) => ({
+          filename: a.filename,
+          contentType: a.contentType,
+          content: a.content,
+        })),
+      }),
     });
   }
 }

@@ -46,6 +46,9 @@ export class ConsoleNotificationChannel implements NotificationChannel {
         [
           `[notifications:console] to=${message.to} template=${message.template}`,
           `  subject: ${rendered.subject}`,
+          ...(rendered.attachments?.length
+            ? [`  attachments: ${rendered.attachments.map((a) => a.filename).join(', ')}`]
+            : []),
           `  ${rendered.text}`,
         ].join('\n'),
       );
