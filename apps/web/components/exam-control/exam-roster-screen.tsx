@@ -9,6 +9,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
+import { StudentSearch, filterStudents } from '@/components/ui/student-search';
 import { useHasPermission } from '@/lib/nav';
 import { useExam } from '@/lib/exams/queries';
 import { useExamControl, useEligibleStudents } from '@/lib/exam-control/queries';
@@ -43,6 +44,7 @@ export function ExamRosterScreen({ basePath, examId }: { basePath: string; examI
   const eligible = useEligibleStudents(examId);
   const canRevoke = useHasPermission('examAdmin.allowStudent');
   const revokeParticipant = useRevokeParticipant(examId);
+  const [query, setQuery] = useState('');
   const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
   // F20 (DoD 3): accommodations, under the same permission as extra time.
   const canGrantAccommodations = useHasPermission('examAdmin.grantExtraTime');
@@ -85,6 +87,15 @@ export function ExamRosterScreen({ basePath, examId }: { basePath: string; examI
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to the resolved default changing, not every searchParams identity change
   }, [selectedSession?.id]);
+
+  const shownStudents = useMemo(
+    () =>
+      filterStudents(eligibleStudents, query, (s) => ({
+        studentId: s.studentIdNumber,
+        name: s.studentName,
+      })),
+    [eligibleStudents, query],
+  );
 
   if (exam.isPending || control.isPending) return <Skeleton className="h-96 w-full" />;
   if (exam.isError) return <ErrorState error={exam.error} onRetry={() => void exam.refetch()} />;
@@ -190,24 +201,32 @@ export function ExamRosterScreen({ basePath, examId }: { basePath: string; examI
         <ErrorState error={eligible.error} onRetry={() => void eligible.refetch()} />
       ) : (
         <>
+          <div className="flex flex-wrap gap-2">
+            <StudentSearch value={query} onChange={setQuery} />
+          </div>
           {canRevoke ? (
             <BatchAuthorizer
               examId={examId}
               sessionId={selectedSession.id}
               accessMode={exam.data.accessMode}
-              students={eligibleStudents}
+              students={shownStudents}
+              filtered={query.trim() !== ''}
             />
           ) : null}
           <DataTable
             columns={columns}
-            rows={eligibleStudents}
+            rows={shownStudents}
             getRowId={(row) => row.studentProfileId}
             caption="Roster"
             emptyState={
               <EmptyState
                 icon={Users}
-                title="No students"
-                description="No targeted class has students enrolled yet."
+                title={query.trim() ? 'No student matches' : 'No students'}
+                description={
+                  query.trim()
+                    ? `No student matches “${query.trim()}”. Try a different ID or name.`
+                    : 'No targeted class has students enrolled yet.'
+                }
               />
             }
           />

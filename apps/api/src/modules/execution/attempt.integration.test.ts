@@ -2257,9 +2257,14 @@ describe('B13 Attempt Engine (attempt.v1)', () => {
     const participation = (await get(teacher, `/exams/${examId}/participation`)).json<{
       students: {
         studentProfileId: string;
+        studentIdNumber: string;
         sessions: { examSessionId: string; status: string; attemptId: string | null }[];
       }[];
     }>();
+    // Participation carries the school's student ID so staff can search by it.
+    expect(participation.students.every((student) => student.studentIdNumber.length > 0)).toBe(
+      true,
+    );
     // End Examination no longer records a student who sat batch one as
     // absent from batch two (audit P2-2), so only students with no attempt
     // at all are pending.

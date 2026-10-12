@@ -102,6 +102,8 @@ export class RolloverQueryDto {
   @IsIn(['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'])
   sourceLevel?: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() overriddenOnly?: boolean;
+  /** Student search: every word must match the student ID or a name part. */
+  @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) q?: string;
 }
 
 export class CommitRolloverDto {

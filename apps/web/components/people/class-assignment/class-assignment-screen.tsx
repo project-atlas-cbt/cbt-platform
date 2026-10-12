@@ -7,6 +7,7 @@ import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { StudentSearch, filterStudents } from '@/components/ui/student-search';
 import {
   Select,
   SelectContent,
@@ -37,6 +38,7 @@ export function ClassAssignmentScreen({ classId }: { classId: string }) {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [targetClassId, setTargetClassId] = useState('');
+  const [query, setQuery] = useState('');
   const [isMoving, setIsMoving] = useState(false);
   const [result, setResult] = useState<{ succeeded: number; failed: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,12 +50,15 @@ export function ClassAssignmentScreen({ classId }: { classId: string }) {
     setSelected(next);
   }
 
+  /** Applies to the students shown; ticks on students the search hides stay. */
   function toggleAll(rows: { studentProfileId: string }[]) {
-    if (selected.size === rows.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(rows.map((r) => r.studentProfileId)));
+    const allTicked = rows.length > 0 && rows.every((r) => selected.has(r.studentProfileId));
+    const next = new Set(selected);
+    for (const r of rows) {
+      if (allTicked) next.delete(r.studentProfileId);
+      else next.add(r.studentProfileId);
     }
+    setSelected(next);
   }
 
   async function handleMove() {
@@ -93,7 +98,11 @@ export function ClassAssignmentScreen({ classId }: { classId: string }) {
     return <ErrorState error={roster.error} onRetry={() => void roster.refetch()} />;
   }
 
-  const rows = roster.data?.students ?? [];
+  const allRows = roster.data?.students ?? [];
+  const rows = filterStudents(allRows, query, (r) => ({
+    studentId: r.studentId,
+    name: r.displayName,
+  }));
   const availableTargets = (classes.data?.classes ?? []).filter((c) => c.id !== classId);
 
   return (
@@ -108,19 +117,26 @@ export function ClassAssignmentScreen({ classId }: { classId: string }) {
         </p>
       </div>
 
-      {rows.length === 0 ? (
+      {allRows.length === 0 ? (
         <EmptyState title="No students in this class yet" />
       ) : (
         <>
+          <div className="flex flex-wrap gap-2">
+            <StudentSearch value={query} onChange={setQuery} />
+          </div>
           <div className="overflow-x-auto rounded-md border border-border">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
                   <th className="w-10 px-3 py-2">
                     <Checkbox
-                      checked={selected.size === rows.length && rows.length > 0}
+                      checked={
+                        rows.length > 0 && rows.every((r) => selected.has(r.studentProfileId))
+                      }
                       onCheckedChange={() => toggleAll(rows)}
-                      aria-label="Select all students"
+                      aria-label={
+                        query.trim() ? 'Select all students shown' : 'Select all students'
+                      }
                     />
                   </th>
                   <th className="px-3 py-2 text-left font-medium text-text-secondary">Student</th>
@@ -146,6 +162,11 @@ export function ClassAssignmentScreen({ classId }: { classId: string }) {
               </tbody>
             </table>
           </div>
+          {rows.length === 0 ? (
+            <p className="rounded-md border border-border px-3 py-6 text-center text-sm text-text-muted">
+              No student matches &ldquo;{query.trim()}&rdquo;.
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap items-end gap-3">
             <div>

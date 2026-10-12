@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useExamParticipation } from '@/lib/exam-control/queries';
 import { NetworkError } from '@/lib/api/error';
 import type { ApiComponents } from '@atlas/contracts';
@@ -262,5 +263,39 @@ describe('LiveAttemptsTable', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('shows the student ID and finds a student by it', async () => {
+    vi.useRealTimers();
+    vi.mocked(useExamParticipation).mockReturnValue({
+      data: {
+        examId: 'e1',
+        students: [
+          {
+            studentProfileId: 'p-john',
+            studentName: 'John Doe',
+            studentIdNumber: 'OLA-0007',
+            rollupStatus: 'PENDING',
+            sessions: [],
+          },
+          {
+            studentProfileId: 'p-ahmed',
+            studentName: 'Ahmed Bello',
+            studentIdNumber: 'OLA-0008',
+            rollupStatus: 'PENDING',
+            sessions: [],
+          },
+        ],
+      },
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    const user = userEvent.setup();
+    render(<LiveAttemptsTable examId="e1" liveAttempts={[]} computedAt={START_ISO} />);
+    expect(screen.getByText('OLA-0007')).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: /search students/i }), '0008');
+    expect(screen.getByText('Ahmed Bello')).toBeInTheDocument();
+    expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
   });
 });

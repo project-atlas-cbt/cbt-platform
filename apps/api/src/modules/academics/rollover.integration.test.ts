@@ -146,6 +146,19 @@ describe('B19 rollover — atomic historical transition', () => {
       actor,
     );
     expect(plan.decisions).toHaveLength(1);
+
+    // Search narrows the decisions by student ID or name, every word matching.
+    const studentId = (
+      await withTenant(prisma, school.id, (tx) =>
+        tx.studentProfile.findFirstOrThrow({ where: { schoolId: school.id } }),
+      )
+    ).studentId;
+    const found = async (q: string) =>
+      ((await service.getPlan(school.id, plan.id, { q })).decisions ?? []).length;
+    expect(await found(studentId.toLowerCase())).toBe(1);
+    expect(await found('ada')).toBe(1);
+    expect(await found(`${studentId.slice(-4)} student`)).toBe(1);
+    expect(await found('nobody-matches')).toBe(0);
     await service.commit(school.id, plan.id, plan.version, actor);
 
     const result = await withTenant(prisma, school.id, async (tx) => ({

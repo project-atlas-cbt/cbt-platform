@@ -5669,6 +5669,7 @@ export interface components {
         ParticipationStudentDto: {
             studentProfileId: string;
             studentName: string;
+            studentIdNumber: string;
             rollupStatus: string;
             sessions: components["schemas"]["ParticipationSessionFactDto"][];
         };
@@ -10097,6 +10098,7 @@ export interface operations {
                 streamId?: string;
                 sourceLevel?: "JSS1" | "JSS2" | "JSS3" | "SS1" | "SS2" | "SS3";
                 overriddenOnly?: boolean;
+                q?: string;
             };
             header?: never;
             path: {

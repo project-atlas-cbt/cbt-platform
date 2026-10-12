@@ -42,6 +42,7 @@ export class ParticipationSessionFactDto {
 export class ParticipationStudentDto {
   @ApiProperty() studentProfileId!: string;
   @ApiProperty() studentName!: string;
+  @ApiProperty() studentIdNumber!: string;
   @ApiProperty() rollupStatus!: string;
   @ApiProperty({ type: ParticipationSessionFactDto, isArray: true })
   sessions!: ParticipationSessionFactDto[];

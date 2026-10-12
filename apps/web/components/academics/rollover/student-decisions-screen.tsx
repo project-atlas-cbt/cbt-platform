@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formalName, sortByPersonName } from '@atlas/domain';
 import Link from 'next/link';
 import {
@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ErrorState } from '@/components/ui/error-state';
+import { StudentSearch } from '@/components/ui/student-search';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useRolloverPlan, useStreams, type RolloverQueryParams } from '@/lib/academics/queries';
@@ -91,6 +92,16 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
   const [selectedLevel, setSelectedLevel] = useState<string>('ALL');
   const [selectedStream, setSelectedStream] = useState<string>('ALL');
   const [overriddenOnly, setOverriddenOnly] = useState(false);
+  // Search runs on the server (the list is paged), so typing waits a beat.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   // Selection for batch actions
   const [selectedDecisionIds, setSelectedDecisionIds] = useState<string[]>([]);
@@ -110,6 +121,7 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
       : {}),
     ...(selectedStream !== 'ALL' ? { streamId: selectedStream } : {}),
     ...(overriddenOnly ? { overriddenOnly: true as const } : {}),
+    ...(search ? { q: search } : {}),
   };
 
   const planQuery = useRolloverPlan(planId, queryParams);
@@ -233,6 +245,10 @@ export function StudentDecisionsScreen({ planId, basePath }: StudentDecisionsScr
       <div className="rounded-lg border border-border bg-surface p-4 space-y-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary uppercase tracking-wider">
           <Filter className="h-3.5 w-3.5" aria-hidden /> Filters & Refinements
+        </div>
+
+        <div className="flex">
+          <StudentSearch value={searchInput} onChange={setSearchInput} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
