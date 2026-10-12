@@ -7,4 +7,3 @@ their first event and normalised. No music, no pitched tones.
 | ----------- | ------------------------------------ |
 | `click.wav` | Raspberry mouse single click (s1735) |
 | `page.wav`  | Pages that turn 2 (s1413)            |
-| `thunk.wav` | Wooden drawer closing (s1500)        |

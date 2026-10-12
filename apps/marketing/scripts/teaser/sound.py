@@ -137,17 +137,17 @@ def _load(name):
 
 
 def _rec_set():
-    click, page, thunk = _load('click'), _load('page'), _load('thunk')
+    click, page = _load('click'), _load('page')
     quiet = lambda: np.zeros(1)
     return {
-        'hover': quiet, 'zoom': quiet, 'state': quiet, 'settle': lambda: thunk * 0.04,
-        # every click-like sound is the one click the owner chose; the wooden thunk and the
-        # page rustle are not clicks and only follow an action
+        'hover': quiet, 'zoom': quiet, 'state': quiet, 'settle': quiet, 'confirm': quiet,
+        # every click-like sound is the one click the owner chose; the only other sound is the
+        # page rustle for a dropped file and a returning network (the owner disliked the wooden
+        # thunk, so nothing follows a success)
         'tik': lambda: click * 0.12, 'click': lambda: click * 0.12,
         'tuk': lambda: click * 0.18, 'final': lambda: click * 0.20,
-        'confirm': lambda: _at((0.1, thunk * 0.07)),
         'drop': lambda: page * 0.10,
-        'interrupt': lambda: thunk * 0.05, 'sync': lambda: page * 0.05,
+        'interrupt': quiet, 'sync': lambda: page * 0.05,
     }
 
 
