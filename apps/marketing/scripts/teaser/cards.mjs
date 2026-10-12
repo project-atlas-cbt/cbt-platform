@@ -52,6 +52,8 @@ const CAPTIONS = [
   'Results are graded and kept until the school publishes them.',
   'One click releases them to students.',
   'Each student then sees their own result.',
+  'Teachers can open any result and see every answer.',
+  'Where the school allows it, students can review every question.',
 ];
 const map = {};
 for (const [i, t] of CAPTIONS.entries()) {

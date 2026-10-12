@@ -424,7 +424,10 @@ async function createExam(
     randomizeQuestions: true,
     randomizeOptions: true,
     resultPolicy: 'TEACHER',
-    resultDetailVisibility: 'SCORE_AND_COUNTS',
+    // DEMO_RESULT_DETAIL=FULL_REVIEW seeds exams whose students may review each question
+    // (the product tour records that screen); the default shows score and counts only
+    resultDetailVisibility: (process.env.DEMO_RESULT_DETAIL ?? 'SCORE_AND_COUNTS') as
+      'SCORE_ONLY' | 'SCORE_AND_COUNTS' | 'FULL_REVIEW',
     generalInstructions:
       'Answer all questions. Each question carries one mark. Calculators are not allowed.',
     navigationInstructions:

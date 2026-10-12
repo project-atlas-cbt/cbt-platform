@@ -263,6 +263,7 @@ PLAN = [
     ('scene', 'exam', 0.2, 0.1),
     ('scene', 'offline', 0.0, 0.1),
     ('scene', 'submit', 0.0, 0.2),
+    ('scene', 'resultdetail', 0.2, 0.2),
     ('scene', 'results', 0.2, 0.2),
     ('scene', 'myresult', 0.2, 0.2),
     ('card', 'end', 4.0),
