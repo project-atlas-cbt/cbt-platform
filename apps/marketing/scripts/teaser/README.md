@@ -5,14 +5,14 @@ demo school, like the screenshots. The cursor, the click marks, the gentle zoom,
 the sound are added afterwards from a timeline the recorder writes. There is no voice-over.
 
 **Sound rule (product owner):** never music, musical instruments, melodies, chords, beats,
-chimes or pitched notification tones, in this or any video. `sound.py` makes every sound from
-filtered noise, with no oscillator ("quiet digital realism", approved 2026-10-07): a near-silent
-computer-room bed that changes a little per scene and drops back while the network is out; a
-dry "tik" for ordinary clicks, a deeper "tuk" for the actions that matter, a breath of air on
-each zoom, small grains for state changes and background work, and a firm, unmusical "final"
-for publishing. Cursor movement is silent. The recorder places sounds on actions
-(`click(…, { sound })`, `cue(name)`, `data(on)`), so they follow what happens on screen. Keep new
-sounds non-tonal; the mix sits near -40 dBFS for the room and -20 to -16 for the interface.
+chimes or pitched notification tones, in this or any video. The sound (revised 2026-10-12) is a
+very quiet recorded nature bed under every scene, and one recorded mouse click for every click-like
+sound, at different loudness for ordinary and important actions; a page-turn rustle marks the file
+drag and background work. Hover, zoom and state changes are silent. The samples are CC0 from
+BigSoundBank (`sounds/`, sources in `sounds/README.md`). `SOUND_SET=synth` falls back to the older
+filtered-noise sounds. Env for `compose.py`: `BED=<file>[:start-seconds]` and `BED_DB` (bed level,
+RMS dBFS, use -47); `AUDIO_ONLY=1` remixes sound over the last video-only render. The first frame is
+the blue title card, which is also the poster.
 
 Against a local stack (API on 3001, web on 3000, both with `PLATFORM_ROOT_DOMAIN=localhost` and
 `PRODUCT_NAME=ExamKeep`), with the marketing app built (the cards use its fonts):
@@ -28,10 +28,12 @@ The recorder imports a class list as the Moderator, imports ten questions as a t
 them for review, has the HOD approve one of them, starts and submits one student's paper
 (`STUDENT_INDEX`), publishes the Continuous Assessment's results, and signs in as a student who did
 well to open their result (picked from the results table; `RESULT_STUDENT` names one instead).
-A second full run needs a fresh seed. Imported students
+Seed with `DEMO_RESULT_DETAIL=FULL_REVIEW` so the result screens show every question (the exam
+setting cannot change once the exam leaves draft). The `resultdetail` scene has a teacher open one
+student's result; `myresult` then scrolls that student's question review. A second full run needs a fresh seed. Imported students
 cannot be deleted either: to retake only the import, give it a new ID range with
 `IMPORT_BASE` (default 201; each take uses 29 IDs). Work files go to the system temp folder (`examkeep-tour/`). Encode the web copy from
-the master and take the poster from a scene frame:
+the master and take the poster from the title card (about 1.5 s):
 
 ```sh
 ffmpeg -i examkeep-tour-master.mp4 -c:v libx264 -crf 24 -preset slow -c:a aac -b:a 96k \

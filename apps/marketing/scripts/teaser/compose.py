@@ -263,6 +263,7 @@ PLAN = [
     ('scene', 'exam', 0.2, 0.1),
     ('scene', 'offline', 0.0, 0.1),
     ('scene', 'submit', 0.0, 0.2),
+    ('scene', 'resultdetail', 0.2, 0.2),
     ('scene', 'results', 0.2, 0.2),
     ('scene', 'myresult', 0.2, 0.2),
     ('card', 'end', 4.0),
@@ -293,7 +294,8 @@ for seg in segs:
         t = i / FPS
         f = seg.frame(t)
         f = apply_caption(f, seg, t)
-        fade = min(1, t / FADE, (seg.dur - t) / FADE)
+        # the first frame is the thumbnail, so the title card opens fully on its own colour
+        fade = min(1, (seg.dur - t) / FADE) if seg is segs[0] else min(1, t / FADE, (seg.dur - t) / FADE)
         if fade < 1:
             f = Image.blend(white, f, max(0, fade))
         ff.stdin.write(f.tobytes())
@@ -311,7 +313,22 @@ backs = [t for t, nm in points if nm == 'sync']
 dips = [(a, min([b for b in backs if b > a] or [a + 3])) for a in drops]
 intro = segs[0].dur if isinstance(segs[0], Card) else 0.0
 outro = segs[-1].dur if isinstance(segs[-1], Card) else 0.0
-audio = sound.mix(offset, points, spans, sections, dips, intro, outro)
+# BED=<audio file>[:start-seconds] swaps the synthesised room tone for a recorded background,
+# placed well under the interface sounds (BED_DB is its RMS level in dBFS, default -36)
+bed = None
+if os.environ.get('BED'):
+    path, _, start = os.environ['BED'].partition(':')
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-ss', start or '0', '-t', str(offset + 2), '-i', path,
+                          '-ac', '1', '-ar', str(SR), '-af', 'highpass=f=70', '-f', 's16le', '-'],
+                         capture_output=True, check=True).stdout
+    bed = np.frombuffer(raw, '<i2') / 32768
+    # nature recordings have sharp snaps and calls; squash anything much above the average so
+    # nothing in the bed can ever stand out against the interface sounds
+    rms = np.sqrt(np.mean(bed ** 2)) or 1
+    ceiling = 2.5 * rms
+    bed = ceiling * np.tanh(bed / ceiling)
+    bed = bed * 10 ** (float(os.environ.get('BED_DB', -36)) / 20) / (np.sqrt(np.mean(bed ** 2)) or 1)
+audio = sound.mix(offset, points, spans, sections, dips, intro, outro, bed)
 peak = np.max(np.abs(audio)) or 1
 if peak > 0.9:
     audio *= 0.9 / peak

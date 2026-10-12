@@ -2,6 +2,17 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-12 — Tour video v10: result detail for teachers and students
+
+The tour is re-recorded on the current app (96 s, was 78 s). A new scene has a teacher open one
+student's result with the question breakdown, and the student scene now scrolls the full question
+review (their answer and the correct answer), after the school publishes. The demo seed takes
+`DEMO_RESULT_DETAIL` (default unchanged) so the exam can be set to full review; the setting is
+locked once an exam leaves draft. Sound is replaced by CC0 recordings from BigSoundBank (s2713
+forest and stream as a very quiet bed, s1735 mouse click for every click, s1413 page turn for
+drags), chosen by the product owner; still no music, instruments or tones. The first frame, and so
+the poster, is the blue title card. Home page lead and `scripts/teaser/README.md` updated.
+
 ### 2026-10-11 — Stale-backup check for the VPS pilot
 
 Closes the two small gaps left after #86. `infra/vps/bin/backup-check.sh` runs from cron at 03:30

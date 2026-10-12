@@ -121,6 +121,41 @@ POINT = {
 }
 
 
+# --- recorded set -------------------------------------------------------------------------------
+# Real recordings (CC0, see sounds/README.md) instead of synthesised sounds. Chosen by the product
+# owner (2026-10-12): the click is a plain mouse click; moments after an action get a soft
+# recorded confirmation. SOUND_SET=synth keeps the synthesised set above.
+import os
+import wave
+
+_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds')
+
+
+def _load(name):
+    with wave.open(os.path.join(_DIR, name + '.wav')) as w:
+        return np.frombuffer(w.readframes(w.getnframes()), '<i2') / 32768.0
+
+
+def _rec_set():
+    click, page = _load('click'), _load('page')
+    quiet = lambda: np.zeros(1)
+    return {
+        'hover': quiet, 'zoom': quiet, 'state': quiet, 'settle': quiet, 'confirm': quiet,
+        # every click-like sound is the one click the owner chose; the only other sound is the
+        # page rustle for a dropped file and a returning network (the owner disliked the wooden
+        # thunk, so nothing follows a success)
+        'tik': lambda: click * 0.12, 'click': lambda: click * 0.12,
+        'tuk': lambda: click * 0.18, 'final': lambda: click * 0.20,
+        'drop': lambda: page * 0.10,
+        'interrupt': quiet, 'sync': lambda: page * 0.05,
+    }
+
+
+RECORDED = os.environ.get('SOUND_SET') != 'synth' and os.path.isdir(_DIR)
+if RECORDED:
+    POINT = _rec_set()
+
+
 def room(n, sections, dips):
     """The bed: broadband computer-room air, very low, a little different in each section.
 
@@ -165,21 +200,35 @@ def room(n, sections, dips):
 UI_GAIN = 1.6
 
 
-def mix(total, points, spans, sections, dips, intro, outro):
-    """points: (t, name); spans: (start, end) of the 'data' texture; intro/outro: card lengths."""
+def mix(total, points, spans, sections, dips, intro, outro, bed=None):
+    """points: (t, name); spans: (start, end) of the 'data' texture; intro/outro: card lengths.
+
+    bed: optional recorded background (mono samples at SR, already at its final level) used in
+    place of the synthesised room tone; it dips with the network outage like the room does.
+    """
     n = int(total * SR)
-    out = room(n, sections, dips)
+    if bed is None:
+        out = room(n, sections, dips)
+    else:
+        out = np.resize(bed, n).astype(float)
+        g = np.ones(n)
+        for a, b in dips:
+            k0, k1, r = int(a * SR), int(b * SR), int(0.25 * SR)
+            g[k0:k1] = 0.5
+            g[k0:k0 + r] = np.linspace(1, 0.5, r)
+            g[k1:k1 + r] = np.linspace(0.5, 1, r)
+        out *= g
     t = np.arange(n) / SR
     # near silence under the title; the room settles in as the product appears, and leaves
     # under the closing card so the logo and address sit in almost nothing
     out *= np.clip(0.15 + 0.85 * (t - intro + 0.8) / 1.6, 0.15, 1)
     out *= np.clip((total - 1.4 - t) / max(outro - 1.4, 0.5), 0, 1)
-    for a, b in spans:
+    for a, b in ([] if RECORDED else spans):
         g = _grains(max(0.2, b - a), 26, 2500, 9000, 0.011)
         k = int(a * SR)
         out[k:k + len(g)] += g[: max(0, n - k)]
     for st, name in points:
-        snd = POINT[name]() * UI_GAIN
+        snd = POINT[name]() * (1.0 if RECORDED else UI_GAIN)
         k = int(st * SR)
         if 0 <= k < n:
             out[k:k + len(snd)] += snd[: n - k]

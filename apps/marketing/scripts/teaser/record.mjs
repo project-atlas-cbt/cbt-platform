@@ -61,7 +61,7 @@ async function signIn(p, user) {
   const btn = p.getByRole('button', { name: 'Sign in' });
   for (let i = 0; i < 50 && !(await btn.isEnabled()); i++) await p.waitForTimeout(200);
   await p.getByLabel('Username or Student ID').fill(user);
-  await p.getByLabel('Password').fill(state.password);
+  await p.getByLabel('Password', { exact: true }).fill(state.password);
   await btn.click();
   await p.waitForURL((u) => !u.pathname.startsWith('/login') && u.pathname !== '/', {
     timeout: 30000,
@@ -609,7 +609,7 @@ if (want('student')) {
   await sleep(200);
   await s1.type(st.identifier);
   await sleep(250);
-  await s1.click(p.getByLabel('Password'), { ms: 450 });
+  await s1.click(p.getByLabel('Password', { exact: true }), { ms: 450 });
   await s1.type(state.password, 45);
   await sleep(250);
   await s1.click(btn, { ms: 500 });
@@ -718,6 +718,78 @@ if (want('student')) {
   await p.context().close();
 }
 
+// --- 7a. A teacher opens one student's result -------------------------------
+// The exams were seeded with result detail set to full review (DEMO_RESULT_DETAIL), so every
+// question shows the correct option and the one the student chose.
+if (want('resultdetail')) {
+  const p = await newPage();
+  await signIn(p, o.teacher);
+  await p.goto(url(`/teacher/results/${o.caExamId}`));
+  await p.waitForLoadState('networkidle');
+  await p.getByText('All classes', { exact: true }).first().click();
+  await p.waitForLoadState('networkidle');
+  await sleep(800);
+  // off camera: follow a student from this table who did well (scores vary from seed to seed)
+  // and has already handed in the live test, so their own home page shows no paper still in
+  // progress; the student scene after publishing opens the same person's result
+  const rows = await p
+    .locator('tbody tr')
+    .evaluateAll((trs) =>
+      trs.map((tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.trim())),
+    );
+  const handedIn = new Set(
+    o.students.filter((x) => x.state === 'submitted').map((x) => x.identifier),
+  );
+  const cellsOf = (row) => ({ shown: row[0].split('\n')[0], id: row[0].split('\n').pop() });
+  const good = rows.find(
+    (cells) =>
+      handedIn.has(cellsOf(cells).id) &&
+      cells.some((c) => /^\d+%$/.test(c) && parseInt(c, 10) >= 60 && parseInt(c, 10) <= 90),
+  );
+  const pick = process.env.RESULT_STUDENT
+    ? o.students.find((x) => x.name === process.env.RESULT_STUDENT)
+    : o.students.find((x) => x.identifier === (good ? cellsOf(good).id : ''));
+  const name = good ? cellsOf(good).shown : pick.name;
+  writeFileSync(`${OUT}/result-student.txt`, pick.identifier);
+  // bring the student's row to the middle of the screen before the camera starts
+  await p
+    .getByRole('link', { name, exact: true })
+    .first()
+    .evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await sleep(600);
+  const s = new Scene(p, 'resultdetail', [VW * 0.6, VH * 0.7]);
+  await s.start();
+  s.caption('Teachers can open any result and see every answer.');
+  await sleep(500);
+  await s.click(p.getByRole('link', { name, exact: true }).first(), { ms: 900 });
+  await p.waitForURL(/results\/[0-9a-f-]{36}\/[0-9a-f-]{36}/, { timeout: 20000 });
+  const breakdown = p.getByRole('heading', { name: 'Question breakdown' });
+  await breakdown.waitFor({ timeout: 20000 });
+  await p.waitForLoadState('networkidle');
+  s.cue('state');
+  await sleep(700);
+  // the student, the score and the counts
+  await s.zoom([p.getByRole('heading', { name }), p.getByText('Unanswered').first()], 1.5, 900);
+  await sleep(1100);
+  s.unzoom(500);
+  await breakdown.evaluate((el) => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  await sleep(1000);
+  // a question the student got wrong: the option they chose beside the correct one
+  const wrong = p.locator('ol > li').filter({ hasText: 'Incorrect' }).first();
+  const card = (await wrong.count()) ? wrong : p.locator('ol > li').first();
+  await card.scrollIntoViewIfNeeded();
+  await sleep(500);
+  await s.zoom(card, 1.4, 900);
+  await s.move(card.getByText("Student's answer").first(), 800).catch(() => {});
+  await sleep(1000);
+  await s.move(card.getByText('Correct answer').first(), 700).catch(() => {});
+  await sleep(1300);
+  s.unzoom(700);
+  await sleep(500);
+  await s.stop();
+  await p.context().close();
+}
+
 // --- 7. Results and publication -------------------------------------------
 if (want('results')) {
   const p = await newPage();
@@ -763,37 +835,19 @@ if (want('results')) {
   await s.unzoom(700);
   await sleep(500);
   await s.stop();
-  // off camera: the next scene follows a student from this table who did well (scores vary
-  // from seed to seed) and has already handed in the live test, so their home page shows no
-  // paper still in progress
-  await p.getByText('All classes', { exact: true }).first().click();
-  await p.waitForLoadState('networkidle');
-  await sleep(800);
-  const rows = await p
-    .locator('tbody tr')
-    .evaluateAll((trs) =>
-      trs.map((tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.trim())),
-    );
-  const handedIn = new Set(o.students.filter((x) => x.state === 'submitted').map((x) => x.name));
-  const good = rows.find(
-    (cells) =>
-      handedIn.has(cells[0].split('\n')[0]) &&
-      cells.some((c) => /^\d+%$/.test(c) && parseInt(c, 10) >= 70 && parseInt(c, 10) <= 90),
-  );
-  if (good) writeFileSync(`${OUT}/result-student.txt`, good[0].split('\n')[0]);
   await p.context().close();
 }
 
 // --- 8. A student opens their published result ------------------------------
 if (want('myresult')) {
-  // a student who sat the Continuous Assessment, whose results the scene before published
-  let name = process.env.RESULT_STUDENT;
+  // the student whose result the teacher just opened (saved as an identifier), else a named one
+  let who = process.env.RESULT_STUDENT;
   try {
-    name ??= readFileSync(`${OUT}/result-student.txt`, 'utf8').trim();
+    who ??= readFileSync(`${OUT}/result-student.txt`, 'utf8').trim();
   } catch {
-    name ??= 'Aisha Bello';
+    who ??= 'Aisha Bello';
   }
-  const st = o.students.find((x) => x.name === name);
+  const st = o.students.find((x) => x.identifier === who || x.name === who);
   const p = await newPage();
   await signIn(p, st.identifier);
   await p.waitForLoadState('networkidle');
@@ -816,12 +870,27 @@ if (want('myresult')) {
   await sleep(600);
   // the paper's name, the score and the counts beneath it
   await s.zoom(
-    [p.getByRole('heading', { name: /Continuous Assessment/ }), p.getByText('Unanswered')],
+    [p.getByRole('heading', { name: /Continuous Assessment/ }), p.getByText('Unanswered').first()],
     1.6,
     900,
   );
   await s.move(p.getByText(/^\d+ \/ \d+$/).first(), 800);
-  await sleep(1700);
+  await sleep(1200);
+  s.unzoom(600);
+  // with full review allowed, scroll on to the question-by-question review
+  s.caption('Where the school allows it, students can review every question.', 'top');
+  const review = p.getByRole('heading', { name: 'Question review' });
+  await review.evaluate((el) => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  await sleep(1000);
+  const wrong = p.locator('ol > li').filter({ hasText: 'Incorrect' }).first();
+  const card = (await wrong.count()) ? wrong : p.locator('ol > li').first();
+  await card.scrollIntoViewIfNeeded();
+  await sleep(500);
+  await s.zoom(card, 1.4, 900);
+  await s.move(card.getByText('Your answer').first(), 800).catch(() => {});
+  await sleep(1000);
+  await s.move(card.getByText('Correct answer').first(), 700).catch(() => {});
+  await sleep(1300);
   s.unzoom(700);
   await sleep(500);
   await s.stop();

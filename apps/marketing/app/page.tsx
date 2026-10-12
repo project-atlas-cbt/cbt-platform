@@ -69,7 +69,7 @@ export default function HomePage() {
         </Container>
       </section>
 
-      {/* The one-minute tour, straight after the promise it demonstrates. */}
+      {/* The tour, straight after the promise it demonstrates. */}
       <section
         aria-labelledby="tour-title"
         className="border-b border-rule bg-surface py-20 sm:py-24"
@@ -80,7 +80,7 @@ export default function HomePage() {
               id="tour-title"
               eyebrow="The product in a minute"
               title="Watch it work, from class list to a student's result"
-              lead="A moderator imports a class list from a spreadsheet, a teacher imports questions and sends them for review, an HOD approves one, the sitting is watched live, a student loses the network mid-paper and carries on, and once the results are published each student opens their own."
+              lead="A moderator imports a class list from a spreadsheet, a teacher imports questions and sends them for review, an HOD approves one, the sitting is watched live, a student loses the network mid-paper and carries on, and once the results are published each student opens their own, while teachers can open any student's result and see every answer."
             />
             <p className="mt-6 text-[0.9375rem] leading-relaxed text-ink-muted">
               Recorded in {site.name} itself, using a fictional school. The video has captions and
