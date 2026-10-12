@@ -1,5 +1,6 @@
 import { TemplateRegistry } from '@atlas/notifications';
 import { describe, expect, it } from 'vitest';
+import { ONBOARDING_GUIDE_PRODUCT_NAME } from './onboarding-guide.generated.js';
 import { SOFTWARE_ADMIN_INVITATION_TEMPLATE } from '../../ops/create-software-admin.js';
 import {
   registerPlatformTemplates,
@@ -14,6 +15,7 @@ describe('platform email templates', () => {
     displayName: 'Ada',
     schoolName: 'Kings College',
     activationUrl: 'https://kings.example/activate?key=k',
+    guideUrl: 'https://example/get-started',
     renewalKey: 'RK-1',
     daysRemaining: 7,
     expiresAt: '2026-11-01',
@@ -44,5 +46,18 @@ describe('platform email templates', () => {
     });
     expect(mail.subject).toBe('Your ExamKeep platform account');
     expect(mail.text).toContain('A Software Admin account on ExamKeep');
+  });
+
+  it('attaches the onboarding guide PDF to the activation email, for its own product only', () => {
+    const own = new TemplateRegistry();
+    registerPlatformTemplates(own, ONBOARDING_GUIDE_PRODUCT_NAME);
+    const mail = own.render(SCHOOL_ACTIVATION_TEMPLATE_NAME, variables);
+    expect(mail.text).toContain('https://example/get-started');
+    expect(mail.attachments).toHaveLength(1);
+    expect(Buffer.from(mail.attachments![0]!.content).subarray(0, 5).toString()).toBe('%PDF-');
+
+    const other = new TemplateRegistry();
+    registerPlatformTemplates(other, 'SomeOtherName');
+    expect(other.render(SCHOOL_ACTIVATION_TEMPLATE_NAME, variables).attachments).toBeUndefined();
   });
 });

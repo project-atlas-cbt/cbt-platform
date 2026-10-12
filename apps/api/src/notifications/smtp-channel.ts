@@ -22,6 +22,8 @@ export interface SmtpMail {
   subject: string;
   text: string;
   html?: string;
+  /** Contents are never logged (B20); see TemplateAttachment for the caps. */
+  attachments?: { filename: string; contentType: string; content: Uint8Array }[];
 }
 
 export type SendMail = (mail: SmtpMail) => Promise<unknown>;
@@ -43,7 +45,14 @@ export function smtpSender(settings: SmtpSettings): SendMail {
     connectionTimeout: 10_000,
     socketTimeout: 20_000,
   });
-  return (mail) => transport.sendMail(mail);
+  return ({ attachments, ...mail }) =>
+    transport.sendMail({
+      ...mail,
+      // Nodemailer types its attachment content as a Buffer.
+      ...(attachments && {
+        attachments: attachments.map((a) => ({ ...a, content: Buffer.from(a.content) })),
+      }),
+    });
 }
 
 export class SmtpNotificationChannel implements NotificationChannel {
@@ -64,6 +73,13 @@ export class SmtpNotificationChannel implements NotificationChannel {
       subject: rendered.subject,
       text: rendered.text,
       ...(rendered.html !== undefined && { html: rendered.html }),
+      ...(rendered.attachments?.length && {
+        attachments: rendered.attachments.map((a) => ({
+          filename: a.filename,
+          contentType: a.contentType,
+          content: a.content,
+        })),
+      }),
     });
   }
 }

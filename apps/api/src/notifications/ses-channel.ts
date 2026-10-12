@@ -33,6 +33,14 @@ export class SesNotificationChannel implements NotificationChannel {
 
   async send(message: NotificationMessage): Promise<void> {
     const rendered = this.templates.render(message.template, message.variables ?? {});
+    // SES "Simple" content cannot carry attachments; sending the mail without
+    // one would silently drop what the template promises, so fail loudly.
+    // (Raw MIME is the route if the AWS design ever needs this.)
+    if (rendered.attachments?.length) {
+      throw new Error(
+        `Template "${message.template}" has attachments, which SES transport does not support.`,
+      );
+    }
     const from = typeof this.from === 'string' ? this.from : await this.from();
     await this.sendEmail({
       FromEmailAddress: from,

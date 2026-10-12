@@ -9,6 +9,27 @@ changes from the founder's personal number to the new WhatsApp Business number, 
 The one-page summary PDF in `apps/marketing/public/downloads/` is re-exported with the new number
 and nothing else changed. Takes effect on the next marketing build and deploy.
 
+### 2026-10-12 — "Get your school ready" guide on the activation email
+
+A public page, `/get-started` on the marketing site, lists what a newly activated school should
+gather before the setup wizard, in the wizard's order: details, calendar, classes and subjects,
+the teacher and student import columns, grading bands (not a wizard step) and first questions. A
+3-page PDF is rendered from the same content (`lib/get-started.ts`) by
+`apps/marketing/scripts/get-started-pdf.mjs`, which also regenerates the copy embedded in the API
+(`onboarding-guide.generated.ts`; the runtime image holds only compiled code). The activation email
+now links the page and attaches the PDF, but only when `PRODUCT_NAME` matches the name the PDF was
+generated for. Also fixes a type error in the SMTP attachment hand-off (nodemailer wants a Buffer).
+SES refuses attachments, so the AWS design needs an attachment-capable path before it carries this
+email. Regenerate the PDF whenever `lib/get-started.ts` changes. Tests: `templates.test.ts`.
+
+### 2026-10-12 — Email templates can carry PDF attachments
+
+Notification templates accept static attachments, sent over SMTP (ADR-0019 amendment of the same
+date). PDF only, at most 3 files and 2 MB in total, checked when the template is registered. The
+bytes belong to the template, so the queue payload is unchanged; contents are never logged. The SES
+transport refuses a template with attachments. First use, next: the onboarding guide on the school
+activation email. Tests: registry validation (`template.test.ts`) and the SMTP hand-off.
+
 ### 2026-10-12 — Tour video v10: result detail for teachers and students
 
 The tour is re-recorded on the current app (96 s, was 78 s). A new scene has a teacher open one

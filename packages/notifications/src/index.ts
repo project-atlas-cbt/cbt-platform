@@ -4,6 +4,11 @@ export {
   interpolate,
   UnknownTemplateError,
   MissingTemplateVariableError,
+  InvalidAttachmentError,
+  ALLOWED_ATTACHMENT_TYPES,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_TEMPLATE,
+  type TemplateAttachment,
   type TemplateDefinition,
   type RenderedTemplate,
 } from './template.js';

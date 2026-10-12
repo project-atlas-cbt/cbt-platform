@@ -1,4 +1,8 @@
-import type { TemplateRegistry } from '@atlas/notifications';
+import type { TemplateAttachment, TemplateRegistry } from '@atlas/notifications';
+import {
+  ONBOARDING_GUIDE_PDF_BASE64,
+  ONBOARDING_GUIDE_PRODUCT_NAME,
+} from './onboarding-guide.generated.js';
 
 export const SCHOOL_ACTIVATION_TEMPLATE_NAME = 'platform-school-activation';
 export const SUBSCRIPTION_RENEWAL_TEMPLATE_NAME = 'platform-subscription-renewal';
@@ -22,6 +26,22 @@ export const PLATFORM_PASSWORD_CHANGED_TEMPLATE_NAME = 'platform-password-change
  * here, not re-supplied on every `.send()` call, since it never changes
  * per message).
  */
+/**
+ * The "get your school ready" PDF, attached to the activation email. It is
+ * generated for one product name, so a deployment under another name sends
+ * the email without it rather than with another product's branding.
+ */
+function onboardingGuideAttachments(productName: string): TemplateAttachment[] {
+  if (productName !== ONBOARDING_GUIDE_PRODUCT_NAME) return [];
+  return [
+    {
+      filename: `Get-your-school-ready-for-${productName}.pdf`,
+      contentType: 'application/pdf',
+      content: Buffer.from(ONBOARDING_GUIDE_PDF_BASE64.replace(/\s/g, ''), 'base64'),
+    },
+  ];
+}
+
 export function registerPlatformTemplates(registry: TemplateRegistry, productName: string): void {
   if (!registry.has(SCHOOL_ACTIVATION_TEMPLATE_NAME)) {
     registry.register({
@@ -33,7 +53,10 @@ export function registerPlatformTemplates(registry: TemplateRegistry, productNam
         'Use the link below to activate your school and set your password. ' +
         'This link expires soon and can only be used once.\n\n' +
         '{{activationUrl}}\n\n' +
+        'Before you start, read the attached guide (also at {{guideUrl}}). ' +
+        'It lists what to gather first, so setup goes in one sitting.\n\n' +
         "If you weren't expecting this, you can ignore this message.",
+      attachments: onboardingGuideAttachments(productName),
     });
   }
 

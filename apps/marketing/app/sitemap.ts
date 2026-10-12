@@ -6,6 +6,7 @@ const pages = [
   ['/', 1],
   ['/features', 0.9],
   ['/how-it-works', 0.8],
+  ['/get-started', 0.6],
   ['/exam-day-reliability', 0.8],
   ['/pricing', 0.8],
   ['/request-a-demo', 0.8],
