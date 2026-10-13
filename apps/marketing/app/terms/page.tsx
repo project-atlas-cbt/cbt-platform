@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of use" updated="4 October 2026">
+    <LegalPage title="Terms of use" updated="13 October 2026">
       <p>
         These terms cover your use of this website. A school’s use of the {site.name} platform is
         governed by its own subscription agreement and data processing agreement, which take
