@@ -2,6 +2,14 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-13 — Draft banner removed from Privacy and Terms
+
+The "Draft pending legal review" notice is gone from both pages (owner decision, as the site
+starts receiving visitors); each keeps its "Last updated" line, now 13 October 2026. The text is
+unchanged and still avoids any "NDPA compliant" claim. The lawyer review of the privacy notice and
+terms is still outstanding (launch checklist: legal review), so the text stays a draft in
+substance until it is signed off.
+
 ### 2026-10-12 — Search by student ID or name on every student list
 
 Owner request (urgent, pilot feedback). One shared `StudentSearch` box (`components/ui/student-search.tsx`)

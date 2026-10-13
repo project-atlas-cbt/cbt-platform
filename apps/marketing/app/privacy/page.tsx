@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy notice" updated="4 October 2026">
+    <LegalPage title="Privacy notice" updated="13 October 2026">
       <p>
         This notice explains what personal data this website collects and how the {site.name}{' '}
         platform handles the data schools put into it. It is written to meet the Nigeria Data
