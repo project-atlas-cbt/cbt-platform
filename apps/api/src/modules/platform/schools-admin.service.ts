@@ -1,9 +1,16 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { prisma, withTenant, TENANT_SESSION_VARIABLE, type Prisma } from '@atlas/db';
+import { prisma, withTenant, TENANT_SESSION_VARIABLE, Prisma } from '@atlas/db';
 import type { Env } from '@atlas/config';
-import type { PlatformOverride, SchoolStatus } from '@atlas/domain';
+import {
+  SCHOOL_ADDRESS_PROBLEM_MESSAGES,
+  firstFreeSchoolAddress,
+  normaliseSchoolAddress,
+  schoolAddressProblem,
+  type PlatformOverride,
+  type SchoolStatus,
+} from '@atlas/domain';
 import type { NotificationChannel } from '@atlas/notifications';
 import { AppHttpException } from '../../common/app-http-exception.js';
 import { buildSchoolUrl } from '../../common/school-url.js';
@@ -13,7 +20,6 @@ import { AuditService } from '../operations/audit-event.service.js';
 import { EXAM_LIST_INCLUDE, toExamListItemResponseDto } from '../exams/exam-mappers.js';
 import type { ExamListResponseDto, ListExamsQueryDto } from '../exams/dto/exam.dto.js';
 import { AccessGateService } from './access-gate.service.js';
-import { generateUniqueSchoolSubdomain } from './subdomain-generator.js';
 import {
   SCHOOL_ACTIVATION_TEMPLATE_NAME,
   SUBSCRIPTION_RENEWAL_TEMPLATE_NAME,
@@ -197,73 +203,89 @@ export class SchoolsAdminService {
     dto: CreateSchoolDto,
     issuedByUserId: string,
   ): Promise<{ id: string; subdomain: string }> {
-    const subdomain = await generateUniqueSchoolSubdomain(
-      dto.name,
-      async (candidate) =>
-        (await prisma.school.findUnique({ where: { subdomain: candidate } })) !== null,
-    );
+    // ADR-0005 amendment (2026-10-15): the admin's chosen address, checked
+    // here as well as in the form; without one, the best free suggestion.
+    let subdomain: string;
+    if (dto.subdomain !== undefined) {
+      subdomain = normaliseSchoolAddress(dto.subdomain);
+      const check = await this.checkAddress(subdomain);
+      if (!check.available) {
+        throw new AppHttpException({
+          code: check.reason === 'TAKEN' ? 'CONFLICT' : 'VALIDATION_ERROR',
+          message: SCHOOL_ADDRESS_PROBLEM_MESSAGES[check.reason ?? 'FORMAT'],
+          details: { field: 'subdomain', reason: check.reason },
+        });
+      }
+    } else {
+      [subdomain] = (await firstFreeSchoolAddress(
+        dto.name,
+        async (label) => !(await this.checkAddress(label)).available,
+      )) as [string];
+    }
 
     const rawKey = generateActivationKey();
     const now = new Date();
     const { defaultSchoolTimezone: defaultTimezone } = await this.settings.current();
 
-    const result = await prisma.$transaction(async (tx) => {
-      const school = await tx.school.create({
-        // ADR-0036: System Configuration's default timezone for new schools.
-        data: { name: dto.name, subdomain, timezone: defaultTimezone },
-      });
-
-      await tx.$executeRaw`SELECT set_config(${TENANT_SESSION_VARIABLE}, ${school.id}, true)`;
-
-      const admin = await tx.user.create({
-        data: {
-          firstName: dto.adminFirstName,
-          lastName: dto.adminLastName,
-          displayName: `${dto.adminFirstName} ${dto.adminLastName}`,
-          email: dto.adminEmail,
-        },
-      });
-      const membership = await tx.schoolMembership.create({
-        data: {
-          schoolId: school.id,
-          userId: admin.id,
-          loginIdentifier: dto.adminLoginIdentifier,
-          status: 'ACTIVE',
-        },
-      });
-      await tx.roleAssignment.create({
-        data: { schoolId: school.id, membershipId: membership.id, role: 'SCHOOL_ADMIN' },
-      });
-
-      const subscription = await tx.subscription.create({
-        data: {
-          schoolId: school.id,
-          plan: dto.plan,
-          startAt: now,
-          expiresAt: addDays(now, dto.initialPeriodDays),
-        },
-      });
-      await tx.activationGrant.create({
-        data: {
-          schoolId: school.id,
-          subscriptionId: subscription.id,
-          purpose: 'INITIAL_ACTIVATION',
-          keyHash: hashKey(rawKey),
-          issuedBy: issuedByUserId,
-          expiresAt: addDays(now, ACTIVATION_GRANT_VALIDITY_DAYS),
-        },
-      });
-
-      // ADR-0038 amendment: the school asked for the standard structure.
-      if (dto.startingStructure === 'STANDARD') {
-        await this.standardSetup.applyAllInTx(tx, school.id, {
-          actorUserId: issuedByUserId,
-          actorRole: 'SOFTWARE_ADMIN',
+    const result = await this.createGuarded(subdomain, () =>
+      prisma.$transaction(async (tx) => {
+        const school = await tx.school.create({
+          // ADR-0036: System Configuration's default timezone for new schools.
+          data: { name: dto.name, subdomain, timezone: defaultTimezone },
         });
-      }
 
-      return { school, admin };
-    });
+        await tx.$executeRaw`SELECT set_config(${TENANT_SESSION_VARIABLE}, ${school.id}, true)`;
+
+        const admin = await tx.user.create({
+          data: {
+            firstName: dto.adminFirstName,
+            lastName: dto.adminLastName,
+            displayName: `${dto.adminFirstName} ${dto.adminLastName}`,
+            email: dto.adminEmail,
+          },
+        });
+        const membership = await tx.schoolMembership.create({
+          data: {
+            schoolId: school.id,
+            userId: admin.id,
+            loginIdentifier: dto.adminLoginIdentifier,
+            status: 'ACTIVE',
+          },
+        });
+        await tx.roleAssignment.create({
+          data: { schoolId: school.id, membershipId: membership.id, role: 'SCHOOL_ADMIN' },
+        });
+
+        const subscription = await tx.subscription.create({
+          data: {
+            schoolId: school.id,
+            plan: dto.plan,
+            startAt: now,
+            expiresAt: addDays(now, dto.initialPeriodDays),
+          },
+        });
+        await tx.activationGrant.create({
+          data: {
+            schoolId: school.id,
+            subscriptionId: subscription.id,
+            purpose: 'INITIAL_ACTIVATION',
+            keyHash: hashKey(rawKey),
+            issuedBy: issuedByUserId,
+            expiresAt: addDays(now, ACTIVATION_GRANT_VALIDITY_DAYS),
+          },
+        });
+
+        // ADR-0038 amendment: the school asked for the standard structure.
+        if (dto.startingStructure === 'STANDARD') {
+          await this.standardSetup.applyAllInTx(tx, school.id, {
+            actorUserId: issuedByUserId,
+            actorRole: 'SOFTWARE_ADMIN',
+          });
+        }
+
+        return { school, admin };
+      }),
+    );
 
     await this.audit.record({
       schoolId: result.school.id,
@@ -289,6 +311,55 @@ export class SchoolsAdminService {
     });
 
     return { id: result.school.id, subdomain };
+  }
+
+  /**
+   * ADR-0005 amendment: whether a new school may take this address. An
+   * address is checked against every school ever created, archived ones
+   * included (schools are never deleted, B20), so a released address never
+   * leads to a different school.
+   */
+  async checkAddress(
+    label: string,
+  ): Promise<{ available: boolean; reason?: 'FORMAT' | 'LENGTH' | 'RESERVED' | 'TAKEN' }> {
+    const problem = schoolAddressProblem(label, this.config.get('PRODUCT_NAME', { infer: true }));
+    if (problem) return { available: false, reason: problem };
+    if (await this.addressTaken(label)) return { available: false, reason: 'TAKEN' };
+    return { available: true };
+  }
+
+  /** Up to three free, valid addresses for a school name, best first. */
+  async suggestAddresses(name: string): Promise<string[]> {
+    return firstFreeSchoolAddress(
+      name,
+      async (label) => !(await this.checkAddress(label)).available,
+      3,
+    );
+  }
+
+  private async addressTaken(label: string): Promise<boolean> {
+    return (await prisma.school.findUnique({ where: { subdomain: label } })) !== null;
+  }
+
+  /** Two creates racing for one address: the unique index decides, and the
+   * loser gets the same 409 the availability check would have given. */
+  private async createGuarded<T>(subdomain: string, fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        (await this.addressTaken(subdomain))
+      ) {
+        throw new AppHttpException({
+          code: 'CONFLICT',
+          message: SCHOOL_ADDRESS_PROBLEM_MESSAGES.TAKEN,
+          details: { field: 'subdomain', reason: 'TAKEN' },
+        });
+      }
+      throw error;
+    }
   }
 
   /**

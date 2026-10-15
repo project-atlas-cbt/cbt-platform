@@ -121,3 +121,24 @@ Consequences:
   application, the schema owner password only in the ops service, expand-only migrations,
   per-school API hosts (ADR-0022 amendment).
 - Revisit before a second school, or when a sitting's size approaches the server's measured limit.
+
+## Amendment — 2026-10-15: wildcard certificates for school hosts on the VPS
+
+**Decision (project owner, 2026-10-15):** school hosts are served from two wildcard certificates,
+`*.<root>` and `*.api.<root>`, which Caddy obtains from Let's Encrypt through a Cloudflare DNS
+record (DNS-01, the `caddy-dns/cloudflare` module in `infra/docker/Dockerfile.caddy`). A school
+created in the Software Admin console is served at once; `SCHOOLS` and a redeploy are no longer
+needed. This replaces the per-school on-demand certificates that failed on the pilot server twice
+(2026-10-08), and it scales: two certificates whatever the number of schools, far from Let's
+Encrypt's 50-certificates-a-week limit that per-school issuance would reach.
+
+Consequences:
+
+- `.env` holds `CLOUDFLARE_API_TOKEN`, a Cloudflare token limited to Zone Read and DNS Edit on the
+  root domain's zone only. It is passed to Caddy's environment and never written to the
+  Caddyfile or logs. Without it, the per-host behaviour above is unchanged.
+- Platform hosts (`admin`, `api`, `admin.api`, `media`, the root and `www`) and any schools still
+  in `SCHOOLS` keep their own HTTP-01 certificates and take precedence, so a DNS or token problem
+  can only affect unlisted schools.
+- The wildcard DNS records `*` and `*.api` (DNS only) stay as they are; nothing per school.
+- The AWS design does the same with an ACM wildcard certificate when it is provisioned.

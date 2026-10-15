@@ -16,7 +16,11 @@ if [ ! -f .env ]; then
 ROOT_DOMAIN=$root
 PRODUCT_NAME="$product"
 # Hosts that get a certificate, besides admin/api/media: one label per school.
+# Optional once CLOUDFLARE_API_TOKEN is set (wildcard certificates).
 SCHOOLS=
+# Cloudflare token (Zone Read + DNS Edit, this zone only) for the wildcard
+# school certificates; vps-pilot.md "Wildcard certificates".
+CLOUDFLARE_API_TOKEN=
 # Email for Let's Encrypt expiry notices.
 ACME_EMAIL=
 SENTRY_DSN=

@@ -29,7 +29,7 @@ if [ "$free_gb" -lt "${DEPLOY_MIN_FREE_GB:-10}" ]; then
 fi
 
 echo "== building $RELEASE"
-docker compose build marketing web api ops
+docker compose build caddy marketing web api ops
 
 echo "== data services"
 # Create backups/ as this user before compose bind-mounts it; otherwise Docker
@@ -109,10 +109,12 @@ esac
 # path never runs against this database.
 echo "== post-deploy smoke"
 # P2-25: every listed school is checked; each must already exist (create it
-# in the Software Admin console before adding it to SCHOOLS).
+# in the Software Admin console before adding it to SCHOOLS). With wildcard
+# certificates (CLOUDFLARE_API_TOKEN) SCHOOLS only chooses what the smoke
+# checks, and any school host is expected to have a certificate.
 if ! docker compose --profile ops run --rm --no-deps \
   -e SMOKE_ROOT="$ROOT_DOMAIN" -e SMOKE_SCHOOLS="${SCHOOLS:-}" -e SMOKE_WEB=true -e SMOKE_MARKETING=true \
-  -e SMOKE_ANY_SCHOOL_HOST="$([ "${CADDY_LOCAL_CA:-}" = 1 ] && echo true || echo false)" \
+  -e SMOKE_ANY_SCHOOL_HOST="$([ "${CADDY_LOCAL_CA:-}" = 1 ] || [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && echo true || echo false)" \
   -e SMOKE_API=https://caddy/v1 -e SMOKE_WEB_URL=https://caddy \
   ops pnpm --filter @atlas/load smoke; then
   echo "smoke FAILED for $RELEASE; it is running. Roll back with: bin/deploy.sh $(tail -n 1 releases.log 2>/dev/null || echo '<previous ref>')" >&2

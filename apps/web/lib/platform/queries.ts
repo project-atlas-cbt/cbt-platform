@@ -232,3 +232,32 @@ export function useAuditLog(params: UseAuditLogParams) {
       ),
   });
 }
+
+/** ADR-0005 amendment: short, free web addresses for a new school's name. */
+export function useSchoolAddressSuggestions(name: string) {
+  return useQuery({
+    queryKey: ['platform', 'school-address', 'suggestions', name],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/platform/schools/address-suggestions', { params: { query: { name } } }),
+      ),
+    enabled: name.trim().length > 0,
+    staleTime: 30_000,
+  });
+}
+
+/** Whether a new school may take `subdomain`; disabled until it passes the
+ * shared format rules, so only a well-formed label reaches the server. */
+export function useSchoolAddressAvailability(subdomain: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['platform', 'school-address', 'availability', subdomain],
+    queryFn: () =>
+      unwrap(
+        apiClient.GET('/platform/schools/address-availability', {
+          params: { query: { subdomain } },
+        }),
+      ),
+    enabled,
+    staleTime: 5_000,
+  });
+}

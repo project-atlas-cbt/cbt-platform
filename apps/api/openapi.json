@@ -1184,6 +1184,70 @@
         ]
       }
     },
+    "/platform/schools/address-suggestions": {
+      "get": {
+        "operationId": "SchoolsAdminController_addressSuggestions",
+        "parameters": [
+          {
+            "name": "name",
+            "required": true,
+            "in": "query",
+            "description": "The school name to suggest addresses for.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAddressSuggestionsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Short, free web addresses for a new school name (ADR-0005 amendment).",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/schools/address-availability": {
+      "get": {
+        "operationId": "SchoolsAdminController_addressAvailability",
+        "parameters": [
+          {
+            "name": "subdomain",
+            "required": true,
+            "in": "query",
+            "description": "The address label to check.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolAddressAvailabilityResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Whether a new school may take a web address (ADR-0005 amendment).",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/platform/schools/{id}": {
       "get": {
         "operationId": "SchoolsAdminController_detail",
@@ -11774,6 +11838,11 @@
           "name": {
             "type": "string"
           },
+          "subdomain": {
+            "type": "string",
+            "description": "The school's web address label, `<subdomain>.<root>` (ADR-0005 amendment): 3 to 20 lowercase letters, digits and single hyphens, not reserved, not used by any school. Omitted: the best free suggestion from the name.",
+            "example": "ola"
+          },
           "adminFirstName": {
             "type": "string"
           },
@@ -11830,6 +11899,46 @@
         "required": [
           "id",
           "subdomain"
+        ]
+      },
+      "SchoolAddressSuggestionsResponseDto": {
+        "type": "object",
+        "properties": {
+          "suggestions": {
+            "description": "Free, valid addresses, best first.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "suggestions"
+        ]
+      },
+      "SchoolAddressAvailabilityResponseDto": {
+        "type": "object",
+        "properties": {
+          "subdomain": {
+            "type": "string",
+            "description": "The label as it would be stored (trimmed, lowercase)."
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "FORMAT",
+              "LENGTH",
+              "RESERVED",
+              "TAKEN"
+            ]
+          }
+        },
+        "required": [
+          "subdomain",
+          "available"
         ]
       },
       "SchoolSubscriptionSummaryDto": {

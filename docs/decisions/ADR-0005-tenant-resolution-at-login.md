@@ -49,3 +49,25 @@ No specification states how a login request resolves to a school. Four incompati
 - B1: `login_identifier` unique per school; `GET /v1/tenant/resolve`.
 - B3: subdomain allocation and validation at school creation.
 - F1: resolve tenant and apply branding before rendering login.
+
+## Amendment — 2026-10-15: short school addresses, chosen at creation
+
+**Context:** the address was the full school name, hyphenated (`05 §3.2`'s "System generates:
+School identifier"), so the pilot school's would have been
+`our-lady-of-apostles-maryway-odo-ona-ibadan`, far too long to type every day.
+
+**Decision (project owner, 2026-10-15):**
+
+- The Create school form suggests short addresses from the name (initials first: `ola`), and the
+  Software Admin may edit the suggestion. The API accepts an optional `subdomain`; without one it
+  uses the best free suggestion.
+- A new address is 3 to 20 lowercase letters, digits and single hyphens
+  (`@atlas/domain` `school-address.ts`). Platform hosts, likely future hosts, mail and support
+  names and the product name are reserved (`SCHOOL_ADDRESS_RESERVED`). Only the original four
+  platform labels stop a host resolving, so growing the reserved list never breaks a school.
+- The form checks availability as the admin types (`GET /v1/platform/schools/address-availability`,
+  `/address-suggestions`); the unique index on `School.subdomain` settles a race, answered as
+  `409 CONFLICT` with `details.reason = TAKEN`.
+- An address is never reused: schools are never deleted (B20 grants) and the address cannot be
+  changed, so an archived or deactivated school keeps its address and old links never reach
+  another school. Existing schools keep their addresses, whatever their length.

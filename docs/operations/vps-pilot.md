@@ -117,15 +117,35 @@ What stays the same:
 
 ## Adding a school
 
-Create the school in the Software Admin console first, then add its subdomain label to `SCHOOLS`
-in `.env` (comma-separated) and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the
-new certificates; the smoke waits up to a minute for them, then checks every school in `SCHOOLS`.
-A listed school that does not exist fails the smoke with a message naming it. Until the school is
+With wildcard certificates on (below), create the school in the Software Admin console and it
+works at once: no `.env` edit and no redeploy. The Create school form suggests a short web address
+and checks it is free (ADR-0005 amendment, 2026-10-15). `SCHOOLS` is then optional: schools listed
+there keep their own certificates and are checked by the post-deploy smoke.
+
+Without wildcard certificates, add the school's label to `SCHOOLS` in `.env` (comma-separated)
+after creating it and run `bin/deploy.sh`. The deploy reloads Caddy, which fetches the new
+certificates; the smoke waits up to a minute for them, then checks every school in `SCHOOLS`. A
+listed school that does not exist fails the smoke with a message naming it. Until the school is
 listed, its addresses have no certificate (the browser shows ERR_SSL_PROTOCOL_ERROR).
 
-`CADDY_ON_DEMAND=1` in `.env` would give console-created schools their certificates on the first
-visit instead. Leave it off: the first deploys with it (2026-10-08) left every host without a
-certificate, and it needs a test on a non-pilot server first (CHANGE-LOG).
+### Wildcard certificates (Cloudflare DNS)
+
+Caddy gets `*.<root>` and `*.api.<root>` from Let's Encrypt by adding a DNS record through
+Cloudflare's API (ADR-0032 amendment, 2026-10-15). Turn it on once:
+
+1. In Cloudflare, **My Profile → API Tokens → Create Token → Create Custom Token**. Permissions:
+   **Zone · Zone · Read** and **Zone · DNS · Edit**. Zone Resources: **Include · Specific zone ·
+   the root domain**. Nothing else. Keep the token out of chat and email.
+2. On the server, add `CLOUDFLARE_API_TOKEN=<token>` to `infra/vps/.env` (as `atlas`).
+3. Run `bin/deploy.sh` outside exam hours. The first deploy with this change builds the Caddy image
+   with the Cloudflare module and recreates the Caddy container (a few seconds without HTTPS).
+4. Check: `docker compose logs caddy | grep -i 'certificate obtained'` names `*.<root>` and
+   `*.api.<root>`, and a school not in `SCHOOLS` opens in the browser.
+
+To turn it off, remove the token and redeploy; listed schools and platform hosts are unaffected
+either way, because they keep their own certificates. If the token is ever exposed, roll it in
+Cloudflare and update `.env`. `CADDY_ON_DEMAND=1` (per-school certificates on first visit) stays
+off: the first deploys with it (2026-10-08) left every host without a certificate.
 
 ## Demo school (staging only)
 

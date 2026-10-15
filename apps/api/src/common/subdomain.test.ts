@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseTenantSubdomain } from './subdomain.js';
+import { SCHOOL_ADDRESS_RESERVED } from '@atlas/domain';
+import { parseTenantSubdomain, RESERVED_SUBDOMAIN_LABELS } from './subdomain.js';
 
 const ROOT = 'localtest.me';
 
@@ -56,5 +57,13 @@ describe('parseTenantSubdomain (ADR-0005)', () => {
 
   it('returns null when the Host header is missing', () => {
     expect(parseTenantSubdomain(undefined, ROOT)).toBeNull();
+  });
+});
+
+describe('RESERVED_SUBDOMAIN_LABELS', () => {
+  it('are all refused as a new school address too', () => {
+    for (const label of RESERVED_SUBDOMAIN_LABELS) {
+      expect(SCHOOL_ADDRESS_RESERVED.has(label)).toBe(true);
+    }
   });
 });

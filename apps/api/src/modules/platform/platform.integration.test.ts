@@ -538,6 +538,77 @@ describe('Full activation lifecycle (B3 DoD items 1-4, 6)', () => {
     );
     expect(audit?.actorRole).toBe('SOFTWARE_ADMIN');
   });
+
+  it('ADR-0005 amendment: a chosen short address is checked, kept unique and never reused', async () => {
+    const label = `t${randomUUID().replace(/-/g, '').slice(0, 10)}`;
+    const body = (subdomain?: string) => ({
+      name: `Our Lady of Apostles Maryway Odo-Ona Ibadan ${randomUUID()}`,
+      adminFirstName: 'Ada',
+      adminLastName: 'Address',
+      adminEmail: `addr-${randomUUID().slice(0, 8)}@example.com`,
+      adminLoginIdentifier: `addr-${randomUUID().slice(0, 8)}`,
+      plan: 'STANDARD',
+      initialPeriodDays: 30,
+      ...(subdomain === undefined ? {} : { subdomain }),
+    });
+
+    const free = await get(
+      platformCtx,
+      `/platform/schools/address-availability?subdomain=${label.toUpperCase()}`,
+    );
+    expect(free.statusCode).toBe(200);
+    expect(free.json()).toEqual({ subdomain: label, available: true });
+
+    const created = await post(platformCtx, '/platform/schools', body(` ${label.toUpperCase()} `));
+    expect(created.statusCode).toBe(201);
+    expect(created.json<{ subdomain: string }>().subdomain).toBe(label);
+    const createdId = created.json<{ id: string }>().id;
+    createdSchoolIds.push(createdId);
+
+    const taken = await get(
+      platformCtx,
+      `/platform/schools/address-availability?subdomain=${label}`,
+    );
+    expect(taken.json()).toEqual({ subdomain: label, available: false, reason: 'TAKEN' });
+
+    // Another school can't take it, even once the first is deactivated.
+    const deactivate = await post(platformCtx, `/platform/schools/${createdId}/deactivate`, {
+      reason: 'Test: deactivated school keeps its address',
+    });
+    expect(deactivate.statusCode).toBeLessThan(300);
+    const duplicate = await post(platformCtx, '/platform/schools', body(label));
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json<{ error: { details: { reason: string } } }>().error.details.reason).toBe(
+      'TAKEN',
+    );
+
+    for (const [bad, reason] of [
+      ['ab', 'LENGTH'],
+      ['ola--x', 'FORMAT'],
+      ['support', 'RESERVED'],
+    ] as const) {
+      const res = await post(platformCtx, '/platform/schools', body(bad));
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ error: { details: { reason: string } } }>().error.details.reason).toBe(
+        reason,
+      );
+    }
+
+    const suggestions = await get(
+      platformCtx,
+      `/platform/schools/address-suggestions?name=${encodeURIComponent('Our Lady of Apostles Maryway Odo-Ona Ibadan')}`,
+    );
+    expect(suggestions.statusCode).toBe(200);
+    const list = suggestions.json<{ suggestions: string[] }>().suggestions;
+    expect(list.length).toBeGreaterThan(0);
+    for (const s of list) expect(s.length).toBeLessThanOrEqual(20);
+
+    // Omitted: a short suggestion, not the hyphenated full name.
+    const auto = await post(platformCtx, '/platform/schools', body());
+    expect(auto.statusCode).toBe(201);
+    createdSchoolIds.push(auto.json<{ id: string }>().id);
+    expect(auto.json<{ subdomain: string }>().subdomain.length).toBeLessThanOrEqual(20);
+  });
 });
 
 /**
