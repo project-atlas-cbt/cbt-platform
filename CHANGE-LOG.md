@@ -2,6 +2,38 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-15 — Short school web addresses; new schools work without a redeploy
+
+Owner request, plan approved on the decision card (ADR-0005 and ADR-0032 amendments). Creating a
+school made its address from the full name (`our-lady-of-apostles-maryway-odo-ona-ibadan`), and
+the address had no HTTPS certificate until its label was added to `SCHOOLS` and the server
+redeployed.
+
+- **Short, chosen address.** Create school has a Web address field, filled with a suggestion from
+  the name's initials (`ola`), other suggestions as buttons, and a live check that says whether
+  the address is free. Rules (`@atlas/domain` `school-address.ts`, shared by the form and the
+  API): 3 to 20 lowercase letters, digits and single hyphens, a reserved list (platform hosts,
+  likely future hosts, mail and support names, the product name). The API takes an optional
+  `subdomain` (omitted: the best free suggestion), and `GET /v1/platform/schools/address-
+suggestions` and `/address-availability`. Two creates racing for one address: the unique index
+  decides and the loser gets `409 CONFLICT`, `details.reason = TAKEN`. Addresses are never reused,
+  since schools are never deleted and an address cannot change. Existing schools are unchanged.
+  `subdomain-generator.ts` is replaced.
+- **Wildcard certificates.** With `CLOUDFLARE_API_TOKEN` in the VPS `.env`, `render-caddyfile.sh`
+  adds `*.<root>` and `*.api.<root>` sites whose certificates Caddy gets through Cloudflare DNS
+  (DNS-01), so any school host works the moment the school exists. Caddy is now built with the
+  `caddy-dns/cloudflare` module (`infra/docker/Dockerfile.caddy`, same Caddy 2.10.2 base). Platform
+  hosts and schools left in `SCHOOLS` keep their own certificates and take precedence, so a token
+  or DNS problem can only touch unlisted schools. Without the token nothing changes.
+  `vps-pilot.md` "Wildcard certificates" has the one-time setup.
+
+Tested: domain unit tests for suggestions, rules and numbering (21); API unit and integration
+(platform suite, health, tenancy: chosen address normalised and stored, taken after creation and
+after deactivation, 409 for a duplicate, 400 for length/format/reserved, suggestions, omitted
+address); web Create school tests (9, three new: suggestion fill, reserved, taken). The rendered
+Caddyfile, with and without the token, validates with a Caddy 2.10.2 build including the module.
+Not yet run: issuing the real wildcard certificates, which needs the token on the server.
+
 ### 2026-10-15 — Marketing site visitors and contacts on the Software Admin panel
 
 Owner request, full plan chosen on the decision card (ADR-0034 amendment). A new Software Admin

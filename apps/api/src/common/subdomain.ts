@@ -11,9 +11,9 @@
 // A request to any of these, or to
 // the bare root domain, resolves no tenant — which is correct, not an
 // error: not every request needs one (see TenancyMiddleware's comment).
-// Exported (not just module-private) so B3's subdomain-generator.ts can
-// avoid ever *generating* a reserved label for a new school, the mirror
-// image of this file's own job of never *resolving* one to a school.
+// New schools may not take these or the longer list in @atlas/domain's
+// SCHOOL_ADDRESS_RESERVED (ADR-0005 amendment); only these four stop a
+// label resolving, so growing that list never breaks an existing school.
 export const RESERVED_SUBDOMAIN_LABELS = new Set(['api', 'admin', 'www', 'media']);
 
 // B23 (ADR-0022 amendment, 2026-10-04): in production the browser on

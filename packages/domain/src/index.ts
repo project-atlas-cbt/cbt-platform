@@ -66,6 +66,17 @@ export {
   type ExamResultSettings,
 } from './platform/result-policy.js';
 export {
+  SCHOOL_ADDRESS_MIN_LENGTH,
+  SCHOOL_ADDRESS_MAX_LENGTH,
+  SCHOOL_ADDRESS_RESERVED,
+  SCHOOL_ADDRESS_PROBLEM_MESSAGES,
+  normaliseSchoolAddress,
+  schoolAddressProblem,
+  suggestSchoolAddresses,
+  firstFreeSchoolAddress,
+  type SchoolAddressProblem,
+} from './platform/school-address.js';
+export {
   derivePalette,
   type BrandTokens,
   type NeutralTokens,

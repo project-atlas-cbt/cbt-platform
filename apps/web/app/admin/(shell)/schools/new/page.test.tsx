@@ -8,8 +8,17 @@ vi.mock('@/lib/platform/mutations', () => ({
   useCreateSchool: () => ({ mutateAsync }),
 }));
 
+const availability = vi.fn<(subdomain: string, enabled: boolean) => unknown>();
+const suggestions = vi.fn<(name: string) => unknown>();
+vi.mock('@/lib/platform/queries', () => ({
+  useSchoolAddressSuggestions: (name: string) => suggestions(name),
+  useSchoolAddressAvailability: (subdomain: string, enabled: boolean) =>
+    availability(subdomain, enabled),
+}));
+
 async function fillValidForm() {
   await userEvent.type(screen.getByLabelText(/school name/i), 'Greenfield College');
+  await userEvent.type(screen.getByLabelText(/web address/i), 'greenfield');
   await userEvent.type(screen.getByLabelText(/admin first name/i), 'Ada');
   await userEvent.type(screen.getByLabelText(/admin last name/i), 'Lovelace');
   await userEvent.type(screen.getByLabelText(/admin email/i), 'ada@example.com');
@@ -20,6 +29,10 @@ async function fillValidForm() {
 describe('CreateSchoolPage', () => {
   beforeEach(() => {
     mutateAsync.mockReset();
+    suggestions.mockReset().mockReturnValue({ data: undefined });
+    availability.mockReset().mockImplementation((subdomain: string, enabled: boolean) => ({
+      data: enabled ? { subdomain, available: true } : undefined,
+    }));
   });
 
   it('shows validation errors for empty required fields and never calls the mutation', async () => {
@@ -95,5 +108,43 @@ describe('CreateSchoolPage', () => {
       /could not create the school/i,
     );
     expect(screen.queryByText(/school created/i)).not.toBeInTheDocument();
+  });
+
+  it('suggests a short address from the name and fills it in', async () => {
+    suggestions.mockImplementation((name: string) => ({
+      data: name ? { suggestions: ['ola', 'olamooi'] } : undefined,
+    }));
+    render(<CreateSchoolPage />);
+    await userEvent.type(
+      screen.getByLabelText(/school name/i),
+      'Our Lady of Apostles Maryway Odo-Ona Ibadan',
+    );
+    await userEvent.tab();
+    expect(screen.getByLabelText(/web address/i)).toHaveValue('ola');
+    await userEvent.click(screen.getByRole('button', { name: 'olamooi' }));
+    expect(screen.getByLabelText(/web address/i)).toHaveValue('olamooi');
+  });
+
+  it('explains an address that breaks the rules without asking the server', async () => {
+    render(<CreateSchoolPage />);
+    await fillValidForm();
+    await userEvent.clear(screen.getByLabelText(/web address/i));
+    await userEvent.type(screen.getByLabelText(/web address/i), 'support');
+    await userEvent.click(screen.getByRole('button', { name: /create school/i }));
+    expect(await screen.findByText(/this address is reserved/i)).toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('blocks an address another school has', async () => {
+    availability.mockImplementation((subdomain: string, enabled: boolean) => ({
+      data: enabled ? { subdomain, available: false, reason: 'TAKEN' } : undefined,
+    }));
+    render(<CreateSchoolPage />);
+    await fillValidForm();
+    expect(
+      await screen.findByText(/another school already has this address/i, {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /create school/i }));
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 });

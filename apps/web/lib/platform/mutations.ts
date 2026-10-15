@@ -32,6 +32,7 @@ export function useCreateSchool() {
   return useMutation({
     mutationFn: (body: {
       name: string;
+      subdomain?: string;
       adminFirstName: string;
       adminLastName: string;
       adminEmail: string;

@@ -1,0 +1,13 @@
+# Caddy with the Cloudflare DNS module, so it can prove control of the
+# domain through a DNS record and get the *.<root> and *.api.<root> wildcard
+# certificates (ADR-0032 amendment, 2026-10-15): every school host is
+# covered by them, so a school created in the Software Admin console is
+# served at once, with no SCHOOLS edit, redeploy or per-school certificate.
+# Without CLOUDFLARE_API_TOKEN the module is simply unused.
+FROM caddy@sha256:4cff3ae272ea05842adb4546e35961e4947aeea65f80fa1eb62a35b960e84971 AS build
+# 2.10.2-builder-alpine
+RUN xcaddy build v2.10.2 --with github.com/caddy-dns/cloudflare@v0.2.4
+
+FROM caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+# 2.10.2-alpine, the image the pilot ran before this module
+COPY --from=build /usr/bin/caddy /usr/bin/caddy

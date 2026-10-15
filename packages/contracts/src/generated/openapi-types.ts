@@ -636,6 +636,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/schools/address-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Short, free web addresses for a new school name (ADR-0005 amendment). */
+        get: operations["SchoolsAdminController_addressSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/schools/address-availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a new school may take a web address (ADR-0005 amendment). */
+        get: operations["SchoolsAdminController_addressAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/schools/{id}": {
         parameters: {
             query?: never;
@@ -4539,6 +4573,11 @@ export interface components {
         };
         CreateSchoolDto: {
             name: string;
+            /**
+             * @description The school's web address label, `<subdomain>.<root>` (ADR-0005 amendment): 3 to 20 lowercase letters, digits and single hyphens, not reserved, not used by any school. Omitted: the best free suggestion from the name.
+             * @example ola
+             */
+            subdomain?: string;
             adminFirstName: string;
             adminLastName: string;
             /** @description The admin's email — where the activation key is sent. */
@@ -4559,6 +4598,17 @@ export interface components {
         CreateSchoolResponseDto: {
             id: string;
             subdomain: string;
+        };
+        SchoolAddressSuggestionsResponseDto: {
+            /** @description Free, valid addresses, best first. */
+            suggestions: string[];
+        };
+        SchoolAddressAvailabilityResponseDto: {
+            /** @description The label as it would be stored (trimmed, lowercase). */
+            subdomain: string;
+            available: boolean;
+            /** @enum {string} */
+            reason?: "FORMAT" | "LENGTH" | "RESERVED" | "TAKEN";
         };
         SchoolSubscriptionSummaryDto: {
             id: string;
@@ -7974,6 +8024,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreateSchoolResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_addressSuggestions: {
+        parameters: {
+            query: {
+                /** @description The school name to suggest addresses for. */
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolAddressSuggestionsResponseDto"];
+                };
+            };
+        };
+    };
+    SchoolsAdminController_addressAvailability: {
+        parameters: {
+            query: {
+                /** @description The address label to check. */
+                subdomain: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolAddressAvailabilityResponseDto"];
                 };
             };
         };

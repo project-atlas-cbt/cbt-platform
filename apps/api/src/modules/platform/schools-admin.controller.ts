@@ -16,7 +16,11 @@ import { AuthorizedPlatform } from '../authorization/decorators.js';
 import { StatusResponseDto } from '../identity/dto/status-response.dto.js';
 import { type AuthenticatedPlatformUser } from '../identity/auth.guard.js';
 import { SchoolsAdminService } from './schools-admin.service.js';
-import { CreateSchoolDto } from './dto/create-school.dto.js';
+import {
+  CreateSchoolDto,
+  SchoolAddressAvailabilityQueryDto,
+  SchoolAddressSuggestionsQueryDto,
+} from './dto/create-school.dto.js';
 import { IssueSubscriptionDto, SchoolLifecycleReasonDto } from './dto/school-lifecycle.dto.js';
 import {
   ListSchoolsQueryDto,
@@ -30,7 +34,10 @@ import { ExamListResponseDto, ListExamsQueryDto } from '../exams/dto/exam.dto.js
 import {
   CreateSchoolResponseDto,
   IssueSubscriptionResponseDto,
+  SchoolAddressAvailabilityResponseDto,
+  SchoolAddressSuggestionsResponseDto,
 } from './dto/create-school-response.dto.js';
+import { normaliseSchoolAddress } from '@atlas/domain';
 
 function currentPlatformUser(req: FastifyRequest): AuthenticatedPlatformUser {
   return req.user as AuthenticatedPlatformUser;
@@ -79,6 +86,31 @@ export class SchoolsAdminController {
   ): Promise<CreateSchoolResponseDto> {
     const actor = currentPlatformUser(req);
     return this.schools.create(body, actor.userId);
+  }
+
+  @Get('address-suggestions')
+  @AuthorizedPlatform('platform.school.create')
+  @ApiOperation({
+    summary: 'Short, free web addresses for a new school name (ADR-0005 amendment).',
+  })
+  @ApiOkResponse({ type: SchoolAddressSuggestionsResponseDto })
+  async addressSuggestions(
+    @Query() query: SchoolAddressSuggestionsQueryDto,
+  ): Promise<SchoolAddressSuggestionsResponseDto> {
+    return { suggestions: await this.schools.suggestAddresses(query.name) };
+  }
+
+  @Get('address-availability')
+  @AuthorizedPlatform('platform.school.create')
+  @ApiOperation({
+    summary: 'Whether a new school may take a web address (ADR-0005 amendment).',
+  })
+  @ApiOkResponse({ type: SchoolAddressAvailabilityResponseDto })
+  async addressAvailability(
+    @Query() query: SchoolAddressAvailabilityQueryDto,
+  ): Promise<SchoolAddressAvailabilityResponseDto> {
+    const subdomain = normaliseSchoolAddress(query.subdomain);
+    return { subdomain, ...(await this.schools.checkAddress(subdomain)) };
   }
 
   @Get(':id')
