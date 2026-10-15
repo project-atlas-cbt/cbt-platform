@@ -19,6 +19,7 @@ import {
   UserCircle,
   KeyRound,
   CircleHelp,
+  Globe,
 } from 'lucide-react';
 import type { Role } from '@atlas/domain';
 
@@ -112,6 +113,14 @@ export const ROLE_WORKSPACES: Record<Role, RoleWorkspace> = {
         href: 'security',
         icon: KeyRound,
         match: ['identity.mfa.'],
+      },
+      // ADR-0034 amendment (2026-10-15): marketing site visits and contacts.
+      {
+        id: 'website',
+        label: 'Website',
+        href: 'website',
+        icon: Globe,
+        match: ['platform.marketing.'],
       },
       // ADR-0036: the editable platform settings (04 §5).
       {
