@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 /**
- * "Request a demo" leads. A lead is emailed to the team and stored nowhere
- * else: it never touches the platform's API or database (proposal §7), and
- * it is never logged, since every field is personal data.
+ * "Request a demo" and "call me back" leads. A lead is emailed to the team
+ * and, since the ADR-0034 amendment (2026-10-15), also saved to the
+ * platform for the Software Admin's Website screen (lib/visits.ts
+ * `storeLead`). It is never logged, since every field is personal data.
  */
 
 export const studentRanges = [
@@ -58,6 +59,28 @@ export function parseLead(form: FormData): ParseResult {
   return parsed.success ? { ok: true, lead: parsed.data } : { ok: false, reason: 'invalid' };
 }
 
+/** The short "call me back" form: a name and a number, the school if given. */
+export const callBackSchema = z.object({
+  name: text(120),
+  phone: leadSchema.shape.phone,
+  school: z.string().trim().max(160).optional().default(''),
+  consent: z.literal('yes'),
+});
+
+export type CallBack = z.infer<typeof callBackSchema>;
+
+export function parseCallBack(
+  form: FormData,
+): { ok: true; lead: CallBack } | { ok: false; reason: 'spam' | 'invalid' } {
+  const trap = form.get('website');
+  if (typeof trap === 'string' && trap.trim() !== '') return { ok: false, reason: 'spam' };
+  const raw = Object.fromEntries(
+    [...form.entries()].filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  );
+  const parsed = callBackSchema.safeParse(raw);
+  return parsed.success ? { ok: true, lead: parsed.data } : { ok: false, reason: 'invalid' };
+}
+
 /** Best-effort limit per client: a lead form has no business seeing bursts. */
 /**
  * Whether a form POST's Origin header is this site's own. A missing header
@@ -99,11 +122,23 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-export function leadEmail(
-  lead: Lead,
-  productName: string,
-): { subject: string; text: string; html: string } {
-  const rows: [string, string][] = [
+type Mail = { subject: string; text: string; html: string };
+
+function mailFromRows(subject: string, rows: [string, string][]): Mail {
+  return {
+    subject,
+    text: rows.map(([k, v]) => `${k}: ${v}`).join('\n'),
+    html: `<table>${rows
+      .map(
+        ([k, v]) =>
+          `<tr><th align="left" valign="top">${escapeHtml(k)}</th><td>${escapeHtml(v).replace(/\n/g, '<br>')}</td></tr>`,
+      )
+      .join('')}</table>`,
+  };
+}
+
+export function leadEmail(lead: Lead, productName: string): Mail {
+  return mailFromRows(`${productName} lead: ${lead.school} (${lead.interest.toLowerCase()})`, [
     ['Name', lead.name],
     ['Role', lead.role],
     ['School', lead.school],
@@ -113,17 +148,16 @@ export function leadEmail(
     ['Phone / WhatsApp', lead.phone],
     ['Email', lead.email],
     ['Message', lead.message || '(none)'],
-  ];
-  return {
-    subject: `${productName} lead: ${lead.school} (${lead.interest.toLowerCase()})`,
-    text: rows.map(([k, v]) => `${k}: ${v}`).join('\n'),
-    html: `<table>${rows
-      .map(
-        ([k, v]) =>
-          `<tr><th align="left" valign="top">${escapeHtml(k)}</th><td>${escapeHtml(v).replace(/\n/g, '<br>')}</td></tr>`,
-      )
-      .join('')}</table>`,
-  };
+  ]);
+}
+
+export function callBackEmail(lead: CallBack, productName: string): Mail {
+  return mailFromRows(`${productName} call-back request: ${lead.school || lead.name}`, [
+    ['Name', lead.name],
+    ['School', lead.school || '(not given)'],
+    ['Phone / WhatsApp', lead.phone],
+    ['Wants', 'A call back'],
+  ]);
 }
 
 export interface MailSettings {
@@ -149,18 +183,32 @@ export function readMailSettings(
   return { provider, apiKey, to, from };
 }
 
-/** Sends the lead through the configured provider's HTTP API. Returns false on any failure. */
+/** Sends a lead email through the configured provider's HTTP API. Returns false on any failure. */
 export async function sendLead(
   lead: Lead,
   settings: MailSettings,
   productName: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<boolean> {
-  const mail = leadEmail(lead, productName);
+  return sendMail(
+    leadEmail(lead, productName),
+    { email: lead.email, name: lead.name },
+    settings,
+    fetchImpl,
+  );
+}
+
+export async function sendMail(
+  mail: Mail,
+  replyTo: { email?: string; name: string },
+  settings: MailSettings,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> {
   if (settings.provider === 'log') {
-    console.info('[marketing] demo request received (details withheld: personal data)');
+    console.info('[marketing] lead received (details withheld: personal data)');
     return true;
   }
+  const reply = replyTo.email ? replyTo : undefined;
   const request =
     settings.provider === 'zeptomail'
       ? {
@@ -175,7 +223,7 @@ export async function sendLead(
           body: {
             from: { address: settings.from },
             to: [{ email_address: { address: settings.to } }],
-            reply_to: [{ address: lead.email, name: lead.name }],
+            ...(reply ? { reply_to: [{ address: reply.email, name: reply.name }] } : {}),
             subject: mail.subject,
             textbody: mail.text,
             htmlbody: mail.html,
@@ -188,7 +236,7 @@ export async function sendLead(
             body: {
               from: settings.from,
               to: [settings.to],
-              reply_to: lead.email,
+              ...(reply ? { reply_to: reply.email } : {}),
               subject: mail.subject,
               text: mail.text,
               html: mail.html,
@@ -200,7 +248,7 @@ export async function sendLead(
             body: {
               sender: { email: settings.from },
               to: [{ email: settings.to }],
-              replyTo: { email: lead.email, name: lead.name },
+              ...(reply ? { replyTo: { email: reply.email, name: reply.name } } : {}),
               subject: mail.subject,
               textContent: mail.text,
               htmlContent: mail.html,
