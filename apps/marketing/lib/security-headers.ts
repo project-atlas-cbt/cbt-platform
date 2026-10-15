@@ -5,7 +5,8 @@
  * prerendered once at build time, so a nonce cannot exist. Next's own inline
  * bootstrap scripts therefore need `'unsafe-inline'` in script-src; what
  * keeps that safe is that the site renders no user content and allows no
- * origin but its own: no analytics, no embeds, no third-party scripts.
+ * origin but its own: no third-party analytics, embeds or scripts. (Visits
+ * are counted first-party, by a beacon to this site's own /api/visit.)
  * Adding an external origin means adding it here, deliberately.
  */
 export function securityHeaders(rootDomain: string): { key: string; value: string }[] {

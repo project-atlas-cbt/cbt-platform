@@ -31,6 +31,8 @@ export interface RetentionSweepResult {
   passwordResetTokensPurged: number;
   importRowsRedacted: number;
   notificationsPurged: number;
+  marketingPageViewsPurged: number;
+  marketingLeadsPurged: number;
   schoolsFailed: number;
 }
 
@@ -55,6 +57,8 @@ export async function runRetentionSweep(
     passwordResetTokensPurged: 0,
     importRowsRedacted: 0,
     notificationsPurged: 0,
+    marketingPageViewsPurged: 0,
+    marketingLeadsPurged: 0,
     schoolsFailed: 0,
   };
 
@@ -68,6 +72,18 @@ export async function runRetentionSweep(
           { revokedAt: null, expiresAt: { lt: platformCutoff } },
         ],
       },
+    })
+  ).count;
+
+  // Platform-scoped (no school): marketing site visits and contacts.
+  result.marketingPageViewsPurged = (
+    await prisma.marketingPageView.deleteMany({
+      where: { occurredAt: { lt: cutoff(now, 'marketing-page-views') } },
+    })
+  ).count;
+  result.marketingLeadsPurged = (
+    await prisma.marketingLead.deleteMany({
+      where: { createdAt: { lt: cutoff(now, 'marketing-leads') } },
     })
   ).count;
 

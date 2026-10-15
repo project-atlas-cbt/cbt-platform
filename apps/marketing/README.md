@@ -3,8 +3,14 @@
 The public site on the root domain (`examkeep.com`, `www.`), separate from the school platform in
 `apps/web`. Why it is its own app: `docs/decisions/ADR-0034-public-marketing-site.md`.
 
-Every page is prerendered. The only server code is the demo-request form
-(`app/api/demo-request`) and the find-your-school redirect (`app/find-your-school/go`).
+Every page is prerendered. The only server code is the demo-request and call-back forms
+(`app/api/demo-request`, `app/api/call-back`), the page-view beacon (`app/api/visit`) and the
+find-your-school redirect (`app/find-your-school/go`).
+
+Visits are counted first-party, with no cookie and nothing stored in the browser
+(`lib/visits.ts`, `components/visit-beacon.tsx`); forms are emailed and also saved to the platform
+for the Software Admin's Website screen (ADR-0034 amendment, 2026-10-15). Add `?ref=whatsapp` (or
+any word) to a shared link to see it as a source, since WhatsApp sends no referrer.
 
 ## Run it
 
@@ -38,6 +44,8 @@ static pages, so changing one needs a rebuild.
 | `MARKETING_LEAD_EMAIL_PROVIDER`     | runtime | `zeptomail`, `resend` or `brevo`; unset means the form tells visitors to contact us |
 | `MARKETING_LEAD_EMAIL_API_KEY`      | runtime | The provider's API key                                                              |
 | `MARKETING_LEAD_EMAIL_FROM` / `_TO` | runtime | Sender (a verified domain address) and the inbox that receives demo leads           |
+| `MARKETING_API_URL`                 | runtime | The platform API as this server reaches it (`http://api:3001/v1` on the VPS)        |
+| `MARKETING_INGEST_KEY`              | runtime | Shared key, the same value as the API's; unset means no visit counts or saved forms |
 
 An unset contact detail or price is hidden, never replaced with a placeholder. Leads are emailed
 and never stored or logged.

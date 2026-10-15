@@ -49,6 +49,10 @@ import { ReportsModule } from '../reports/reports.module.js';
 import { PlatformAdminsController } from './platform-admins.controller.js';
 import { PlatformSettingsController } from './platform-settings.controller.js';
 import { PlatformSettingsAdminService } from './platform-settings-admin.service.js';
+import { MarketingService } from './marketing/marketing.service.js';
+import { MarketingIngestGuard } from './marketing/marketing-ingest.guard.js';
+import { MarketingIngestController } from './marketing/marketing-ingest.controller.js';
+import { PlatformMarketingController } from './marketing/platform-marketing.controller.js';
 
 /**
  * Bounded domain per 08 §5: "Platform — Software Admin, schools,
@@ -94,6 +98,8 @@ import { PlatformSettingsAdminService } from './platform-settings-admin.service.
     PlatformAnalyticsController,
     PlatformSearchController,
     PlatformExportController,
+    MarketingIngestController,
+    PlatformMarketingController,
   ],
   providers: [
     PlatformSessionService,
@@ -111,6 +117,8 @@ import { PlatformSettingsAdminService } from './platform-settings-admin.service.
     PlatformAuditActionRegistrationProvider,
     PlatformAuditReaderService,
     PlatformSettingsAdminService,
+    MarketingService,
+    MarketingIngestGuard,
   ],
 })
 export class PlatformModule implements OnModuleInit {

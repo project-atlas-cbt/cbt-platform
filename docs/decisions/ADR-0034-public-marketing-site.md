@@ -56,3 +56,41 @@ Putting the pages inside `apps/web` was considered and rejected:
 - Claims on the site must stay true of the product. `apps/marketing/lib/content.ts` holds them
   in one place. Testimonials, "NDPA compliant", uptime figures, essay marking and PDF reports
   stay off the site until they are true.
+
+## Amendment (2026-10-15, owner decision): visits and contacts on the Software Admin panel
+
+**Context.** The owner asked to see how many people visit the site, and who to reach out to,
+on the Software Admin panel, next to demo requests (which until now were only emailed). A
+visitor who only reads the site is anonymous: there is no honest way to get their name or number,
+and fingerprinting or third-party identification would break both the privacy notice and the
+Nigeria Data Protection Act's consent rules. The owner chose the full plan (decision card,
+2026-10-15): anonymous counts for everyone, contact details only from people who send a form.
+
+**Decision.** "No platform coupling" is relaxed to one narrow, server-to-server path:
+
+- **Anonymous visit counts.** A small client component posts each page view to the site's own
+  `/api/visit`. No cookie is set and nothing is stored in the browser; a browser sending Do Not
+  Track or Global Privacy Control is not counted. The marketing server turns IP + browser into a
+  `visitorKey` under a random salt held only in its memory and replaced every Lagos day, then
+  discards both. Views go to the API in batches (`POST /v1/marketing/page-views`). The source of a
+  visit is a `ref`/`utm_source` link tag or the referring site's name.
+- **Contacts, with consent.** Demo requests are still emailed and are now also saved. A short
+  "call me back" form (name, phone, school optional) sits in the closing call-to-action band. Both
+  post to `POST /v1/marketing/leads` with the same-day `visitorKey`, so the API attaches the pages
+  that browser viewed that day. A form counts as sent when either the email or the save succeeds.
+- **The path.** The marketing server calls the API on the private network
+  (`MARKETING_API_URL`) with a shared key, `MARKETING_INGEST_KEY`, in the `X-Marketing-Key`
+  header. Unset, the routes answer 404 and the site keeps working without counts. These two routes
+  are exempt from CSRF only for requests carrying no cookie at all (`ServerKeyRoute`).
+- **Storage.** Two platform-scoped tables, `marketing_page_views` (no IP, no user agent) and
+  `marketing_leads`. Retention (ADR-0028 schedule): views are purged after 400 days, contacts after
+  365 days (the privacy notice's 12 months). Software Admin can delete a contact sooner; the
+  delete is audited without the contact's personal data.
+- **Reading.** A new Software Admin nav item, **Website**, behind `platform.marketing.view` (and
+  `platform.marketing.deleteLead` for deletes).
+
+**Consequences.** The site still makes no third-party request and loads no third-party script.
+The privacy notice now describes the counting, the call-back form and the pages-viewed note; its
+legal wording (including the legitimate-interest basis for counting) is part of the outstanding
+legal review. The platform's database now holds prospects' contact details, so a data-subject
+request about the website is answered from the Website screen.

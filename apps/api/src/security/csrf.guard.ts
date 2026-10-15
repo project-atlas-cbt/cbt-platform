@@ -73,6 +73,18 @@ declare module 'fastify' {
 export const ISSUES_CSRF_TOKEN = 'atlas:issuesCsrfToken';
 export const IssuesCsrfToken = () => SetMetadata(ISSUES_CSRF_TOKEN, true);
 
+/**
+ * Marks a server-to-server route authenticated only by a shared key header
+ * (the marketing site's ingest routes, ADR-0034 amendment). CSRF defends a
+ * browser's ambient cookies; such a route reads no cookie, and a browser on
+ * another site cannot attach the key header without a CORS preflight the
+ * API refuses. The exemption holds only for a request that carries no
+ * cookie at all, so it can never cover a browser session. The route must
+ * still enforce its key with its own guard.
+ */
+export const SERVER_KEY_ROUTE = 'atlas:serverKeyRoute';
+export const ServerKeyRoute = () => SetMetadata(SERVER_KEY_ROUTE, true);
+
 @Injectable()
 export class CsrfGuard implements CanActivate {
   constructor(
@@ -130,6 +142,13 @@ export class CsrfGuard implements CanActivate {
       );
     }
     req.csrfSecret = secret;
+
+    const serverKeyRoute =
+      this.reflector?.getAllAndOverride<boolean>(SERVER_KEY_ROUTE, [
+        context.getHandler(),
+        context.getClass(),
+      ]) === true;
+    if (serverKeyRoute && !req.headers.cookie) return true;
 
     if (MUTATING_METHODS.has(req.method)) {
       const userInfo = this.tenancy.schoolId ?? PLATFORM_CSRF_USER_INFO;

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy notice" updated="13 October 2026">
+    <LegalPage title="Privacy notice" updated="15 October 2026">
       <p>
         This notice explains what personal data this website collects and how the {site.name}{' '}
         platform handles the data schools put into it. It is written to meet the Nigeria Data
@@ -28,22 +28,40 @@ export default function PrivacyPage() {
       <h3>What we collect</h3>
       <p>
         When you request a demo or a quote, we collect what you type into the form: your name, role,
-        school, state, number of students, phone number, email address and message.
+        school, state, number of students, phone number, email address and message. When you ask us
+        to call you back, we collect your name, your phone number and, if you give it, your school.
       </p>
       <p>
-        This website sets no cookies and runs no analytics or advertising trackers. Our servers keep
-        short-lived technical logs, such as the time of a request and the address it came from, to
-        keep the site secure.
+        When you send either form, we also note which pages of this website you viewed earlier the
+        same day and how you arrived (for example, from a LinkedIn post), so we know what interests
+        you when we get in touch.
+      </p>
+      <h3>Counting visits</h3>
+      <p>
+        We count visits to this website to see how many people it reaches, which pages they read and
+        where they came from. We do this ourselves, without cookies, without storing anything in
+        your browser and without any third-party analytics or advertising tracker. Our server turns
+        your network address and browser type into a code that changes every day and cannot be
+        turned back into your address, then discards the address. These counts do not tell us who
+        you are, and we do not try to find out. If your browser sends a “Do Not Track” or “Global
+        Privacy Control” signal, your visit is not counted at all.
+      </p>
+      <p>
+        Our servers also keep short-lived technical logs, such as the time of a request and the
+        address it came from, to keep the site secure.
       </p>
       <h3>Why, and on what basis</h3>
       <p>
-        We use your request only to contact you about it, by phone, WhatsApp or email, with your
-        consent, which you give when you send the form. We do not sell it or use it for advertising.
+        We use a request or a call-back number only to contact you about it, by phone, WhatsApp or
+        email, with your consent, which you give when you send the form. We do not sell it or use it
+        for advertising. We count visits because we have a legitimate interest in knowing whether
+        the website is useful, and the counts are anonymous.
       </p>
       <h3>How long we keep it</h3>
       <p>
-        Requests are kept while we are in contact with you. If your school does not become a
-        customer, we delete the request within 12 months.
+        Requests and call-back numbers are kept while we are in contact with you. If your school
+        does not become a customer, we delete them within 12 months. Visit counts are deleted after
+        about 13 months.
       </p>
 
       <h2>The platform</h2>

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Literata } from 'next/font/google';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { VisitBeacon } from '@/components/visit-beacon';
 import { site } from '@/lib/site';
 import './globals.css';
 
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
         <main id="main">{children}</main>
         <SiteFooter />
+        <VisitBeacon />
       </body>
     </html>
   );

@@ -2,6 +2,29 @@
 
 Claude should append meaningful project-state changes here rather than rewriting historical entries.
 
+### 2026-10-15 — Marketing site visitors and contacts on the Software Admin panel
+
+Owner request, full plan chosen on the decision card (ADR-0034 amendment). A new Software Admin
+screen, **Website**, shows marketing site visitors and page views per day, the most viewed pages,
+where visitors came from and the share on phones (7, 30 or 90 days), and lists the people who got
+in touch, with the pages their browser viewed that day. Visitors who only read the site stay
+anonymous: no cookie, nothing stored in the browser, Do Not Track and Global Privacy Control
+honoured, and the IP address never leaves the marketing server (a day-salted `visitorKey` whose
+salt is only in memory). Contact details come only from forms sent with consent: the demo request
+(still emailed, now also saved) and a new short "call me back" form in the closing call-to-action
+band. The marketing server batches views to `POST /v1/marketing/page-views` and saves forms with
+`POST /v1/marketing/leads`, authorized by `MARKETING_INGEST_KEY` (unset = routes 404, site works
+without counts); these routes skip CSRF only for cookie-less requests (`ServerKeyRoute`). New
+tables `marketing_page_views` and `marketing_leads` (expand-only migration), permissions
+`platform.marketing.view` and `platform.marketing.deleteLead`, an audited contact delete without
+personal data, and retention rules (views 400 days, contacts 365 days, matching the privacy
+notice). The Privacy page now describes the counting and the call-back form; its legal wording
+stays part of the outstanding legal review. Deploy needs `MARKETING_INGEST_KEY` added to the VPS
+`.env` once (`docs/operations/vps-pilot.md`). Tests: API integration (ingest key, CSRF exemption
+limits, validation, summary, pages attached to a contact, audited delete), guard unit tests,
+worker retention, marketing unit and browser checks (beacon, no cookie or storage, GPC, call-back
+form), web Website screen tests.
+
 ### 2026-10-13 — Draft banner removed from Privacy and Terms
 
 The "Draft pending legal review" notice is gone from both pages (owner decision, as the site

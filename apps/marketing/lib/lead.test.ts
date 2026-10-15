@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   RateLimiter,
+  callBackEmail,
   isOwnOrigin,
   leadEmail,
+  parseCallBack,
   parseLead,
   readMailSettings,
   sendLead,
+  sendMail,
   type Lead,
 } from './lead';
 
@@ -201,5 +204,52 @@ describe('isOwnOrigin (P3-12)', () => {
     expect(isOwnOrigin('https://evil.test', site)).toBe(false);
     expect(isOwnOrigin('null', site)).toBe(false);
     expect(isOwnOrigin('not a url', site)).toBe(false);
+  });
+});
+
+describe('call-back form', () => {
+  function callBack(overrides: Record<string, string> = {}): FormData {
+    const data = new FormData();
+    const fields = {
+      name: 'Ada',
+      phone: '0803 123 4567',
+      school: '',
+      consent: 'yes',
+      website: '',
+      ...overrides,
+    };
+    for (const [k, v] of Object.entries(fields)) data.set(k, v);
+    return data;
+  }
+
+  it('accepts a name and number, school optional', () => {
+    expect(parseCallBack(callBack())).toEqual({
+      ok: true,
+      lead: { name: 'Ada', phone: '0803 123 4567', school: '', consent: 'yes' },
+    });
+  });
+
+  it('needs consent and a real number, and catches bots', () => {
+    expect(parseCallBack(callBack({ consent: '' }))).toEqual({ ok: false, reason: 'invalid' });
+    expect(parseCallBack(callBack({ phone: 'call me' }))).toEqual({ ok: false, reason: 'invalid' });
+    expect(parseCallBack(callBack({ website: 'x' }))).toEqual({ ok: false, reason: 'spam' });
+  });
+
+  it('emails without a reply-to when there is no email address', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 200 }));
+    const mail = callBackEmail(
+      { name: 'Ada', phone: '0803', school: '', consent: 'yes' },
+      'ExamKeep',
+    );
+    expect(mail.subject).toBe('ExamKeep call-back request: Ada');
+    await sendMail(
+      mail,
+      { name: 'Ada' },
+      { provider: 'zeptomail', apiKey: 'k', to: 'team@example.com', from: 'site@example.com' },
+      fetchImpl,
+    );
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]?.body as string) as Record<string, unknown>;
+    expect(body.reply_to).toBeUndefined();
+    expect(body.textbody).toContain('Phone / WhatsApp: 0803');
   });
 });

@@ -143,6 +143,26 @@ export const RETENTION_SCHEDULE: readonly RetentionRule[] = [
     rationale:
       'In-app operational notices (07 §11.2), not records; a year after being read they are noise.',
   },
+  {
+    id: 'marketing-page-views',
+    table: 'marketing_page_views',
+    category: 'OPERATIONAL',
+    action: 'PURGE',
+    afterDays: 400,
+    trigger: 'occurred_at',
+    rationale:
+      'ADR-0034 amendment: anonymous marketing site visit counts. A little over a year lets this month be compared with the same month last year; nothing older is needed.',
+  },
+  {
+    id: 'marketing-leads',
+    table: 'marketing_leads',
+    category: 'OPERATIONAL',
+    action: 'PURGE',
+    afterDays: 365,
+    trigger: 'created_at',
+    rationale:
+      'ADR-0034 amendment: contact details a prospective school left on the marketing site. The privacy notice promises deletion within 12 months if the school does not become a customer; a customer is a school in the platform by then. Software Admin can delete one sooner on request. Pending the legal review (ADR-0028).',
+  },
 ];
 
 export function retentionRule(id: string): RetentionRule {

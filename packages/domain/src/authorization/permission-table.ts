@@ -407,6 +407,34 @@ export const PERMISSION_TABLE: readonly PermissionRule[] = [
       STUDENT: denied(),
     },
   },
+  {
+    id: 'platform.marketing.view',
+    section: 'Platform / School',
+    label: 'View marketing site visits and the contacts people left there (ADR-0034 amendment)',
+    action: 'READ',
+    grants: {
+      SOFTWARE_ADMIN: granted('PLATFORM'),
+      SCHOOL_ADMIN: denied(),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
+  {
+    id: 'platform.marketing.deleteLead',
+    section: 'Platform / School',
+    label: 'Delete a marketing site contact — audited (ADR-0034 amendment)',
+    action: 'DELETE',
+    grants: {
+      SOFTWARE_ADMIN: granted('PLATFORM'),
+      SCHOOL_ADMIN: denied(),
+      MODERATOR: denied(),
+      HOD: denied(),
+      TEACHER: denied(),
+      STUDENT: denied(),
+    },
+  },
 
   // ------------------------------------------------------------------
   // School Configuration

@@ -282,6 +282,14 @@ const envObject = z.object({
     .min(32, 'MEDIA_PRECACHE_SECRET must be at least 32 chars')
     .optional(),
 
+  // ADR-0034 amendment (2026-10-15): the shared key the marketing site's
+  // server sends with page views and contact forms. Unset (or empty, as the
+  // VPS Compose file passes it) turns those two routes off: they answer 404.
+  MARKETING_INGEST_KEY: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().min(32, 'MARKETING_INGEST_KEY must be at least 32 chars').optional(),
+  ),
+
   // Observability (08 §18, 09 §35). All optional: unset means no export
   // (logs still go to stdout as JSON).
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info'),

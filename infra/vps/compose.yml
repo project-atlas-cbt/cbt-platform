@@ -93,10 +93,11 @@ services:
       PRODUCT_NAME: ${PRODUCT_NAME}
     networks: [internal]
 
-  # The public marketing site on <root> and www.<root> (ADR-0034). Fully
-  # separate from the platform: no database, API or cookies. Its business
-  # details are baked in from apps/marketing/.env.production; only the
-  # demo-request email settings are read at run time.
+  # The public marketing site on <root> and www.<root> (ADR-0034). No
+  # database or cookies; it reaches the API only to send visit counts and
+  # saved forms, with a shared key (2026-10-15 amendment). Its business
+  # details are baked in from apps/marketing/.env.production; the email and
+  # API settings are read at run time.
   marketing:
     image: atlas-marketing:${RELEASE:-unset}
     build:
@@ -114,6 +115,10 @@ services:
       MARKETING_LEAD_EMAIL_API_KEY: ${MARKETING_LEAD_EMAIL_API_KEY:-}
       MARKETING_LEAD_EMAIL_TO: ${MARKETING_LEAD_EMAIL_TO:-}
       MARKETING_LEAD_EMAIL_FROM: ${MARKETING_LEAD_EMAIL_FROM:-}
+      # Visit counts and saved forms for Software Admin > Website (ADR-0034
+      # amendment), straight to the API on the private network.
+      MARKETING_API_URL: http://api:3001/v1
+      MARKETING_INGEST_KEY: ${MARKETING_INGEST_KEY:-}
     networks: [internal]
 
   api:
@@ -129,6 +134,7 @@ services:
       DATABASE_APP_PASSWORD: ${DATABASE_APP_PASSWORD}
       DATABASE_AUDIT_READER_PASSWORD: ${DATABASE_AUDIT_READER_PASSWORD}
       RELEASE_VERSION: ${RELEASE:-unset}
+      MARKETING_INGEST_KEY: ${MARKETING_INGEST_KEY:-}
     # The server image says HEALTHCHECK NONE, which `docker compose up --wait`
     # (bin/deploy.sh) refuses as "no healthcheck configured", so the service
     # declares its own: liveness only; deploy.sh checks readiness itself.

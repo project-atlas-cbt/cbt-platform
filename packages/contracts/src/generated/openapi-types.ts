@@ -1134,6 +1134,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/marketing/page-views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a batch of anonymous marketing site page views. */
+        post: operations["MarketingIngestController_recordPageViews"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/marketing/leads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a contact a person left on the marketing site, with consent. */
+        post: operations["MarketingIngestController_recordLead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/marketing/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Marketing site visits: totals, by day, top pages and sources. */
+        get: operations["PlatformMarketingController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/marketing/leads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Contacts people left on the marketing site, newest first. */
+        get: operations["PlatformMarketingController_leads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/marketing/leads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a contact (audited, without its personal data). */
+        delete: operations["PlatformMarketingController_deleteLead"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/academics/context": {
         parameters: {
             query?: never;
@@ -4835,6 +4920,95 @@ export interface components {
             downloadUrl?: string;
             failureReason?: string;
             rowCount: number;
+        };
+        MarketingPageViewDto: {
+            /** Format: date-time */
+            occurredAt: string;
+            /** @example /pricing */
+            path: string;
+            source?: string | null;
+            referrerHost?: string | null;
+            /** @enum {string} */
+            device: "mobile" | "desktop";
+            /** @description Day-salted hash; never an IP address. */
+            visitorKey: string;
+        };
+        RecordMarketingPageViewsDto: {
+            views: components["schemas"]["MarketingPageViewDto"][];
+        };
+        RecordMarketingLeadDto: {
+            /** @enum {string} */
+            kind: "DEMO_REQUEST" | "CALL_BACK";
+            name: string;
+            phone: string;
+            email?: string;
+            school?: string;
+            role?: string;
+            state?: string;
+            students?: string;
+            interest?: string;
+            message?: string;
+            /** @description Same-day visitor key, to attach the pages this browser viewed. */
+            visitorKey?: string;
+        };
+        RecordMarketingLeadResponseDto: {
+            /** Format: uuid */
+            id: string;
+        };
+        MarketingDayDto: {
+            /**
+             * @description Lagos calendar day.
+             * @example 2026-10-15
+             */
+            date: string;
+            visits: number;
+            visitors: number;
+        };
+        MarketingCountDto: {
+            label: string;
+            /** @description Page views for a page; visitors for a source. */
+            count: number;
+        };
+        MarketingSummaryResponseDto: {
+            days: number;
+            /** @description Page views in the range. */
+            visits: number;
+            /** @description Distinct visitors per day, added up over the range (no cookies, so a person who returns on another day counts again). */
+            visitors: number;
+            /** @description Contacts left in the range. */
+            leads: number;
+            /** @description Share of visits from a phone, 0–100. */
+            mobilePercent: number;
+            daily: components["schemas"]["MarketingDayDto"][];
+            /** @description Most viewed pages, by page views. */
+            topPages: components["schemas"]["MarketingCountDto"][];
+            /** @description Where visitors came from, by visitors; "Direct or unknown" when no source was given. */
+            topSources: components["schemas"]["MarketingCountDto"][];
+        };
+        MarketingLeadDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            kind: "DEMO_REQUEST" | "CALL_BACK";
+            name: string;
+            phone: string;
+            email: string | null;
+            school: string | null;
+            role: string | null;
+            state: string | null;
+            students: string | null;
+            interest: string | null;
+            message: string | null;
+            pagesViewed: string[];
+            source: string | null;
+        };
+        MarketingLeadListResponseDto: {
+            leads: components["schemas"]["MarketingLeadDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         CurrentSessionSummaryDto: {
             id: string;
@@ -8566,6 +8740,114 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    MarketingIngestController_recordPageViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordMarketingPageViewsDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MarketingIngestController_recordLead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordMarketingLeadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordMarketingLeadResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformMarketingController_summary: {
+        parameters: {
+            query?: {
+                days?: 7 | 30 | 90;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketingSummaryResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformMarketingController_leads: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketingLeadListResponseDto"];
+                };
+            };
+        };
+    };
+    PlatformMarketingController_deleteLead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponseDto"];
+                };
             };
         };
     };

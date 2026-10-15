@@ -12,6 +12,8 @@ const pages = [
   '/request-a-demo',
   '/request-a-demo/sent',
   '/request-a-demo/not-sent',
+  '/call-back/sent',
+  '/call-back/not-sent',
   '/find-your-school',
   '/find-your-school/invalid',
   '/about',
@@ -154,5 +156,71 @@ test.describe('request a demo', () => {
       maxRedirects: 0,
     });
     expect(response.status()).toBe(403);
+  });
+});
+
+test.describe('call me back', () => {
+  test('says plainly when a number could not be sent', async ({ page }) => {
+    await page.goto('/');
+    const form = page.locator('form#call-back');
+    await form.getByLabel('Your name').fill('Adaeze Okafor');
+    await form.getByRole('textbox', { name: 'Phone or WhatsApp' }).fill('0803 123 4567');
+    await form.getByLabel(/You can call or message me/).check();
+    await form.getByRole('button', { name: 'Call me back' }).click();
+    await expect(page).toHaveURL(/\/call-back\/not-sent$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your number didn’t reach us');
+  });
+
+  test('refuses a form posted from another site', async ({ request }) => {
+    const response = await request.post('/api/call-back', {
+      headers: { origin: 'https://attacker.example' },
+      form: { name: 'x' },
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(403);
+  });
+});
+
+test.describe('visit counting', () => {
+  test('sends one beacon per page, sets no cookie and stores nothing in the browser', async ({
+    page,
+    context,
+  }) => {
+    const beacons: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().endsWith('/api/visit')) beacons.push(r.postData() ?? '');
+    });
+    await page.goto('/?ref=whatsapp');
+    await page.getByRole('link', { name: 'Pricing' }).first().click();
+    await expect(page).toHaveURL(/\/pricing$/);
+    await expect.poll(() => beacons.length).toBe(2);
+    expect(JSON.parse(beacons[0]!)).toMatchObject({ path: '/', tag: 'whatsapp' });
+    expect(JSON.parse(beacons[1]!)).toEqual({ path: '/pricing' });
+    expect(await context.cookies()).toEqual([]);
+    expect(await page.evaluate(() => localStorage.length + sessionStorage.length)).toBe(0);
+  });
+
+  test('is not counted when the browser asks not to be tracked', async ({ browser }) => {
+    const context = await browser.newContext();
+    await context.addInitScript(() =>
+      Object.defineProperty(navigator, 'globalPrivacyControl', { value: true }),
+    );
+    const page = await context.newPage();
+    let beacons = 0;
+    page.on('request', (r) => {
+      if (r.url().endsWith('/api/visit')) beacons += 1;
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    expect(beacons).toBe(0);
+    await context.close();
+  });
+
+  test('always answers 204 with no cookie, even for junk', async ({ request }) => {
+    for (const data of ['{"path":"/"}', 'not json', '{"path":"https://evil.example"}']) {
+      const response = await request.post('/api/visit', { data });
+      expect(response.status()).toBe(204);
+      expect(response.headers()['set-cookie']).toBeUndefined();
+    }
   });
 });
