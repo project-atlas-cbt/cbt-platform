@@ -33,6 +33,9 @@ const schemaPath = resolve(__dirname, '../packages/db/prisma/schema.prisma');
 //
 // PlatformMfaCredential / PlatformMfaRecoveryCode (B20): Software Admin's
 // second factor — the same platform-account reasoning again.
+//
+// MarketingPageView / MarketingLead (ADR-0034 amendment): visits to and
+// contacts from the public marketing site — they belong to no school.
 const EXEMPT_MODELS = new Set([
   'School',
   'User',
@@ -41,6 +44,8 @@ const EXEMPT_MODELS = new Set([
   'PlatformMfaCredential',
   'PlatformMfaRecoveryCode',
   'PlatformSetting',
+  'MarketingPageView',
+  'MarketingLead',
 ]);
 
 const schema = readFileSync(schemaPath, 'utf-8');

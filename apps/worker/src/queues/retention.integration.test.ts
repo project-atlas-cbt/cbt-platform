@@ -177,4 +177,42 @@ describe.skipIf(!ownerDatabaseUrl)('retention sweep (B20, ADR-0028 amended)', ()
     const second = await runRetentionSweep({ now: () => now });
     expect(second.importRowsRedacted).toBe(0);
   });
+  it('purges marketing visits after 400 days and contacts after a year (ADR-0034 amendment)', async () => {
+    const now = new Date();
+    const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
+    const view = (occurredAt: Date) => ({
+      occurredAt,
+      path: '/',
+      device: 'desktop',
+      visitorKey: 'c'.repeat(32),
+    });
+    const oldView = await prisma.marketingPageView.create({ data: view(daysAgo(401)) });
+    const recentView = await prisma.marketingPageView.create({ data: view(daysAgo(399)) });
+    const lead = (createdAt: Date) => ({
+      createdAt,
+      kind: 'CALL_BACK' as const,
+      name: 'X',
+      phone: '0803',
+    });
+    const oldLead = await prisma.marketingLead.create({ data: lead(daysAgo(366)) });
+    const recentLead = await prisma.marketingLead.create({ data: lead(daysAgo(364)) });
+    try {
+      const result = await runRetentionSweep({ now: () => now });
+      expect(result.marketingPageViewsPurged).toBeGreaterThanOrEqual(1);
+      expect(result.marketingLeadsPurged).toBeGreaterThanOrEqual(1);
+      expect(await prisma.marketingPageView.findUnique({ where: { id: oldView.id } })).toBeNull();
+      expect(
+        await prisma.marketingPageView.findUnique({ where: { id: recentView.id } }),
+      ).not.toBeNull();
+      expect(await prisma.marketingLead.findUnique({ where: { id: oldLead.id } })).toBeNull();
+      expect(
+        await prisma.marketingLead.findUnique({ where: { id: recentLead.id } }),
+      ).not.toBeNull();
+    } finally {
+      await prisma.marketingPageView.deleteMany({
+        where: { id: { in: [oldView.id, recentView.id] } },
+      });
+      await prisma.marketingLead.deleteMany({ where: { id: { in: [oldLead.id, recentLead.id] } } });
+    }
+  });
 });

@@ -2484,6 +2484,175 @@
         ]
       }
     },
+    "/marketing/page-views": {
+      "post": {
+        "operationId": "MarketingIngestController_recordPageViews",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordMarketingPageViewsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Record a batch of anonymous marketing site page views.",
+        "tags": [
+          "marketing"
+        ]
+      }
+    },
+    "/marketing/leads": {
+      "post": {
+        "operationId": "MarketingIngestController_recordLead",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordMarketingLeadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordMarketingLeadResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Record a contact a person left on the marketing site, with consent.",
+        "tags": [
+          "marketing"
+        ]
+      }
+    },
+    "/platform/marketing/summary": {
+      "get": {
+        "operationId": "PlatformMarketingController_summary",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 30,
+              "type": "number",
+              "enum": [
+                7,
+                30,
+                90
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Marketing site visits: totals, by day, top pages and sources.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/marketing/leads": {
+      "get": {
+        "operationId": "PlatformMarketingController_leads",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketingLeadListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Contacts people left on the marketing site, newest first.",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/platform/marketing/leads/{id}": {
+      "delete": {
+        "operationId": "PlatformMarketingController_deleteLead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete a contact (audited, without its personal data).",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/academics/context": {
       "get": {
         "operationId": "AcademicsContextController_get",
@@ -12978,6 +13147,327 @@
           "type",
           "expiresAt",
           "rowCount"
+        ]
+      },
+      "MarketingPageViewDto": {
+        "type": "object",
+        "properties": {
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 200,
+            "example": "/pricing"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 60,
+            "nullable": true
+          },
+          "referrerHost": {
+            "type": "string",
+            "maxLength": 120,
+            "nullable": true
+          },
+          "device": {
+            "type": "string",
+            "enum": [
+              "mobile",
+              "desktop"
+            ]
+          },
+          "visitorKey": {
+            "type": "string",
+            "description": "Day-salted hash; never an IP address."
+          }
+        },
+        "required": [
+          "occurredAt",
+          "path",
+          "device",
+          "visitorKey"
+        ]
+      },
+      "RecordMarketingPageViewsDto": {
+        "type": "object",
+        "properties": {
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketingPageViewDto"
+            }
+          }
+        },
+        "required": [
+          "views"
+        ]
+      },
+      "RecordMarketingLeadDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "DEMO_REQUEST",
+              "CALL_BACK"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "school": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "role": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "state": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "students": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "interest": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "visitorKey": {
+            "type": "string",
+            "description": "Same-day visitor key, to attach the pages this browser viewed."
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "phone"
+        ]
+      },
+      "RecordMarketingLeadResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "MarketingDayDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "example": "2026-10-15",
+            "description": "Lagos calendar day."
+          },
+          "visits": {
+            "type": "number"
+          },
+          "visitors": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "visits",
+          "visitors"
+        ]
+      },
+      "MarketingCountDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number",
+            "description": "Page views for a page; visitors for a source."
+          }
+        },
+        "required": [
+          "label",
+          "count"
+        ]
+      },
+      "MarketingSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "number"
+          },
+          "visits": {
+            "type": "number",
+            "description": "Page views in the range."
+          },
+          "visitors": {
+            "type": "number",
+            "description": "Distinct visitors per day, added up over the range (no cookies, so a person who returns on another day counts again)."
+          },
+          "leads": {
+            "type": "number",
+            "description": "Contacts left in the range."
+          },
+          "mobilePercent": {
+            "type": "number",
+            "description": "Share of visits from a phone, 0–100."
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketingDayDto"
+            }
+          },
+          "topPages": {
+            "description": "Most viewed pages, by page views.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketingCountDto"
+            }
+          },
+          "topSources": {
+            "description": "Where visitors came from, by visitors; \"Direct or unknown\" when no source was given.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketingCountDto"
+            }
+          }
+        },
+        "required": [
+          "days",
+          "visits",
+          "visitors",
+          "leads",
+          "mobilePercent",
+          "daily",
+          "topPages",
+          "topSources"
+        ]
+      },
+      "MarketingLeadDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "DEMO_REQUEST",
+              "CALL_BACK"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "school": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "students": {
+            "type": "string",
+            "nullable": true
+          },
+          "interest": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "pagesViewed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "kind",
+          "name",
+          "phone",
+          "email",
+          "school",
+          "role",
+          "state",
+          "students",
+          "interest",
+          "message",
+          "pagesViewed",
+          "source"
+        ]
+      },
+      "MarketingLeadListResponseDto": {
+        "type": "object",
+        "properties": {
+          "leads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketingLeadDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "pageSize": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "leads",
+          "total",
+          "page",
+          "pageSize"
         ]
       },
       "CurrentSessionSummaryDto": {

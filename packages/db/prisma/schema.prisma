@@ -3520,3 +3520,63 @@ model ExamMediaCiphertext {
   @@index([schoolId, examId])
   @@map("exam_media_ciphertexts")
 }
+
+// ---------------------------------------------------------------------------
+// Marketing site visits and contacts (ADR-0034 amendment, 2026-10-15).
+// Platform-scoped: they belong to no school. Written only by the marketing
+// site's server (shared ingest key), read by Software Admin.
+// ---------------------------------------------------------------------------
+
+/// One page view on the public marketing site. No cookie, IP address or
+/// user agent is stored: `visitorKey` is a hash of IP + browser under a
+/// random salt that lives only in the marketing server's memory and changes
+/// every day, so it can count unique visitors per day but cannot be traced
+/// back to a person or linked across days. Purged by the retention sweep.
+model MarketingPageView {
+  id           String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  occurredAt   DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  path         String   @db.VarChar(200)
+  /// Where the visit came from: a label such as "LinkedIn", from the
+  /// referrer or a `ref`/`utm_source` link tag. Null = direct or unknown.
+  source       String?  @db.VarChar(60)
+  referrerHost String?  @map("referrer_host") @db.VarChar(120)
+  /// "mobile" or "desktop".
+  device       String   @db.VarChar(10)
+  visitorKey   String   @map("visitor_key") @db.VarChar(64)
+
+  @@index([occurredAt])
+  @@index([visitorKey])
+  @@map("marketing_page_views")
+}
+
+enum MarketingLeadKind {
+  DEMO_REQUEST
+  CALL_BACK
+}
+
+/// A person who chose to leave their details on the marketing site (a demo
+/// request or a call-back request), with consent. Personal data: never
+/// logged; deletable by Software Admin (audited); purged by the retention
+/// sweep after a year (the privacy notice's promise).
+model MarketingLead {
+  id          String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  kind        MarketingLeadKind
+  name        String            @db.VarChar(120)
+  phone       String            @db.VarChar(24)
+  email       String?           @db.VarChar(160)
+  school      String?           @db.VarChar(160)
+  role        String?           @db.VarChar(60)
+  state       String?           @db.VarChar(60)
+  students    String?           @db.VarChar(30)
+  interest    String?           @db.VarChar(30)
+  message     String?
+  /// Marketing pages this browser viewed earlier the same day, in order —
+  /// matched by the same day-salted visitor key, at the moment of sending.
+  pagesViewed String[]          @default([]) @map("pages_viewed")
+  /// The source of that day's first visit, as on MarketingPageView.
+  source      String?           @db.VarChar(60)
+
+  @@index([createdAt])
+  @@map("marketing_leads")
+}
