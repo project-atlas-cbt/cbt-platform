@@ -90,7 +90,10 @@ What stays the same:
      are built into the web image, so changing them needs a rebuild. `MARKETING_LEAD_EMAIL_*`
      send the marketing site's demo requests (`apps/marketing/README.md`); left empty, the form
      says it cannot send. The site's contact details and price are built in from
-     `apps/marketing/.env.production`.
+     `apps/marketing/.env.production`. `MARKETING_INGEST_KEY` (created by `init-env.sh`; on a
+     server set up before 2026-10-15, add it by hand: `openssl rand -hex 32`) lets the marketing
+     site send visit counts and saved forms to the API for the Software Admin's Website screen;
+     empty turns that off.
    - `app.env`: `OPS_ALERT_EMAILS` and the `SMTP_*` values from the email provider. The sender
      domain must be verified with that provider (SPF and DKIM records).
 

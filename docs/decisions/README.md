@@ -81,14 +81,14 @@ Unblocks `B11`–`B14`. The highest-integrity subsystem.
 
 ## After the gates
 
-| ADR                                                 | Decision             | Outcome                                                                                     |
-| --------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
-| [0034](./ADR-0034-public-marketing-site.md)         | Marketing site       | Separate static `apps/marketing` on the root domain; no platform coupling; leads emailed    |
-| [0035](./ADR-0035-in-app-help.md)                   | In-app help          | Role-tailored task guides in each staff workspace, filtered by permission; no AI agent      |
-| [0036](./ADR-0036-platform-system-configuration.md) | System Configuration | Ops and sign-in settings editable by Software Admin; env stays the default; audited         |
-| [0037](./ADR-0037-exam-visibility-own-exams.md)     | Exam visibility      | A teacher sees only exams they created or were delegated; HOD sees their department         |
-| [0038](./ADR-0038-subjects-streams-departments.md)  | Subjects and streams | Compulsory/elective offerings, choice rules that warn, streams, teaching departments        |
-| [0039](./ADR-0039-person-names-register-order.md)   | Person names         | Optional middle name, register order (Surname First Middle), A to Z lists, number-order IDs |
+| ADR                                                 | Decision             | Outcome                                                                                                                                                         |
+| --------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [0034](./ADR-0034-public-marketing-site.md)         | Marketing site       | Separate static `apps/marketing` on the root domain; leads emailed; anonymous visit counts and consented contacts sent to the API by key (2026-10-15 amendment) |
+| [0035](./ADR-0035-in-app-help.md)                   | In-app help          | Role-tailored task guides in each staff workspace, filtered by permission; no AI agent                                                                          |
+| [0036](./ADR-0036-platform-system-configuration.md) | System Configuration | Ops and sign-in settings editable by Software Admin; env stays the default; audited                                                                             |
+| [0037](./ADR-0037-exam-visibility-own-exams.md)     | Exam visibility      | A teacher sees only exams they created or were delegated; HOD sees their department                                                                             |
+| [0038](./ADR-0038-subjects-streams-departments.md)  | Subjects and streams | Compulsory/elective offerings, choice rules that warn, streams, teaching departments                                                                            |
+| [0039](./ADR-0039-person-names-register-order.md)   | Person names         | Optional middle name, register order (Surname First Middle), A to Z lists, number-order IDs                                                                     |
 
 ---
 

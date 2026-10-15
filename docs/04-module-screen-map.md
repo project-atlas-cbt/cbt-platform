@@ -145,8 +145,12 @@ Schools
 Subscriptions
 Platform Analytics
 Audit & Security
+Website
 System Configuration
 ```
+
+`Website` (ADR-0034 amendment, 2026-10-15): anonymous visit counts for the public marketing site
+and the contacts people left there (demo requests and call-back numbers).
 
 Potentially:
 

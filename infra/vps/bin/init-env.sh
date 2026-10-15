@@ -35,6 +35,9 @@ MARKETING_LEAD_EMAIL_PROVIDER=
 MARKETING_LEAD_EMAIL_API_KEY=
 MARKETING_LEAD_EMAIL_TO=
 MARKETING_LEAD_EMAIL_FROM=
+# Lets the marketing site send visit counts and saved forms to the API
+# (Software Admin > Website). Empty turns that off.
+MARKETING_INGEST_KEY=$(secret)
 # Off-site backups (S3-compatible, e.g. Backblaze B2). Empty = local only.
 BACKUP_S3_ENDPOINT=
 BACKUP_S3_BUCKET=
