@@ -13,8 +13,8 @@
   "devDependencies": {
     "@atlas/config": "workspace:*",
     "@atlas/db": "workspace:*",
-    "bullmq": "^6.3.11",
+    "bullmq": "^6.5.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
